@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Trash2, X } from 'lucide-react';
+import { Plus, Trash2, X, Loader2 } from 'lucide-react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,53 +23,117 @@ export function SkillsSection({ skills, skillGroups, profileId, onUpdate }: Skil
   const [newSkillName, setNewSkillName] = useState('');
   const [newSkillLevel, setNewSkillLevel] = useState<string>('');
   const [newGroupName, setNewGroupName] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const addSkill = () => {
-    if (newSkillName.trim()) {
-      const newSkill: Skill = {
-        id: `temp-${Date.now()}`,
-        profileId,
-        name: newSkillName.trim(),
-        level: newSkillLevel as any || null,
-        yearsOfExp: null,
-        groupId: null,
-        source: 'MANUAL',
-        sortOrder: skills.length,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-      onUpdate([...skills, newSkill], skillGroups);
+  const addSkill = async () => {
+    if (!newSkillName.trim()) return;
+    
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/profile/skills', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newSkillName.trim(),
+          level: newSkillLevel || undefined,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to add skill');
+      }
+
+      const { skill } = await response.json();
+      onUpdate([...skills, skill], skillGroups);
       setNewSkillName('');
       setNewSkillLevel('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const removeSkill = (skillId: string) => {
-    onUpdate(skills.filter((s) => s.id !== skillId), skillGroups);
+  const removeSkill = async (skillId: string) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/profile/skills/${skillId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to delete skill');
+      }
+
+      onUpdate(skills.filter((s) => s.id !== skillId), skillGroups);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const addGroup = () => {
-    if (newGroupName.trim()) {
-      const newGroup: SkillGroup & { skills: Skill[] } = {
-        id: `temp-${Date.now()}`,
-        profileId,
-        name: newGroupName.trim(),
-        sortOrder: skillGroups.length,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        skills: [],
-      };
-      onUpdate(skills, [...skillGroups, newGroup]);
+  const addGroup = async () => {
+    if (!newGroupName.trim()) return;
+    
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/profile/skill-groups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newGroupName.trim(),
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to add skill group');
+      }
+
+      const { skillGroup } = await response.json();
+      onUpdate(skills, [...skillGroups, skillGroup]);
       setNewGroupName('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const removeGroup = (groupId: string) => {
-    // Move skills from deleted group to ungrouped
-    const updatedSkills = skills.map((s) =>
-      s.groupId === groupId ? { ...s, groupId: null } : s
-    );
-    onUpdate(updatedSkills, skillGroups.filter((g) => g.id !== groupId));
+  const removeGroup = async (groupId: string) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/profile/skill-groups/${groupId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to delete skill group');
+      }
+
+      // Move skills from deleted group to ungrouped
+      const updatedSkills = skills.map((s) =>
+        s.groupId === groupId ? { ...s, groupId: null } : s
+      );
+      onUpdate(updatedSkills, skillGroups.filter((g) => g.id !== groupId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Get ungrouped skills
@@ -82,6 +146,12 @@ export function SkillsSection({ skills, skillGroups, profileId, onUpdate }: Skil
         <CardDescription>Add your technical and professional skills</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        {error && (
+          <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+            {error}
+          </div>
+        )}
+
         {/* Add New Skill */}
         <div className="space-y-2">
           <Label>Add a skill</Label>
@@ -92,8 +162,9 @@ export function SkillsSection({ skills, skillGroups, profileId, onUpdate }: Skil
               placeholder="e.g., TypeScript, React, Python"
               onKeyPress={(e) => e.key === 'Enter' && addSkill()}
               className="flex-1"
+              disabled={isLoading}
             />
-            <Select value={newSkillLevel} onValueChange={setNewSkillLevel}>
+            <Select value={newSkillLevel} onValueChange={setNewSkillLevel} disabled={isLoading}>
               <SelectTrigger className="w-32">
                 <SelectValue placeholder="Level" />
               </SelectTrigger>
@@ -104,8 +175,8 @@ export function SkillsSection({ skills, skillGroups, profileId, onUpdate }: Skil
                 <SelectItem value="EXPERT">Expert</SelectItem>
               </SelectContent>
             </Select>
-            <Button onClick={addSkill} disabled={!newSkillName.trim()}>
-              <Plus className="h-4 w-4" />
+            <Button onClick={addSkill} disabled={!newSkillName.trim() || isLoading}>
+              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
             </Button>
           </div>
         </div>
@@ -120,6 +191,7 @@ export function SkillsSection({ skills, skillGroups, profileId, onUpdate }: Skil
                 size="sm"
                 onClick={() => removeGroup(group.id)}
                 className="h-8 w-8 p-0"
+                disabled={isLoading}
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
@@ -139,6 +211,7 @@ export function SkillsSection({ skills, skillGroups, profileId, onUpdate }: Skil
                     <button
                       onClick={() => removeSkill(skill.id)}
                       className="ml-1 rounded-full p-0.5 hover:bg-destructive hover:text-destructive-foreground"
+                      disabled={isLoading}
                     >
                       <X className="h-3 w-3" />
                     </button>
@@ -167,6 +240,7 @@ export function SkillsSection({ skills, skillGroups, profileId, onUpdate }: Skil
                   <button
                     onClick={() => removeSkill(skill.id)}
                     className="ml-1 rounded-full p-0.5 hover:bg-destructive hover:text-destructive-foreground"
+                    disabled={isLoading}
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -191,8 +265,10 @@ export function SkillsSection({ skills, skillGroups, profileId, onUpdate }: Skil
               onChange={(e) => setNewGroupName(e.target.value)}
               placeholder="e.g., Frontend, Backend, DevOps"
               onKeyPress={(e) => e.key === 'Enter' && addGroup()}
+              disabled={isLoading}
             />
-            <Button onClick={addGroup} variant="outline" disabled={!newGroupName.trim()}>
+            <Button onClick={addGroup} variant="outline" disabled={!newGroupName.trim() || isLoading}>
+              {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Add Group
             </Button>
           </div>

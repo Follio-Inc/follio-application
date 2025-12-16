@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Trash2, GripVertical } from 'lucide-react';
+import { Plus, Trash2, GripVertical, Loader2 } from 'lucide-react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -37,49 +37,109 @@ const emptyExperience: Partial<WorkExperience> = {
 
 export function ExperienceSection({ experiences, profileId, onUpdate }: ExperienceSectionProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editingExperience, setEditingExperience] = useState<WorkExperience | null>(null);
   const [formData, setFormData] = useState<Partial<WorkExperience>>(emptyExperience);
   const [bulletInput, setBulletInput] = useState('');
   const [tagInput, setTagInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleOpenDialog = (index?: number) => {
-    if (index !== undefined) {
-      setEditingIndex(index);
-      setFormData(experiences[index]);
+  const handleOpenDialog = (experience?: WorkExperience) => {
+    if (experience) {
+      setEditingExperience(experience);
+      setFormData(experience);
     } else {
-      setEditingIndex(null);
+      setEditingExperience(null);
       setFormData(emptyExperience);
     }
+    setError(null);
     setIsDialogOpen(true);
   };
 
   const handleSave = async () => {
-    const newExperiences = [...experiences];
-    
-    if (editingIndex !== null) {
-      newExperiences[editingIndex] = { ...newExperiences[editingIndex], ...formData } as WorkExperience;
-    } else {
-      // In a real app, this would be an API call
-      const newExp = {
-        ...formData,
-        id: `temp-${Date.now()}`,
-        profileId,
-        sortOrder: experiences.length,
-        source: 'MANUAL' as const,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      } as WorkExperience;
-      newExperiences.push(newExp);
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const payload = {
+        company: formData.company,
+        role: formData.role,
+        location: formData.location || undefined,
+        locationType: formData.locationType || undefined,
+        employmentType: formData.employmentType || undefined,
+        startDate: formData.startDate,
+        endDate: formData.isCurrent ? null : formData.endDate,
+        isCurrent: formData.isCurrent || false,
+        description: formData.description || undefined,
+        bullets: formData.bullets || [],
+        tags: formData.tags || [],
+      };
+
+      if (editingExperience) {
+        // Update existing experience
+        const response = await fetch(`/api/profile/experiences/${editingExperience.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || 'Failed to update experience');
+        }
+
+        const { experience } = await response.json();
+        const updatedExperiences = experiences.map((exp) =>
+          exp.id === editingExperience.id ? experience : exp
+        );
+        onUpdate(updatedExperiences);
+      } else {
+        // Create new experience
+        const response = await fetch('/api/profile/experiences', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || 'Failed to create experience');
+        }
+
+        const { experience } = await response.json();
+        onUpdate([...experiences, experience]);
+      }
+
+      setIsDialogOpen(false);
+      setFormData(emptyExperience);
+      setEditingExperience(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setIsLoading(false);
     }
-    
-    onUpdate(newExperiences);
-    setIsDialogOpen(false);
-    setFormData(emptyExperience);
   };
 
-  const handleDelete = (index: number) => {
-    const newExperiences = experiences.filter((_, i) => i !== index);
-    onUpdate(newExperiences);
+  const handleDelete = async (experienceId: string) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/profile/experiences/${experienceId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to delete experience');
+      }
+
+      onUpdate(experiences.filter((exp) => exp.id !== experienceId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const addBullet = () => {
@@ -132,8 +192,15 @@ export function ExperienceSection({ experiences, profileId, onUpdate }: Experien
           </DialogTrigger>
           <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
             <DialogHeader>
-              <DialogTitle>{editingIndex !== null ? 'Edit' : 'Add'} Experience</DialogTitle>
+              <DialogTitle>{editingExperience ? 'Edit' : 'Add'} Experience</DialogTitle>
             </DialogHeader>
+            
+            {error && (
+              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                {error}
+              </div>
+            )}
+
             <div className="space-y-4 py-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
@@ -297,11 +364,12 @@ export function ExperienceSection({ experiences, profileId, onUpdate }: Experien
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+              <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isLoading}>
                 Cancel
               </Button>
-              <Button onClick={handleSave} disabled={!formData.company || !formData.role}>
-                Save
+              <Button onClick={handleSave} disabled={!formData.company || !formData.role || isLoading}>
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isLoading ? 'Saving...' : 'Save'}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -314,7 +382,7 @@ export function ExperienceSection({ experiences, profileId, onUpdate }: Experien
           </div>
         ) : (
           <div className="space-y-4">
-            {experiences.map((exp, index) => (
+            {experiences.map((exp) => (
               <div
                 key={exp.id}
                 className="flex items-start gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50"
@@ -334,10 +402,10 @@ export function ExperienceSection({ experiences, profileId, onUpdate }: Experien
                       </p>
                     </div>
                     <div className="flex gap-2">
-                      <Button variant="ghost" size="sm" onClick={() => handleOpenDialog(index)}>
+                      <Button variant="ghost" size="sm" onClick={() => handleOpenDialog(exp)} disabled={isLoading}>
                         Edit
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDelete(index)}>
+                      <Button variant="ghost" size="sm" onClick={() => handleDelete(exp.id)} disabled={isLoading}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>

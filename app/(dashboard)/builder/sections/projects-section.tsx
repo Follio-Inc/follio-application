@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Trash2, GripVertical, Star, ExternalLink, Github } from 'lucide-react';
+import { Plus, Trash2, GripVertical, Star, ExternalLink, Github, Loader2 } from 'lucide-react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -37,48 +37,110 @@ const emptyProject: Partial<Project> = {
 
 export function ProjectsSection({ projects, profileId, onUpdate }: ProjectsSectionProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [formData, setFormData] = useState<Partial<Project>>(emptyProject);
   const [techInput, setTechInput] = useState('');
   const [highlightInput, setHighlightInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleOpenDialog = (index?: number) => {
-    if (index !== undefined) {
-      setEditingIndex(index);
-      setFormData(projects[index]);
+  const handleOpenDialog = (project?: Project) => {
+    if (project) {
+      setEditingProject(project);
+      setFormData(project);
     } else {
-      setEditingIndex(null);
+      setEditingProject(null);
       setFormData(emptyProject);
     }
+    setError(null);
     setIsDialogOpen(true);
   };
 
   const handleSave = async () => {
-    const newProjects = [...projects];
-    
-    if (editingIndex !== null) {
-      newProjects[editingIndex] = { ...newProjects[editingIndex], ...formData } as Project;
-    } else {
-      const newProject = {
-        ...formData,
-        id: `temp-${Date.now()}`,
-        profileId,
-        sortOrder: projects.length,
-        source: 'MANUAL' as const,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      } as Project;
-      newProjects.push(newProject);
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const payload = {
+        title: formData.title,
+        description: formData.description || undefined,
+        shortDesc: formData.shortDesc || undefined,
+        url: formData.url || undefined,
+        repoUrl: formData.repoUrl || undefined,
+        imageUrl: formData.imageUrl || undefined,
+        techStack: formData.techStack || [],
+        highlights: formData.highlights || [],
+        startDate: formData.startDate,
+        endDate: formData.isCurrent ? null : formData.endDate,
+        isCurrent: formData.isCurrent || false,
+        featured: formData.featured || false,
+      };
+
+      if (editingProject) {
+        // Update existing project
+        const response = await fetch(`/api/profile/projects/${editingProject.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || 'Failed to update project');
+        }
+
+        const { project } = await response.json();
+        const updatedProjects = projects.map((p) =>
+          p.id === editingProject.id ? project : p
+        );
+        onUpdate(updatedProjects);
+      } else {
+        // Create new project
+        const response = await fetch('/api/profile/projects', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || 'Failed to create project');
+        }
+
+        const { project } = await response.json();
+        onUpdate([...projects, project]);
+      }
+
+      setIsDialogOpen(false);
+      setFormData(emptyProject);
+      setEditingProject(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setIsLoading(false);
     }
-    
-    onUpdate(newProjects);
-    setIsDialogOpen(false);
-    setFormData(emptyProject);
   };
 
-  const handleDelete = (index: number) => {
-    const newProjects = projects.filter((_, i) => i !== index);
-    onUpdate(newProjects);
+  const handleDelete = async (projectId: string) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/profile/projects/${projectId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to delete project');
+      }
+
+      onUpdate(projects.filter((p) => p.id !== projectId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const addTech = () => {
@@ -115,10 +177,32 @@ export function ProjectsSection({ projects, profileId, onUpdate }: ProjectsSecti
     }));
   };
 
-  const toggleFeatured = (index: number) => {
-    const newProjects = [...projects];
-    newProjects[index] = { ...newProjects[index], featured: !newProjects[index].featured };
-    onUpdate(newProjects);
+  const toggleFeatured = async (project: Project) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/profile/projects/${project.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ featured: !project.featured }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to update project');
+      }
+
+      const { project: updatedProject } = await response.json();
+      const updatedProjects = projects.map((p) =>
+        p.id === project.id ? updatedProject : p
+      );
+      onUpdate(updatedProjects);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -137,8 +221,15 @@ export function ProjectsSection({ projects, profileId, onUpdate }: ProjectsSecti
           </DialogTrigger>
           <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
             <DialogHeader>
-              <DialogTitle>{editingIndex !== null ? 'Edit' : 'Add'} Project</DialogTitle>
+              <DialogTitle>{editingProject ? 'Edit' : 'Add'} Project</DialogTitle>
             </DialogHeader>
+            
+            {error && (
+              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                {error}
+              </div>
+            )}
+
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label>Project Title *</Label>
@@ -261,11 +352,12 @@ export function ProjectsSection({ projects, profileId, onUpdate }: ProjectsSecti
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+              <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isLoading}>
                 Cancel
               </Button>
-              <Button onClick={handleSave} disabled={!formData.title}>
-                Save
+              <Button onClick={handleSave} disabled={!formData.title || isLoading}>
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isLoading ? 'Saving...' : 'Save'}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -278,7 +370,7 @@ export function ProjectsSection({ projects, profileId, onUpdate }: ProjectsSecti
           </div>
         ) : (
           <div className="space-y-4">
-            {projects.map((project, index) => (
+            {projects.map((project) => (
               <div
                 key={project.id}
                 className="flex items-start gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50"
@@ -320,15 +412,16 @@ export function ProjectsSection({ projects, profileId, onUpdate }: ProjectsSecti
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => toggleFeatured(index)}
+                        onClick={() => toggleFeatured(project)}
                         className={project.featured ? 'text-yellow-500' : ''}
+                        disabled={isLoading}
                       >
                         <Star className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleOpenDialog(index)}>
+                      <Button variant="ghost" size="sm" onClick={() => handleOpenDialog(project)} disabled={isLoading}>
                         Edit
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDelete(index)}>
+                      <Button variant="ghost" size="sm" onClick={() => handleDelete(project.id)} disabled={isLoading}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>

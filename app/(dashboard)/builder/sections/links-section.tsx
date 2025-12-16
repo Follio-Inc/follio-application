@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Trash2, GripVertical, ExternalLink, Github, Linkedin, Twitter, Globe, Mail, Youtube, Instagram, Facebook, Link as LinkIcon } from 'lucide-react';
+import { Plus, Trash2, GripVertical, ExternalLink, Github, Linkedin, Twitter, Globe, Mail, Youtube, Instagram, Facebook, Link as LinkIcon, Loader2 } from 'lucide-react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,21 +19,14 @@ interface LinksSectionProps {
 }
 
 const LINK_TYPES = [
-  { value: 'WEBSITE', label: 'Website', icon: Globe },
   { value: 'GITHUB', label: 'GitHub', icon: Github },
   { value: 'LINKEDIN', label: 'LinkedIn', icon: Linkedin },
   { value: 'TWITTER', label: 'Twitter / X', icon: Twitter },
-  { value: 'EMAIL', label: 'Email', icon: Mail },
-  { value: 'YOUTUBE', label: 'YouTube', icon: Youtube },
-  { value: 'INSTAGRAM', label: 'Instagram', icon: Instagram },
-  { value: 'FACEBOOK', label: 'Facebook', icon: Facebook },
+  { value: 'PORTFOLIO', label: 'Portfolio', icon: Globe },
+  { value: 'BLOG', label: 'Blog', icon: Globe },
   { value: 'DRIBBBLE', label: 'Dribbble', icon: Globe },
   { value: 'BEHANCE', label: 'Behance', icon: Globe },
-  { value: 'MEDIUM', label: 'Medium', icon: Globe },
-  { value: 'DEVTO', label: 'DEV.to', icon: Globe },
-  { value: 'STACKOVERFLOW', label: 'Stack Overflow', icon: Globe },
-  { value: 'RESUME', label: 'Resume', icon: ExternalLink },
-  { value: 'CALENDLY', label: 'Calendly', icon: Globe },
+  { value: 'YOUTUBE', label: 'YouTube', icon: Youtube },
   { value: 'OTHER', label: 'Other', icon: LinkIcon },
 ] as const;
 
@@ -43,57 +36,109 @@ const getIconForType = (type: string) => {
 };
 
 const emptyLink: Partial<Link> = {
-  type: 'WEBSITE',
+  type: 'GITHUB',
   label: '',
   url: '',
-  isPrimary: false,
 };
 
 export function LinksSection({ links, profileId, onUpdate }: LinksSectionProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editingLink, setEditingLink] = useState<Link | null>(null);
   const [formData, setFormData] = useState<Partial<Link>>(emptyLink);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleOpenDialog = (index?: number) => {
-    if (index !== undefined) {
-      setEditingIndex(index);
-      setFormData(links[index]);
+  const handleOpenDialog = (link?: Link) => {
+    if (link) {
+      setEditingLink(link);
+      setFormData(link);
     } else {
-      setEditingIndex(null);
+      setEditingLink(null);
       setFormData(emptyLink);
     }
+    setError(null);
     setIsDialogOpen(true);
   };
 
   const handleSave = async () => {
-    const newLinks = [...links];
-    
-    // Auto-generate label if not provided
-    const label = formData.label?.trim() || LINK_TYPES.find((t) => t.value === formData.type)?.label || 'Link';
-    
-    if (editingIndex !== null) {
-      newLinks[editingIndex] = { ...newLinks[editingIndex], ...formData, label } as Link;
-    } else {
-      const newLink = {
-        ...formData,
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Auto-generate label if not provided
+      const label = formData.label?.trim() || LINK_TYPES.find((t) => t.value === formData.type)?.label || 'Link';
+      
+      const payload = {
+        type: formData.type,
+        url: formData.url,
         label,
-        id: `temp-${Date.now()}`,
-        profileId,
-        sortOrder: links.length,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      } as Link;
-      newLinks.push(newLink);
+      };
+
+      if (editingLink) {
+        // Update existing link
+        const response = await fetch(`/api/profile/links/${editingLink.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || 'Failed to update link');
+        }
+
+        const { link } = await response.json();
+        const updatedLinks = links.map((l) =>
+          l.id === editingLink.id ? link : l
+        );
+        onUpdate(updatedLinks);
+      } else {
+        // Create new link
+        const response = await fetch('/api/profile/links', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || 'Failed to create link');
+        }
+
+        const { link } = await response.json();
+        onUpdate([...links, link]);
+      }
+
+      setIsDialogOpen(false);
+      setFormData(emptyLink);
+      setEditingLink(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setIsLoading(false);
     }
-    
-    onUpdate(newLinks);
-    setIsDialogOpen(false);
-    setFormData(emptyLink);
   };
 
-  const handleDelete = (index: number) => {
-    const newLinks = links.filter((_, i) => i !== index);
-    onUpdate(newLinks);
+  const handleDelete = async (linkId: string) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/profile/links/${linkId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to delete link');
+      }
+
+      onUpdate(links.filter((l) => l.id !== linkId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const getPlaceholderForType = (type: string) => {
@@ -104,12 +149,12 @@ export function LinksSection({ links, profileId, onUpdate }: LinksSectionProps) 
         return 'https://linkedin.com/in/username';
       case 'TWITTER':
         return 'https://x.com/username';
-      case 'EMAIL':
-        return 'mailto:you@example.com';
       case 'YOUTUBE':
         return 'https://youtube.com/@channel';
-      case 'CALENDLY':
-        return 'https://calendly.com/username';
+      case 'PORTFOLIO':
+        return 'https://myportfolio.com';
+      case 'BLOG':
+        return 'https://myblog.com';
       default:
         return 'https://example.com';
     }
@@ -131,14 +176,22 @@ export function LinksSection({ links, profileId, onUpdate }: LinksSectionProps) 
           </DialogTrigger>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle>{editingIndex !== null ? 'Edit' : 'Add'} Link</DialogTitle>
+              <DialogTitle>{editingLink ? 'Edit' : 'Add'} Link</DialogTitle>
             </DialogHeader>
+            
+            {error && (
+              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                {error}
+              </div>
+            )}
+
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label>Link Type</Label>
                 <Select
-                  value={formData.type || 'WEBSITE'}
+                  value={formData.type || 'GITHUB'}
                   onValueChange={(value) => setFormData((prev) => ({ ...prev, type: value as Link['type'] }))}
+                  disabled={isLoading}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select type" />
@@ -164,7 +217,8 @@ export function LinksSection({ links, profileId, onUpdate }: LinksSectionProps) 
                 <Input
                   value={formData.url || ''}
                   onChange={(e) => setFormData((prev) => ({ ...prev, url: e.target.value }))}
-                  placeholder={getPlaceholderForType(formData.type || 'WEBSITE')}
+                  placeholder={getPlaceholderForType(formData.type || 'GITHUB')}
+                  disabled={isLoading}
                 />
               </div>
 
@@ -174,6 +228,7 @@ export function LinksSection({ links, profileId, onUpdate }: LinksSectionProps) 
                   value={formData.label || ''}
                   onChange={(e) => setFormData((prev) => ({ ...prev, label: e.target.value }))}
                   placeholder={LINK_TYPES.find((t) => t.value === formData.type)?.label || 'Custom label'}
+                  disabled={isLoading}
                 />
                 <p className="text-xs text-muted-foreground">
                   Leave blank to use the default label for this link type
@@ -181,11 +236,12 @@ export function LinksSection({ links, profileId, onUpdate }: LinksSectionProps) 
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+              <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isLoading}>
                 Cancel
               </Button>
-              <Button onClick={handleSave} disabled={!formData.url}>
-                Save
+              <Button onClick={handleSave} disabled={!formData.url || isLoading}>
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isLoading ? 'Saving...' : 'Save'}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -198,7 +254,7 @@ export function LinksSection({ links, profileId, onUpdate }: LinksSectionProps) 
           </div>
         ) : (
           <div className="space-y-2">
-            {links.map((link, index) => {
+            {links.map((link) => {
               const Icon = getIconForType(link.type);
               return (
                 <div
@@ -224,10 +280,10 @@ export function LinksSection({ links, profileId, onUpdate }: LinksSectionProps) 
                     </a>
                   </div>
                   <div className="flex gap-1">
-                    <Button variant="ghost" size="sm" onClick={() => handleOpenDialog(index)}>
+                    <Button variant="ghost" size="sm" onClick={() => handleOpenDialog(link)} disabled={isLoading}>
                       Edit
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleDelete(index)}>
+                    <Button variant="ghost" size="sm" onClick={() => handleDelete(link.id)} disabled={isLoading}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>

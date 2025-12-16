@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Trash2, GripVertical } from 'lucide-react';
+import { Plus, Trash2, GripVertical, Loader2 } from 'lucide-react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -35,46 +35,107 @@ const emptyEducation: Partial<Education> = {
 
 export function EducationSection({ educations, profileId, onUpdate }: EducationSectionProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editingEducation, setEditingEducation] = useState<Education | null>(null);
   const [formData, setFormData] = useState<Partial<Education>>(emptyEducation);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleOpenDialog = (index?: number) => {
-    if (index !== undefined) {
-      setEditingIndex(index);
-      setFormData(educations[index]);
+  const handleOpenDialog = (education?: Education) => {
+    if (education) {
+      setEditingEducation(education);
+      setFormData(education);
     } else {
-      setEditingIndex(null);
+      setEditingEducation(null);
       setFormData(emptyEducation);
     }
+    setError(null);
     setIsDialogOpen(true);
   };
 
   const handleSave = async () => {
-    const newEducations = [...educations];
-    
-    if (editingIndex !== null) {
-      newEducations[editingIndex] = { ...newEducations[editingIndex], ...formData } as Education;
-    } else {
-      const newEdu = {
-        ...formData,
-        id: `temp-${Date.now()}`,
-        profileId,
-        sortOrder: educations.length,
-        source: 'MANUAL' as const,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      } as Education;
-      newEducations.push(newEdu);
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const payload = {
+        institution: formData.institution,
+        degree: formData.degree || undefined,
+        fieldOfStudy: formData.fieldOfStudy || undefined,
+        location: formData.location || undefined,
+        startDate: formData.startDate,
+        endDate: formData.isCurrent ? null : formData.endDate,
+        isCurrent: formData.isCurrent || false,
+        gpa: formData.gpa || undefined,
+        description: formData.description || undefined,
+        activities: formData.activities || [],
+        honors: formData.honors || [],
+      };
+
+      if (editingEducation) {
+        // Update existing education
+        const response = await fetch(`/api/profile/education/${editingEducation.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || 'Failed to update education');
+        }
+
+        const { education } = await response.json();
+        const updatedEducations = educations.map((edu) =>
+          edu.id === editingEducation.id ? education : edu
+        );
+        onUpdate(updatedEducations);
+      } else {
+        // Create new education
+        const response = await fetch('/api/profile/education', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || 'Failed to create education');
+        }
+
+        const { education } = await response.json();
+        onUpdate([...educations, education]);
+      }
+
+      setIsDialogOpen(false);
+      setFormData(emptyEducation);
+      setEditingEducation(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setIsLoading(false);
     }
-    
-    onUpdate(newEducations);
-    setIsDialogOpen(false);
-    setFormData(emptyEducation);
   };
 
-  const handleDelete = (index: number) => {
-    const newEducations = educations.filter((_, i) => i !== index);
-    onUpdate(newEducations);
+  const handleDelete = async (educationId: string) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/profile/education/${educationId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to delete education');
+      }
+
+      onUpdate(educations.filter((edu) => edu.id !== educationId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -93,8 +154,15 @@ export function EducationSection({ educations, profileId, onUpdate }: EducationS
           </DialogTrigger>
           <DialogContent className="sm:max-w-xl">
             <DialogHeader>
-              <DialogTitle>{editingIndex !== null ? 'Edit' : 'Add'} Education</DialogTitle>
+              <DialogTitle>{editingEducation ? 'Edit' : 'Add'} Education</DialogTitle>
             </DialogHeader>
+            
+            {error && (
+              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                {error}
+              </div>
+            )}
+
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label>Institution *</Label>
@@ -183,11 +251,12 @@ export function EducationSection({ educations, profileId, onUpdate }: EducationS
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+              <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isLoading}>
                 Cancel
               </Button>
-              <Button onClick={handleSave} disabled={!formData.institution}>
-                Save
+              <Button onClick={handleSave} disabled={!formData.institution || isLoading}>
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isLoading ? 'Saving...' : 'Save'}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -200,7 +269,7 @@ export function EducationSection({ educations, profileId, onUpdate }: EducationS
           </div>
         ) : (
           <div className="space-y-4">
-            {educations.map((edu, index) => (
+            {educations.map((edu) => (
               <div
                 key={edu.id}
                 className="flex items-start gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50"
@@ -223,10 +292,10 @@ export function EducationSection({ educations, profileId, onUpdate }: EducationS
                       </p>
                     </div>
                     <div className="flex gap-2">
-                      <Button variant="ghost" size="sm" onClick={() => handleOpenDialog(index)}>
+                      <Button variant="ghost" size="sm" onClick={() => handleOpenDialog(edu)} disabled={isLoading}>
                         Edit
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDelete(index)}>
+                      <Button variant="ghost" size="sm" onClick={() => handleDelete(edu.id)} disabled={isLoading}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
