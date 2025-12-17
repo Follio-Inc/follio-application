@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+import { auth, currentUser } from '@clerk/nextjs/server';
 
 import { db } from '@/lib/db';
 import { CreateProfileSchema } from '@/lib/validations';
@@ -28,13 +28,24 @@ export async function POST(request: NextRequest) {
 
     const { handle, firstName, lastName, headline, summary, location } = validatedData.data;
 
-    // Check if user exists
-    const user = await db.user.findUnique({
+    // Check if user exists, create if not (handles first-time profile creation)
+    let user = await db.user.findUnique({
       where: { clerkId: userId },
     });
 
     if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      // Get user details from Clerk and create user in database
+      const clerkUser = await currentUser();
+      if (!clerkUser || !clerkUser.emailAddresses?.[0]?.emailAddress) {
+        return NextResponse.json({ error: 'Unable to get user details' }, { status: 400 });
+      }
+
+      user = await db.user.create({
+        data: {
+          clerkId: userId,
+          email: clerkUser.emailAddresses[0].emailAddress,
+        },
+      });
     }
 
     // Check if user already has a profile
