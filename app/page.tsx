@@ -63,7 +63,7 @@ export default async function HomePage() {
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
-            <Link href="/u/alexchen">
+            <Link href="/demo">
               <Button size="xl" variant="outline">
                 See demo profile
               </Button>
@@ -242,13 +242,13 @@ export default async function HomePage() {
               </span>
             </div>
             <div className="flex gap-6 text-sm text-muted-foreground">
-              <Link href="#" className="hover:text-foreground">
+              <Link href="/privacy" className="hover:text-foreground">
                 Privacy
               </Link>
-              <Link href="#" className="hover:text-foreground">
+              <Link href="/terms" className="hover:text-foreground">
                 Terms
               </Link>
-              <Link href="#" className="hover:text-foreground">
+              <Link href="/contact" className="hover:text-foreground">
                 Contact
               </Link>
             </div>
