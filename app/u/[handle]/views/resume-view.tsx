@@ -114,8 +114,8 @@ export function ResumeView({ profile }: ResumeViewProps) {
               {profile.skills.map((skill) => (
                 <Badge key={skill.id} variant={skill.level === 'EXPERT' ? 'default' : 'secondary'}>
                   {skill.name}
-                  {skill.yearsOfExperience && (
-                    <span className="ml-1 text-xs opacity-70">{skill.yearsOfExperience}y</span>
+                  {skill.yearsOfExp && (
+                    <span className="ml-1 text-xs opacity-70">{skill.yearsOfExp}y</span>
                   )}
                 </Badge>
               ))}
@@ -146,7 +146,7 @@ export function ResumeView({ profile }: ResumeViewProps) {
                   <div className="flex-1">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
-                        <h3 className="font-semibold">{exp.title}</h3>
+                        <h3 className="font-semibold">{exp.role}</h3>
                         <p className="text-muted-foreground">
                           {exp.company}
                           {exp.location && <span> · {exp.location}</span>}

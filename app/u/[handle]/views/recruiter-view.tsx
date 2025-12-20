@@ -176,7 +176,7 @@ export function RecruiterView({ profile }: RecruiterViewProps) {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <h3 className="text-lg font-semibold">{currentRole.title}</h3>
+                <h3 className="text-lg font-semibold">{currentRole.role}</h3>
                 <p className="text-muted-foreground">{currentRole.company}</p>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Since {formatDate(currentRole.startDate)}
@@ -243,8 +243,8 @@ export function RecruiterView({ profile }: RecruiterViewProps) {
                     className="px-3 py-1"
                   >
                     {skill.name}
-                    {skill.yearsOfExperience && (
-                      <span className="ml-1 opacity-70">{skill.yearsOfExperience}y</span>
+                    {skill.yearsOfExp && (
+                      <span className="ml-1 opacity-70">{skill.yearsOfExp}y</span>
                     )}
                   </Badge>
                 ))}
@@ -295,7 +295,7 @@ export function RecruiterView({ profile }: RecruiterViewProps) {
                     <div className="flex-1">
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div>
-                          <h4 className="font-medium">{exp.title}</h4>
+                          <h4 className="font-medium">{exp.role}</h4>
                           <p className="text-sm text-muted-foreground">{exp.company}</p>
                         </div>
                         <span className="text-sm text-muted-foreground">

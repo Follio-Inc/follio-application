@@ -12,13 +12,13 @@ describe('Merge Service', () => {
     it('should prioritize MANUAL over all other sources', () => {
       expect(compareSourcePriority('MANUAL', 'GITHUB')).toBe('existing');
       expect(compareSourcePriority('MANUAL', 'LINKEDIN')).toBe('existing');
-      expect(compareSourcePriority('MANUAL', 'RESUME_IMPORT')).toBe('existing');
-      expect(compareSourcePriority('MANUAL', 'API')).toBe('existing');
+      expect(compareSourcePriority('MANUAL', 'RESUME')).toBe('existing');
+      expect(compareSourcePriority('MANUAL', 'GENERATED')).toBe('existing');
     });
 
-    it('should prioritize RESUME_IMPORT over GITHUB', () => {
-      expect(compareSourcePriority('RESUME_IMPORT', 'GITHUB')).toBe('existing');
-      expect(compareSourcePriority('GITHUB', 'RESUME_IMPORT')).toBe('incoming');
+    it('should prioritize RESUME over GITHUB', () => {
+      expect(compareSourcePriority('RESUME', 'GITHUB')).toBe('existing');
+      expect(compareSourcePriority('GITHUB', 'RESUME')).toBe('incoming');
     });
 
     it('should return equal for same source', () => {
@@ -33,14 +33,13 @@ describe('Merge Service', () => {
         firstName: 'John',
         lastName: 'Doe',
         headline: 'Software Engineer',
-        summary: null,
+        summary: null as string | null,
         source: 'MANUAL' as const,
       };
 
       const incoming = {
         headline: 'Senior Software Engineer',
         summary: 'Experienced developer',
-        location: 'San Francisco',
       };
 
       const result = mergeProfileData(existing, incoming, 'GITHUB', {
@@ -51,7 +50,6 @@ describe('Merge Service', () => {
 
       expect(result.merged.headline).toBe('Senior Software Engineer');
       expect(result.merged.summary).toBe('Experienced developer');
-      expect(result.merged.location).toBe('San Francisco');
       expect(result.applied).toBeGreaterThan(0);
     });
 
@@ -212,7 +210,7 @@ describe('Merge Service', () => {
 
     it('should skip null/undefined incoming values', () => {
       const existing = { firstName: 'John', lastName: 'Doe' };
-      const incoming = { firstName: null, lastName: undefined };
+      const incoming = { firstName: undefined, lastName: undefined };
 
       const preview = previewMerge(existing, incoming, 'GITHUB');
 

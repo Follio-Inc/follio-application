@@ -11,10 +11,10 @@ import type { DataSource } from '@prisma/client';
 // Priority order for data sources (higher = more authoritative)
 const SOURCE_PRIORITY: Record<DataSource, number> = {
   MANUAL: 100, // User edits always win
-  RESUME_IMPORT: 80,
+  RESUME: 80,
   LINKEDIN: 70,
   GITHUB: 60,
-  API: 50,
+  GENERATED: 50,
 };
 
 // Fields that should never be auto-overwritten
