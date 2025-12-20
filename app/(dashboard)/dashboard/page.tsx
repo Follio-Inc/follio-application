@@ -10,10 +10,22 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 export default async function DashboardPage() {
-  const { userId } = await auth();
-  const user = await currentUser();
+  let userId: string | null = null;
+  
+  try {
+    const authResult = await auth();
+    userId = authResult?.userId ?? null;
+  } catch {
+    redirect('/sign-in');
+  }
 
-  if (!userId || !user) {
+  if (!userId) {
+    redirect('/sign-in');
+  }
+
+  const user = await currentUser();
+  
+  if (!user) {
     redirect('/sign-in');
   }
 

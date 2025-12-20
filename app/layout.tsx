@@ -19,6 +19,15 @@ export const metadata: Metadata = {
   keywords: ['resume', 'portfolio', 'digital resume', 'career', 'professional profile'],
   authors: [{ name: 'Follio' }],
   creator: 'Follio',
+  manifest: '/site.webmanifest',
+  icons: {
+    icon: [
+      { url: '/favicon.ico' },
+    ],
+    apple: [
+      { url: '/apple-touch-icon.png' },
+    ],
+  },
   openGraph: {
     type: 'website',
     locale: 'en_US',

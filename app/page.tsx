@@ -4,9 +4,18 @@ import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 
 import { Button } from '@/components/ui/button';
+import { Logo } from '@/components/Logo';
 
 export default async function HomePage() {
-  const { userId } = await auth();
+  let userId: string | null = null;
+  
+  try {
+    const authResult = await auth();
+    userId = authResult?.userId ?? null;
+  } catch {
+    // Auth might fail during sign-out transition, treat as logged out
+    userId = null;
+  }
   
   // If user is logged in, redirect to dashboard
   if (userId) {
@@ -18,12 +27,7 @@ export default async function HomePage() {
       {/* Navigation */}
       <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-              <span className="text-lg font-bold text-primary-foreground">F</span>
-            </div>
-            <span className="text-xl font-semibold">Follio</span>
-          </Link>
+          <Logo href="/" size="md" />
           <div className="flex items-center gap-4">
             <Link href="/sign-in">
               <Button variant="ghost">Sign in</Button>
@@ -40,7 +44,7 @@ export default async function HomePage() {
         <div className="text-center">
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border bg-muted/50 px-4 py-1.5 text-sm">
             <Sparkles className="h-4 w-4 text-primary" />
-            <span>The future of professional profiles</span>
+            <span>The future of professional resumes</span>
           </div>
           <h1 className="mb-6 text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl">
             Your resume,{' '}
@@ -232,9 +236,7 @@ export default async function HomePage() {
         <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
           <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
             <div className="flex items-center gap-2">
-              <div className="flex h-6 w-6 items-center justify-center rounded bg-primary">
-                <span className="text-sm font-bold text-primary-foreground">F</span>
-              </div>
+              <Logo size="sm" showText={false} />
               <span className="text-sm text-muted-foreground">
                 © {new Date().getFullYear()} Follio. All rights reserved.
               </span>

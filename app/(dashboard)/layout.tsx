@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { LayoutDashboard, FileText, Settings, ExternalLink } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { Logo } from '@/components/Logo';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -11,12 +12,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-6">
-            <Link href="/dashboard" className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-                <span className="text-lg font-bold text-primary-foreground">F</span>
-              </div>
-              <span className="text-xl font-semibold">Follio</span>
-            </Link>
+            <Logo href="/dashboard" size="md" />
             <nav className="hidden md:flex items-center gap-1">
               <Link href="/dashboard">
                 <Button variant="ghost" size="sm" className="gap-2">

@@ -5,7 +5,14 @@ import { db } from '@/lib/db';
 import { BuilderClient } from './builder-client';
 
 export default async function BuilderPage() {
-  const { userId } = await auth();
+  let userId: string | null = null;
+  
+  try {
+    const authResult = await auth();
+    userId = authResult?.userId ?? null;
+  } catch {
+    redirect('/sign-in');
+  }
 
   if (!userId) {
     redirect('/sign-in');

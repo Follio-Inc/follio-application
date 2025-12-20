@@ -50,6 +50,14 @@ const config: Config = {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
+        // Follio brand colors
+        follio: {
+          purple: 'hsl(var(--follio-purple))',
+          'purple-light': 'hsl(var(--follio-purple-light))',
+          'purple-dark': 'hsl(var(--follio-purple-dark))',
+          violet: 'hsl(var(--follio-violet))',
+          indigo: 'hsl(var(--follio-indigo))',
+        },
       },
       borderRadius: {
         lg: 'var(--radius)',
