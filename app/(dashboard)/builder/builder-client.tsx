@@ -176,7 +176,6 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
           <TabsContent value="links" className="mt-0">
             <LinksSection
               links={profile.links}
-              contactInfo={profile.contactInfo}
               profileId={profile.id}
               onUpdate={(links) => handleProfileUpdate({ links })}
             />
