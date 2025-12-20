@@ -28,7 +28,7 @@ export function PortfolioView({ profile }: PortfolioViewProps) {
           transition={{ duration: 0.5 }}
         >
           <Avatar className="mx-auto h-28 w-28 border-4 border-background shadow-lg">
-            <AvatarImage src={profile.avatarUrl || undefined} alt={profile.firstName} />
+            <AvatarImage src={profile.avatarUrl || undefined} alt={profile.firstName || undefined} />
             <AvatarFallback className="text-3xl">{initials}</AvatarFallback>
           </Avatar>
         </motion.div>

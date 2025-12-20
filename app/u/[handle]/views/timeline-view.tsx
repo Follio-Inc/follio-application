@@ -124,7 +124,7 @@ export function TimelineView({ profile }: TimelineViewProps) {
       {/* Header */}
       <header className="text-center">
         <Avatar className="mx-auto h-24 w-24 border-4 border-background shadow-lg">
-          <AvatarImage src={profile.avatarUrl || undefined} alt={profile.firstName} />
+          <AvatarImage src={profile.avatarUrl || undefined} alt={profile.firstName || undefined} />
           <AvatarFallback className="text-2xl">{initials}</AvatarFallback>
         </Avatar>
         <h1 className="mt-4 text-3xl font-bold">

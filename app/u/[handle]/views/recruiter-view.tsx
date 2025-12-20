@@ -54,7 +54,7 @@ export function RecruiterView({ profile }: RecruiterViewProps) {
           <CardContent className="pt-6">
             <div className="flex flex-col items-center gap-6 sm:flex-row">
               <Avatar className="h-24 w-24 border-4 border-background shadow-lg">
-                <AvatarImage src={profile.avatarUrl || undefined} alt={profile.firstName} />
+                <AvatarImage src={profile.avatarUrl || undefined} alt={profile.firstName || undefined} />
                 <AvatarFallback className="text-2xl">{initials}</AvatarFallback>
               </Avatar>
               <div className="flex-1 text-center sm:text-left">
