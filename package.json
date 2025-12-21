@@ -7,7 +7,9 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
+    "lint:fix": "next lint --fix",
     "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
@@ -15,7 +17,11 @@
     "db:studio": "prisma studio",
     "test": "vitest",
     "test:run": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "test:coverage": "vitest run --coverage",
+    "test:ui": "vitest --ui",
+    "typecheck": "tsc --noEmit",
+    "validate": "npm run typecheck && npm run lint && npm run test:run",
+    "prepare": "husky"
   },
   "dependencies": {
     "@clerk/nextjs": "^5.7.1",
@@ -49,14 +55,20 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@commitlint/cli": "^18.6.0",
+    "@commitlint/config-conventional": "^18.6.0",
     "@types/node": "^22.9.0",
     "@types/pdf-parse": "^1.1.4",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
+    "@vitest/coverage-v8": "^2.1.5",
+    "@vitest/ui": "^2.1.5",
     "autoprefixer": "^10.4.20",
     "eslint": "^8.57.1",
     "eslint-config-next": "15.0.3",
     "eslint-config-prettier": "^9.1.0",
+    "husky": "^9.0.11",
+    "lint-staged": "^15.2.2",
     "postcss": "^8.4.49",
     "prettier": "^3.3.3",
     "prettier-plugin-tailwindcss": "^0.6.8",

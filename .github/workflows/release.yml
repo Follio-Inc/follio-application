@@ -1,0 +1,66 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Get version from package.json
+        id: package-version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Check if tag exists
+        id: tag-check
+        run: |
+          if git rev-parse "v${{ steps.package-version.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate changelog
+        id: changelog
+        if: steps.tag-check.outputs.exists == 'false'
+        run: |
+          # Get the previous tag or first commit
+          PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || git rev-list --max-parents=0 HEAD)
+          
+          # Generate changelog
+          echo "## What's Changed" > CHANGELOG_TEMP.md
+          echo "" >> CHANGELOG_TEMP.md
+          git log $PREV_TAG..HEAD --pretty=format:"- %s (%h)" >> CHANGELOG_TEMP.md
+          echo "" >> CHANGELOG_TEMP.md
+          echo "" >> CHANGELOG_TEMP.md
+          echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/$PREV_TAG...v${{ steps.package-version.outputs.version }}" >> CHANGELOG_TEMP.md
+
+      - name: Create Release
+        if: steps.tag-check.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.package-version.outputs.version }}
+          name: Release v${{ steps.package-version.outputs.version }}
+          body_path: CHANGELOG_TEMP.md
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
