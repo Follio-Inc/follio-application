@@ -105,7 +105,12 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
               <ExternalLink className="h-3 w-3" />
             </Button>
           </Link>
-          <Button onClick={handleSave} disabled={isSaving || !hasChanges} size="sm" className="gap-2">
+          <Button
+            onClick={handleSave}
+            disabled={isSaving || !hasChanges}
+            size="sm"
+            className="gap-2"
+          >
             {isSaving ? <Spinner size="sm" /> : <Save className="h-4 w-4" />}
             {isSaving ? 'Saving...' : 'Save Changes'}
           </Button>

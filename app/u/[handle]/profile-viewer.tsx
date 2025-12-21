@@ -28,7 +28,7 @@ export function ProfileViewer({ profile, initialView }: ProfileViewerProps) {
   return (
     <div className="min-h-screen bg-gradient-to-b from-muted/30 to-background">
       <ViewSwitcher currentView={currentView} onViewChange={handleViewChange} />
-      
+
       <AnimatePresence mode="wait">
         <motion.main
           key={currentView}
@@ -51,8 +51,8 @@ export function ProfileViewer({ profile, initialView }: ProfileViewerProps) {
             Built with{' '}
             <a href="/" className="font-medium text-primary hover:underline">
               Follio
-            </a>
-            {' '}— Your professional identity, everywhere.
+            </a>{' '}
+            — Your professional identity, everywhere.
           </p>
         </div>
       </footer>

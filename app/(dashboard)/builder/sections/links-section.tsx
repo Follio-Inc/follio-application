@@ -1,14 +1,42 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Trash2, GripVertical, ExternalLink, Github, Linkedin, Twitter, Globe, Mail, Youtube, Instagram, Facebook, Link as LinkIcon, Loader2 } from 'lucide-react';
+import {
+  Plus,
+  Trash2,
+  GripVertical,
+  ExternalLink,
+  Github,
+  Linkedin,
+  Twitter,
+  Globe,
+  Mail,
+  Youtube,
+  Instagram,
+  Facebook,
+  Link as LinkIcon,
+  Loader2,
+} from 'lucide-react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from '@/components/ui/dialog';
 
 import type { Link } from '@/types';
 
@@ -66,8 +94,11 @@ export function LinksSection({ links, profileId, onUpdate }: LinksSectionProps) 
 
     try {
       // Auto-generate label if not provided
-      const label = formData.label?.trim() || LINK_TYPES.find((t) => t.value === formData.type)?.label || 'Link';
-      
+      const label =
+        formData.label?.trim() ||
+        LINK_TYPES.find((t) => t.value === formData.type)?.label ||
+        'Link';
+
       const payload = {
         type: formData.type,
         url: formData.url,
@@ -88,9 +119,7 @@ export function LinksSection({ links, profileId, onUpdate }: LinksSectionProps) 
         }
 
         const { link } = await response.json();
-        const updatedLinks = links.map((l) =>
-          l.id === editingLink.id ? link : l
-        );
+        const updatedLinks = links.map((l) => (l.id === editingLink.id ? link : l));
         onUpdate(updatedLinks);
       } else {
         // Create new link
@@ -178,7 +207,7 @@ export function LinksSection({ links, profileId, onUpdate }: LinksSectionProps) 
             <DialogHeader>
               <DialogTitle>{editingLink ? 'Edit' : 'Add'} Link</DialogTitle>
             </DialogHeader>
-            
+
             {error && (
               <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
                 {error}
@@ -190,7 +219,9 @@ export function LinksSection({ links, profileId, onUpdate }: LinksSectionProps) 
                 <Label>Link Type</Label>
                 <Select
                   value={formData.type || 'GITHUB'}
-                  onValueChange={(value) => setFormData((prev) => ({ ...prev, type: value as Link['type'] }))}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, type: value as Link['type'] }))
+                  }
                   disabled={isLoading}
                 >
                   <SelectTrigger>
@@ -227,7 +258,9 @@ export function LinksSection({ links, profileId, onUpdate }: LinksSectionProps) 
                 <Input
                   value={formData.label || ''}
                   onChange={(e) => setFormData((prev) => ({ ...prev, label: e.target.value }))}
-                  placeholder={LINK_TYPES.find((t) => t.value === formData.type)?.label || 'Custom label'}
+                  placeholder={
+                    LINK_TYPES.find((t) => t.value === formData.type)?.label || 'Custom label'
+                  }
                   disabled={isLoading}
                 />
                 <p className="text-xs text-muted-foreground">
@@ -267,23 +300,33 @@ export function LinksSection({ links, profileId, onUpdate }: LinksSectionProps) 
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
                     <Icon className="h-5 w-5" />
                   </div>
-                  <div className="flex-1 min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="font-medium">{link.label || link.type}</div>
                     <a
                       href={link.url}
                       target="_blank"
                       rel="noopener"
-                      className="flex items-center gap-1 text-sm text-muted-foreground hover:text-primary truncate"
+                      className="flex items-center gap-1 truncate text-sm text-muted-foreground hover:text-primary"
                     >
                       {link.url}
                       <ExternalLink className="h-3 w-3 flex-shrink-0" />
                     </a>
                   </div>
                   <div className="flex gap-1">
-                    <Button variant="ghost" size="sm" onClick={() => handleOpenDialog(link)} disabled={isLoading}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleOpenDialog(link)}
+                      disabled={isLoading}
+                    >
                       Edit
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleDelete(link.id)} disabled={isLoading}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDelete(link.id)}
+                      disabled={isLoading}
+                    >
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>

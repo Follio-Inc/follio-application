@@ -1,6 +1,19 @@
 'use client';
 
-import { Mail, MapPin, Globe, Github, Linkedin, Twitter, ExternalLink, Calendar, Building2, GraduationCap, Award, FileCheck } from 'lucide-react';
+import {
+  Mail,
+  MapPin,
+  Globe,
+  Github,
+  Linkedin,
+  Twitter,
+  ExternalLink,
+  Calendar,
+  Building2,
+  GraduationCap,
+  Award,
+  FileCheck,
+} from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -39,7 +52,10 @@ export function ResumeView({ profile }: ResumeViewProps) {
         <CardContent className="pt-6">
           <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-start">
             <Avatar className="h-24 w-24 sm:h-32 sm:w-32">
-              <AvatarImage src={profile.avatarUrl || undefined} alt={profile.firstName || undefined} />
+              <AvatarImage
+                src={profile.avatarUrl || undefined}
+                alt={profile.firstName || undefined}
+              />
               <AvatarFallback className="text-2xl">{initials}</AvatarFallback>
             </Avatar>
             <div className="flex-1 text-center sm:text-left">
@@ -154,7 +170,8 @@ export function ResumeView({ profile }: ResumeViewProps) {
                       </div>
                       <div className="flex items-center gap-1 text-sm text-muted-foreground">
                         <Calendar className="h-4 w-4" />
-                        {formatDate(exp.startDate)} — {exp.isCurrent ? 'Present' : formatDate(exp.endDate)}
+                        {formatDate(exp.startDate)} —{' '}
+                        {exp.isCurrent ? 'Present' : formatDate(exp.endDate)}
                       </div>
                     </div>
                     {exp.description && (

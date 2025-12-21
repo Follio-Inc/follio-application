@@ -8,10 +8,7 @@ import { SkillGroupSchema } from '@/lib/validations';
  * PATCH /api/profile/skill-groups/[id]
  * Update a skill group
  */
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { userId } = await auth();
 

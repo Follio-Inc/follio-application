@@ -11,7 +11,7 @@ interface ProfilePageProps {
 export async function generateMetadata({ params }: ProfilePageProps): Promise<Metadata> {
   const { handle } = await params;
   const profile = await getPublicProfile(handle);
-  
+
   if (!profile) {
     return {
       title: 'Profile Not Found | Follio',
@@ -19,7 +19,9 @@ export async function generateMetadata({ params }: ProfilePageProps): Promise<Me
   }
 
   const title = `${profile.firstName} ${profile.lastName} | Follio`;
-  const description = profile.summary || `${profile.headline || 'Professional'} based in ${profile.location || 'Unknown'}`;
+  const description =
+    profile.summary ||
+    `${profile.headline || 'Professional'} based in ${profile.location || 'Unknown'}`;
 
   return {
     title,
@@ -49,7 +51,7 @@ export const revalidate = 60; // ISR: revalidate every 60 seconds
 export default async function ProfilePage({ params, searchParams }: ProfilePageProps) {
   const { handle } = await params;
   const { view = 'resume' } = await searchParams;
-  
+
   const profile = await getPublicProfile(handle);
 
   if (!profile || profile.status === 'DRAFT') {
@@ -62,9 +64,9 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
   }
 
   return (
-    <ProfileViewer 
-      profile={profile} 
-      initialView={view as 'resume' | 'portfolio' | 'timeline' | 'recruiter'} 
+    <ProfileViewer
+      profile={profile}
+      initialView={view as 'resume' | 'portfolio' | 'timeline' | 'recruiter'}
     />
   );
 }

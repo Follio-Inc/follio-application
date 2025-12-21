@@ -7,7 +7,14 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 
 import { formatDate } from '@/lib/utils';
-import type { PublicProfile, WorkExperience, Education, Award as AwardType, Certification, Project } from '@/types';
+import type {
+  PublicProfile,
+  WorkExperience,
+  Education,
+  Award as AwardType,
+  Certification,
+  Project,
+} from '@/types';
 
 interface TimelineViewProps {
   profile: PublicProfile;
@@ -63,21 +70,23 @@ function buildTimeline(profile: PublicProfile): TimelineItem[] {
   });
 
   // Projects (with dates)
-  profile.projects?.filter((p) => p.startDate).forEach((project) => {
-    items.push({
-      id: `project-${project.id}`,
-      type: 'project',
-      date: project.startDate,
-      endDate: project.endDate,
-      isCurrent: project.isCurrent,
-      title: project.title,
-      subtitle: project.shortDesc || 'Project',
-      description: project.description,
-      tags: project.techStack || [],
-      icon: FolderKanban,
-      color: 'bg-purple-500',
+  profile.projects
+    ?.filter((p) => p.startDate)
+    .forEach((project) => {
+      items.push({
+        id: `project-${project.id}`,
+        type: 'project',
+        date: project.startDate,
+        endDate: project.endDate,
+        isCurrent: project.isCurrent,
+        title: project.title,
+        subtitle: project.shortDesc || 'Project',
+        description: project.description,
+        tags: project.techStack || [],
+        icon: FolderKanban,
+        color: 'bg-purple-500',
+      });
     });
-  });
 
   // Awards
   profile.awards?.forEach((award) => {
@@ -197,12 +206,14 @@ export function TimelineView({ profile }: TimelineViewProps) {
                       <h3 className="mt-1 font-semibold">{item.title}</h3>
                       <p className="text-sm text-muted-foreground">{item.subtitle}</p>
                       {item.description && (
-                        <p className="mt-2 text-sm text-muted-foreground line-clamp-3">
+                        <p className="mt-2 line-clamp-3 text-sm text-muted-foreground">
                           {item.description}
                         </p>
                       )}
                       {item.tags && item.tags.length > 0 && (
-                        <div className={`mt-2 flex flex-wrap gap-1 ${isLeft ? 'md:justify-end' : ''}`}>
+                        <div
+                          className={`mt-2 flex flex-wrap gap-1 ${isLeft ? 'md:justify-end' : ''}`}
+                        >
                           {item.tags.slice(0, 4).map((tag) => (
                             <Badge key={tag} variant="outline" className="text-xs">
                               {tag}
@@ -215,7 +226,9 @@ export function TimelineView({ profile }: TimelineViewProps) {
 
                   {/* Icon on the line */}
                   <div className="absolute left-0 flex h-12 w-12 items-center justify-center rounded-full border-4 border-background bg-muted md:left-1/2 md:-translate-x-1/2">
-                    <div className={`flex h-8 w-8 items-center justify-center rounded-full ${item.color}`}>
+                    <div
+                      className={`flex h-8 w-8 items-center justify-center rounded-full ${item.color}`}
+                    >
                       <Icon className="h-4 w-4 text-white" />
                     </div>
                   </div>

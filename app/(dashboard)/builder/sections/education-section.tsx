@@ -9,7 +9,14 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from '@/components/ui/dialog';
 
 import type { Education } from '@/types';
 
@@ -156,7 +163,7 @@ export function EducationSection({ educations, profileId, onUpdate }: EducationS
             <DialogHeader>
               <DialogTitle>{editingEducation ? 'Edit' : 'Add'} Education</DialogTitle>
             </DialogHeader>
-            
+
             {error && (
               <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
                 {error}
@@ -168,7 +175,9 @@ export function EducationSection({ educations, profileId, onUpdate }: EducationS
                 <Label>Institution *</Label>
                 <Input
                   value={formData.institution || ''}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, institution: e.target.value }))}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, institution: e.target.value }))
+                  }
                   placeholder="Stanford University"
                 />
               </div>
@@ -186,7 +195,9 @@ export function EducationSection({ educations, profileId, onUpdate }: EducationS
                   <Label>Field of Study</Label>
                   <Input
                     value={formData.fieldOfStudy || ''}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, fieldOfStudy: e.target.value }))}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, fieldOfStudy: e.target.value }))
+                    }
                     placeholder="Computer Science"
                   />
                 </div>
@@ -214,7 +225,9 @@ export function EducationSection({ educations, profileId, onUpdate }: EducationS
               <div className="flex items-center gap-2">
                 <Switch
                   checked={formData.isCurrent || false}
-                  onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, isCurrent: checked }))}
+                  onCheckedChange={(checked) =>
+                    setFormData((prev) => ({ ...prev, isCurrent: checked }))
+                  }
                 />
                 <Label>Currently studying here</Label>
               </div>
@@ -224,8 +237,17 @@ export function EducationSection({ educations, profileId, onUpdate }: EducationS
                   <Label>Start Date</Label>
                   <Input
                     type="month"
-                    value={formData.startDate ? new Date(formData.startDate).toISOString().slice(0, 7) : ''}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, startDate: e.target.value ? new Date(e.target.value) : null }))}
+                    value={
+                      formData.startDate
+                        ? new Date(formData.startDate).toISOString().slice(0, 7)
+                        : ''
+                    }
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        startDate: e.target.value ? new Date(e.target.value) : null,
+                      }))
+                    }
                   />
                 </div>
                 {!formData.isCurrent && (
@@ -233,8 +255,15 @@ export function EducationSection({ educations, profileId, onUpdate }: EducationS
                     <Label>End Date</Label>
                     <Input
                       type="month"
-                      value={formData.endDate ? new Date(formData.endDate).toISOString().slice(0, 7) : ''}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, endDate: e.target.value ? new Date(e.target.value) : null }))}
+                      value={
+                        formData.endDate ? new Date(formData.endDate).toISOString().slice(0, 7) : ''
+                      }
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          endDate: e.target.value ? new Date(e.target.value) : null,
+                        }))
+                      }
                     />
                   </div>
                 )}
@@ -244,7 +273,9 @@ export function EducationSection({ educations, profileId, onUpdate }: EducationS
                 <Label>Description / Activities</Label>
                 <Textarea
                   value={formData.description || ''}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, description: e.target.value }))
+                  }
                   placeholder="Relevant coursework, clubs, activities..."
                   rows={3}
                 />
@@ -285,17 +316,38 @@ export function EducationSection({ educations, profileId, onUpdate }: EducationS
                       </h4>
                       <p className="text-sm text-muted-foreground">{edu.institution}</p>
                       <p className="text-xs text-muted-foreground">
-                        {edu.startDate && new Date(edu.startDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                        {edu.startDate &&
+                          new Date(edu.startDate).toLocaleDateString('en-US', {
+                            month: 'short',
+                            year: 'numeric',
+                          })}
                         {edu.startDate && ' - '}
-                        {edu.isCurrent ? 'Present' : edu.endDate ? new Date(edu.endDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : ''}
+                        {edu.isCurrent
+                          ? 'Present'
+                          : edu.endDate
+                            ? new Date(edu.endDate).toLocaleDateString('en-US', {
+                                month: 'short',
+                                year: 'numeric',
+                              })
+                            : ''}
                         {edu.gpa && ` • GPA: ${edu.gpa}`}
                       </p>
                     </div>
                     <div className="flex gap-2">
-                      <Button variant="ghost" size="sm" onClick={() => handleOpenDialog(edu)} disabled={isLoading}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleOpenDialog(edu)}
+                        disabled={isLoading}
+                      >
                         Edit
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDelete(edu.id)} disabled={isLoading}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDelete(edu.id)}
+                        disabled={isLoading}
+                      >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>

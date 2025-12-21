@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
 - DevOps infrastructure setup
   - GitHub Actions CI/CD pipeline
   - PR and issue templates
@@ -16,18 +17,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Error handling utilities
 
 ### Changed
+
 - None
 
 ### Deprecated
+
 - None
 
 ### Removed
+
 - None
 
 ### Fixed
+
 - None
 
 ### Security
+
 - None
 
 ---
@@ -35,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0] - 2024-12-20
 
 ### Added
+
 - Initial release
 - Profile management with multiple views (Resume, Portfolio, Timeline, Recruiter)
 - GitHub import integration
@@ -48,9 +55,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History
 
-| Version | Date | Description |
-|---------|------|-------------|
-| 0.1.0 | 2024-12-20 | Initial release |
+| Version | Date       | Description     |
+| ------- | ---------- | --------------- |
+| 0.1.0   | 2024-12-20 | Initial release |
 
 ---
 

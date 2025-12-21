@@ -47,14 +47,10 @@ export function UnderConstruction({
           </motion.div>
 
           {/* Title */}
-          <h1 className="mb-4 text-4xl font-bold tracking-tight sm:text-5xl">
-            {title}
-          </h1>
+          <h1 className="mb-4 text-4xl font-bold tracking-tight sm:text-5xl">{title}</h1>
 
           {/* Description */}
-          <p className="mx-auto mb-8 max-w-md text-lg text-muted-foreground">
-            {description}
-          </p>
+          <p className="mx-auto mb-8 max-w-md text-lg text-muted-foreground">{description}</p>
 
           {/* Progress Bar Animation */}
           <div className="mx-auto mb-8 h-2 w-64 overflow-hidden rounded-full bg-muted">
@@ -69,11 +65,7 @@ export function UnderConstruction({
           {/* Buttons */}
           <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
             {showBackButton && (
-              <Button
-                variant="outline"
-                onClick={() => window.history.back()}
-                className="gap-2"
-              >
+              <Button variant="outline" onClick={() => window.history.back()} className="gap-2">
                 <ArrowLeft className="h-4 w-4" />
                 Go Back
               </Button>
@@ -96,9 +88,7 @@ export function UnderConstruction({
           transition={{ delay: 0.5, duration: 0.5 }}
           className="mt-16 text-center"
         >
-          <p className="text-sm text-muted-foreground">
-            🚀 Launching soon with amazing features
-          </p>
+          <p className="text-sm text-muted-foreground">🚀 Launching soon with amazing features</p>
         </motion.div>
       </div>
     </div>

@@ -1,6 +1,6 @@
 /**
  * Resume Parser Service
- * 
+ *
  * Parses PDF and text resumes into normalized profile data.
  * Uses pdf-parse for PDF extraction and rule-based parsing for structured data.
  */
@@ -58,12 +58,14 @@ const PATTERNS = {
   github: /github\.com\/[\w-]+/i,
   url: /https?:\/\/[^\s]+/gi,
   date: /(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{4}|\d{1,2}\/\d{4}|\d{4}/gi,
-  dateRange: /(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{4}\s*[-–—]\s*(?:Present|Current|(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{4})/gi,
+  dateRange:
+    /(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{4}\s*[-–—]\s*(?:Present|Current|(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{4})/gi,
 };
 
 // Section headers to identify resume sections
 const SECTION_HEADERS = {
-  experience: /^(?:work\s+)?experience|employment(?:\s+history)?|professional\s+experience|work\s+history/i,
+  experience:
+    /^(?:work\s+)?experience|employment(?:\s+history)?|professional\s+experience|work\s+history/i,
   education: /^education(?:al)?(?:\s+background)?|academic/i,
   skills: /^(?:technical\s+)?skills|competenc(?:y|ies)|expertise|technologies/i,
   summary: /^(?:professional\s+)?summary|profile|objective|about(?:\s+me)?/i,
@@ -91,9 +93,12 @@ export async function extractTextFromPDF(buffer: Buffer): Promise<string> {
  * Parse plain text resume content
  */
 export function parseResumeText(text: string): ParsedResume {
-  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+  const lines = text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
   let confidence = 0.5;
-  
+
   const result: ParsedResume = {
     basics: {},
     workExperiences: [],
@@ -193,7 +198,10 @@ export function parseResumeText(text: string): ParsedResume {
   if (sections.skills) {
     const skillText = sections.skills.join(' ');
     // Split by common delimiters
-    const skills = skillText.split(/[,;•|]|\s{2,}/).map((s) => s.trim()).filter((s) => s.length > 0 && s.length < 30);
+    const skills = skillText
+      .split(/[,;•|]|\s{2,}/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0 && s.length < 30);
     result.skills = skills;
     if (skills.length > 0) confidence += 0.1;
   }
@@ -222,10 +230,12 @@ export function parseResumeText(text: string): ParsedResume {
     const degrees = ['Bachelor', 'Master', 'PhD', 'Ph.D.', 'MBA', 'B.S.', 'M.S.', 'B.A.', 'M.A.'];
     const foundDegree = degrees.find((d) => eduText.includes(d));
     if (foundDegree) {
-      result.educations = [{
-        institution: 'University', // Would need better parsing
-        degree: foundDegree,
-      }];
+      result.educations = [
+        {
+          institution: 'University', // Would need better parsing
+          degree: foundDegree,
+        },
+      ];
       confidence += 0.1;
     }
   }
@@ -237,10 +247,7 @@ export function parseResumeText(text: string): ParsedResume {
 /**
  * Main entry point for resume parsing
  */
-export async function parseResume(
-  input: Buffer | string,
-  mimeType: string
-): Promise<ParsedResume> {
+export async function parseResume(input: Buffer | string, mimeType: string): Promise<ParsedResume> {
   let text: string;
 
   if (typeof input === 'string') {

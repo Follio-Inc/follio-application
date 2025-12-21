@@ -1,7 +1,17 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Mail, MapPin, Calendar, Briefcase, GraduationCap, Code2, Download, CheckCircle, Globe } from 'lucide-react';
+import {
+  Mail,
+  MapPin,
+  Calendar,
+  Briefcase,
+  GraduationCap,
+  Code2,
+  Download,
+  CheckCircle,
+  Globe,
+} from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -20,16 +30,17 @@ export function RecruiterView({ profile }: RecruiterViewProps) {
   const initials = `${profile.firstName?.[0] || ''}${profile.lastName?.[0] || ''}`;
 
   // Calculate key metrics
-  const totalYearsExperience = profile.workExperiences?.reduce((total, exp) => {
-    const start = new Date(exp.startDate);
-    const end = exp.isCurrent ? new Date() : exp.endDate ? new Date(exp.endDate) : new Date();
-    const years = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 365);
-    return total + years;
-  }, 0) || 0;
+  const totalYearsExperience =
+    profile.workExperiences?.reduce((total, exp) => {
+      const start = new Date(exp.startDate);
+      const end = exp.isCurrent ? new Date() : exp.endDate ? new Date(exp.endDate) : new Date();
+      const years = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 365);
+      return total + years;
+    }, 0) || 0;
 
   const currentRole = profile.workExperiences?.find((exp) => exp.isCurrent);
   const latestEducation = profile.educations?.[0];
-  
+
   // Get top skills (expert level first)
   const expertSkills = profile.skills?.filter((s) => s.level === 'EXPERT') || [];
   const otherSkills = profile.skills?.filter((s) => s.level !== 'EXPERT') || [];
@@ -37,7 +48,7 @@ export function RecruiterView({ profile }: RecruiterViewProps) {
 
   // Unique companies
   const companies = [...new Set(profile.workExperiences?.map((e) => e.company) || [])];
-  
+
   // Tech stack from projects
   const allTech = profile.projects?.flatMap((p) => p.techStack || []) || [];
   const uniqueTech = [...new Set(allTech)].slice(0, 8);
@@ -54,7 +65,10 @@ export function RecruiterView({ profile }: RecruiterViewProps) {
           <CardContent className="pt-6">
             <div className="flex flex-col items-center gap-6 sm:flex-row">
               <Avatar className="h-24 w-24 border-4 border-background shadow-lg">
-                <AvatarImage src={profile.avatarUrl || undefined} alt={profile.firstName || undefined} />
+                <AvatarImage
+                  src={profile.avatarUrl || undefined}
+                  alt={profile.firstName || undefined}
+                />
                 <AvatarFallback className="text-2xl">{initials}</AvatarFallback>
               </Avatar>
               <div className="flex-1 text-center sm:text-left">
@@ -299,7 +313,8 @@ export function RecruiterView({ profile }: RecruiterViewProps) {
                           <p className="text-sm text-muted-foreground">{exp.company}</p>
                         </div>
                         <span className="text-sm text-muted-foreground">
-                          {formatDate(exp.startDate)} — {exp.isCurrent ? 'Present' : formatDate(exp.endDate)}
+                          {formatDate(exp.startDate)} —{' '}
+                          {exp.isCurrent ? 'Present' : formatDate(exp.endDate)}
                         </span>
                       </div>
                     </div>

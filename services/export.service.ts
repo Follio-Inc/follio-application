@@ -37,7 +37,9 @@ export function toJSONResume(profile: FullProfile): JSONResume {
       position: exp.role,
       url: exp.companyUrl || undefined,
       startDate: formatDate(exp.startDate, { year: 'numeric', month: '2-digit' }),
-      endDate: exp.isCurrent ? undefined : formatDate(exp.endDate, { year: 'numeric', month: '2-digit' }) || undefined,
+      endDate: exp.isCurrent
+        ? undefined
+        : formatDate(exp.endDate, { year: 'numeric', month: '2-digit' }) || undefined,
       summary: exp.description || undefined,
       highlights: exp.bullets,
     })),
@@ -47,28 +49,33 @@ export function toJSONResume(profile: FullProfile): JSONResume {
       area: edu.fieldOfStudy || undefined,
       studyType: edu.degree || undefined,
       startDate: formatDate(edu.startDate, { year: 'numeric', month: '2-digit' }) || undefined,
-      endDate: edu.isCurrent ? undefined : formatDate(edu.endDate, { year: 'numeric', month: '2-digit' }) || undefined,
+      endDate: edu.isCurrent
+        ? undefined
+        : formatDate(edu.endDate, { year: 'numeric', month: '2-digit' }) || undefined,
       score: edu.gpa || undefined,
       courses: edu.activities,
     })),
-    skills: profile.skillGroups.length > 0
-      ? profile.skillGroups.map((group) => ({
-          name: group.name,
-          level: undefined,
-          keywords: group.skills.map((s) => s.name),
-        }))
-      : profile.skills.map((skill) => ({
-          name: skill.name,
-          level: skill.level || undefined,
-          keywords: [],
-        })),
+    skills:
+      profile.skillGroups.length > 0
+        ? profile.skillGroups.map((group) => ({
+            name: group.name,
+            level: undefined,
+            keywords: group.skills.map((s) => s.name),
+          }))
+        : profile.skills.map((skill) => ({
+            name: skill.name,
+            level: skill.level || undefined,
+            keywords: [],
+          })),
     projects: profile.projects.map((project) => ({
       name: project.title,
       description: project.description || undefined,
       highlights: project.highlights,
       keywords: project.techStack,
       startDate: formatDate(project.startDate, { year: 'numeric', month: '2-digit' }) || undefined,
-      endDate: project.isCurrent ? undefined : formatDate(project.endDate, { year: 'numeric', month: '2-digit' }) || undefined,
+      endDate: project.isCurrent
+        ? undefined
+        : formatDate(project.endDate, { year: 'numeric', month: '2-digit' }) || undefined,
       url: project.url || project.repoUrl || undefined,
     })),
     awards: profile.awards.map((award) => ({
@@ -97,7 +104,7 @@ export function toPlainText(profile: FullProfile): string {
   lines.push(fullName.toUpperCase());
   if (profile.headline) lines.push(profile.headline);
   if (profile.location) lines.push(profile.location);
-  
+
   // Contact
   const contacts: string[] = [];
   if (profile.contactInfo?.email && profile.contactInfo.emailPublic) {
@@ -254,17 +261,25 @@ export function toPDFHtml(profile: FullProfile): string {
     </div>
   </div>
 
-  ${profile.summary ? `
+  ${
+    profile.summary
+      ? `
   <div class="section">
     <h2>Summary</h2>
     <p>${profile.summary}</p>
   </div>
-  ` : ''}
+  `
+      : ''
+  }
 
-  ${profile.workExperiences.length > 0 ? `
+  ${
+    profile.workExperiences.length > 0
+      ? `
   <div class="section">
     <h2>Experience</h2>
-    ${profile.workExperiences.map((exp) => `
+    ${profile.workExperiences
+      .map(
+        (exp) => `
     <div class="entry">
       <div class="entry-header">
         <div>
@@ -273,20 +288,32 @@ export function toPDFHtml(profile: FullProfile): string {
         </div>
         <div class="entry-date">${formatDate(exp.startDate)} - ${exp.isCurrent ? 'Present' : formatDate(exp.endDate)}</div>
       </div>
-      ${exp.bullets.length > 0 ? `
+      ${
+        exp.bullets.length > 0
+          ? `
       <ul>
         ${exp.bullets.map((b) => `<li>${b}</li>`).join('')}
       </ul>
-      ` : ''}
+      `
+          : ''
+      }
     </div>
-    `).join('')}
+    `
+      )
+      .join('')}
   </div>
-  ` : ''}
+  `
+      : ''
+  }
 
-  ${profile.educations.length > 0 ? `
+  ${
+    profile.educations.length > 0
+      ? `
   <div class="section">
     <h2>Education</h2>
-    ${profile.educations.map((edu) => `
+    ${profile.educations
+      .map(
+        (edu) => `
     <div class="entry">
       <div class="entry-header">
         <div>
@@ -296,31 +323,47 @@ export function toPDFHtml(profile: FullProfile): string {
         <div class="entry-date">${formatDate(edu.startDate)} - ${edu.isCurrent ? 'Present' : formatDate(edu.endDate)}</div>
       </div>
     </div>
-    `).join('')}
+    `
+      )
+      .join('')}
   </div>
-  ` : ''}
+  `
+      : ''
+  }
 
-  ${profile.skills.length > 0 ? `
+  ${
+    profile.skills.length > 0
+      ? `
   <div class="section">
     <h2>Skills</h2>
     <div class="skills">
       ${profile.skills.map((s) => `<span class="skill">${s.name}</span>`).join('')}
     </div>
   </div>
-  ` : ''}
+  `
+      : ''
+  }
 
-  ${profile.projects.length > 0 ? `
+  ${
+    profile.projects.length > 0
+      ? `
   <div class="section">
     <h2>Projects</h2>
-    ${profile.projects.map((p) => `
+    ${profile.projects
+      .map(
+        (p) => `
     <div class="entry">
       <h3 class="entry-title">${p.title}</h3>
       ${p.description ? `<div class="entry-description">${p.description}</div>` : ''}
       ${p.techStack.length > 0 ? `<div class="entry-subtitle">Tech: ${p.techStack.join(', ')}</div>` : ''}
     </div>
-    `).join('')}
+    `
+      )
+      .join('')}
   </div>
-  ` : ''}
+  `
+      : ''
+  }
 </body>
 </html>
   `.trim();

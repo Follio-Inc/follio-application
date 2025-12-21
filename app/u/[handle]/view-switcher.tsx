@@ -11,10 +11,25 @@ interface ViewSwitcherProps {
 }
 
 const VIEWS = [
-  { id: 'resume' as const, label: 'Resume', icon: FileText, description: 'Traditional resume format' },
-  { id: 'portfolio' as const, label: 'Portfolio', icon: Grid3X3, description: 'Visual project showcase' },
+  {
+    id: 'resume' as const,
+    label: 'Resume',
+    icon: FileText,
+    description: 'Traditional resume format',
+  },
+  {
+    id: 'portfolio' as const,
+    label: 'Portfolio',
+    icon: Grid3X3,
+    description: 'Visual project showcase',
+  },
   { id: 'timeline' as const, label: 'Timeline', icon: Clock, description: 'Career journey' },
-  { id: 'recruiter' as const, label: 'Recruiter', icon: UserCheck, description: 'Key facts summary' },
+  {
+    id: 'recruiter' as const,
+    label: 'Recruiter',
+    icon: UserCheck,
+    description: 'Key facts summary',
+  },
 ];
 
 export function ViewSwitcher({ currentView, onViewChange }: ViewSwitcherProps) {
@@ -25,14 +40,16 @@ export function ViewSwitcher({ currentView, onViewChange }: ViewSwitcherProps) {
           {VIEWS.map((view) => {
             const Icon = view.icon;
             const isActive = currentView === view.id;
-            
+
             return (
               <button
                 key={view.id}
                 onClick={() => onViewChange(view.id)}
                 className="relative flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
               >
-                <Icon className={`h-4 w-4 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
+                <Icon
+                  className={`h-4 w-4 ${isActive ? 'text-primary' : 'text-muted-foreground'}`}
+                />
                 <span className={isActive ? 'text-primary' : 'text-muted-foreground'}>
                   {view.label}
                 </span>

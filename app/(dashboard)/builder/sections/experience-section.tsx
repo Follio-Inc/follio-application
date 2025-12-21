@@ -8,10 +8,23 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from '@/components/ui/dialog';
 
 import type { WorkExperience } from '@/types';
 
@@ -194,7 +207,7 @@ export function ExperienceSection({ experiences, profileId, onUpdate }: Experien
             <DialogHeader>
               <DialogTitle>{editingExperience ? 'Edit' : 'Add'} Experience</DialogTitle>
             </DialogHeader>
-            
+
             {error && (
               <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
                 {error}
@@ -234,7 +247,9 @@ export function ExperienceSection({ experiences, profileId, onUpdate }: Experien
                   <Label>Location Type</Label>
                   <Select
                     value={formData.locationType || ''}
-                    onValueChange={(value) => setFormData((prev) => ({ ...prev, locationType: value as any }))}
+                    onValueChange={(value) =>
+                      setFormData((prev) => ({ ...prev, locationType: value as any }))
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select type" />
@@ -253,7 +268,9 @@ export function ExperienceSection({ experiences, profileId, onUpdate }: Experien
                   <Label>Employment Type</Label>
                   <Select
                     value={formData.employmentType || ''}
-                    onValueChange={(value) => setFormData((prev) => ({ ...prev, employmentType: value as any }))}
+                    onValueChange={(value) =>
+                      setFormData((prev) => ({ ...prev, employmentType: value as any }))
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select type" />
@@ -270,7 +287,9 @@ export function ExperienceSection({ experiences, profileId, onUpdate }: Experien
                 <div className="flex items-center gap-2 pt-7">
                   <Switch
                     checked={formData.isCurrent || false}
-                    onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, isCurrent: checked }))}
+                    onCheckedChange={(checked) =>
+                      setFormData((prev) => ({ ...prev, isCurrent: checked }))
+                    }
                   />
                   <Label>Currently working here</Label>
                 </div>
@@ -281,8 +300,14 @@ export function ExperienceSection({ experiences, profileId, onUpdate }: Experien
                   <Label>Start Date</Label>
                   <Input
                     type="month"
-                    value={formData.startDate ? new Date(formData.startDate).toISOString().slice(0, 7) : ''}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, startDate: new Date(e.target.value) }))}
+                    value={
+                      formData.startDate
+                        ? new Date(formData.startDate).toISOString().slice(0, 7)
+                        : ''
+                    }
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, startDate: new Date(e.target.value) }))
+                    }
                   />
                 </div>
                 {!formData.isCurrent && (
@@ -290,8 +315,12 @@ export function ExperienceSection({ experiences, profileId, onUpdate }: Experien
                     <Label>End Date</Label>
                     <Input
                       type="month"
-                      value={formData.endDate ? new Date(formData.endDate).toISOString().slice(0, 7) : ''}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, endDate: new Date(e.target.value) }))}
+                      value={
+                        formData.endDate ? new Date(formData.endDate).toISOString().slice(0, 7) : ''
+                      }
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, endDate: new Date(e.target.value) }))
+                      }
                     />
                   </div>
                 )}
@@ -301,7 +330,9 @@ export function ExperienceSection({ experiences, profileId, onUpdate }: Experien
                 <Label>Description</Label>
                 <Textarea
                   value={formData.description || ''}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, description: e.target.value }))
+                  }
                   placeholder="Brief overview of your role..."
                   rows={3}
                 />
@@ -320,7 +351,7 @@ export function ExperienceSection({ experiences, profileId, onUpdate }: Experien
                     Add
                   </Button>
                 </div>
-                <ul className="space-y-2 mt-2">
+                <ul className="mt-2 space-y-2">
                   {(formData.bullets || []).map((bullet, i) => (
                     <li key={i} className="flex items-start gap-2 text-sm">
                       <span className="flex-1 rounded bg-muted p-2">• {bullet}</span>
@@ -351,11 +382,14 @@ export function ExperienceSection({ experiences, profileId, onUpdate }: Experien
                     Add
                   </Button>
                 </div>
-                <div className="flex flex-wrap gap-2 mt-2">
+                <div className="mt-2 flex flex-wrap gap-2">
                   {(formData.tags || []).map((tag) => (
                     <Badge key={tag} variant="secondary" className="gap-1">
                       {tag}
-                      <button onClick={() => removeTag(tag)} className="ml-1 hover:text-destructive">
+                      <button
+                        onClick={() => removeTag(tag)}
+                        className="ml-1 hover:text-destructive"
+                      >
                         ×
                       </button>
                     </Badge>
@@ -367,7 +401,10 @@ export function ExperienceSection({ experiences, profileId, onUpdate }: Experien
               <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isLoading}>
                 Cancel
               </Button>
-              <Button onClick={handleSave} disabled={!formData.company || !formData.role || isLoading}>
+              <Button
+                onClick={handleSave}
+                disabled={!formData.company || !formData.role || isLoading}
+              >
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {isLoading ? 'Saving...' : 'Save'}
               </Button>
@@ -396,16 +433,36 @@ export function ExperienceSection({ experiences, profileId, onUpdate }: Experien
                       <h4 className="font-medium">{exp.role}</h4>
                       <p className="text-sm text-muted-foreground">{exp.company}</p>
                       <p className="text-xs text-muted-foreground">
-                        {new Date(exp.startDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                        {new Date(exp.startDate).toLocaleDateString('en-US', {
+                          month: 'short',
+                          year: 'numeric',
+                        })}
                         {' - '}
-                        {exp.isCurrent ? 'Present' : exp.endDate ? new Date(exp.endDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : ''}
+                        {exp.isCurrent
+                          ? 'Present'
+                          : exp.endDate
+                            ? new Date(exp.endDate).toLocaleDateString('en-US', {
+                                month: 'short',
+                                year: 'numeric',
+                              })
+                            : ''}
                       </p>
                     </div>
                     <div className="flex gap-2">
-                      <Button variant="ghost" size="sm" onClick={() => handleOpenDialog(exp)} disabled={isLoading}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleOpenDialog(exp)}
+                        disabled={isLoading}
+                      >
                         Edit
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDelete(exp.id)} disabled={isLoading}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDelete(exp.id)}
+                        disabled={isLoading}
+                      >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>

@@ -24,7 +24,7 @@
     --input: 240 6% 90%;
     --ring: 262 83% 58%;
     --radius: 0.75rem;
-    
+
     /* Follio brand colors */
     --follio-purple: 262 83% 58%;
     --follio-purple-light: 262 83% 68%;
@@ -53,7 +53,7 @@
     --border: 240 4% 16%;
     --input: 240 4% 16%;
     --ring: 262 83% 65%;
-    
+
     /* Follio brand colors - dark mode */
     --follio-purple: 262 83% 65%;
     --follio-purple-light: 262 83% 75%;
@@ -69,7 +69,9 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    font-feature-settings:
+      'rlig' 1,
+      'calt' 1;
   }
 }
 
@@ -126,11 +128,21 @@
     }
   }
 
-  .stagger-1 { animation-delay: 0.1s; }
-  .stagger-2 { animation-delay: 0.2s; }
-  .stagger-3 { animation-delay: 0.3s; }
-  .stagger-4 { animation-delay: 0.4s; }
-  .stagger-5 { animation-delay: 0.5s; }
+  .stagger-1 {
+    animation-delay: 0.1s;
+  }
+  .stagger-2 {
+    animation-delay: 0.2s;
+  }
+  .stagger-3 {
+    animation-delay: 0.3s;
+  }
+  .stagger-4 {
+    animation-delay: 0.4s;
+  }
+  .stagger-5 {
+    animation-delay: 0.5s;
+  }
 }
 
 /* Scrollbar styling */

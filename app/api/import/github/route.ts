@@ -5,7 +5,7 @@ import { normalizeGitHubData } from '@/services/github.service';
 export async function POST(request: NextRequest) {
   try {
     const { userId } = await auth();
-    
+
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -14,18 +14,12 @@ export async function POST(request: NextRequest) {
     const { username, accessToken } = body;
 
     if (!username) {
-      return NextResponse.json(
-        { error: 'GitHub username is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'GitHub username is required' }, { status: 400 });
     }
 
     // Validate username format
     if (!/^[a-z\d](?:[a-z\d]|-(?=[a-z\d])){0,38}$/i.test(username)) {
-      return NextResponse.json(
-        { error: 'Invalid GitHub username format' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Invalid GitHub username format' }, { status: 400 });
     }
 
     const data = await normalizeGitHubData(username, accessToken);
@@ -37,12 +31,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('GitHub import error:', error);
-    
+
     if (error instanceof Error && error.message.includes('not found')) {
-      return NextResponse.json(
-        { error: 'GitHub user not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'GitHub user not found' }, { status: 404 });
     }
 
     return NextResponse.json(

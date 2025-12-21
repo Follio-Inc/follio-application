@@ -6,7 +6,7 @@ import { BuilderClient } from './builder-client';
 
 export default async function BuilderPage() {
   let userId: string | null = null;
-  
+
   try {
     const authResult = await auth();
     userId = authResult?.userId ?? null;
@@ -28,7 +28,10 @@ export default async function BuilderPage() {
           workExperiences: { orderBy: { sortOrder: 'asc' } },
           educations: { orderBy: { sortOrder: 'asc' } },
           skills: { orderBy: { sortOrder: 'asc' } },
-          skillGroups: { include: { skills: { orderBy: { sortOrder: 'asc' } } }, orderBy: { sortOrder: 'asc' } },
+          skillGroups: {
+            include: { skills: { orderBy: { sortOrder: 'asc' } } },
+            orderBy: { sortOrder: 'asc' },
+          },
           projects: { orderBy: { sortOrder: 'asc' } },
           awards: { orderBy: { sortOrder: 'asc' } },
           certifications: { orderBy: { sortOrder: 'asc' } },

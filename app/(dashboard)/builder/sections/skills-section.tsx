@@ -8,7 +8,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 import type { Skill, SkillGroup } from '@/types';
 
@@ -28,7 +34,7 @@ export function SkillsSection({ skills, skillGroups, profileId, onUpdate }: Skil
 
   const addSkill = async () => {
     if (!newSkillName.trim()) return;
-    
+
     setIsLoading(true);
     setError(null);
 
@@ -72,7 +78,10 @@ export function SkillsSection({ skills, skillGroups, profileId, onUpdate }: Skil
         throw new Error(data.error || 'Failed to delete skill');
       }
 
-      onUpdate(skills.filter((s) => s.id !== skillId), skillGroups);
+      onUpdate(
+        skills.filter((s) => s.id !== skillId),
+        skillGroups
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -82,7 +91,7 @@ export function SkillsSection({ skills, skillGroups, profileId, onUpdate }: Skil
 
   const addGroup = async () => {
     if (!newGroupName.trim()) return;
-    
+
     setIsLoading(true);
     setError(null);
 
@@ -128,7 +137,10 @@ export function SkillsSection({ skills, skillGroups, profileId, onUpdate }: Skil
       const updatedSkills = skills.map((s) =>
         s.groupId === groupId ? { ...s, groupId: null } : s
       );
-      onUpdate(updatedSkills, skillGroups.filter((g) => g.id !== groupId));
+      onUpdate(
+        updatedSkills,
+        skillGroups.filter((g) => g.id !== groupId)
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -147,9 +159,7 @@ export function SkillsSection({ skills, skillGroups, profileId, onUpdate }: Skil
       </CardHeader>
       <CardContent className="space-y-6">
         {error && (
-          <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-            {error}
-          </div>
+          <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
         )}
 
         {/* Add New Skill */}
@@ -176,7 +186,11 @@ export function SkillsSection({ skills, skillGroups, profileId, onUpdate }: Skil
               </SelectContent>
             </Select>
             <Button onClick={addSkill} disabled={!newSkillName.trim() || isLoading}>
-              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4" />
+              )}
             </Button>
           </div>
         </div>
@@ -204,9 +218,7 @@ export function SkillsSection({ skills, skillGroups, profileId, onUpdate }: Skil
                   <Badge key={skill.id} variant="secondary" className="gap-1 pr-1">
                     {skill.name}
                     {skill.level && (
-                      <span className="ml-1 text-xs opacity-70">
-                        ({skill.level.toLowerCase()})
-                      </span>
+                      <span className="ml-1 text-xs opacity-70">({skill.level.toLowerCase()})</span>
                     )}
                     <button
                       onClick={() => removeSkill(skill.id)}
@@ -233,9 +245,7 @@ export function SkillsSection({ skills, skillGroups, profileId, onUpdate }: Skil
                 <Badge key={skill.id} variant="secondary" className="gap-1 pr-1">
                   {skill.name}
                   {skill.level && (
-                    <span className="ml-1 text-xs opacity-70">
-                      ({skill.level.toLowerCase()})
-                    </span>
+                    <span className="ml-1 text-xs opacity-70">({skill.level.toLowerCase()})</span>
                   )}
                   <button
                     onClick={() => removeSkill(skill.id)}
@@ -267,7 +277,11 @@ export function SkillsSection({ skills, skillGroups, profileId, onUpdate }: Skil
               onKeyPress={(e) => e.key === 'Enter' && addGroup()}
               disabled={isLoading}
             />
-            <Button onClick={addGroup} variant="outline" disabled={!newGroupName.trim() || isLoading}>
+            <Button
+              onClick={addGroup}
+              variant="outline"
+              disabled={!newGroupName.trim() || isLoading}
+            >
               {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Add Group
             </Button>

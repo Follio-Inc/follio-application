@@ -3,7 +3,15 @@
  * Creates demo profile data for development and testing
  */
 
-import { PrismaClient, ProfileStatus, DataSource, LinkType, SkillLevel, EmploymentType, LocationType } from '@prisma/client';
+import {
+  PrismaClient,
+  ProfileStatus,
+  DataSource,
+  LinkType,
+  SkillLevel,
+  EmploymentType,
+  LocationType,
+} from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -118,7 +126,8 @@ I love open source, technical writing, and mentoring junior developers. When I'm
         employmentType: EmploymentType.FULL_TIME,
         startDate: new Date('2022-03-01'),
         isCurrent: true,
-        description: 'Leading frontend architecture and driving technical decisions for a B2B SaaS platform.',
+        description:
+          'Leading frontend architecture and driving technical decisions for a B2B SaaS platform.',
         bullets: [
           'Architected and implemented a new design system using React, TypeScript, and Tailwind CSS, reducing UI development time by 40%',
           'Led migration from REST to GraphQL, improving data fetching efficiency and reducing API calls by 60%',
@@ -126,7 +135,11 @@ I love open source, technical writing, and mentoring junior developers. When I'm
           'Mentored team of 4 junior developers, conducting code reviews and establishing best practices',
           'Reduced bundle size by 45% through code splitting and lazy loading strategies',
         ],
-        metrics: JSON.stringify({ teamSize: 12, usersScaled: '10K to 500K', performanceImprovement: '45%' }),
+        metrics: JSON.stringify({
+          teamSize: 12,
+          usersScaled: '10K to 500K',
+          performanceImprovement: '45%',
+        }),
         tags: ['React', 'TypeScript', 'GraphQL', 'WebSockets', 'Tailwind CSS'],
         source: DataSource.MANUAL,
         sortOrder: 0,
@@ -142,7 +155,8 @@ I love open source, technical writing, and mentoring junior developers. When I'm
         startDate: new Date('2019-06-01'),
         endDate: new Date('2022-02-28'),
         isCurrent: false,
-        description: 'Worked on Chrome DevTools, improving developer experience for millions of web developers.',
+        description:
+          'Worked on Chrome DevTools, improving developer experience for millions of web developers.',
         bullets: [
           'Developed new Performance panel features used by 2M+ developers monthly',
           'Implemented accessibility improvements in DevTools, earning internal accessibility award',
@@ -197,7 +211,7 @@ I love open source, technical writing, and mentoring junior developers. When I'm
         gpa: '3.9',
         description: 'Focused on distributed systems and machine learning.',
         activities: ['Teaching Assistant for CS 101', 'Stanford ACM Club'],
-        honors: ['Dean\'s List', 'Graduate Fellowship'],
+        honors: ["Dean's List", 'Graduate Fellowship'],
         source: DataSource.MANUAL,
         sortOrder: 0,
       },
@@ -253,21 +267,125 @@ I love open source, technical writing, and mentoring junior developers. When I'm
   await prisma.skill.createMany({
     data: [
       // Frontend
-      { profileId: profile.id, name: 'TypeScript', level: SkillLevel.EXPERT, yearsOfExp: 6, groupId: frontendGroup.id, source: DataSource.MANUAL, sortOrder: 0 },
-      { profileId: profile.id, name: 'React', level: SkillLevel.EXPERT, yearsOfExp: 7, groupId: frontendGroup.id, source: DataSource.MANUAL, sortOrder: 1 },
-      { profileId: profile.id, name: 'Next.js', level: SkillLevel.ADVANCED, yearsOfExp: 4, groupId: frontendGroup.id, source: DataSource.MANUAL, sortOrder: 2 },
-      { profileId: profile.id, name: 'Tailwind CSS', level: SkillLevel.EXPERT, yearsOfExp: 3, groupId: frontendGroup.id, source: DataSource.MANUAL, sortOrder: 3 },
-      { profileId: profile.id, name: 'GraphQL', level: SkillLevel.ADVANCED, yearsOfExp: 4, groupId: frontendGroup.id, source: DataSource.MANUAL, sortOrder: 4 },
+      {
+        profileId: profile.id,
+        name: 'TypeScript',
+        level: SkillLevel.EXPERT,
+        yearsOfExp: 6,
+        groupId: frontendGroup.id,
+        source: DataSource.MANUAL,
+        sortOrder: 0,
+      },
+      {
+        profileId: profile.id,
+        name: 'React',
+        level: SkillLevel.EXPERT,
+        yearsOfExp: 7,
+        groupId: frontendGroup.id,
+        source: DataSource.MANUAL,
+        sortOrder: 1,
+      },
+      {
+        profileId: profile.id,
+        name: 'Next.js',
+        level: SkillLevel.ADVANCED,
+        yearsOfExp: 4,
+        groupId: frontendGroup.id,
+        source: DataSource.MANUAL,
+        sortOrder: 2,
+      },
+      {
+        profileId: profile.id,
+        name: 'Tailwind CSS',
+        level: SkillLevel.EXPERT,
+        yearsOfExp: 3,
+        groupId: frontendGroup.id,
+        source: DataSource.MANUAL,
+        sortOrder: 3,
+      },
+      {
+        profileId: profile.id,
+        name: 'GraphQL',
+        level: SkillLevel.ADVANCED,
+        yearsOfExp: 4,
+        groupId: frontendGroup.id,
+        source: DataSource.MANUAL,
+        sortOrder: 4,
+      },
       // Backend
-      { profileId: profile.id, name: 'Node.js', level: SkillLevel.EXPERT, yearsOfExp: 8, groupId: backendGroup.id, source: DataSource.MANUAL, sortOrder: 0 },
-      { profileId: profile.id, name: 'PostgreSQL', level: SkillLevel.ADVANCED, yearsOfExp: 6, groupId: backendGroup.id, source: DataSource.MANUAL, sortOrder: 1 },
-      { profileId: profile.id, name: 'Python', level: SkillLevel.INTERMEDIATE, yearsOfExp: 4, groupId: backendGroup.id, source: DataSource.MANUAL, sortOrder: 2 },
-      { profileId: profile.id, name: 'Redis', level: SkillLevel.ADVANCED, yearsOfExp: 5, groupId: backendGroup.id, source: DataSource.MANUAL, sortOrder: 3 },
+      {
+        profileId: profile.id,
+        name: 'Node.js',
+        level: SkillLevel.EXPERT,
+        yearsOfExp: 8,
+        groupId: backendGroup.id,
+        source: DataSource.MANUAL,
+        sortOrder: 0,
+      },
+      {
+        profileId: profile.id,
+        name: 'PostgreSQL',
+        level: SkillLevel.ADVANCED,
+        yearsOfExp: 6,
+        groupId: backendGroup.id,
+        source: DataSource.MANUAL,
+        sortOrder: 1,
+      },
+      {
+        profileId: profile.id,
+        name: 'Python',
+        level: SkillLevel.INTERMEDIATE,
+        yearsOfExp: 4,
+        groupId: backendGroup.id,
+        source: DataSource.MANUAL,
+        sortOrder: 2,
+      },
+      {
+        profileId: profile.id,
+        name: 'Redis',
+        level: SkillLevel.ADVANCED,
+        yearsOfExp: 5,
+        groupId: backendGroup.id,
+        source: DataSource.MANUAL,
+        sortOrder: 3,
+      },
       // Tools
-      { profileId: profile.id, name: 'Docker', level: SkillLevel.ADVANCED, yearsOfExp: 5, groupId: toolsGroup.id, source: DataSource.MANUAL, sortOrder: 0 },
-      { profileId: profile.id, name: 'AWS', level: SkillLevel.ADVANCED, yearsOfExp: 5, groupId: toolsGroup.id, source: DataSource.MANUAL, sortOrder: 1 },
-      { profileId: profile.id, name: 'Git', level: SkillLevel.EXPERT, yearsOfExp: 8, groupId: toolsGroup.id, source: DataSource.MANUAL, sortOrder: 2 },
-      { profileId: profile.id, name: 'CI/CD', level: SkillLevel.ADVANCED, yearsOfExp: 5, groupId: toolsGroup.id, source: DataSource.MANUAL, sortOrder: 3 },
+      {
+        profileId: profile.id,
+        name: 'Docker',
+        level: SkillLevel.ADVANCED,
+        yearsOfExp: 5,
+        groupId: toolsGroup.id,
+        source: DataSource.MANUAL,
+        sortOrder: 0,
+      },
+      {
+        profileId: profile.id,
+        name: 'AWS',
+        level: SkillLevel.ADVANCED,
+        yearsOfExp: 5,
+        groupId: toolsGroup.id,
+        source: DataSource.MANUAL,
+        sortOrder: 1,
+      },
+      {
+        profileId: profile.id,
+        name: 'Git',
+        level: SkillLevel.EXPERT,
+        yearsOfExp: 8,
+        groupId: toolsGroup.id,
+        source: DataSource.MANUAL,
+        sortOrder: 2,
+      },
+      {
+        profileId: profile.id,
+        name: 'CI/CD',
+        level: SkillLevel.ADVANCED,
+        yearsOfExp: 5,
+        groupId: toolsGroup.id,
+        source: DataSource.MANUAL,
+        sortOrder: 3,
+      },
     ],
     skipDuplicates: true,
   });
@@ -280,7 +398,8 @@ I love open source, technical writing, and mentoring junior developers. When I'm
       {
         profileId: profile.id,
         title: 'DevDash',
-        description: 'An open-source developer dashboard that aggregates GitHub activity, CI/CD status, and project metrics in one beautiful interface. Built with Next.js and real-time WebSocket updates.',
+        description:
+          'An open-source developer dashboard that aggregates GitHub activity, CI/CD status, and project metrics in one beautiful interface. Built with Next.js and real-time WebSocket updates.',
         shortDesc: 'Developer productivity dashboard with real-time updates',
         url: 'https://devdash.dev',
         repoUrl: 'https://github.com/alexchen/devdash',
@@ -300,12 +419,17 @@ I love open source, technical writing, and mentoring junior developers. When I'm
       {
         profileId: profile.id,
         title: 'CodeReview AI',
-        description: 'An AI-powered code review assistant that integrates with GitHub PRs to provide intelligent suggestions and catch potential bugs before merge.',
+        description:
+          'An AI-powered code review assistant that integrates with GitHub PRs to provide intelligent suggestions and catch potential bugs before merge.',
         shortDesc: 'AI code review assistant for GitHub PRs',
         url: 'https://codereview-ai.com',
         repoUrl: 'https://github.com/alexchen/codereview-ai',
         techStack: ['Python', 'FastAPI', 'OpenAI', 'GitHub Actions'],
-        highlights: ['Processes 1000+ PRs daily', 'Reduced review time by 50%', 'Enterprise customers'],
+        highlights: [
+          'Processes 1000+ PRs daily',
+          'Reduced review time by 50%',
+          'Enterprise customers',
+        ],
         githubStars: 850,
         githubForks: 95,
         githubLanguage: 'Python',
@@ -318,11 +442,17 @@ I love open source, technical writing, and mentoring junior developers. When I'm
       {
         profileId: profile.id,
         title: 'React Component Library',
-        description: 'A comprehensive React component library with 50+ accessible, customizable components. Built with TypeScript and styled with CSS-in-JS for maximum flexibility.',
+        description:
+          'A comprehensive React component library with 50+ accessible, customizable components. Built with TypeScript and styled with CSS-in-JS for maximum flexibility.',
         shortDesc: 'Accessible React component library',
         repoUrl: 'https://github.com/alexchen/react-components',
         techStack: ['React', 'TypeScript', 'Storybook', 'Jest', 'CSS-in-JS'],
-        highlights: ['50+ components', '100% TypeScript', 'Full accessibility support', 'Extensive documentation'],
+        highlights: [
+          '50+ components',
+          '100% TypeScript',
+          'Full accessibility support',
+          'Extensive documentation',
+        ],
         githubStars: 450,
         githubForks: 60,
         githubLanguage: 'TypeScript',
@@ -346,7 +476,8 @@ I love open source, technical writing, and mentoring junior developers. When I'm
         title: 'Google Peer Bonus Award',
         issuer: 'Google',
         date: new Date('2021-06-01'),
-        description: 'Recognized for exceptional contributions to Chrome DevTools accessibility features.',
+        description:
+          'Recognized for exceptional contributions to Chrome DevTools accessibility features.',
         source: DataSource.MANUAL,
         sortOrder: 0,
       },

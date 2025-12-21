@@ -16,7 +16,10 @@ export function cn(...inputs: ClassValue[]) {
 /**
  * Format a date for display
  */
-export function formatDate(date: Date | string | null | undefined, options?: Intl.DateTimeFormatOptions): string {
+export function formatDate(
+  date: Date | string | null | undefined,
+  options?: Intl.DateTimeFormatOptions
+): string {
   if (!date) return '';
   const d = typeof date === 'string' ? new Date(date) : date;
   return d.toLocaleDateString('en-US', options ?? { month: 'short', year: 'numeric' });
@@ -45,14 +48,18 @@ export function calculateDuration(
   isCurrent?: boolean
 ): string {
   if (!startDate) return '';
-  
+
   const start = typeof startDate === 'string' ? new Date(startDate) : startDate;
-  const end = isCurrent || !endDate ? new Date() : (typeof endDate === 'string' ? new Date(endDate) : endDate);
-  
-  const months = Math.max(1, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 30)));
+  const end =
+    isCurrent || !endDate ? new Date() : typeof endDate === 'string' ? new Date(endDate) : endDate;
+
+  const months = Math.max(
+    1,
+    Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 30))
+  );
   const years = Math.floor(months / 12);
   const remainingMonths = months % 12;
-  
+
   if (years === 0) return `${months} mo`;
   if (remainingMonths === 0) return `${years} yr`;
   return `${years} yr ${remainingMonths} mo`;

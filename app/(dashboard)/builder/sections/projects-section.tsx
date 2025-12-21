@@ -10,7 +10,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from '@/components/ui/dialog';
 
 import type { Project } from '@/types';
 
@@ -90,9 +97,7 @@ export function ProjectsSection({ projects, profileId, onUpdate }: ProjectsSecti
         }
 
         const { project } = await response.json();
-        const updatedProjects = projects.map((p) =>
-          p.id === editingProject.id ? project : p
-        );
+        const updatedProjects = projects.map((p) => (p.id === editingProject.id ? project : p));
         onUpdate(updatedProjects);
       } else {
         // Create new project
@@ -194,9 +199,7 @@ export function ProjectsSection({ projects, profileId, onUpdate }: ProjectsSecti
       }
 
       const { project: updatedProject } = await response.json();
-      const updatedProjects = projects.map((p) =>
-        p.id === project.id ? updatedProject : p
-      );
+      const updatedProjects = projects.map((p) => (p.id === project.id ? updatedProject : p));
       onUpdate(updatedProjects);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -223,7 +226,7 @@ export function ProjectsSection({ projects, profileId, onUpdate }: ProjectsSecti
             <DialogHeader>
               <DialogTitle>{editingProject ? 'Edit' : 'Add'} Project</DialogTitle>
             </DialogHeader>
-            
+
             {error && (
               <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
                 {error}
@@ -253,7 +256,9 @@ export function ProjectsSection({ projects, profileId, onUpdate }: ProjectsSecti
                 <Label>Full Description</Label>
                 <Textarea
                   value={formData.description || ''}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, description: e.target.value }))
+                  }
                   placeholder="Detailed description of the project..."
                   rows={4}
                 />
@@ -300,11 +305,14 @@ export function ProjectsSection({ projects, profileId, onUpdate }: ProjectsSecti
                     Add
                   </Button>
                 </div>
-                <div className="flex flex-wrap gap-2 mt-2">
+                <div className="mt-2 flex flex-wrap gap-2">
                   {(formData.techStack || []).map((tech) => (
                     <Badge key={tech} variant="secondary" className="gap-1">
                       {tech}
-                      <button onClick={() => removeTech(tech)} className="ml-1 hover:text-destructive">
+                      <button
+                        onClick={() => removeTech(tech)}
+                        className="ml-1 hover:text-destructive"
+                      >
                         ×
                       </button>
                     </Badge>
@@ -325,7 +333,7 @@ export function ProjectsSection({ projects, profileId, onUpdate }: ProjectsSecti
                     Add
                   </Button>
                 </div>
-                <ul className="space-y-2 mt-2">
+                <ul className="mt-2 space-y-2">
                   {(formData.highlights || []).map((highlight, i) => (
                     <li key={i} className="flex items-start gap-2 text-sm">
                       <span className="flex-1 rounded bg-muted p-2">• {highlight}</span>
@@ -346,7 +354,9 @@ export function ProjectsSection({ projects, profileId, onUpdate }: ProjectsSecti
               <div className="flex items-center gap-2">
                 <Switch
                   checked={formData.featured || false}
-                  onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, featured: checked }))}
+                  onCheckedChange={(checked) =>
+                    setFormData((prev) => ({ ...prev, featured: checked }))
+                  }
                 />
                 <Label>Featured project (show prominently)</Label>
               </div>
@@ -395,13 +405,23 @@ export function ProjectsSection({ projects, profileId, onUpdate }: ProjectsSecti
                       )}
                       <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
                         {project.url && (
-                          <a href={project.url} target="_blank" rel="noopener" className="flex items-center gap-1 hover:text-primary">
+                          <a
+                            href={project.url}
+                            target="_blank"
+                            rel="noopener"
+                            className="flex items-center gap-1 hover:text-primary"
+                          >
                             <ExternalLink className="h-3 w-3" />
                             Live
                           </a>
                         )}
                         {project.repoUrl && (
-                          <a href={project.repoUrl} target="_blank" rel="noopener" className="flex items-center gap-1 hover:text-primary">
+                          <a
+                            href={project.repoUrl}
+                            target="_blank"
+                            rel="noopener"
+                            className="flex items-center gap-1 hover:text-primary"
+                          >
                             <Github className="h-3 w-3" />
                             Code
                           </a>
@@ -418,10 +438,20 @@ export function ProjectsSection({ projects, profileId, onUpdate }: ProjectsSecti
                       >
                         <Star className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleOpenDialog(project)} disabled={isLoading}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleOpenDialog(project)}
+                        disabled={isLoading}
+                      >
                         Edit
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDelete(project.id)} disabled={isLoading}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDelete(project.id)}
+                        disabled={isLoading}
+                      >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>

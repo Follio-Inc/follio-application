@@ -17,23 +17,27 @@ Build your professional presence once, share it everywhere.
 ## ✨ Features
 
 ### 🎯 **One Canonical Profile**
+
 - Single source of truth for your professional data
 - Import from LinkedIn, GitHub, or upload your resume
 - Smart merge with conflict resolution and provenance tracking
 
 ### 👁️ **Four Curated Views**
+
 - **Resume View** — Traditional, ATS-friendly format
 - **Portfolio View** — Visual showcase of projects
 - **Timeline View** — Interactive career journey
 - **Recruiter View** — Key facts dashboard for hiring managers
 
 ### 📤 **Perfect Parsing Exports**
+
 - JSON Resume standard (machine-readable)
 - Plain text (ATS-optimized)
 - PDF generation (coming soon)
 - Zero information loss from input to output
 
 ### 🔒 **Privacy Controls**
+
 - Public, private, or draft profiles
 - Share tokens for controlled access
 - Full data ownership
@@ -120,20 +124,21 @@ follio-app/
 
 ### Tech Stack
 
-| Layer | Technology |
-|-------|------------|
-| Framework | Next.js 15 (App Router) |
-| Language | TypeScript |
-| Styling | Tailwind CSS + shadcn/ui |
-| Database | PostgreSQL + Prisma ORM |
-| Auth | Clerk |
-| Animations | Framer Motion |
-| Validation | Zod |
-| Testing | Vitest |
+| Layer      | Technology               |
+| ---------- | ------------------------ |
+| Framework  | Next.js 15 (App Router)  |
+| Language   | TypeScript               |
+| Styling    | Tailwind CSS + shadcn/ui |
+| Database   | PostgreSQL + Prisma ORM  |
+| Auth       | Clerk                    |
+| Animations | Framer Motion            |
+| Validation | Zod                      |
+| Testing    | Vitest                   |
 
 ### Data Model
 
 The canonical profile model supports:
+
 - **Profile** — Core identity (handle, name, headline, summary)
 - **ContactInfo** — Email, phone, addresses
 - **WorkExperience** — Job history with bullets and tags
@@ -147,11 +152,11 @@ Each entity tracks its **source** (MANUAL, GITHUB, LINKEDIN, RESUME_IMPORT, API)
 
 ### Export Formats
 
-| Endpoint | Format | Use Case |
-|----------|--------|----------|
+| Endpoint                    | Format      | Use Case              |
+| --------------------------- | ----------- | --------------------- |
 | `/api/export/[handle]/json` | JSON Resume | Machine parsing, APIs |
-| `/api/export/[handle]/text` | Plain text | ATS systems |
-| `/api/export/[handle]/pdf` | PDF (HTML) | Human reading |
+| `/api/export/[handle]/text` | Plain text  | ATS systems           |
+| `/api/export/[handle]/pdf`  | PDF (HTML)  | Human reading         |
 
 ---
 
@@ -250,6 +255,7 @@ pnpm test:watch
 4. Deploy
 
 The app is optimized for Vercel with:
+
 - Edge middleware for auth
 - ISR (60s revalidation) for profile pages
 - Serverless functions for API routes

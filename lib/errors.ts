@@ -79,7 +79,8 @@ export const Errors = {
 
   forbidden: (message = 'Access denied') => new AppError(message, ErrorCode.FORBIDDEN, 403),
 
-  notFound: (resource = 'Resource') => new AppError(`${resource} not found`, ErrorCode.NOT_FOUND, 404),
+  notFound: (resource = 'Resource') =>
+    new AppError(`${resource} not found`, ErrorCode.NOT_FOUND, 404),
 
   conflict: (message: string, details?: Record<string, unknown>) =>
     new AppError(message, ErrorCode.CONFLICT, 409, details),
@@ -202,7 +203,11 @@ export function handleApiError(
     // Common Prisma error codes
     switch (prismaError.code) {
       case 'P2002': // Unique constraint violation
-        return createErrorResponse(ErrorCode.CONFLICT, 'A record with this value already exists', 409);
+        return createErrorResponse(
+          ErrorCode.CONFLICT,
+          'A record with this value already exists',
+          409
+        );
       case 'P2025': // Record not found
         return createErrorResponse(ErrorCode.NOT_FOUND, 'Record not found', 404);
       case 'P2003': // Foreign key constraint failed
@@ -223,11 +228,7 @@ export function handleApiError(
   }
 
   // Handle unknown errors
-  return createErrorResponse(
-    ErrorCode.INTERNAL_ERROR,
-    'An unexpected error occurred',
-    500
-  );
+  return createErrorResponse(ErrorCode.INTERNAL_ERROR, 'An unexpected error occurred', 500);
 }
 
 /**
@@ -244,9 +245,17 @@ export function withErrorHandler<T>(
 /**
  * Assert a condition and throw if false
  */
-export function assert(condition: unknown, message: string, code?: ErrorCodeType): asserts condition {
+export function assert(
+  condition: unknown,
+  message: string,
+  code?: ErrorCodeType
+): asserts condition {
   if (!condition) {
-    throw new AppError(message, code || ErrorCode.BAD_REQUEST, code === ErrorCode.NOT_FOUND ? 404 : 400);
+    throw new AppError(
+      message,
+      code || ErrorCode.BAD_REQUEST,
+      code === ErrorCode.NOT_FOUND ? 404 : 400
+    );
   }
 }
 

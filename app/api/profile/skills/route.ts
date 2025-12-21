@@ -91,10 +91,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (existingSkill) {
-      return NextResponse.json(
-        { error: 'A skill with this name already exists' },
-        { status: 409 }
-      );
+      return NextResponse.json({ error: 'A skill with this name already exists' }, { status: 409 });
     }
 
     // Get the highest sortOrder

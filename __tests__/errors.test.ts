@@ -1,13 +1,13 @@
 import {
-    AppError,
-    ErrorCode,
-    Errors,
-    assert,
-    assertExists,
-    formatZodErrors,
-    handleApiError,
-    isAppError,
-    isZodError,
+  AppError,
+  ErrorCode,
+  Errors,
+  assert,
+  assertExists,
+  formatZodErrors,
+  handleApiError,
+  isAppError,
+  isZodError,
 } from '@/lib/errors';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
@@ -26,7 +26,7 @@ describe('Error Utilities', () => {
   describe('AppError', () => {
     it('should create an error with default values', () => {
       const error = new AppError('Something went wrong');
-      
+
       expect(error.message).toBe('Something went wrong');
       expect(error.code).toBe(ErrorCode.INTERNAL_ERROR);
       expect(error.statusCode).toBe(500);
@@ -35,7 +35,7 @@ describe('Error Utilities', () => {
 
     it('should create an error with custom values', () => {
       const error = new AppError('Not found', ErrorCode.NOT_FOUND, 404, { id: '123' });
-      
+
       expect(error.message).toBe('Not found');
       expect(error.code).toBe(ErrorCode.NOT_FOUND);
       expect(error.statusCode).toBe(404);
@@ -123,13 +123,13 @@ describe('Error Utilities', () => {
 
     it('should identify ZodError', () => {
       const schema = z.object({ name: z.string() });
-      
+
       try {
         schema.parse({ name: 123 });
       } catch (error) {
         expect(isZodError(error)).toBe(true);
       }
-      
+
       expect(isZodError(new Error('Test'))).toBe(false);
     });
   });
@@ -174,9 +174,9 @@ describe('Error Utilities', () => {
     it('should handle AppError', async () => {
       const error = Errors.notFound('User');
       const response = handleApiError(error);
-      
+
       expect(response.status).toBe(404);
-      
+
       const body = await response.json();
       expect(body.success).toBe(false);
       expect(body.error.code).toBe(ErrorCode.NOT_FOUND);
@@ -184,13 +184,13 @@ describe('Error Utilities', () => {
 
     it('should handle ZodError', async () => {
       const schema = z.object({ name: z.string() });
-      
+
       try {
         schema.parse({ name: 123 });
       } catch (error) {
         const response = handleApiError(error);
         expect(response.status).toBe(400);
-        
+
         const body = await response.json();
         expect(body.error.code).toBe(ErrorCode.VALIDATION_ERROR);
       }
@@ -199,29 +199,29 @@ describe('Error Utilities', () => {
     it('should handle Prisma unique constraint error', async () => {
       const error = { code: 'P2002', message: 'Unique constraint failed' };
       const response = handleApiError(error);
-      
+
       expect(response.status).toBe(409);
     });
 
     it('should handle Prisma not found error', async () => {
       const error = { code: 'P2025', message: 'Record not found' };
       const response = handleApiError(error);
-      
+
       expect(response.status).toBe(404);
     });
 
     it('should handle generic Error', async () => {
       const error = new Error('Something went wrong');
       const response = handleApiError(error);
-      
+
       expect(response.status).toBe(500);
     });
 
     it('should handle unknown errors', async () => {
       const response = handleApiError('string error');
-      
+
       expect(response.status).toBe(500);
-      
+
       const body = await response.json();
       expect(body.success).toBe(false);
     });

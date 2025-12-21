@@ -1,7 +1,17 @@
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { ExternalLink, Eye, Download, Edit, Plus, FileText, Briefcase, Clock, Users } from 'lucide-react';
+import {
+  ExternalLink,
+  Eye,
+  Download,
+  Edit,
+  Plus,
+  FileText,
+  Briefcase,
+  Clock,
+  Users,
+} from 'lucide-react';
 
 import { db } from '@/lib/db';
 import { Button } from '@/components/ui/button';
@@ -11,7 +21,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 export default async function DashboardPage() {
   let userId: string | null = null;
-  
+
   try {
     const authResult = await auth();
     userId = authResult?.userId ?? null;
@@ -24,7 +34,7 @@ export default async function DashboardPage() {
   }
 
   const user = await currentUser();
-  
+
   if (!user) {
     redirect('/sign-in');
   }
@@ -77,7 +87,9 @@ export default async function DashboardPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold">Welcome back, {profile.firstName || 'there'}!</h1>
-          <p className="text-muted-foreground">Manage your Follio profile and track your progress.</p>
+          <p className="text-muted-foreground">
+            Manage your Follio profile and track your progress.
+          </p>
         </div>
         <div className="flex gap-3">
           <Link href={profileUrl} target="_blank">
@@ -102,7 +114,10 @@ export default async function DashboardPage() {
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-4">
               <Avatar className="h-16 w-16">
-                <AvatarImage src={profile.avatarUrl || undefined} alt={profile.firstName || 'Profile'} />
+                <AvatarImage
+                  src={profile.avatarUrl || undefined}
+                  alt={profile.firstName || 'Profile'}
+                />
                 <AvatarFallback className="text-lg">
                   {profile.firstName?.[0]}
                   {profile.lastName?.[0]}
@@ -117,7 +132,9 @@ export default async function DashboardPage() {
                   <Badge variant={profile.status === 'PUBLIC' ? 'default' : 'secondary'}>
                     {profile.status.toLowerCase()}
                   </Badge>
-                  <span className="text-sm text-muted-foreground">follio.dev/u/{profile.handle}</span>
+                  <span className="text-sm text-muted-foreground">
+                    follio.dev/u/{profile.handle}
+                  </span>
                 </div>
               </div>
             </div>
@@ -133,7 +150,10 @@ export default async function DashboardPage() {
             <CardTitle className="text-3xl">{profile.workExperiences.length}</CardTitle>
           </CardHeader>
           <CardContent>
-            <Link href="/builder?section=experience" className="text-sm text-primary hover:underline">
+            <Link
+              href="/builder?section=experience"
+              className="text-sm text-primary hover:underline"
+            >
               Edit experiences →
             </Link>
           </CardContent>

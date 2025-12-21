@@ -1,6 +1,6 @@
 /**
  * GitHub Integration Service
- * 
+ *
  * Fetches user data, repositories, and contribution data from GitHub.
  * Normalizes data for profile merging.
  */
@@ -94,10 +94,7 @@ export interface NormalizedGitHubData {
 /**
  * Fetch GitHub user profile
  */
-export async function fetchGitHubUser(
-  username: string,
-  accessToken?: string
-): Promise<GitHubUser> {
+export async function fetchGitHubUser(username: string, accessToken?: string): Promise<GitHubUser> {
   const headers: HeadersInit = {
     Accept: 'application/vnd.github.v3+json',
     'User-Agent': 'Follio-App',
@@ -144,10 +141,7 @@ export async function fetchGitHubRepos(
     direction: 'desc',
   });
 
-  const response = await fetch(
-    `${GITHUB_API_BASE}/users/${username}/repos?${params}`,
-    { headers }
-  );
+  const response = await fetch(`${GITHUB_API_BASE}/users/${username}/repos?${params}`, { headers });
 
   if (!response.ok) {
     throw new Error(`GitHub API error: ${response.status}`);
@@ -177,10 +171,7 @@ export async function fetchRepoLanguages(
     headers.Authorization = `Bearer ${accessToken}`;
   }
 
-  const response = await fetch(
-    `${GITHUB_API_BASE}/repos/${fullName}/languages`,
-    { headers }
-  );
+  const response = await fetch(`${GITHUB_API_BASE}/repos/${fullName}/languages`, { headers });
 
   if (!response.ok) {
     return {};

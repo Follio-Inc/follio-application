@@ -11,10 +11,26 @@ import { z } from 'zod';
 
 export const ProfileStatusSchema = z.enum(['DRAFT', 'PUBLIC', 'PRIVATE']);
 export const DataSourceSchema = z.enum(['MANUAL', 'GITHUB', 'RESUME', 'LINKEDIN', 'GENERATED']);
-export const LinkTypeSchema = z.enum(['GITHUB', 'LINKEDIN', 'TWITTER', 'PORTFOLIO', 'BLOG', 'DRIBBBLE', 'BEHANCE', 'YOUTUBE', 'OTHER']);
+export const LinkTypeSchema = z.enum([
+  'GITHUB',
+  'LINKEDIN',
+  'TWITTER',
+  'PORTFOLIO',
+  'BLOG',
+  'DRIBBBLE',
+  'BEHANCE',
+  'YOUTUBE',
+  'OTHER',
+]);
 export const SkillLevelSchema = z.enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT']);
 export const LocationTypeSchema = z.enum(['ONSITE', 'REMOTE', 'HYBRID']);
-export const EmploymentTypeSchema = z.enum(['FULL_TIME', 'PART_TIME', 'CONTRACT', 'FREELANCE', 'INTERNSHIP']);
+export const EmploymentTypeSchema = z.enum([
+  'FULL_TIME',
+  'PART_TIME',
+  'CONTRACT',
+  'FREELANCE',
+  'INTERNSHIP',
+]);
 
 // ===========================================
 // PROFILE SCHEMAS
@@ -24,7 +40,10 @@ export const HandleSchema = z
   .string()
   .min(3, 'Handle must be at least 3 characters')
   .max(30, 'Handle must be at most 30 characters')
-  .regex(/^[a-z0-9][a-z0-9-]*[a-z0-9]$/, 'Handle must start and end with a letter or number, and can only contain lowercase letters, numbers, and hyphens');
+  .regex(
+    /^[a-z0-9][a-z0-9-]*[a-z0-9]$/,
+    'Handle must start and end with a letter or number, and can only contain lowercase letters, numbers, and hyphens'
+  );
 
 export const ProfileBasicInfoSchema = z.object({
   firstName: z.string().min(1, 'First name is required').max(50),
@@ -181,7 +200,10 @@ export const PaginationSchema = z.object({
 
 export const ResumeUploadSchema = z.object({
   fileName: z.string(),
-  fileType: z.enum(['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']),
+  fileType: z.enum([
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  ]),
   fileSize: z.number().max(5 * 1024 * 1024, 'File must be less than 5MB'),
 });
 

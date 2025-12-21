@@ -63,7 +63,10 @@ export async function POST(request: NextRequest) {
     });
 
     if (handleTaken) {
-      return NextResponse.json({ error: 'Handle is already taken', message: 'Please choose a different handle' }, { status: 409 });
+      return NextResponse.json(
+        { error: 'Handle is already taken', message: 'Please choose a different handle' },
+        { status: 409 }
+      );
     }
 
     // Create profile

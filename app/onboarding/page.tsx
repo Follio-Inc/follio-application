@@ -3,7 +3,15 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Upload, Github, FileText, ArrowRight, ArrowLeft, CheckCircle2, Sparkles } from 'lucide-react';
+import {
+  Upload,
+  Github,
+  FileText,
+  ArrowRight,
+  ArrowLeft,
+  CheckCircle2,
+  Sparkles,
+} from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -47,7 +55,7 @@ export default function OnboardingPage() {
 
   const handleDataChange = (field: keyof OnboardingData, value: string) => {
     setData((prev) => ({ ...prev, [field]: value }));
-    
+
     // Auto-generate handle from name
     if (field === 'firstName' || field === 'lastName') {
       const firstName = field === 'firstName' ? value : data.firstName;
@@ -87,7 +95,7 @@ export default function OnboardingPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
       {/* Progress bar */}
-      <div className="fixed top-0 left-0 right-0 h-1 bg-muted">
+      <div className="fixed left-0 right-0 top-0 h-1 bg-muted">
         <motion.div
           className="h-full bg-primary"
           initial={{ width: '0%' }}
@@ -165,9 +173,7 @@ export default function OnboardingPage() {
                     </div>
                     <div>
                       <div className="font-medium">Connect GitHub</div>
-                      <div className="text-sm text-muted-foreground">
-                        Import projects and repos
-                      </div>
+                      <div className="text-sm text-muted-foreground">Import projects and repos</div>
                     </div>
                   </button>
                 </CardContent>
@@ -222,7 +228,12 @@ export default function OnboardingPage() {
                       <Input
                         id="handle"
                         value={data.handle}
-                        onChange={(e) => handleDataChange('handle', e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                        onChange={(e) =>
+                          handleDataChange(
+                            'handle',
+                            e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '')
+                          )
+                        }
                         className="rounded-l-none"
                         placeholder="alexchen"
                       />

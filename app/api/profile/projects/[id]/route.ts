@@ -8,10 +8,7 @@ import { ProjectSchema } from '@/lib/validations';
  * PATCH /api/profile/projects/[id]
  * Update a project
  */
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { userId } = await auth();
 

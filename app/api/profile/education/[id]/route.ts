@@ -8,10 +8,7 @@ import { EducationSchema } from '@/lib/validations';
  * PATCH /api/profile/education/[id]
  * Update an education entry
  */
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { userId } = await auth();
 

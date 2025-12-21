@@ -21,12 +21,8 @@ export const metadata: Metadata = {
   creator: 'Follio',
   manifest: '/site.webmanifest',
   icons: {
-    icon: [
-      { url: '/favicon.ico' },
-    ],
-    apple: [
-      { url: '/apple-touch-icon.png' },
-    ],
+    icon: [{ url: '/favicon.ico' }],
+    apple: [{ url: '/apple-touch-icon.png' }],
   },
   openGraph: {
     type: 'website',

@@ -8,10 +8,7 @@ import { WorkExperienceSchema } from '@/lib/validations';
  * PATCH /api/profile/experiences/[id]
  * Update a work experience
  */
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { userId } = await auth();
 

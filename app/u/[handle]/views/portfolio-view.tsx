@@ -28,7 +28,10 @@ export function PortfolioView({ profile }: PortfolioViewProps) {
           transition={{ duration: 0.5 }}
         >
           <Avatar className="mx-auto h-28 w-28 border-4 border-background shadow-lg">
-            <AvatarImage src={profile.avatarUrl || undefined} alt={profile.firstName || undefined} />
+            <AvatarImage
+              src={profile.avatarUrl || undefined}
+              alt={profile.firstName || undefined}
+            />
             <AvatarFallback className="text-3xl">{initials}</AvatarFallback>
           </Avatar>
         </motion.div>
@@ -44,9 +47,7 @@ export function PortfolioView({ profile }: PortfolioViewProps) {
             <p className="mt-2 text-xl text-muted-foreground">{profile.headline}</p>
           )}
           {profile.summary && (
-            <p className="mx-auto mt-4 max-w-2xl text-muted-foreground">
-              {profile.summary}
-            </p>
+            <p className="mx-auto mt-4 max-w-2xl text-muted-foreground">{profile.summary}</p>
           )}
         </motion.div>
 
@@ -104,14 +105,14 @@ export function PortfolioView({ profile }: PortfolioViewProps) {
                     </div>
                   )}
                   <CardContent className={project.imageUrl ? 'pt-4' : 'pt-6'}>
-                    {!project.imageUrl && (
-                      <h3 className="text-xl font-bold">{project.title}</h3>
-                    )}
+                    {!project.imageUrl && <h3 className="text-xl font-bold">{project.title}</h3>}
                     {project.shortDesc && (
                       <p className="mt-2 text-muted-foreground">{project.shortDesc}</p>
                     )}
                     {project.description && !project.shortDesc && (
-                      <p className="mt-2 line-clamp-3 text-muted-foreground">{project.description}</p>
+                      <p className="mt-2 line-clamp-3 text-muted-foreground">
+                        {project.description}
+                      </p>
                     )}
                     {project.techStack && project.techStack.length > 0 && (
                       <div className="mt-4 flex flex-wrap gap-1">

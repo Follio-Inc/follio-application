@@ -18,7 +18,12 @@ interface SettingsSectionProps {
   onUpdate: (updates: Partial<Profile>) => void;
 }
 
-const STATUS_OPTIONS: { value: ProfileStatus; label: string; description: string; icon: typeof Globe }[] = [
+const STATUS_OPTIONS: {
+  value: ProfileStatus;
+  label: string;
+  description: string;
+  icon: typeof Globe;
+}[] = [
   {
     value: 'PUBLIC',
     label: 'Public',
@@ -46,9 +51,10 @@ export function SettingsSection({ profile, onUpdate }: SettingsSectionProps) {
   const [handleSuccess, setHandleSuccess] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const publicUrl = typeof window !== 'undefined' 
-    ? `${window.location.origin}/u/${profile.handle}`
-    : `/u/${profile.handle}`;
+  const publicUrl =
+    typeof window !== 'undefined'
+      ? `${window.location.origin}/u/${profile.handle}`
+      : `/u/${profile.handle}`;
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(publicUrl);
@@ -60,8 +66,10 @@ export function SettingsSection({ profile, onUpdate }: SettingsSectionProps) {
     if (!value) return 'Handle is required';
     if (value.length < 3) return 'Handle must be at least 3 characters';
     if (value.length > 30) return 'Handle must be less than 30 characters';
-    if (!/^[a-z0-9-]+$/.test(value)) return 'Handle can only contain lowercase letters, numbers, and hyphens';
-    if (value.startsWith('-') || value.endsWith('-')) return 'Handle cannot start or end with a hyphen';
+    if (!/^[a-z0-9-]+$/.test(value))
+      return 'Handle can only contain lowercase letters, numbers, and hyphens';
+    if (value.startsWith('-') || value.endsWith('-'))
+      return 'Handle cannot start or end with a hyphen';
     return null;
   };
 
@@ -84,7 +92,7 @@ export function SettingsSection({ profile, onUpdate }: SettingsSectionProps) {
     try {
       const res = await fetch(`/api/profile/check-handle?handle=${handle}`);
       const data = await res.json();
-      
+
       if (data.available) {
         setHandleSuccess(true);
         onUpdate({ handle });
@@ -171,7 +179,7 @@ export function SettingsSection({ profile, onUpdate }: SettingsSectionProps) {
             {STATUS_OPTIONS.map((option) => {
               const Icon = option.icon;
               const isSelected = profile.status === option.value;
-              
+
               return (
                 <button
                   key={option.value}
@@ -181,11 +189,13 @@ export function SettingsSection({ profile, onUpdate }: SettingsSectionProps) {
                   }`}
                 >
                   {isSelected && (
-                    <Badge className="absolute -top-2 -right-2 h-5 w-5 rounded-full p-0">
+                    <Badge className="absolute -right-2 -top-2 h-5 w-5 rounded-full p-0">
                       <Check className="h-3 w-3" />
                     </Badge>
                   )}
-                  <Icon className={`h-6 w-6 ${isSelected ? 'text-primary' : 'text-muted-foreground'}`} />
+                  <Icon
+                    className={`h-6 w-6 ${isSelected ? 'text-primary' : 'text-muted-foreground'}`}
+                  />
                   <div className="text-center">
                     <div className="font-medium">{option.label}</div>
                     <div className="text-xs text-muted-foreground">{option.description}</div>
@@ -227,7 +237,8 @@ export function SettingsSection({ profile, onUpdate }: SettingsSectionProps) {
             <div>
               <div className="font-medium">Delete Profile</div>
               <div className="text-sm text-muted-foreground">
-                Permanently delete your profile and all associated data. This action cannot be undone.
+                Permanently delete your profile and all associated data. This action cannot be
+                undone.
               </div>
             </div>
             <Button variant="destructive" className="shrink-0">

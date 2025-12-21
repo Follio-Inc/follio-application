@@ -1,5 +1,14 @@
 import Link from 'next/link';
-import { ArrowRight, FileText, Briefcase, Clock, Users, Download, CheckCircle2, Sparkles } from 'lucide-react';
+import {
+  ArrowRight,
+  FileText,
+  Briefcase,
+  Clock,
+  Users,
+  Download,
+  CheckCircle2,
+  Sparkles,
+} from 'lucide-react';
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 
@@ -8,7 +17,7 @@ import { Logo } from '@/components/Logo';
 
 export default async function HomePage() {
   let userId: string | null = null;
-  
+
   try {
     const authResult = await auth();
     userId = authResult?.userId ?? null;
@@ -16,7 +25,7 @@ export default async function HomePage() {
     // Auth might fail during sign-out transition, treat as logged out
     userId = null;
   }
-  
+
   // If user is logged in, redirect to dashboard
   if (userId) {
     redirect('/dashboard');

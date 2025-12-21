@@ -39,7 +39,9 @@ export function Logo({ href, size = 'md', showText = true, className = '' }: Log
         priority
       />
       {showText && (
-        <span className={`${textSize} font-semibold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent`}>
+        <span
+          className={`${textSize} bg-gradient-to-r from-primary to-primary/70 bg-clip-text font-semibold text-transparent`}
+        >
           Follio
         </span>
       )}

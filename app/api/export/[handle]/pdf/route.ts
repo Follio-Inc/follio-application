@@ -6,13 +6,13 @@ import { toPDFHtml } from '@/services/export.service';
 /**
  * GET /api/export/[handle]/pdf
  * Export profile as PDF
- * 
+ *
  * TODO: Implement proper PDF generation using Puppeteer/Playwright
  * For serverless (Vercel), consider:
  * - Using @vercel/functions with extended timeout
  * - External PDF generation service (e.g., Browserless, ApiFlash)
  * - Pre-generating PDFs and storing in blob storage
- * 
+ *
  * Current implementation returns print-friendly HTML that can be
  * printed to PDF using browser's print function.
  */

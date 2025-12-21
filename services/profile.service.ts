@@ -18,7 +18,10 @@ export async function getProfileByHandle(handle: string): Promise<FullProfile | 
       workExperiences: { orderBy: { sortOrder: 'asc' } },
       educations: { orderBy: { sortOrder: 'asc' } },
       skills: { orderBy: { sortOrder: 'asc' } },
-      skillGroups: { include: { skills: { orderBy: { sortOrder: 'asc' } } }, orderBy: { sortOrder: 'asc' } },
+      skillGroups: {
+        include: { skills: { orderBy: { sortOrder: 'asc' } } },
+        orderBy: { sortOrder: 'asc' },
+      },
       projects: { orderBy: { sortOrder: 'asc' } },
       awards: { orderBy: { sortOrder: 'asc' } },
       certifications: { orderBy: { sortOrder: 'asc' } },
@@ -40,7 +43,10 @@ export async function getPublicProfile(handle: string): Promise<PublicProfile | 
       workExperiences: { orderBy: { sortOrder: 'asc' } },
       educations: { orderBy: { sortOrder: 'asc' } },
       skills: { orderBy: { sortOrder: 'asc' } },
-      skillGroups: { include: { skills: { orderBy: { sortOrder: 'asc' } } }, orderBy: { sortOrder: 'asc' } },
+      skillGroups: {
+        include: { skills: { orderBy: { sortOrder: 'asc' } } },
+        orderBy: { sortOrder: 'asc' },
+      },
       projects: { orderBy: { sortOrder: 'asc' } },
       awards: { orderBy: { sortOrder: 'asc' } },
       certifications: { orderBy: { sortOrder: 'asc' } },
@@ -69,7 +75,10 @@ export async function getPublicProfile(handle: string): Promise<PublicProfile | 
 /**
  * Check if a handle is available
  */
-export async function isHandleAvailable(handle: string, excludeProfileId?: string): Promise<boolean> {
+export async function isHandleAvailable(
+  handle: string,
+  excludeProfileId?: string
+): Promise<boolean> {
   const existing = await db.profile.findUnique({
     where: { handle },
     select: { id: true },

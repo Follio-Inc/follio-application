@@ -5,7 +5,7 @@ import { parseResume, normalizeResumeData } from '@/services/resume-parser.servi
 export async function POST(request: NextRequest) {
   try {
     const { userId } = await auth();
-    
+
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -15,10 +15,7 @@ export async function POST(request: NextRequest) {
     const text = formData.get('text') as string | null;
 
     if (!file && !text) {
-      return NextResponse.json(
-        { error: 'Either file or text is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Either file or text is required' }, { status: 400 });
     }
 
     let parsed;
@@ -35,10 +32,7 @@ export async function POST(request: NextRequest) {
 
       // Validate file size (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
-        return NextResponse.json(
-          { error: 'File size must be less than 5MB' },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: 'File size must be less than 5MB' }, { status: 400 });
       }
 
       const buffer = Buffer.from(await file.arrayBuffer());
@@ -48,10 +42,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!parsed) {
-      return NextResponse.json(
-        { error: 'Failed to parse resume' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to parse resume' }, { status: 500 });
     }
 
     const normalized = normalizeResumeData(parsed);
