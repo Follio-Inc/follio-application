@@ -20,14 +20,19 @@ export function createMockRequest(
 ): Request {
   const { method = 'GET', body, headers = {} } = options;
 
-  return new Request(url, {
+  const requestInit: RequestInit = {
     method,
     headers: {
       'Content-Type': 'application/json',
       ...headers,
     },
-    ...(body && { body: JSON.stringify(body) }),
-  });
+  };
+
+  if (body) {
+    requestInit.body = JSON.stringify(body);
+  }
+
+  return new Request(url, requestInit);
 }
 
 /**

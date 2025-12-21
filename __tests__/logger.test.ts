@@ -10,9 +10,9 @@ describe('Logger', () => {
   beforeEach(async () => {
     // Reset modules to get a fresh logger instance
     vi.resetModules();
-    // Override LOG_LEVEL for these tests
-    process.env.LOG_LEVEL = 'debug';
-    process.env.NODE_ENV = 'development';
+    // Override LOG_LEVEL for these tests using vi.stubEnv
+    vi.stubEnv('LOG_LEVEL', 'debug');
+    vi.stubEnv('NODE_ENV', 'development');
 
     const loggerModule = await import('@/lib/logger');
     Logger = loggerModule.logger;
@@ -22,8 +22,7 @@ describe('Logger', () => {
 
   afterEach(() => {
     consoleSpy.mockRestore();
-    process.env.LOG_LEVEL = 'error';
-    process.env.NODE_ENV = 'test';
+    vi.unstubAllEnvs();
   });
 
   describe('log levels', () => {
@@ -116,7 +115,7 @@ describe('generateRequestId', () => {
   it('should generate unique request IDs', () => {
     const id1 = generateRequestId();
     const id2 = generateRequestId();
-    
+
     expect(id1).not.toBe(id2);
   });
 

@@ -86,13 +86,21 @@ class Logger {
     context?: LogContext,
     error?: unknown
   ): LogEntry {
-    return {
+    const entry: LogEntry = {
       timestamp: new Date().toISOString(),
       level,
       message,
-      ...(context && Object.keys(context).length > 0 && { context }),
-      ...(error && { error: this.formatError(error) }),
     };
+
+    if (context && Object.keys(context).length > 0) {
+      entry.context = context;
+    }
+
+    if (error) {
+      entry.error = this.formatError(error);
+    }
+
+    return entry;
   }
 
   private output(entry: LogEntry): void {
