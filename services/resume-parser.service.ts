@@ -2,10 +2,8 @@
  * Resume Parser Service
  *
  * Parses PDF and text resumes into normalized profile data.
- * Uses pdf-parse for PDF extraction and rule-based parsing for structured data.
+ * Uses unpdf for PDF extraction and rule-based parsing for structured data.
  */
-
-// import pdfParse from 'pdf-parse'; // Uncomment when pdf-parse is installed
 
 export interface ParsedResume {
   basics?: {
@@ -75,18 +73,21 @@ const SECTION_HEADERS = {
 };
 
 /**
- * Extract text from a PDF buffer
+ * Extract text from a PDF buffer using unpdf
+ * unpdf is a modern library designed for serverless/edge environments
  */
 export async function extractTextFromPDF(buffer: Buffer): Promise<string> {
   try {
-    // Use runtime require to prevent webpack from statically analyzing this module
-    // The pdf-parse package contains test files that break the Next.js build
-    // By using a variable for the module name, webpack cannot resolve it at build time
-    const moduleName = 'pdf-parse';
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const pdfParse = require(moduleName);
-    const data = await pdfParse(buffer);
-    return data.text;
+    // Import unpdf - a modern PDF library that works well with Next.js
+    const { extractText } = await import('unpdf');
+
+    // Convert Buffer to Uint8Array for unpdf
+    const uint8Array = new Uint8Array(buffer);
+
+    // Extract text from PDF
+    const { text } = await extractText(uint8Array, { mergePages: true });
+
+    return text;
   } catch (error) {
     console.error('PDF parsing error:', error);
     throw new Error(
