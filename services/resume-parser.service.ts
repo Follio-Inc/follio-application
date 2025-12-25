@@ -79,15 +79,19 @@ const SECTION_HEADERS = {
  */
 export async function extractTextFromPDF(buffer: Buffer): Promise<string> {
   try {
-    // Dynamic import for pdf-parse (only available server-side)
-    // Use the direct path to avoid test fixture files that cause Base64 decoding errors
-    // @ts-expect-error - Direct import to avoid build issues, types not available
-    const pdfParse = (await import('pdf-parse/lib/pdf-parse')).default;
+    // Use runtime require to prevent webpack from statically analyzing this module
+    // The pdf-parse package contains test files that break the Next.js build
+    // By using a variable for the module name, webpack cannot resolve it at build time
+    const moduleName = 'pdf-parse';
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const pdfParse = require(moduleName);
     const data = await pdfParse(buffer);
     return data.text;
   } catch (error) {
     console.error('PDF parsing error:', error);
-    throw new Error('Failed to extract text from PDF');
+    throw new Error(
+      'Failed to extract text from PDF. Please try pasting your resume text instead.'
+    );
   }
 }
 
