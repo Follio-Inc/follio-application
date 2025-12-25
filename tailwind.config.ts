@@ -52,11 +52,11 @@ const config: Config = {
         },
         // Follio brand colors
         follio: {
-          purple: 'hsl(var(--follio-purple))',
-          'purple-light': 'hsl(var(--follio-purple-light))',
-          'purple-dark': 'hsl(var(--follio-purple-dark))',
-          violet: 'hsl(var(--follio-violet))',
-          indigo: 'hsl(var(--follio-indigo))',
+          teal: 'hsl(var(--follio-teal))',
+          'teal-light': 'hsl(var(--follio-teal-light))',
+          'teal-dark': 'hsl(var(--follio-teal-dark))',
+          mint: 'hsl(var(--follio-mint))',
+          cyan: 'hsl(var(--follio-cyan))',
         },
       },
       borderRadius: {
