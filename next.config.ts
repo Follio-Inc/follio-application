@@ -4,6 +4,18 @@ const nextConfig: NextConfig = {
   // Enable React strict mode for better development experience
   reactStrictMode: true,
 
+  // Webpack configuration to fix pdf-parse build issues
+  webpack: (config) => {
+    // Replace pdf-parse with the direct lib path to avoid problematic test files
+    // The main index.js references test/data files that contain invalid Base64
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      'pdf-parse': 'pdf-parse/lib/pdf-parse',
+    };
+
+    return config;
+  },
+
   // Image optimization configuration
   images: {
     remotePatterns: [
