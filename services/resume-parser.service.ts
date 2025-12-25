@@ -80,7 +80,9 @@ const SECTION_HEADERS = {
 export async function extractTextFromPDF(buffer: Buffer): Promise<string> {
   try {
     // Dynamic import for pdf-parse (only available server-side)
-    const pdfParse = (await import('pdf-parse')).default;
+    // Use the direct path to avoid test fixture files that cause Base64 decoding errors
+    // @ts-expect-error - Direct import to avoid build issues, types not available
+    const pdfParse = (await import('pdf-parse/lib/pdf-parse')).default;
     const data = await pdfParse(buffer);
     return data.text;
   } catch (error) {
