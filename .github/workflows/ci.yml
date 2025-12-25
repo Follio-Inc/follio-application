@@ -96,8 +96,11 @@ jobs:
           SKIP_ENV_VALIDATION: true
           # Provide dummy values for required env vars during build
           DATABASE_URL: 'postgresql://dummy:dummy@localhost:5432/dummy'
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: 'pk_test_dummy'
-          CLERK_SECRET_KEY: 'sk_test_dummy'
+          # Use minimal placeholder values for Clerk (these won't be used at runtime)
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: 'pk_test_placeholder'
+          CLERK_SECRET_KEY: 'sk_test_placeholder'
+          # Skip Clerk JWKS validation during build
+          CLERK_SKIP_JWT_VERIFICATION_IN_DEVELOPMENT: 'true'
 
   security:
     name: Security Audit
