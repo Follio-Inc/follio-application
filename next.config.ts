@@ -4,6 +4,10 @@ const nextConfig: NextConfig = {
   // Enable React strict mode for better development experience
   reactStrictMode: true,
 
+  // Exclude pdf-parse from webpack bundling to avoid build errors
+  // pdf-parse contains test files with invalid Base64 that break the build
+  serverExternalPackages: ['pdf-parse'],
+
   // Webpack configuration to fix pdf-parse build issues
   webpack: (config) => {
     // Replace pdf-parse with the direct lib path to avoid problematic test files
