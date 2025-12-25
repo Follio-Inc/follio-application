@@ -73,23 +73,27 @@ const SECTION_HEADERS = {
 };
 
 /**
- * Extract text from a PDF buffer
- *
- * NOTE: PDF parsing is temporarily disabled due to build system compatibility issues.
- * The unpdf library (and its internal pdfjs-dist) causes Next.js build failures
- * when the bundler tries to analyze the module.
- *
- * TODO: Re-enable using one of these approaches:
- * 1. Move to a separate serverless function (AWS Lambda, Vercel Edge Function)
- * 2. Use a cloud-based PDF API service
- * 3. Wait for Next.js/unpdf compatibility improvements
+ * Extract text from a PDF buffer using unpdf
+ * unpdf is a modern library designed for serverless/edge environments
  */
-export async function extractTextFromPDF(_buffer: Buffer): Promise<string> {
-  // PDF file parsing is temporarily disabled
-  // Users should paste their resume text directly
-  throw new Error(
-    'PDF file upload is temporarily unavailable. Please paste your resume text directly instead.'
-  );
+export async function extractTextFromPDF(buffer: Buffer): Promise<string> {
+  try {
+    // Import unpdf - a modern PDF library that works well with Next.js
+    const { extractText } = await import('unpdf');
+
+    // Convert Buffer to Uint8Array for unpdf
+    const uint8Array = new Uint8Array(buffer);
+
+    // Extract text from PDF
+    const { text } = await extractText(uint8Array, { mergePages: true });
+
+    return text;
+  } catch (error) {
+    console.error('PDF parsing error:', error);
+    throw new Error(
+      'Failed to extract text from PDF. Please try pasting your resume text instead.'
+    );
+  }
 }
 
 /**
