@@ -50,6 +50,7 @@ export async function getPublicProfile(handle: string): Promise<PublicProfile | 
       projects: { orderBy: { sortOrder: 'asc' } },
       awards: { orderBy: { sortOrder: 'asc' } },
       certifications: { orderBy: { sortOrder: 'asc' } },
+      sections: { orderBy: { sortOrder: 'asc' } },
     },
   });
 

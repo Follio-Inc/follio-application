@@ -4,22 +4,26 @@
  */
 
 import type {
-  Profile,
-  ContactInfo,
-  Link,
-  WorkExperience,
-  Education,
-  Skill,
-  SkillGroup,
-  Project,
   Award,
   Certification,
-  User,
+  ContactInfo,
   DataSource,
+  Education,
+  Link,
+  Profile,
+  ProfileSection,
   ProfileStatus,
+  Project,
+  SectionType,
+  Skill,
+  SkillGroup,
+  User,
+  WorkExperience,
 } from '@prisma/client';
 
 // ===========================================
+// PROFILE TYPES
+// ===========================================// ===========================================
 // PROFILE TYPES
 // ===========================================
 
@@ -36,6 +40,7 @@ export interface FullProfile extends Profile {
   projects: Project[];
   awards: Award[];
   certifications: Certification[];
+  sections: ProfileSection[];
 }
 
 /**
@@ -51,6 +56,7 @@ export interface PublicProfile extends Omit<Profile, 'userId'> {
   projects: Project[];
   awards: Award[];
   certifications: Certification[];
+  sections: ProfileSection[];
 }
 
 /**
@@ -297,17 +303,171 @@ export interface SessionUser {
 
 // Re-export Prisma types for convenience
 export type {
-  Profile,
-  ContactInfo,
-  Link,
-  WorkExperience,
-  Education,
-  Skill,
-  SkillGroup,
-  Project,
   Award,
   Certification,
-  User,
+  ContactInfo,
+  CustomContentType,
   DataSource,
+  Education,
+  Link,
+  Profile,
+  ProfileSection,
   ProfileStatus,
+  Project,
+  SectionType,
+  Skill,
+  SkillGroup,
+  User,
+  WorkExperience,
 };
+
+// Note: SectionType, CustomContentType, ProfileSection are defined locally above
+
+// ===========================================
+// SECTION UI TYPES
+// ===========================================
+
+/**
+ * Section configuration for UI
+ */
+export interface SectionConfig {
+  type: SectionType;
+  defaultTitle: string;
+  icon: string;
+  description: string;
+  isRemovable: boolean;
+  hasItems: boolean; // Does this section have a list of items (experiences, projects) or just fields (basic info)
+}
+
+/**
+ * All available section types with their configurations
+ */
+export const SECTION_CONFIGS: SectionConfig[] = [
+  {
+    type: 'BASIC_INFO',
+    defaultTitle: 'Basic Info',
+    icon: 'User',
+    description: 'Name, headline, summary',
+    isRemovable: false,
+    hasItems: false,
+  },
+  {
+    type: 'EXPERIENCE',
+    defaultTitle: 'Experience',
+    icon: 'Briefcase',
+    description: 'Work history',
+    isRemovable: true,
+    hasItems: true,
+  },
+  {
+    type: 'EDUCATION',
+    defaultTitle: 'Education',
+    icon: 'GraduationCap',
+    description: 'Schools and degrees',
+    isRemovable: true,
+    hasItems: true,
+  },
+  {
+    type: 'SKILLS',
+    defaultTitle: 'Skills',
+    icon: 'Code',
+    description: 'Technical and soft skills',
+    isRemovable: true,
+    hasItems: true,
+  },
+  {
+    type: 'PROJECTS',
+    defaultTitle: 'Projects',
+    icon: 'FolderKanban',
+    description: 'Portfolio projects',
+    isRemovable: true,
+    hasItems: true,
+  },
+  {
+    type: 'LINKS',
+    defaultTitle: 'Links',
+    icon: 'Link',
+    description: 'Social profiles and websites',
+    isRemovable: true,
+    hasItems: true,
+  },
+  {
+    type: 'AWARDS',
+    defaultTitle: 'Awards',
+    icon: 'Award',
+    description: 'Recognition and achievements',
+    isRemovable: true,
+    hasItems: true,
+  },
+  {
+    type: 'CERTIFICATIONS',
+    defaultTitle: 'Certifications',
+    icon: 'BadgeCheck',
+    description: 'Professional certifications',
+    isRemovable: true,
+    hasItems: true,
+  },
+  {
+    type: 'PUBLICATIONS',
+    defaultTitle: 'Publications',
+    icon: 'BookOpen',
+    description: 'Papers, articles, books',
+    isRemovable: true,
+    hasItems: true,
+  },
+  {
+    type: 'VOLUNTEERING',
+    defaultTitle: 'Volunteering',
+    icon: 'Heart',
+    description: 'Community involvement',
+    isRemovable: true,
+    hasItems: true,
+  },
+  {
+    type: 'LANGUAGES',
+    defaultTitle: 'Languages',
+    icon: 'Globe',
+    description: 'Languages you speak',
+    isRemovable: true,
+    hasItems: true,
+  },
+  {
+    type: 'INTERESTS',
+    defaultTitle: 'Interests',
+    icon: 'Sparkles',
+    description: 'Hobbies and interests',
+    isRemovable: true,
+    hasItems: true,
+  },
+  {
+    type: 'CUSTOM',
+    defaultTitle: 'Custom Section',
+    icon: 'LayoutGrid',
+    description: 'Create your own section',
+    isRemovable: true,
+    hasItems: true,
+  },
+];
+
+/**
+ * Custom section content item (for structured custom sections)
+ */
+export interface CustomSectionItem {
+  id: string;
+  title: string;
+  subtitle?: string;
+  description?: string;
+  startDate?: string;
+  endDate?: string;
+  isCurrent?: boolean;
+  url?: string;
+  tags?: string[];
+}
+
+/**
+ * Custom section content structure
+ */
+export interface CustomSectionContent {
+  items?: CustomSectionItem[];
+  content?: string; // For freeform content
+}

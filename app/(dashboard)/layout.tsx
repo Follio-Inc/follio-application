@@ -1,9 +1,9 @@
 import { UserButton } from '@clerk/nextjs';
+import { ExternalLink, FileText, LayoutDashboard, Settings } from 'lucide-react';
 import Link from 'next/link';
-import { LayoutDashboard, FileText, Settings, ExternalLink } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/Logo';
+import { Button } from '@/components/ui/button';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -24,6 +24,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <Button variant="ghost" size="sm" className="gap-2">
                   <FileText className="h-4 w-4" />
                   Builder
+                </Button>
+              </Link>
+              <Link href="/me">
+                <Button variant="ghost" size="sm" className="gap-2">
+                  <ExternalLink className="h-4 w-4" />
+                  Your Follio
                 </Button>
               </Link>
             </nav>

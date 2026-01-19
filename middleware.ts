@@ -7,6 +7,7 @@ const isProtectedRoute = createRouteMatcher([
   '/onboarding(.*)',
   '/builder(.*)',
   '/settings(.*)',
+  '/me(.*)',
 ]);
 
 // Define public routes that should never require auth

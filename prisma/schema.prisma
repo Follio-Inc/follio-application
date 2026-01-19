@@ -23,9 +23,9 @@ model User {
   updatedAt DateTime @updatedAt
 
   // Relations
-  profile      Profile?
-  importLogs   ImportLog[]
-  shareTokens  ShareToken[]
+  profile     Profile?
+  importLogs  ImportLog[]
+  shareTokens ShareToken[]
 
   @@index([clerkId])
   @@index([email])
@@ -36,51 +36,52 @@ model User {
 // ===========================================
 
 model Profile {
-  id        String        @id @default(cuid())
-  userId    String        @unique
-  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   // Public identity
-  handle    String        @unique // URL-friendly identifier: /u/[handle]
-  
+  handle String @unique // URL-friendly identifier: /u/[handle]
+
   // Profile state
-  status    ProfileStatus @default(DRAFT)
-  
+  status ProfileStatus @default(DRAFT)
+
   // Basic info with provenance
-  firstName           String?
-  firstNameSource     DataSource @default(MANUAL)
-  lastName            String?
-  lastNameSource      DataSource @default(MANUAL)
-  headline            String? // Professional headline
-  headlineSource      DataSource @default(MANUAL)
-  summary             String? @db.Text // About/bio section
-  summarySource       DataSource @default(MANUAL)
-  summarySuggestion   String? @db.Text // AI/import suggested summary (not yet accepted)
-  
+  firstName         String?
+  firstNameSource   DataSource @default(MANUAL)
+  lastName          String?
+  lastNameSource    DataSource @default(MANUAL)
+  headline          String? // Professional headline
+  headlineSource    DataSource @default(MANUAL)
+  summary           String?    @db.Text // About/bio section
+  summarySource     DataSource @default(MANUAL)
+  summarySuggestion String?    @db.Text // AI/import suggested summary (not yet accepted)
+
   // Profile photo
-  avatarUrl           String?
-  avatarUrlSource     DataSource @default(MANUAL)
-  
+  avatarUrl       String?
+  avatarUrlSource DataSource @default(MANUAL)
+
   // Location
-  location            String?
-  locationSource      DataSource @default(MANUAL)
-  
+  location       String?
+  locationSource DataSource @default(MANUAL)
+
   // Timestamps
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
   publishedAt DateTime? // When first made public
 
   // Relations
-  contactInfo       ContactInfo?
-  links             Link[]
-  workExperiences   WorkExperience[]
-  educations        Education[]
-  skills            Skill[]
-  skillGroups       SkillGroup[]
-  projects          Project[]
-  awards            Award[]
-  certifications    Certification[]
-  rawImports        RawImportPayload[]
+  contactInfo     ContactInfo?
+  links           Link[]
+  workExperiences WorkExperience[]
+  educations      Education[]
+  skills          Skill[]
+  skillGroups     SkillGroup[]
+  projects        Project[]
+  awards          Award[]
+  certifications  Certification[]
+  rawImports      RawImportPayload[]
+  sections        ProfileSection[]
 
   @@index([handle])
   @@index([status])
@@ -88,18 +89,71 @@ model Profile {
 
 // Profile visibility states
 enum ProfileStatus {
-  DRAFT    // Not visible to anyone except owner
-  PUBLIC   // Visible to everyone at /u/[handle]
-  PRIVATE  // Only accessible via share token
+  DRAFT // Not visible to anyone except owner
+  PUBLIC // Visible to everyone at /u/[handle]
+  PRIVATE // Only accessible via share token
 }
 
 // Track where data originated
 enum DataSource {
-  MANUAL   // User entered manually
-  GITHUB   // Imported from GitHub
-  RESUME   // Extracted from resume upload
+  MANUAL // User entered manually
+  GITHUB // Imported from GitHub
+  RESUME // Extracted from resume upload
   LINKEDIN // Imported from LinkedIn
   GENERATED // AI-generated suggestion
+}
+
+// ===========================================
+// PROFILE SECTIONS - Dynamic section management
+// ===========================================
+
+model ProfileSection {
+  id        String  @id @default(cuid())
+  profileId String
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  // Section type
+  type       SectionType
+  customName String? // For CUSTOM type - user-defined name
+
+  // Display settings
+  title     String // Displayed title (can be customized)
+  sortOrder Int     @default(0)
+  isVisible Boolean @default(true)
+
+  // For custom sections - store content as JSON
+  // Structure: { items: [{ title, description, startDate, endDate, url, ... }] } for structured
+  // Or: { content: "rich text content" } for freeform
+  customContent Json?
+  contentType   CustomContentType @default(STRUCTURED)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([profileId, type, customName])
+  @@index([profileId])
+  @@index([sortOrder])
+}
+
+enum SectionType {
+  BASIC_INFO
+  EXPERIENCE
+  EDUCATION
+  SKILLS
+  PROJECTS
+  LINKS
+  AWARDS
+  CERTIFICATIONS
+  PUBLICATIONS
+  VOLUNTEERING
+  LANGUAGES
+  INTERESTS
+  CUSTOM
+}
+
+enum CustomContentType {
+  STRUCTURED // title, description, dates, etc.
+  FREEFORM // rich text
 }
 
 // ===========================================
@@ -107,21 +161,21 @@ enum DataSource {
 // ===========================================
 
 model ContactInfo {
-  id        String   @id @default(cuid())
-  profileId String   @unique
-  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  id        String  @id @default(cuid())
+  profileId String  @unique
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
-  email           String?
-  emailSource     DataSource @default(MANUAL)
-  emailPublic     Boolean    @default(false) // Whether to show on public profile
-  
-  phone           String?
-  phoneSource     DataSource @default(MANUAL)
-  phonePublic     Boolean    @default(false)
-  
-  website         String?
-  websiteSource   DataSource @default(MANUAL)
-  
+  email       String?
+  emailSource DataSource @default(MANUAL)
+  emailPublic Boolean    @default(false) // Whether to show on public profile
+
+  phone       String?
+  phoneSource DataSource @default(MANUAL)
+  phonePublic Boolean    @default(false)
+
+  website       String?
+  websiteSource DataSource @default(MANUAL)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -131,16 +185,16 @@ model ContactInfo {
 // ===========================================
 
 model Link {
-  id        String     @id @default(cuid())
+  id        String  @id @default(cuid())
   profileId String
-  profile   Profile    @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
   type      LinkType
   url       String
-  label     String?    // Custom display label
+  label     String? // Custom display label
   source    DataSource @default(MANUAL)
   sortOrder Int        @default(0)
-  
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -164,35 +218,35 @@ enum LinkType {
 // ===========================================
 
 model WorkExperience {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   profileId String
-  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
-  company         String
-  companyUrl      String?
-  companyLogo     String?
-  role            String
-  location        String?
-  locationType    LocationType?
-  employmentType  EmploymentType?
-  
-  startDate       DateTime
-  endDate         DateTime? // Null = current position
-  isCurrent       Boolean   @default(false)
-  
-  description     String?   @db.Text
-  bullets         String[]  // Array of bullet points
-  
+  company        String
+  companyUrl     String?
+  companyLogo    String?
+  role           String
+  location       String?
+  locationType   LocationType?
+  employmentType EmploymentType?
+
+  startDate DateTime
+  endDate   DateTime? // Null = current position
+  isCurrent Boolean   @default(false)
+
+  description String?  @db.Text
+  bullets     String[] // Array of bullet points
+
   // Structured metrics for recruiter view
-  metrics         Json?     // { revenue: "10M", teamSize: 5, etc. }
-  
+  metrics Json? // { revenue: "10M", teamSize: 5, etc. }
+
   // Skills/technologies used
-  tags            String[]
-  
+  tags String[]
+
   // Provenance
-  source          DataSource @default(MANUAL)
-  sortOrder       Int        @default(0)
-  
+  source    DataSource @default(MANUAL)
+  sortOrder Int        @default(0)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -219,29 +273,29 @@ enum EmploymentType {
 // ===========================================
 
 model Education {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   profileId String
-  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
   institution     String
   institutionUrl  String?
   institutionLogo String?
-  degree          String?  // e.g., "Bachelor of Science"
-  fieldOfStudy    String?  // e.g., "Computer Science"
+  degree          String? // e.g., "Bachelor of Science"
+  fieldOfStudy    String? // e.g., "Computer Science"
   location        String?
-  
-  startDate       DateTime?
-  endDate         DateTime?
-  isCurrent       Boolean  @default(false)
-  
-  gpa             String?
-  description     String?  @db.Text
-  activities      String[] // Clubs, organizations
-  honors          String[] // Dean's list, etc.
-  
-  source          DataSource @default(MANUAL)
-  sortOrder       Int        @default(0)
-  
+
+  startDate DateTime?
+  endDate   DateTime?
+  isCurrent Boolean   @default(false)
+
+  gpa         String?
+  description String?  @db.Text
+  activities  String[] // Clubs, organizations
+  honors      String[] // Dean's list, etc.
+
+  source    DataSource @default(MANUAL)
+  sortOrder Int        @default(0)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -253,21 +307,21 @@ model Education {
 // ===========================================
 
 model Skill {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   profileId String
-  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
-  name          String
-  level         SkillLevel?
-  yearsOfExp    Int?
-  
+  name       String
+  level      SkillLevel?
+  yearsOfExp Int?
+
   // Optional grouping
-  groupId       String?
-  group         SkillGroup? @relation(fields: [groupId], references: [id])
-  
-  source        DataSource @default(MANUAL)
-  sortOrder     Int        @default(0)
-  
+  groupId String?
+  group   SkillGroup? @relation(fields: [groupId], references: [id])
+
+  source    DataSource @default(MANUAL)
+  sortOrder Int        @default(0)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -277,15 +331,15 @@ model Skill {
 }
 
 model SkillGroup {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   profileId String
-  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
-  name      String   // e.g., "Frontend", "Backend", "DevOps"
-  sortOrder Int      @default(0)
-  
-  skills    Skill[]
-  
+  name      String // e.g., "Frontend", "Backend", "DevOps"
+  sortOrder Int    @default(0)
+
+  skills Skill[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -305,43 +359,43 @@ enum SkillLevel {
 // ===========================================
 
 model Project {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   profileId String
-  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
-  title           String
-  description     String?  @db.Text
-  shortDesc       String?  // One-liner for portfolio cards
-  
+  title       String
+  description String? @db.Text
+  shortDesc   String? // One-liner for portfolio cards
+
   // Links
-  url             String?  // Live project URL
-  repoUrl         String?  // Source code
-  
+  url     String? // Live project URL
+  repoUrl String? // Source code
+
   // Media
-  imageUrl        String?  // Main project image
-  images          String[] // Additional images
-  
+  imageUrl String? // Main project image
+  images   String[] // Additional images
+
   // Technical details
-  techStack       String[]
-  highlights      String[] // Key achievements/features
-  
+  techStack  String[]
+  highlights String[] // Key achievements/features
+
   // GitHub-specific metadata (if imported)
-  githubStars     Int?
-  githubForks     Int?
-  githubLanguage  String?
-  githubTopics    String[]
-  
+  githubStars    Int?
+  githubForks    Int?
+  githubLanguage String?
+  githubTopics   String[]
+
   // Timeline
-  startDate       DateTime?
-  endDate         DateTime?
-  isCurrent       Boolean  @default(false)
-  
+  startDate DateTime?
+  endDate   DateTime?
+  isCurrent Boolean   @default(false)
+
   // Visibility
-  featured        Boolean  @default(false) // Show prominently
-  
-  source          DataSource @default(MANUAL)
-  sortOrder       Int        @default(0)
-  
+  featured Boolean @default(false) // Show prominently
+
+  source    DataSource @default(MANUAL)
+  sortOrder Int        @default(0)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -354,19 +408,19 @@ model Project {
 // ===========================================
 
 model Award {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   profileId String
-  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
   title       String
-  issuer      String?  // Organization that gave the award
+  issuer      String? // Organization that gave the award
   date        DateTime?
-  description String?  @db.Text
-  url         String?  // Link to award/announcement
-  
-  source      DataSource @default(MANUAL)
-  sortOrder   Int        @default(0)
-  
+  description String?   @db.Text
+  url         String? // Link to award/announcement
+
+  source    DataSource @default(MANUAL)
+  sortOrder Int        @default(0)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -374,22 +428,22 @@ model Award {
 }
 
 model Certification {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   profileId String
-  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
-  name            String
-  issuer          String   // e.g., "AWS", "Google"
-  issuerLogo      String?
-  credentialId    String?
-  credentialUrl   String?  // Verification link
-  
-  issueDate       DateTime?
-  expirationDate  DateTime?
-  
-  source          DataSource @default(MANUAL)
-  sortOrder       Int        @default(0)
-  
+  name          String
+  issuer        String // e.g., "AWS", "Google"
+  issuerLogo    String?
+  credentialId  String?
+  credentialUrl String? // Verification link
+
+  issueDate      DateTime?
+  expirationDate DateTime?
+
+  source    DataSource @default(MANUAL)
+  sortOrder Int        @default(0)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -402,19 +456,20 @@ model Certification {
 
 // Store raw import payloads for debugging and re-processing
 model RawImportPayload {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   profileId String
-  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
   source      DataSource
-  rawData     Json       // Original imported data
-  processedAt DateTime?  // When it was processed into canonical model
+  rawData     Json // Original imported data
+  processedAt DateTime? // When it was processed into canonical model
   status      ImportStatus @default(PENDING)
   errorMsg    String?
-  
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([profileId, source])
   @@index([profileId])
   @@index([source])
 }
@@ -428,17 +483,17 @@ enum ImportStatus {
 
 // Log import operations for audit trail
 model ImportLog {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   source      DataSource
   status      ImportStatus
-  itemsFound  Int       @default(0)
-  itemsMerged Int       @default(0)
+  itemsFound  Int          @default(0)
+  itemsMerged Int          @default(0)
   errorMsg    String?
-  metadata    Json?     // Additional context
-  
+  metadata    Json? // Additional context
+
   createdAt DateTime @default(now())
 
   @@index([userId])
@@ -450,18 +505,18 @@ model ImportLog {
 // ===========================================
 
 model ShareToken {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  token       String   @unique @default(cuid())
-  expiresAt   DateTime?
-  viewCount   Int      @default(0)
-  maxViews    Int?     // Optional view limit
-  
+  token     String    @unique @default(cuid())
+  expiresAt DateTime?
+  viewCount Int       @default(0)
+  maxViews  Int? // Optional view limit
+
   // Optional restrictions
-  allowedView String?  // Restrict to specific view (resume/portfolio/etc.)
-  
+  allowedView String? // Restrict to specific view (resume/portfolio/etc.)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
