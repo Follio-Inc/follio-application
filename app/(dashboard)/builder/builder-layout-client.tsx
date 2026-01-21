@@ -230,6 +230,7 @@ export function BuilderLayoutClient({ profile, children }: BuilderLayoutClientPr
         {/* Section List with Drag & Drop */}
         <ScrollArea className="flex-1 p-2">
           <DndContext
+            id="builder-sections-dnd"
             sensors={sensors}
             collisionDetection={closestCenter}
             onDragEnd={handleDragEnd}

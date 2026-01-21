@@ -16,13 +16,21 @@ import {
   X,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
+
+// Storage key prefix for persisting onboarding state across OAuth redirects
+const ONBOARDING_STATE_KEY_PREFIX = 'follio_onboarding_state_';
+
+// Helper to get user-specific storage key
+const getStorageKey = (userId: string | undefined) => {
+  return userId ? `${ONBOARDING_STATE_KEY_PREFIX}${userId}` : null;
+};
 
 interface OnboardingData {
   firstName: string;
@@ -45,6 +53,15 @@ interface ManualLink {
   label: string;
 }
 
+// Persisted state interface for sessionStorage
+interface PersistedOnboardingState {
+  importSources: ImportSource[];
+  manualLinks: ManualLink[];
+  data: OnboardingData;
+  resumeFileName?: string | null;
+  linkedinFileName?: string | null;
+}
+
 export default function OnboardingPage() {
   const router = useRouter();
   const { signOut } = useClerk();
@@ -54,11 +71,15 @@ export default function OnboardingPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const linkedinFileInputRef = useRef<HTMLInputElement>(null);
   const [hasInitializedFromUser, setHasInitializedFromUser] = useState(false);
+  const [hasRestoredPersistedState, setHasRestoredPersistedState] = useState(false);
   const [showLinkedInHelp, setShowLinkedInHelp] = useState(false);
   const [showGitHubModal, setShowGitHubModal] = useState(false);
   const [githubUsername, setGithubUsername] = useState('');
   const [githubConnecting, setGithubConnecting] = useState(false);
   const [githubError, setGithubError] = useState<string | null>(null);
+  const [resumeFileName, setResumeFileName] = useState<string | null>(null);
+  const [linkedinFileName, setLinkedinFileName] = useState<string | null>(null);
+  const clerk = useClerk();
 
   const [data, setData] = useState<OnboardingData>({
     firstName: '',
@@ -76,6 +97,88 @@ export default function OnboardingPage() {
   const [manualLinks, setManualLinks] = useState<ManualLink[]>([]);
   const [newLinkUrl, setNewLinkUrl] = useState('');
   const [newLinkLabel, setNewLinkLabel] = useState('');
+
+  // Save onboarding state to sessionStorage (used before OAuth redirects)
+  const saveOnboardingState = useCallback(() => {
+    const storageKey = getStorageKey(user?.id);
+    if (!storageKey) return;
+
+    try {
+      const stateToSave: PersistedOnboardingState = {
+        importSources,
+        manualLinks,
+        data,
+        resumeFileName,
+        linkedinFileName,
+      };
+      sessionStorage.setItem(storageKey, JSON.stringify(stateToSave));
+    } catch (err) {
+      console.error('Failed to save onboarding state:', err);
+    }
+  }, [importSources, manualLinks, data, resumeFileName, linkedinFileName, user?.id]);
+
+  // Clear persisted state (called after successful profile creation)
+  const clearPersistedState = useCallback(() => {
+    const storageKey = getStorageKey(user?.id);
+    if (!storageKey) return;
+
+    try {
+      sessionStorage.removeItem(storageKey);
+    } catch (err) {
+      console.error('Failed to clear persisted state:', err);
+    }
+  }, [user?.id]);
+
+  // Restore state from sessionStorage on mount (for after OAuth redirects)
+  useEffect(() => {
+    if (hasRestoredPersistedState || !isUserLoaded || !user?.id) return;
+
+    const storageKey = getStorageKey(user.id);
+    if (!storageKey) {
+      setHasRestoredPersistedState(true);
+      return;
+    }
+
+    try {
+      const savedState = sessionStorage.getItem(storageKey);
+      if (savedState) {
+        const parsed: PersistedOnboardingState = JSON.parse(savedState);
+
+        // Restore import sources
+        if (parsed.importSources && Array.isArray(parsed.importSources)) {
+          setImportSources(parsed.importSources);
+        }
+
+        // Restore manual links
+        if (parsed.manualLinks && Array.isArray(parsed.manualLinks)) {
+          setManualLinks(parsed.manualLinks);
+        }
+
+        // Restore form data
+        if (parsed.data) {
+          setData(parsed.data);
+          // If we restored data, mark as initialized so Clerk doesn't overwrite
+          if (parsed.data.firstName || parsed.data.handle) {
+            setHasInitializedFromUser(true);
+          }
+        }
+
+        // Restore resume filename
+        if (parsed.resumeFileName) {
+          setResumeFileName(parsed.resumeFileName);
+        }
+
+        // Restore linkedin filename
+        if (parsed.linkedinFileName) {
+          setLinkedinFileName(parsed.linkedinFileName);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to restore onboarding state:', err);
+    }
+
+    setHasRestoredPersistedState(true);
+  }, [hasRestoredPersistedState, isUserLoaded, user?.id]);
 
   // Helper function to generate handle from name parts
   const generateHandle = (firstName: string, middleName: string, lastName: string) => {
@@ -175,6 +278,7 @@ export default function OnboardingPage() {
   // Resume upload handler
   const handleResumeUpload = async (file: File) => {
     updateImportSource('resume', { status: 'loading' });
+    setResumeFileName(file.name);
 
     try {
       const formData = new FormData();
@@ -238,6 +342,7 @@ export default function OnboardingPage() {
   // LinkedIn import handler
   const handleLinkedInImport = async (file: File) => {
     updateImportSource('linkedin', { status: 'loading' });
+    setLinkedinFileName(file.name);
 
     try {
       const formData = new FormData();
@@ -317,6 +422,9 @@ export default function OnboardingPage() {
           }),
         });
       }
+
+      // Clear persisted onboarding state since we're done
+      clearPersistedState();
 
       // Redirect to builder to build profile
       router.push('/builder');
@@ -430,12 +538,17 @@ export default function OnboardingPage() {
             </Card>
 
             {/* Import Hub Card */}
-            <Card>
+            <Card className="border-dashed">
               <CardHeader>
-                <CardTitle>Bring your data</CardTitle>
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-base">Quick Import</CardTitle>
+                  <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                    Optional
+                  </span>
+                </div>
                 <CardDescription>
-                  Import from your existing sources to auto-build your profile. You can skip this
-                  and add content later.
+                  Speed up your setup by importing existing data. Skip this if you prefer to add
+                  content manually later.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -455,7 +568,7 @@ export default function OnboardingPage() {
                 <input
                   ref={linkedinFileInputRef}
                   type="file"
-                  accept=".zip"
+                  accept=".pdf,.zip"
                   className="hidden"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
@@ -468,28 +581,56 @@ export default function OnboardingPage() {
                   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
                     <div className="mx-4 max-w-md rounded-xl bg-background p-6 shadow-xl">
                       <h3 className="mb-2 text-lg font-semibold">Import from LinkedIn</h3>
-                      <p className="mb-4 text-sm text-muted-foreground">
-                        LinkedIn doesn&apos;t allow direct access, but you can export your data:
+                      <p className="mb-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">
+                        LinkedIn doesn&apos;t allow direct data access. Please export your profile
+                        manually.
                       </p>
-                      <ol className="mb-4 space-y-2 text-sm">
-                        <li className="flex gap-2">
-                          <span className="font-medium text-primary">1.</span>
-                          Go to LinkedIn → Settings → Data Privacy → Get a copy of your data
-                        </li>
-                        <li className="flex gap-2">
-                          <span className="font-medium text-primary">2.</span>
-                          Select &quot;Want something in particular?&quot; and check the boxes you
-                          want
-                        </li>
-                        <li className="flex gap-2">
-                          <span className="font-medium text-primary">3.</span>
-                          Request archive and wait for the email (usually 10-15 minutes)
-                        </li>
-                        <li className="flex gap-2">
-                          <span className="font-medium text-primary">4.</span>
-                          Download the ZIP file and upload it here
-                        </li>
-                      </ol>
+                      <p className="mb-4 text-sm text-muted-foreground">
+                        Export your LinkedIn profile as PDF (quick) or data archive (complete):
+                      </p>
+
+                      {/* Option 1: PDF Export (Recommended) */}
+                      <div className="mb-4 rounded-lg border bg-muted/30 p-3">
+                        <p className="mb-2 text-sm font-medium text-primary">
+                          Option 1: Save as PDF (Recommended)
+                        </p>
+                        <ol className="space-y-1 text-sm text-muted-foreground">
+                          <li className="flex gap-2">
+                            <span className="font-medium">1.</span>
+                            Go to your LinkedIn profile page
+                          </li>
+                          <li className="flex gap-2">
+                            <span className="font-medium">2.</span>
+                            Click &quot;More&quot; → &quot;Save to PDF&quot;
+                          </li>
+                          <li className="flex gap-2">
+                            <span className="font-medium">3.</span>
+                            Upload the downloaded PDF here
+                          </li>
+                        </ol>
+                      </div>
+
+                      {/* Option 2: Data Export */}
+                      <details className="mb-4 rounded-lg border bg-muted/30 p-3">
+                        <summary className="cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground">
+                          Option 2: Data Export (takes 10-15 min)
+                        </summary>
+                        <ol className="mt-2 space-y-1 text-sm text-muted-foreground">
+                          <li className="flex gap-2">
+                            <span className="font-medium">1.</span>
+                            Settings → Data Privacy → Get a copy of your data
+                          </li>
+                          <li className="flex gap-2">
+                            <span className="font-medium">2.</span>
+                            Select data types and request archive
+                          </li>
+                          <li className="flex gap-2">
+                            <span className="font-medium">3.</span>
+                            Wait for email, download ZIP, upload here
+                          </li>
+                        </ol>
+                      </details>
+
                       <div className="flex gap-2">
                         <Button
                           variant="outline"
@@ -502,7 +643,7 @@ export default function OnboardingPage() {
                           className="flex-1"
                           onClick={() => linkedinFileInputRef.current?.click()}
                         >
-                          Upload ZIP
+                          Upload PDF/ZIP
                         </Button>
                       </div>
                     </div>
@@ -516,6 +657,9 @@ export default function OnboardingPage() {
                       (a) => a.provider === 'github'
                     );
 
+                    // GitHub username from the external account
+                    const githubUsernameFromAccount = connectedGithub?.username ?? null;
+
                     return (
                       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
                         <div className="mx-4 w-full max-w-sm rounded-xl bg-background p-6 shadow-xl">
@@ -527,7 +671,9 @@ export default function OnboardingPage() {
                               <h3 className="text-lg font-semibold">Import from GitHub</h3>
                               <p className="text-sm text-muted-foreground">
                                 {connectedGithub
-                                  ? 'Your account is connected'
+                                  ? githubUsernameFromAccount
+                                    ? `Connected as @${githubUsernameFromAccount}`
+                                    : 'Your account is connected'
                                   : 'Connect or enter your username'}
                               </p>
                             </div>
@@ -536,34 +682,67 @@ export default function OnboardingPage() {
                           {/* Show connected account if exists */}
                           {connectedGithub ? (
                             <>
-                              <button
-                                onClick={() => {
-                                  if (connectedGithub.username) {
-                                    setGithubUsername(connectedGithub.username);
-                                    handleGitHubImport();
-                                  }
-                                }}
-                                className="mb-4 flex w-full items-center gap-3 rounded-lg border-2 border-green-500/30 bg-green-50 p-4 text-left transition-all hover:border-green-500/50 hover:bg-green-100 dark:bg-green-950/30 dark:hover:bg-green-950/50"
-                              >
-                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100 dark:bg-green-900">
-                                  <Check className="h-5 w-5 text-green-600" />
+                              <div className="mb-4 rounded-lg border-2 border-green-500/30 bg-green-50 p-4 dark:bg-green-950/30">
+                                <button
+                                  onClick={() => {
+                                    if (githubUsernameFromAccount) {
+                                      setGithubUsername(githubUsernameFromAccount);
+                                      handleGitHubImport();
+                                    }
+                                  }}
+                                  className="flex w-full items-center gap-3 text-left"
+                                >
+                                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100 dark:bg-green-900">
+                                    <Check className="h-5 w-5 text-green-600" />
+                                  </div>
+                                  <div className="flex-1">
+                                    <p className="font-medium">
+                                      {githubUsernameFromAccount ? (
+                                        <>@{githubUsernameFromAccount}</>
+                                      ) : (
+                                        'Connected via GitHub'
+                                      )}
+                                    </p>
+                                    <p className="text-sm text-muted-foreground">
+                                      {githubUsernameFromAccount
+                                        ? 'Connected via GitHub'
+                                        : 'Click to import your data'}
+                                    </p>
+                                  </div>
+                                  <span className="rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground">
+                                    Import
+                                  </span>
+                                </button>
+
+                                {/* Disconnect button - opens Clerk's user profile for proper verification */}
+                                <div className="mt-3 flex justify-end border-t border-green-500/20 pt-3">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      // Save state before opening profile (in case of navigation)
+                                      saveOnboardingState();
+                                      // Open Clerk's user profile to the connected accounts section
+                                      clerk.openUserProfile({
+                                        appearance: {
+                                          elements: {
+                                            rootBox: 'z-[100]',
+                                          },
+                                        },
+                                      });
+                                    }}
+                                    className="flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-destructive"
+                                  >
+                                    <X className="h-3 w-3" />
+                                    Disconnect account
+                                  </button>
                                 </div>
-                                <div className="flex-1">
-                                  <p className="font-medium">{connectedGithub.username}</p>
-                                  <p className="text-sm text-muted-foreground">
-                                    Connected via GitHub
-                                  </p>
-                                </div>
-                                <span className="rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground">
-                                  Import
-                                </span>
-                              </button>
+                              </div>
 
                               {/* Divider for manual entry */}
                               <div className="mb-3 flex items-center gap-3">
                                 <div className="h-px flex-1 bg-border" />
                                 <span className="text-xs text-muted-foreground">
-                                  or use different account
+                                  or enter username manually
                                 </span>
                                 <div className="h-px flex-1 bg-border" />
                               </div>
@@ -590,6 +769,9 @@ export default function OnboardingPage() {
                                   }
 
                                   try {
+                                    // Save state before OAuth redirect so we can restore it when we come back
+                                    saveOnboardingState();
+
                                     const externalAccount = await user?.createExternalAccount({
                                       strategy: 'oauth_github',
                                       redirectUrl: window.location.href,
@@ -700,39 +882,107 @@ export default function OnboardingPage() {
 
                 {/* Import Sources Grid */}
                 <div className="grid gap-3 sm:grid-cols-3">
-                  {importSources.map((source) => (
-                    <button
-                      key={source.id}
-                      onClick={() => {
-                        if (source.type === 'resume') {
-                          fileInputRef.current?.click();
-                        } else if (source.type === 'github') {
-                          setShowGitHubModal(true);
-                        } else if (source.type === 'linkedin') {
-                          setShowLinkedInHelp(true);
-                        }
-                      }}
-                      disabled={source.status === 'loading'}
-                      className={`relative flex flex-col items-center gap-2 rounded-xl border p-4 transition-all hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 ${
-                        source.status === 'success'
-                          ? 'border-green-500 bg-green-50 dark:bg-green-950'
-                          : source.status === 'error'
-                            ? 'border-red-500 bg-red-50 dark:bg-red-950'
-                            : ''
-                      }`}
-                    >
-                      {source.status === 'loading' ? (
-                        <Loader2 className="h-5 w-5 animate-spin" />
-                      ) : source.status === 'success' ? (
-                        <Check className="h-5 w-5 text-green-600" />
-                      ) : source.status === 'error' ? (
-                        <X className="h-5 w-5 text-red-600" />
-                      ) : (
-                        getSourceIcon(source.type)
-                      )}
-                      <span className="text-sm font-medium">{getSourceLabel(source.type)}</span>
-                    </button>
-                  ))}
+                  {importSources.map((source) => {
+                    // Get connected GitHub username if available
+                    const githubAccount =
+                      source.type === 'github'
+                        ? user?.externalAccounts?.find((a) => a.provider === 'github')
+                        : null;
+                    const connectedGithubUsername = githubAccount?.username ?? null;
+
+                    // Check if this source can be cleared
+                    const canClear =
+                      (source.type === 'resume' && source.status === 'success') ||
+                      (source.type === 'linkedin' && source.status === 'success') ||
+                      (source.type === 'github' && (githubAccount || source.status === 'success'));
+
+                    return (
+                      <div key={source.id} className="relative">
+                        {/* Clear/Remove button */}
+                        {canClear && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (source.type === 'resume') {
+                                updateImportSource('resume', { status: 'idle', data: undefined });
+                                setResumeFileName(null);
+                              } else if (source.type === 'linkedin') {
+                                updateImportSource('linkedin', { status: 'idle', data: undefined });
+                                setLinkedinFileName(null);
+                              } else if (source.type === 'github') {
+                                // Open Clerk profile to manage connected accounts
+                                clerk.openUserProfile();
+                              }
+                            }}
+                            className="absolute -right-1 -top-1 z-10 rounded-full bg-muted p-1 text-muted-foreground shadow-sm transition-colors hover:bg-destructive hover:text-destructive-foreground"
+                            title={source.type === 'github' ? 'Disconnect' : 'Remove'}
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => {
+                            if (source.type === 'resume') {
+                              fileInputRef.current?.click();
+                            } else if (source.type === 'github') {
+                              setShowGitHubModal(true);
+                            } else if (source.type === 'linkedin') {
+                              setShowLinkedInHelp(true);
+                            }
+                          }}
+                          disabled={source.status === 'loading'}
+                          className={`relative flex min-h-[88px] w-full flex-col items-center justify-center gap-2 rounded-xl border p-4 transition-all hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50 ${
+                            source.status === 'success'
+                              ? 'border-green-500 bg-green-50 dark:bg-green-950'
+                              : source.status === 'error'
+                                ? 'border-red-500 bg-red-50 dark:bg-red-950'
+                                : githubAccount && source.type === 'github'
+                                  ? 'border-green-500 bg-green-50 dark:bg-green-950'
+                                  : 'border-dashed border-muted-foreground/30 hover:border-muted-foreground/50'
+                          }`}
+                        >
+                          {source.status === 'loading' ? (
+                            <Loader2 className="h-5 w-5 animate-spin" />
+                          ) : source.status === 'success' ? (
+                            <Check className="h-5 w-5 text-green-600" />
+                          ) : source.status === 'error' ? (
+                            <X className="h-5 w-5 text-red-600" />
+                          ) : githubAccount && source.type === 'github' ? (
+                            <Check className="h-5 w-5 text-green-600" />
+                          ) : (
+                            getSourceIcon(source.type)
+                          )}
+                          <span className="text-sm font-medium">{getSourceLabel(source.type)}</span>
+                          {/* Show GitHub username if connected */}
+                          {connectedGithubUsername && source.type === 'github' && (
+                            <span className="text-xs text-green-600 dark:text-green-400">
+                              @{connectedGithubUsername}
+                            </span>
+                          )}
+                          {/* Show resume filename if uploaded */}
+                          {resumeFileName &&
+                            source.type === 'resume' &&
+                            source.status === 'success' && (
+                              <span className="max-w-full truncate text-xs text-green-600 dark:text-green-400">
+                                {resumeFileName.length > 20
+                                  ? `...${resumeFileName.slice(-20)}`
+                                  : resumeFileName}
+                              </span>
+                            )}
+                          {/* Show LinkedIn filename if uploaded */}
+                          {linkedinFileName &&
+                            source.type === 'linkedin' &&
+                            source.status === 'success' && (
+                              <span className="max-w-full truncate text-xs text-green-600 dark:text-green-400">
+                                {linkedinFileName.length > 20
+                                  ? `...${linkedinFileName.slice(-20)}`
+                                  : linkedinFileName}
+                              </span>
+                            )}
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
 
                 {/* Manual Links Section */}

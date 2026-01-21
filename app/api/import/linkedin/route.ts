@@ -9,6 +9,7 @@ import type {
   NormalizedProfileData,
   NormalizedSkill,
 } from '@/services/import/types';
+import { extractTextFromPDF, parseResumeText } from '@/services/resume-parser.service';
 
 interface LinkedInPosition {
   'Company Name'?: string;
@@ -238,6 +239,59 @@ async function parseLinkedInExport(buffer: Buffer): Promise<ParsedLinkedInData> 
   return result;
 }
 
+/**
+ * Parse LinkedIn PDF export
+ * LinkedIn's "Save to PDF" creates a formatted PDF of the profile
+ */
+async function parseLinkedInPDF(buffer: Buffer): Promise<ParsedLinkedInData> {
+  // Extract text from PDF using the resume parser's PDF extraction
+  const text = await extractTextFromPDF(buffer);
+
+  // Use the resume parser to extract structured data
+  const parsedResume = parseResumeText(text);
+
+  // Convert resume format to LinkedIn format
+  const result: ParsedLinkedInData = {
+    profile: {
+      firstName: parsedResume.basics?.firstName,
+      lastName: parsedResume.basics?.lastName,
+      headline: parsedResume.basics?.headline,
+      summary: parsedResume.basics?.summary,
+      location: parsedResume.basics?.location,
+    },
+    experiences: (parsedResume.workExperiences || []).map((exp) => ({
+      company: exp.company,
+      role: exp.title,
+      description: exp.description || exp.bullets?.join('\n'),
+      location: exp.location,
+      startDate: exp.startDate,
+      endDate: exp.endDate,
+      isCurrent: exp.isCurrent || !exp.endDate,
+      source: 'LINKEDIN' as const,
+    })),
+    education: (parsedResume.educations || []).map((edu) => ({
+      institution: edu.institution,
+      degree: edu.degree,
+      fieldOfStudy: edu.fieldOfStudy,
+      startDate: edu.startDate,
+      endDate: edu.endDate,
+      source: 'LINKEDIN' as const,
+    })),
+    skills: (parsedResume.skills || []).map((skill) => ({
+      name: skill,
+      source: 'LINKEDIN' as const,
+    })),
+    certifications: (parsedResume.certifications || []).map((cert) => ({
+      name: cert.name,
+      issuer: cert.issuer,
+      issueDate: cert.date,
+      source: 'LINKEDIN' as const,
+    })),
+  };
+
+  return result;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { userId } = await auth();
@@ -250,24 +304,33 @@ export async function POST(request: NextRequest) {
     const file = formData.get('file') as File | null;
 
     if (!file) {
-      return NextResponse.json({ error: 'LinkedIn export ZIP file is required' }, { status: 400 });
+      return NextResponse.json({ error: 'LinkedIn export file is required' }, { status: 400 });
     }
 
+    const isPDF = file.name.endsWith('.pdf') || file.type === 'application/pdf';
+    const isZIP = file.name.endsWith('.zip') || file.type === 'application/zip';
+
     // Validate file type
-    if (!file.name.endsWith('.zip') && file.type !== 'application/zip') {
+    if (!isPDF && !isZIP) {
       return NextResponse.json(
-        { error: 'Please upload your LinkedIn data export ZIP file' },
+        { error: 'Please upload your LinkedIn profile as PDF or data export ZIP file' },
         { status: 400 }
       );
     }
 
-    // Validate file size (max 50MB - LinkedIn exports can be large)
-    if (file.size > 50 * 1024 * 1024) {
-      return NextResponse.json({ error: 'File size must be less than 50MB' }, { status: 400 });
+    // Validate file size (max 50MB for ZIP, 10MB for PDF)
+    const maxSize = isZIP ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+      return NextResponse.json(
+        { error: `File size must be less than ${isZIP ? '50MB' : '10MB'}` },
+        { status: 400 }
+      );
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const parsed = await parseLinkedInExport(buffer);
+
+    // Parse based on file type
+    const parsed = isPDF ? await parseLinkedInPDF(buffer) : await parseLinkedInExport(buffer);
 
     // Calculate confidence based on what we found
     let confidence = 0;
