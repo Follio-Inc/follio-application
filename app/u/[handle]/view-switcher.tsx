@@ -1,7 +1,7 @@
 'use client';
 
-import { FileText, Grid3X3, Clock, UserCheck } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { Clock, FileText, Grid3X3, UserCheck } from 'lucide-react';
 
 import type { ProfileView } from '@/types';
 
@@ -25,8 +25,8 @@ const VIEWS = [
   },
   { id: 'timeline' as const, label: 'Timeline', icon: Clock, description: 'Career journey' },
   {
-    id: 'recruiter' as const,
-    label: 'Recruiter',
+    id: 'snapshot' as const,
+    label: 'SnapShot',
     icon: UserCheck,
     description: 'Key facts summary',
   },

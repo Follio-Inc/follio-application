@@ -2,31 +2,31 @@
 
 import { motion } from 'framer-motion';
 import {
-  Mail,
-  MapPin,
-  Calendar,
   Briefcase,
-  GraduationCap,
+  Calendar,
+  CheckCircle,
   Code2,
   Download,
-  CheckCircle,
   Globe,
+  GraduationCap,
+  Mail,
+  MapPin,
 } from 'lucide-react';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 
 import { formatDate } from '@/lib/utils';
 import type { PublicProfile } from '@/types';
 
-interface RecruiterViewProps {
+interface SnapshotViewProps {
   profile: PublicProfile;
 }
 
-export function RecruiterView({ profile }: RecruiterViewProps) {
+export function SnapshotView({ profile }: SnapshotViewProps) {
   const initials = `${profile.firstName?.[0] || ''}${profile.lastName?.[0] || ''}`;
 
   // Calculate key metrics
@@ -326,7 +326,7 @@ export function RecruiterView({ profile }: RecruiterViewProps) {
         </motion.div>
       )}
 
-      {/* Quick Actions for Recruiters */}
+      {/* Quick Actions */}
       <motion.div
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}

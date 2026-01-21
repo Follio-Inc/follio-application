@@ -43,7 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Initial release
-- Profile management with multiple views (Resume, Portfolio, Timeline, Recruiter)
+- Profile management with multiple views (Resume, Portfolio, Timeline, SnapShot)
 - GitHub import integration
 - Resume parsing and import
 - Smart merge with conflict resolution

@@ -1,15 +1,15 @@
 'use client';
 
+import { AnimatePresence, motion } from 'framer-motion';
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 
 import { ViewSwitcher } from './view-switcher';
-import { ResumeView } from './views/resume-view';
 import { PortfolioView } from './views/portfolio-view';
+import { ResumeView } from './views/resume-view';
+import { SnapshotView } from './views/snapshot-view';
 import { TimelineView } from './views/timeline-view';
-import { RecruiterView } from './views/recruiter-view';
 
-import type { PublicProfile, ProfileView } from '@/types';
+import type { ProfileView, PublicProfile } from '@/types';
 
 interface ProfileViewerProps {
   profile: PublicProfile;
@@ -41,7 +41,7 @@ export function ProfileViewer({ profile, initialView }: ProfileViewerProps) {
           {currentView === 'resume' && <ResumeView profile={profile} />}
           {currentView === 'portfolio' && <PortfolioView profile={profile} />}
           {currentView === 'timeline' && <TimelineView profile={profile} />}
-          {currentView === 'recruiter' && <RecruiterView profile={profile} />}
+          {currentView === 'snapshot' && <SnapshotView profile={profile} />}
         </motion.main>
       </AnimatePresence>
 

@@ -255,7 +255,7 @@ model WorkExperience {
   description String?  @db.Text
   bullets     String[] // Array of bullet points
 
-  // Structured metrics for recruiter view
+  // Structured metrics for snapshot view
   metrics Json? // { revenue: "10M", teamSize: 5, etc. }
 
   // Skills/technologies used

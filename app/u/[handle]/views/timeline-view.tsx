@@ -1,20 +1,21 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Briefcase, GraduationCap, Award, FileCheck, FolderKanban, Calendar } from 'lucide-react';
+import {
+  Award,
+  Briefcase,
+  Calendar,
+  FileCheck,
+  FolderKanban,
+  GraduationCap,
+  LayoutGrid,
+} from 'lucide-react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 
 import { formatDate } from '@/lib/utils';
-import type {
-  PublicProfile,
-  WorkExperience,
-  Education,
-  Award as AwardType,
-  Certification,
-  Project,
-} from '@/types';
+import type { CustomSectionContent, CustomSectionItem, PublicProfile } from '@/types';
 
 interface TimelineViewProps {
   profile: PublicProfile;
@@ -22,7 +23,7 @@ interface TimelineViewProps {
 
 type TimelineItem = {
   id: string;
-  type: 'work' | 'education' | 'award' | 'certification' | 'project';
+  type: 'work' | 'education' | 'award' | 'certification' | 'project' | 'custom';
   date: Date | null;
   endDate?: Date | null;
   isCurrent?: boolean;
@@ -115,6 +116,39 @@ function buildTimeline(profile: PublicProfile): TimelineItem[] {
     });
   });
 
+  // Custom sections with date items
+  profile.sections
+    ?.filter((s) => s.type === 'CUSTOM' && s.isVisible)
+    .forEach((section) => {
+      const content = section.customContent as CustomSectionContent | null;
+      const sectionItems = content?.items || [];
+
+      sectionItems
+        .filter((item: CustomSectionItem) => item.startDate)
+        .forEach((item: CustomSectionItem) => {
+          // Try to parse the date string (could be "Jan 2023" format)
+          let parsedDate: Date | null = null;
+          if (item.startDate) {
+            const parsed = new Date(item.startDate);
+            parsedDate = isNaN(parsed.getTime()) ? null : parsed;
+          }
+
+          items.push({
+            id: `custom-${section.id}-${item.id}`,
+            type: 'custom',
+            date: parsedDate,
+            endDate: item.endDate ? new Date(item.endDate) : null,
+            isCurrent: item.isCurrent,
+            title: item.title,
+            subtitle: section.title,
+            description: item.description || null,
+            tags: item.tags || [],
+            icon: LayoutGrid,
+            color: 'bg-pink-500',
+          });
+        });
+    });
+
   // Sort by date (most recent first), null dates at the end
   return items.sort((a, b) => {
     if (!a.date && !b.date) return 0;
@@ -166,6 +200,10 @@ export function TimelineView({ profile }: TimelineViewProps) {
         <span className="flex items-center gap-2">
           <span className="h-3 w-3 rounded-full bg-orange-500" />
           Certifications
+        </span>
+        <span className="flex items-center gap-2">
+          <span className="h-3 w-3 rounded-full bg-pink-500" />
+          Custom
         </span>
       </div>
 

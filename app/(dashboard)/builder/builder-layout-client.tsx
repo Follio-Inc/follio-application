@@ -1,53 +1,35 @@
 'use client';
 
 import {
-  Award,
-  BadgeCheck,
-  BookOpen,
-  Briefcase,
-  ChevronLeft,
-  Code,
-  ExternalLink,
-  Eye,
-  EyeOff,
-  FolderKanban,
-  Globe,
-  GraduationCap,
-  Heart,
-  LayoutGrid,
-  Link as LinkIcon,
-  PanelLeft,
-  PanelLeftClose,
-  Sparkles,
-  User,
-} from 'lucide-react';
+  closestCenter,
+  DndContext,
+  DragEndEvent,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import { restrictToParentElement, restrictToVerticalAxis } from '@dnd-kit/modifiers';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { ChevronLeft, ExternalLink, Eye, PanelLeft, PanelLeftClose, Share2 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 
-import type { FullProfile, ProfileSection, SectionType } from '@/types';
+import { AddSectionDialog } from './components/add-section-dialog';
+import { SortableSectionItem } from './components/sortable-section-item';
 
-// Icon mapping
-const SECTION_ICONS: Record<SectionType, React.ComponentType<{ className?: string }>> = {
-  BASIC_INFO: User,
-  EXPERIENCE: Briefcase,
-  EDUCATION: GraduationCap,
-  SKILLS: Code,
-  PROJECTS: FolderKanban,
-  LINKS: LinkIcon,
-  AWARDS: Award,
-  CERTIFICATIONS: BadgeCheck,
-  PUBLICATIONS: BookOpen,
-  VOLUNTEERING: Heart,
-  LANGUAGES: Globe,
-  INTERESTS: Sparkles,
-  CUSTOM: LayoutGrid,
-};
+import type { FullProfile, ProfileSection, SectionType } from '@/types';
 
 interface BuilderLayoutClientProps {
   profile: FullProfile;
@@ -55,11 +37,23 @@ interface BuilderLayoutClientProps {
 }
 
 export function BuilderLayoutClient({ profile, children }: BuilderLayoutClientProps) {
-  const router = useRouter();
   const pathname = usePathname();
+  const router = useRouter();
   const [sections, setSections] = useState<ProfileSection[]>(profile.sections || []);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+
+  // DnD sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   // Fetch sections if not present
   useEffect(() => {
@@ -92,20 +86,123 @@ export function BuilderLayoutClient({ profile, children }: BuilderLayoutClientPr
     return pathname === `/builder/${slug}`;
   };
 
-  const handleToggleVisibility = async (section: ProfileSection) => {
+  const handleToggleVisibility = async (section: ProfileSection): Promise<void> => {
     const newVisibility = !section.isVisible;
     setSections((prev) =>
       prev.map((s) => (s.id === section.id ? { ...s, isVisible: newVisibility } : s))
     );
 
     try {
-      await fetch(`/api/profile/sections/${section.id}`, {
+      const response = await fetch(`/api/profile/sections/${section.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isVisible: newVisibility }),
       });
+
+      if (!response.ok) {
+        throw new Error('Failed to toggle visibility');
+      }
     } catch (error) {
       console.error('Failed to toggle visibility:', error);
+      // Revert on error
+      setSections((prev) =>
+        prev.map((s) => (s.id === section.id ? { ...s, isVisible: !newVisibility } : s))
+      );
+    }
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      const oldIndex = sections.findIndex((s) => s.id === active.id);
+      const newIndex = sections.findIndex((s) => s.id === over.id);
+
+      const newSections = arrayMove(sections, oldIndex, newIndex);
+
+      // Update sortOrder for all sections
+      const updatedSections = newSections.map((s, index) => ({
+        ...s,
+        sortOrder: index,
+      }));
+
+      setSections(updatedSections);
+
+      // Save to backend
+      setIsSaving(true);
+      try {
+        await fetch('/api/profile/sections', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sections: updatedSections.map((s) => ({
+              id: s.id,
+              sortOrder: s.sortOrder,
+            })),
+          }),
+        });
+      } catch (error) {
+        console.error('Failed to save section order:', error);
+        // Revert on error
+        fetchSections();
+      } finally {
+        setIsSaving(false);
+      }
+    }
+  };
+
+  const handleAddSection = async (type: SectionType, customName?: string, title?: string) => {
+    try {
+      const response = await fetch('/api/profile/sections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, customName, title }),
+      });
+
+      if (response.ok) {
+        const newSection = await response.json();
+        setSections((prev) => [...prev, newSection]);
+
+        // Navigate to the new section
+        const slug = getSectionSlug(newSection);
+        router.push(`/builder/${slug}`);
+      } else {
+        const error = await response.json();
+        console.error('Failed to add section:', error);
+      }
+    } catch (error) {
+      console.error('Failed to add section:', error);
+    }
+  };
+
+  const handleDeleteSection = async (
+    section: ProfileSection
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const response = await fetch(`/api/profile/sections/${section.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        return {
+          success: false,
+          error: errorData.message || 'Failed to delete section',
+        };
+      }
+
+      // Remove from local state on success
+      setSections((prev) => prev.filter((s) => s.id !== section.id));
+
+      // Navigate to basic-info if we deleted the current section
+      if (isActiveSection(section)) {
+        router.push('/builder/basic-info');
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Failed to delete section:', error);
+      return { success: false, error: 'Failed to delete section' };
     }
   };
 
@@ -121,70 +218,66 @@ export function BuilderLayoutClient({ profile, children }: BuilderLayoutClientPr
         {/* Sidebar Header */}
         <div className="flex items-center justify-between border-b p-4">
           <Link
-            href="/dashboard"
+            href="/me"
             className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
           >
             <ChevronLeft className="h-4 w-4" />
-            Back to Dashboard
+            View Profile
           </Link>
+          {isSaving && <span className="text-xs text-muted-foreground">Saving...</span>}
         </div>
 
-        {/* Section List */}
+        {/* Section List with Drag & Drop */}
         <ScrollArea className="flex-1 p-2">
-          <nav className="space-y-1">
-            {sections.map((section) => {
-              const Icon = SECTION_ICONS[section.type] || LayoutGrid;
-              const isActive = isActiveSection(section);
-              const slug = getSectionSlug(section);
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+            modifiers={[restrictToVerticalAxis, restrictToParentElement]}
+          >
+            <SortableContext
+              items={sections.map((s) => s.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <nav className="space-y-1">
+                {sections.map((section) => (
+                  <SortableSectionItem
+                    key={section.id}
+                    section={section}
+                    isActive={isActiveSection(section)}
+                    onToggleVisibility={handleToggleVisibility}
+                    onDelete={handleDeleteSection}
+                  />
+                ))}
+              </nav>
+            </SortableContext>
+          </DndContext>
 
-              return (
-                <div
-                  key={section.id}
-                  className={cn(
-                    'group flex items-center rounded-lg transition-colors',
-                    isActive ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
-                  )}
-                >
-                  <Link
-                    href={`/builder/${slug}`}
-                    className="flex flex-1 items-center gap-3 px-3 py-2"
-                  >
-                    <Icon className="h-4 w-4" />
-                    <span className="text-sm font-medium">{section.title}</span>
-                  </Link>
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      handleToggleVisibility(section);
-                    }}
-                    className={cn(
-                      'mr-2 rounded p-1 opacity-0 transition-opacity group-hover:opacity-100',
-                      isActive ? 'hover:bg-primary-foreground/20' : 'hover:bg-muted-foreground/20'
-                    )}
-                    title={section.isVisible ? 'Hide section' : 'Show section'}
-                  >
-                    {section.isVisible ? (
-                      <Eye className="h-3 w-3" />
-                    ) : (
-                      <EyeOff className="h-3 w-3" />
-                    )}
-                  </button>
-                </div>
-              );
-            })}
+          {/* Add Section Button */}
+          <div className="mt-3">
+            <AddSectionDialog existingSections={sections} onAdd={handleAddSection} />
+          </div>
+
+          {/* Separator and Share Link */}
+          <Separator className="my-3" />
+          <nav className="space-y-1">
+            <Link
+              href="/builder/share"
+              className={cn(
+                'flex items-center gap-3 rounded-lg px-3 py-2 transition-colors',
+                pathname === '/builder/share'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'hover:bg-muted'
+              )}
+            >
+              <Share2 className="h-4 w-4" />
+              <span className="text-sm font-medium">Share & Publish</span>
+            </Link>
           </nav>
         </ScrollArea>
 
         {/* Sidebar Footer */}
         <div className="border-t p-4">
-          <div className="mb-3 flex items-center gap-2">
-            <Badge
-              variant={profile.status === 'PUBLIC' ? 'default' : 'secondary'}
-              className="text-xs"
-            >
-              {profile.status.toLowerCase()}
-            </Badge>
-          </div>
           <Link href={`/u/${profile.handle}`} target="_blank">
             <Button variant="outline" size="sm" className="w-full gap-2">
               <Eye className="h-4 w-4" />

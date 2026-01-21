@@ -1,27 +1,44 @@
 'use client';
 
 import {
+  Award,
+  BookOpen,
+  Building2,
+  Calendar,
+  ExternalLink,
+  FileCheck,
+  Github,
+  Globe,
+  GraduationCap,
+  Heart,
+  LayoutGrid,
+  Linkedin,
   Mail,
   MapPin,
-  Globe,
-  Github,
-  Linkedin,
+  Sparkles,
   Twitter,
-  ExternalLink,
-  Calendar,
-  Building2,
-  GraduationCap,
-  Award,
-  FileCheck,
 } from 'lucide-react';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 
 import { formatDate } from '@/lib/utils';
-import type { PublicProfile } from '@/types';
+import type {
+  CustomSectionContent,
+  CustomSectionItem,
+  InterestItem,
+  InterestsSectionContent,
+  LanguageItem,
+  LanguagesSectionContent,
+  ProfileSection,
+  PublicationItem,
+  PublicationsSectionContent,
+  PublicProfile,
+  VolunteeringItem,
+  VolunteeringSectionContent,
+} from '@/types';
 
 interface ResumeViewProps {
   profile: PublicProfile;
@@ -44,6 +61,46 @@ const getLinkIcon = (type: string) => {
 
 export function ResumeView({ profile }: ResumeViewProps) {
   const initials = `${profile.firstName?.[0] || ''}${profile.lastName?.[0] || ''}`;
+
+  // Get visible sections by type
+  const getSectionByType = (type: string) =>
+    (profile.sections || []).find((s: ProfileSection) => s.type === type && s.isVisible);
+
+  // Get visible custom sections
+  const customSections = (profile.sections || [])
+    .filter((s: ProfileSection) => s.type === 'CUSTOM' && s.isVisible)
+    .sort((a: ProfileSection, b: ProfileSection) => a.sortOrder - b.sortOrder);
+
+  // Get specialized sections
+  const volunteeringSection = getSectionByType('VOLUNTEERING');
+  const languagesSection = getSectionByType('LANGUAGES');
+  const publicationsSection = getSectionByType('PUBLICATIONS');
+  const interestsSection = getSectionByType('INTERESTS');
+
+  // Extract items from sections
+  const volunteeringItems = volunteeringSection
+    ? (volunteeringSection.customContent as unknown as VolunteeringSectionContent)?.items || []
+    : [];
+  const languageItems = languagesSection
+    ? (languagesSection.customContent as unknown as LanguagesSectionContent)?.items || []
+    : [];
+  const publicationItems = publicationsSection
+    ? (publicationsSection.customContent as unknown as PublicationsSectionContent)?.items || []
+    : [];
+  const interestItems = interestsSection
+    ? (interestsSection.customContent as unknown as InterestsSectionContent)?.items || []
+    : [];
+
+  const getProficiencyLabel = (proficiency: string) => {
+    const labels: Record<string, string> = {
+      NATIVE: 'Native / Bilingual',
+      FLUENT: 'Fluent',
+      ADVANCED: 'Advanced',
+      INTERMEDIATE: 'Intermediate',
+      BASIC: 'Basic',
+    };
+    return labels[proficiency] || proficiency;
+  };
 
   return (
     <div className="space-y-6">
@@ -318,6 +375,255 @@ export function ResumeView({ profile }: ResumeViewProps) {
           </CardContent>
         </Card>
       )}
+
+      {/* Publications */}
+      {publicationItems.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <BookOpen className="h-5 w-5" />
+              Publications
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {publicationItems.map((pub: PublicationItem, index: number) => (
+              <div key={pub.id}>
+                {index > 0 && <Separator className="mb-6" />}
+                <div className="flex gap-4">
+                  <div className="hidden sm:block">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                      <BookOpen className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-semibold">{pub.title}</h3>
+                    {pub.authors && <p className="text-sm text-muted-foreground">{pub.authors}</p>}
+                    {pub.publisher && (
+                      <p className="text-sm text-muted-foreground">Published in: {pub.publisher}</p>
+                    )}
+                    {pub.date && <p className="mt-1 text-xs text-muted-foreground">{pub.date}</p>}
+                    {pub.description && (
+                      <p className="mt-2 text-sm text-muted-foreground">{pub.description}</p>
+                    )}
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {pub.url && (
+                        <a
+                          href={pub.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                        >
+                          View publication <ExternalLink className="h-3 w-3" />
+                        </a>
+                      )}
+                      {pub.doi && (
+                        <a
+                          href={`https://doi.org/${pub.doi}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary hover:underline"
+                        >
+                          DOI: {pub.doi}
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Volunteering */}
+      {volunteeringItems.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Heart className="h-5 w-5" />
+              Volunteering
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {volunteeringItems.map((vol: VolunteeringItem, index: number) => (
+              <div key={vol.id}>
+                {index > 0 && <Separator className="mb-6" />}
+                <div className="flex gap-4">
+                  <div className="hidden sm:block">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                      <Heart className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <h3 className="font-semibold">{vol.role}</h3>
+                        <p className="text-muted-foreground">{vol.organization}</p>
+                        {vol.cause && (
+                          <p className="text-xs text-muted-foreground">Cause: {vol.cause}</p>
+                        )}
+                      </div>
+                      {(vol.startDate || vol.endDate || vol.isCurrent) && (
+                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                          <Calendar className="h-4 w-4" />
+                          {vol.startDate}
+                          {(vol.endDate || vol.isCurrent) && ' — '}
+                          {vol.isCurrent ? 'Present' : vol.endDate}
+                        </div>
+                      )}
+                    </div>
+                    {vol.description && (
+                      <p className="mt-2 text-sm text-muted-foreground">{vol.description}</p>
+                    )}
+                    {vol.url && (
+                      <a
+                        href={vol.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-2 inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                        View details
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Languages */}
+      {languageItems.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Globe className="h-5 w-5" />
+              Languages
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-3">
+              {languageItems.map((lang: LanguageItem) => (
+                <div key={lang.id} className="flex items-center gap-2 rounded-lg border px-3 py-2">
+                  <span className="font-medium">{lang.language}</span>
+                  <Badge variant="outline">{getProficiencyLabel(lang.proficiency)}</Badge>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Interests */}
+      {interestItems.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Sparkles className="h-5 w-5" />
+              Interests
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {interestItems.map((interest: InterestItem) => (
+                <Badge key={interest.id} variant="secondary" className="px-3 py-1 text-sm">
+                  {interest.name}
+                </Badge>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Custom Sections */}
+      {customSections.map((section) => {
+        const content = section.customContent as CustomSectionContent | null;
+        const items = content?.items || [];
+        const freeformContent = content?.content;
+
+        // Skip if no content
+        if (items.length === 0 && !freeformContent) return null;
+
+        return (
+          <Card key={section.id}>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <LayoutGrid className="h-5 w-5" />
+                {section.title}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {/* Structured items */}
+              {items.length > 0 && (
+                <div className="space-y-6">
+                  {items.map((item: CustomSectionItem, index: number) => (
+                    <div key={item.id}>
+                      {index > 0 && <Separator className="mb-6" />}
+                      <div className="flex gap-4">
+                        <div className="hidden sm:block">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                            <LayoutGrid className="h-5 w-5 text-muted-foreground" />
+                          </div>
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                              <h3 className="font-semibold">{item.title}</h3>
+                              {item.subtitle && (
+                                <p className="text-muted-foreground">{item.subtitle}</p>
+                              )}
+                            </div>
+                            {(item.startDate || item.endDate || item.isCurrent) && (
+                              <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                                <Calendar className="h-4 w-4" />
+                                {item.startDate && item.startDate}
+                                {(item.endDate || item.isCurrent) && ' — '}
+                                {item.isCurrent ? 'Present' : item.endDate}
+                              </div>
+                            )}
+                          </div>
+                          {item.description && (
+                            <p className="mt-2 text-sm text-muted-foreground">{item.description}</p>
+                          )}
+                          {item.tags && item.tags.length > 0 && (
+                            <div className="mt-3 flex flex-wrap gap-1">
+                              {item.tags.map((tag) => (
+                                <Badge key={tag} variant="outline" className="text-xs">
+                                  {tag}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                          {item.url && (
+                            <a
+                              href={item.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="mt-2 inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                              View details
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Freeform content */}
+              {freeformContent && (
+                <div className="prose prose-sm max-w-none text-muted-foreground">
+                  <p className="whitespace-pre-wrap">{freeformContent}</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })}
     </div>
   );
 }

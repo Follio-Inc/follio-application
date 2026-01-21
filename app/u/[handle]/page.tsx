@@ -1,11 +1,45 @@
+import { db } from '@/lib/db';
+import { getPublicProfile } from '@/services/profile.service';
 import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { getPublicProfile } from '@/services/profile.service';
 import { ProfileViewer } from './profile-viewer';
 
 interface ProfilePageProps {
   params: Promise<{ handle: string }>;
-  searchParams: Promise<{ view?: string }>;
+  searchParams: Promise<{ view?: string; token?: string }>;
+}
+
+// Validate a share token for a private profile
+async function validateShareToken(handle: string, token: string): Promise<boolean> {
+  if (!token) return false;
+
+  const shareToken = await db.shareToken.findUnique({
+    where: { token },
+    include: {
+      user: {
+        include: { profile: true },
+      },
+    },
+  });
+
+  if (!shareToken) return false;
+
+  // Check if token belongs to this profile
+  if (shareToken.user.profile?.handle !== handle) return false;
+
+  // Check expiration
+  if (shareToken.expiresAt && shareToken.expiresAt < new Date()) return false;
+
+  // Check max views
+  if (shareToken.maxViews && shareToken.viewCount >= shareToken.maxViews) return false;
+
+  // Increment view count
+  await db.shareToken.update({
+    where: { id: shareToken.id },
+    data: { viewCount: { increment: 1 } },
+  });
+
+  return true;
 }
 
 export async function generateMetadata({ params }: ProfilePageProps): Promise<Metadata> {
@@ -46,11 +80,11 @@ export async function generateMetadata({ params }: ProfilePageProps): Promise<Me
   };
 }
 
-export const revalidate = 60; // ISR: revalidate every 60 seconds
+export const dynamic = 'force-dynamic'; // Disable caching for now to ensure fresh data
 
 export default async function ProfilePage({ params, searchParams }: ProfilePageProps) {
   const { handle } = await params;
-  const { view = 'resume' } = await searchParams;
+  const { view = 'resume', token } = await searchParams;
 
   const profile = await getPublicProfile(handle);
 
@@ -58,15 +92,18 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
     notFound();
   }
 
+  // For PRIVATE (Unlisted) profiles, require a valid share token
   if (profile.status === 'PRIVATE') {
-    // TODO: Check for valid share token
-    notFound();
+    const isValidToken = token ? await validateShareToken(handle, token) : false;
+    if (!isValidToken) {
+      notFound();
+    }
   }
 
   return (
     <ProfileViewer
       profile={profile}
-      initialView={view as 'resume' | 'portfolio' | 'timeline' | 'recruiter'}
+      initialView={view as 'resume' | 'portfolio' | 'timeline' | 'snapshot'}
     />
   );
 }

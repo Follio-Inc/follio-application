@@ -27,7 +27,7 @@ Build your professional presence once, share it everywhere.
 - **Resume View** — Traditional, ATS-friendly format
 - **Portfolio View** — Visual showcase of projects
 - **Timeline View** — Interactive career journey
-- **Recruiter View** — Key facts dashboard for hiring managers
+- **SnapShot View** — Key facts dashboard at a glance
 
 ### 📤 **Perfect Parsing Exports**
 
@@ -173,7 +173,7 @@ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="pk_test_..."
 CLERK_SECRET_KEY="sk_test_..."
 NEXT_PUBLIC_CLERK_SIGN_IN_URL="/sign-in"
 NEXT_PUBLIC_CLERK_SIGN_UP_URL="/sign-up"
-NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL="/dashboard"
+NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL="/builder"
 NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL="/onboarding"
 
 # Optional: GitHub OAuth

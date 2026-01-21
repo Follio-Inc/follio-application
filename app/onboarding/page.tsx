@@ -318,8 +318,8 @@ export default function OnboardingPage() {
         });
       }
 
-      // Redirect to dashboard to build profile
-      router.push('/dashboard');
+      // Redirect to builder to build profile
+      router.push('/builder');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {

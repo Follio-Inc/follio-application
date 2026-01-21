@@ -18,6 +18,7 @@ const SLUG_TO_SECTION: Record<string, string> = {
   volunteering: 'VOLUNTEERING',
   languages: 'LANGUAGES',
   interests: 'INTERESTS',
+  share: 'SHARE', // Share & Publish section
 };
 
 interface PageProps {
@@ -65,6 +66,18 @@ export default async function SectionPage({ params }: PageProps) {
 
   if (!user || !user.profile) {
     redirect('/onboarding');
+  }
+
+  // Handle SHARE section separately (not a profile section)
+  if (sectionSlug === 'share') {
+    return (
+      <SectionEditor
+        profile={user.profile}
+        sectionType="SHARE"
+        section={null}
+        customSectionId={null}
+      />
+    );
   }
 
   // Determine section type from slug

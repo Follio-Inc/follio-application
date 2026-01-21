@@ -1,0 +1,241 @@
+'use client';
+
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import {
+  Award,
+  BadgeCheck,
+  BookOpen,
+  Briefcase,
+  Code,
+  Eye,
+  EyeOff,
+  FolderKanban,
+  Globe,
+  GraduationCap,
+  GripVertical,
+  Heart,
+  LayoutGrid,
+  Link as LinkIcon,
+  Sparkles,
+  Trash2,
+  User,
+} from 'lucide-react';
+import Link from 'next/link';
+import { useState } from 'react';
+
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+
+import type { ProfileSection, SectionType } from '@/types';
+
+// Icon mapping
+const SECTION_ICONS: Record<SectionType, React.ComponentType<{ className?: string }>> = {
+  BASIC_INFO: User,
+  EXPERIENCE: Briefcase,
+  EDUCATION: GraduationCap,
+  SKILLS: Code,
+  PROJECTS: FolderKanban,
+  LINKS: LinkIcon,
+  AWARDS: Award,
+  CERTIFICATIONS: BadgeCheck,
+  PUBLICATIONS: BookOpen,
+  VOLUNTEERING: Heart,
+  LANGUAGES: Globe,
+  INTERESTS: Sparkles,
+  CUSTOM: LayoutGrid,
+};
+
+interface SortableSectionItemProps {
+  section: ProfileSection;
+  isActive: boolean;
+  onToggleVisibility: (section: ProfileSection) => Promise<void>;
+  onDelete: (section: ProfileSection) => Promise<{ success: boolean; error?: string }>;
+}
+
+export function SortableSectionItem({
+  section,
+  isActive,
+  onToggleVisibility,
+  onDelete,
+}: SortableSectionItemProps) {
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isTogglingVisibility, setIsTogglingVisibility] = useState(false);
+
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: section.id,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  const Icon = SECTION_ICONS[section.type] || LayoutGrid;
+  const slug =
+    section.type === 'CUSTOM' && section.customName
+      ? `custom-${section.id}`
+      : section.type.toLowerCase().replace(/_/g, '-');
+
+  const canDelete = section.type !== 'BASIC_INFO';
+
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    setDeleteError(null);
+
+    const result = await onDelete(section);
+
+    if (!result.success) {
+      setDeleteError(result.error || 'Failed to delete section');
+      setIsDeleting(false);
+    } else {
+      setDeleteDialogOpen(false);
+    }
+  };
+
+  const handleToggleVisibility = async () => {
+    setIsTogglingVisibility(true);
+    try {
+      await onToggleVisibility(section);
+    } finally {
+      setIsTogglingVisibility(false);
+    }
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        'group flex items-center rounded-lg transition-colors',
+        isActive ? 'bg-primary text-primary-foreground' : 'hover:bg-muted',
+        isDragging && 'z-50 opacity-90 shadow-lg',
+        !section.isVisible && 'opacity-50'
+      )}
+    >
+      {/* Drag Handle */}
+      <button
+        {...attributes}
+        {...listeners}
+        className={cn(
+          'cursor-grab touch-none rounded-l-lg p-2 opacity-0 transition-opacity group-hover:opacity-100',
+          isActive ? 'hover:bg-primary-foreground/20' : 'hover:bg-muted-foreground/20',
+          isDragging && 'cursor-grabbing opacity-100'
+        )}
+        title="Drag to reorder"
+      >
+        <GripVertical className="h-4 w-4" />
+      </button>
+
+      {/* Section Link */}
+      <Link href={`/builder/${slug}`} className="flex flex-1 items-center gap-3 py-2 pr-2">
+        <Icon className="h-4 w-4" />
+        <span className="truncate text-sm font-medium">{section.title}</span>
+      </Link>
+
+      {/* Actions */}
+      <div className="mr-2 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+        {/* Visibility Toggle */}
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            handleToggleVisibility();
+          }}
+          disabled={isTogglingVisibility}
+          className={cn(
+            'rounded p-1',
+            isActive ? 'hover:bg-primary-foreground/20' : 'hover:bg-muted-foreground/20',
+            isTogglingVisibility && 'cursor-not-allowed opacity-50'
+          )}
+          title={
+            section.isVisible
+              ? 'Hide section from public profile'
+              : 'Show section on public profile'
+          }
+        >
+          {section.isVisible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+        </button>
+
+        {/* Delete Button */}
+        {canDelete && (
+          <AlertDialog
+            open={deleteDialogOpen}
+            onOpenChange={(open) => {
+              setDeleteDialogOpen(open);
+              if (!open) setDeleteError(null);
+            }}
+          >
+            <AlertDialogTrigger asChild>
+              <button
+                onClick={(e) => e.preventDefault()}
+                className={cn(
+                  'rounded p-1',
+                  isActive
+                    ? 'text-primary-foreground hover:bg-destructive/20'
+                    : 'hover:bg-destructive/20 hover:text-destructive'
+                )}
+                title="Delete section"
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete Section</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {deleteError ? (
+                    <span className="text-destructive">{deleteError}</span>
+                  ) : (
+                    <>
+                      Are you sure you want to delete the "{section.title}" section? This action
+                      cannot be undone.
+                      <br />
+                      <br />
+                      <strong>Note:</strong> You can only delete empty sections. If you want to keep
+                      the data but hide it from your public profile, use the hide option instead.
+                    </>
+                  )}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+                {deleteError ? (
+                  <Button
+                    onClick={() => {
+                      setDeleteDialogOpen(false);
+                      handleToggleVisibility();
+                    }}
+                    variant="outline"
+                  >
+                    Hide Instead
+                  </Button>
+                ) : (
+                  <AlertDialogAction
+                    onClick={handleDelete}
+                    disabled={isDeleting}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    {isDeleting ? 'Deleting...' : 'Delete'}
+                  </AlertDialogAction>
+                )}
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
+      </div>
+    </div>
+  );
+}

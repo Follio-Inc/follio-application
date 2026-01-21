@@ -1,36 +1,41 @@
 'use client';
 
-import { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-  User,
+  AlertCircle,
   Briefcase,
-  GraduationCap,
+  Check,
   Code,
-  FolderKanban,
-  Award,
-  Link as LinkIcon,
-  Settings,
-  Save,
-  Eye,
   ExternalLink,
+  Eye,
+  FolderKanban,
+  GraduationCap,
+  Link as LinkIcon,
+  Loader2,
+  Save,
+  Settings,
+  User,
 } from 'lucide-react';
 import Link from 'next/link';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
+import { UnsavedChangesDialog } from './components/unsaved-changes-dialog';
 import { BasicInfoForm } from './sections/basic-info-form';
-import { ExperienceSection } from './sections/experience-section';
 import { EducationSection } from './sections/education-section';
-import { SkillsSection } from './sections/skills-section';
-import { ProjectsSection } from './sections/projects-section';
+import { ExperienceSection } from './sections/experience-section';
 import { LinksSection } from './sections/links-section';
+import { ProjectsSection } from './sections/projects-section';
 import { SettingsSection } from './sections/settings-section';
+import { SkillsSection } from './sections/skills-section';
 
 import type { FullProfile } from '@/types';
+
+type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
 interface BuilderClientProps {
   initialProfile: FullProfile;
@@ -51,14 +56,35 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
   const [activeSection, setActiveSection] = useState('basic');
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
+  const [pendingSection, setPendingSection] = useState<string | null>(null);
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
 
-  const handleProfileUpdate = (updates: Partial<FullProfile>) => {
-    setProfile((prev) => ({ ...prev, ...updates }));
-    setHasChanges(true);
-  };
+  // Debounce timer ref for auto-save
+  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const AUTO_SAVE_DELAY = 2000; // 2 seconds
 
-  const handleSave = async () => {
+  // Warn user before closing/refreshing if there are unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasChanges) {
+        e.preventDefault();
+        e.returnValue = '';
+        return '';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasChanges]);
+
+  // Auto-save function
+  const performAutoSave = useCallback(async () => {
+    if (!hasChanges) return;
+
+    setSaveStatus('saving');
     setIsSaving(true);
+
     try {
       const response = await fetch('/api/profile', {
         method: 'PATCH',
@@ -79,15 +105,154 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
       }
 
       setHasChanges(false);
+      setSaveStatus('saved');
+
+      // Reset to idle after showing "saved" status
+      setTimeout(() => setSaveStatus('idle'), 2000);
     } catch (error) {
-      console.error('Save error:', error);
+      console.error('Auto-save error:', error);
+      setSaveStatus('error');
     } finally {
       setIsSaving(false);
+    }
+  }, [hasChanges, profile]);
+
+  // Debounced auto-save on profile changes
+  useEffect(() => {
+    if (hasChanges) {
+      // Clear existing timer
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+
+      // Set new auto-save timer
+      autoSaveTimerRef.current = setTimeout(() => {
+        performAutoSave();
+      }, AUTO_SAVE_DELAY);
+    }
+
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+    };
+  }, [hasChanges, profile, performAutoSave]);
+
+  const handleProfileUpdate = (updates: Partial<FullProfile>) => {
+    setProfile((prev) => ({ ...prev, ...updates }));
+    setHasChanges(true);
+    setSaveStatus('idle'); // Reset status when new changes are made
+  };
+
+  const handleSave = async () => {
+    // Cancel any pending auto-save
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+    await performAutoSave();
+  };
+
+  // Handle section change with unsaved changes check
+  const handleSectionChange = (newSection: string) => {
+    if (hasChanges) {
+      setPendingSection(newSection);
+      setShowUnsavedDialog(true);
+    } else {
+      setActiveSection(newSection);
+    }
+  };
+
+  // Save changes and navigate to pending section
+  const handleSaveAndContinue = async () => {
+    // Cancel any pending auto-save
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+
+    await performAutoSave();
+
+    setShowUnsavedDialog(false);
+    if (pendingSection) {
+      setActiveSection(pendingSection);
+      setPendingSection(null);
+    }
+  };
+
+  // Discard changes and navigate to pending section
+  const handleDiscardChanges = () => {
+    // Cancel any pending auto-save
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+
+    // Reset profile to initial values for basic info fields
+    setProfile((prev) => ({
+      ...prev,
+      firstName: initialProfile.firstName,
+      lastName: initialProfile.lastName,
+      headline: initialProfile.headline,
+      summary: initialProfile.summary,
+      location: initialProfile.location,
+      avatarUrl: initialProfile.avatarUrl,
+    }));
+
+    setHasChanges(false);
+    setSaveStatus('idle');
+    setShowUnsavedDialog(false);
+    if (pendingSection) {
+      setActiveSection(pendingSection);
+      setPendingSection(null);
+    }
+  };
+
+  // Cancel navigation
+  const handleCancelNavigation = () => {
+    setShowUnsavedDialog(false);
+    setPendingSection(null);
+  };
+
+  // Save status indicator component
+  const renderSaveStatus = () => {
+    switch (saveStatus) {
+      case 'saving':
+        return (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Saving...
+          </div>
+        );
+      case 'saved':
+        return (
+          <div className="flex items-center gap-2 text-sm text-green-600">
+            <Check className="h-4 w-4" />
+            Saved
+          </div>
+        );
+      case 'error':
+        return (
+          <div className="flex items-center gap-2 text-sm text-destructive">
+            <AlertCircle className="h-4 w-4" />
+            Save failed
+          </div>
+        );
+      default:
+        return hasChanges ? (
+          <div className="text-sm text-muted-foreground">Unsaved changes</div>
+        ) : null;
     }
   };
 
   return (
     <div className="space-y-6">
+      {/* Unsaved Changes Dialog */}
+      <UnsavedChangesDialog
+        open={showUnsavedDialog}
+        onSaveAndContinue={handleSaveAndContinue}
+        onDiscard={handleDiscardChanges}
+        onCancel={handleCancelNavigation}
+        isSaving={isSaving}
+      />
+
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -95,6 +260,9 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
           <p className="text-muted-foreground">Edit your Follio profile</p>
         </div>
         <div className="flex items-center gap-3">
+          {/* Save Status Indicator */}
+          {renderSaveStatus()}
+
           <Badge variant={profile.status === 'PUBLIC' ? 'default' : 'secondary'}>
             {profile.status.toLowerCase()}
           </Badge>
@@ -118,7 +286,7 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
       </div>
 
       {/* Builder Tabs */}
-      <Tabs value={activeSection} onValueChange={setActiveSection} className="space-y-6">
+      <Tabs value={activeSection} onValueChange={handleSectionChange} className="space-y-6">
         <TabsList className="flex h-auto flex-wrap gap-2 bg-transparent p-0">
           {sections.map((section) => {
             const Icon = section.icon;

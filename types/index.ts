@@ -78,7 +78,7 @@ export interface PublicContactInfo {
 /**
  * Available profile view types
  */
-export type ProfileView = 'resume' | 'portfolio' | 'timeline' | 'recruiter';
+export type ProfileView = 'resume' | 'portfolio' | 'timeline' | 'snapshot';
 
 /**
  * View configuration
@@ -110,8 +110,8 @@ export const PROFILE_VIEWS: ViewConfig[] = [
     icon: 'Clock',
   },
   {
-    id: 'recruiter',
-    name: 'Recruiter',
+    id: 'snapshot',
+    name: 'SnapShot',
     description: 'Quick facts & metrics',
     icon: 'Users',
   },
@@ -475,4 +475,79 @@ export interface CustomSectionItem {
 export interface CustomSectionContent {
   items?: CustomSectionItem[];
   content?: string; // For freeform content
+}
+
+/**
+ * Volunteering experience item
+ */
+export interface VolunteeringItem {
+  id: string;
+  organization: string;
+  role: string;
+  cause?: string;
+  description?: string;
+  startDate?: string;
+  endDate?: string;
+  isCurrent?: boolean;
+  url?: string;
+}
+
+/**
+ * Volunteering section content
+ */
+export interface VolunteeringSectionContent {
+  items: VolunteeringItem[];
+}
+
+/**
+ * Language proficiency item
+ */
+export interface LanguageItem {
+  id: string;
+  language: string;
+  proficiency: 'NATIVE' | 'FLUENT' | 'ADVANCED' | 'INTERMEDIATE' | 'BASIC';
+}
+
+/**
+ * Languages section content
+ */
+export interface LanguagesSectionContent {
+  items: LanguageItem[];
+}
+
+/**
+ * Publication item
+ */
+export interface PublicationItem {
+  id: string;
+  title: string;
+  publisher?: string;
+  authors?: string;
+  date?: string;
+  description?: string;
+  url?: string;
+  doi?: string;
+}
+
+/**
+ * Publications section content
+ */
+export interface PublicationsSectionContent {
+  items: PublicationItem[];
+}
+
+/**
+ * Interest item
+ */
+export interface InterestItem {
+  id: string;
+  name: string;
+  category?: string;
+}
+
+/**
+ * Interests section content
+ */
+export interface InterestsSectionContent {
+  items: InterestItem[];
 }

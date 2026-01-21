@@ -11,10 +11,15 @@ import { EducationSection } from '../sections/education-section';
 import { ExperienceSection } from '../sections/experience-section';
 import { LinksSection } from '../sections/links-section';
 import { ProjectsSection } from '../sections/projects-section';
+import { ShareSection } from '../sections/share-section';
 import { SkillsSection } from '../sections/skills-section';
 import { AwardsSection } from './awards-section';
 import { CertificationsSection } from './certifications-section';
 import { CustomSection } from './custom-section';
+import { InterestsSection } from './interests-section';
+import { LanguagesSection } from './languages-section';
+import { PublicationsSection } from './publications-section';
+import { VolunteeringSection } from './volunteering-section';
 
 import type { Award, Certification, FullProfile, ProfileSection } from '@/types';
 
@@ -39,6 +44,7 @@ const SECTION_TITLES: Record<string, string> = {
   LANGUAGES: 'Languages',
   INTERESTS: 'Interests',
   CUSTOM: 'Custom Section',
+  SHARE: 'Share & Publish',
 };
 
 export function SectionEditor({
@@ -159,8 +165,23 @@ export function SectionEditor({
           />
         );
 
+      case 'VOLUNTEERING':
+        return <VolunteeringSection section={section} profileId={currentProfile.id} />;
+
+      case 'LANGUAGES':
+        return <LanguagesSection section={section} profileId={currentProfile.id} />;
+
+      case 'PUBLICATIONS':
+        return <PublicationsSection section={section} profileId={currentProfile.id} />;
+
+      case 'INTERESTS':
+        return <InterestsSection section={section} profileId={currentProfile.id} />;
+
       case 'CUSTOM':
         return <CustomSection section={section} profileId={currentProfile.id} />;
+
+      case 'SHARE':
+        return <ShareSection profile={currentProfile} onUpdateAction={handleProfileUpdate} />;
 
       // Placeholder for sections not yet implemented
       default:
@@ -185,7 +206,9 @@ export function SectionEditor({
           <p className="text-muted-foreground">
             {sectionType === 'BASIC_INFO'
               ? 'Update your basic profile information'
-              : 'Add, edit, or remove items'}
+              : sectionType === 'SHARE'
+                ? 'Control visibility and share your profile'
+                : 'Add, edit, or remove items'}
           </p>
         </div>
         {sectionType === 'BASIC_INFO' && (

@@ -1,19 +1,19 @@
-import Link from 'next/link';
+import { auth } from '@clerk/nextjs/server';
 import {
   ArrowRight,
-  FileText,
   Briefcase,
-  Clock,
-  Users,
-  Download,
   CheckCircle2,
+  Clock,
+  Download,
+  FileText,
   Sparkles,
+  Users,
 } from 'lucide-react';
-import { auth } from '@clerk/nextjs/server';
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
-import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/Logo';
+import { Button } from '@/components/ui/button';
 
 export default async function HomePage() {
   let userId: string | null = null;
@@ -26,9 +26,9 @@ export default async function HomePage() {
     userId = null;
   }
 
-  // If user is logged in, redirect to dashboard
+  // If user is logged in, redirect to builder
   if (userId) {
-    redirect('/dashboard');
+    redirect('/builder');
   }
 
   return (
@@ -124,14 +124,14 @@ export default async function HomePage() {
             </p>
           </div>
 
-          {/* Recruiter View */}
+          {/* SnapShot View */}
           <div className="group rounded-2xl border bg-card p-6 transition-shadow hover:shadow-lg">
             <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
               <Users className="h-6 w-6" />
             </div>
-            <h3 className="mb-2 font-semibold">Recruiter View</h3>
+            <h3 className="mb-2 font-semibold">SnapShot View</h3>
             <p className="text-sm text-muted-foreground">
-              Key metrics, skills matrix, and quick facts optimized for busy recruiters.
+              Key metrics, skills matrix, and quick facts at a glance.
             </p>
           </div>
         </div>

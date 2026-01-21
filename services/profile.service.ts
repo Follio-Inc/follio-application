@@ -33,6 +33,7 @@ export async function getProfileByHandle(handle: string): Promise<FullProfile | 
 
 /**
  * Get a public profile by handle (excludes sensitive data)
+ * Filters out hidden sections and their associated content
  */
 export async function getPublicProfile(handle: string): Promise<PublicProfile | null> {
   const profile = await db.profile.findUnique({
@@ -56,6 +57,10 @@ export async function getPublicProfile(handle: string): Promise<PublicProfile | 
 
   if (!profile) return null;
 
+  // Get visible sections
+  const visibleSections = profile.sections.filter((s) => s.isVisible);
+  const visibleSectionTypes = new Set(visibleSections.map((s) => s.type));
+
   // Filter contact info for public view
   const publicContactInfo = profile.contactInfo
     ? {
@@ -67,9 +72,30 @@ export async function getPublicProfile(handle: string): Promise<PublicProfile | 
   // Remove userId from the response
   const { userId, ...publicProfile } = profile;
 
+  // Check if BASIC_INFO is visible - if hidden, nullify personal details
+  const showBasicInfo = visibleSectionTypes.has('BASIC_INFO');
+
+  // Filter content based on visible sections
   return {
     ...publicProfile,
-    contactInfo: publicContactInfo,
+    // Basic info fields - hide if BASIC_INFO section is hidden
+    firstName: showBasicInfo ? profile.firstName : null,
+    lastName: showBasicInfo ? profile.lastName : null,
+    headline: showBasicInfo ? profile.headline : null,
+    summary: showBasicInfo ? profile.summary : null,
+    avatarUrl: showBasicInfo ? profile.avatarUrl : null,
+    location: showBasicInfo ? profile.location : null,
+    contactInfo: showBasicInfo ? publicContactInfo : null,
+    sections: visibleSections,
+    // Only include content if the corresponding section is visible
+    workExperiences: visibleSectionTypes.has('EXPERIENCE') ? profile.workExperiences : [],
+    educations: visibleSectionTypes.has('EDUCATION') ? profile.educations : [],
+    skills: visibleSectionTypes.has('SKILLS') ? profile.skills : [],
+    skillGroups: visibleSectionTypes.has('SKILLS') ? profile.skillGroups : [],
+    projects: visibleSectionTypes.has('PROJECTS') ? profile.projects : [],
+    links: visibleSectionTypes.has('LINKS') ? profile.links : [],
+    awards: visibleSectionTypes.has('AWARDS') ? profile.awards : [],
+    certifications: visibleSectionTypes.has('CERTIFICATIONS') ? profile.certifications : [],
   } as PublicProfile;
 }
 
