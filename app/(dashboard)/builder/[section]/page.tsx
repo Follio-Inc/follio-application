@@ -4,6 +4,11 @@ import { notFound, redirect } from 'next/navigation';
 import { db } from '@/lib/db';
 import { SectionEditor } from './section-editor';
 
+// Helper to serialize data for client components (converts Date objects to ISO strings)
+function serializeForClient<T>(data: T): T {
+  return JSON.parse(JSON.stringify(data));
+}
+
 // Map URL slugs to section types
 const SLUG_TO_SECTION: Record<string, string> = {
   'basic-info': 'BASIC_INFO',
@@ -28,14 +33,7 @@ interface PageProps {
 export default async function SectionPage({ params }: PageProps) {
   const { section: sectionSlug } = await params;
 
-  let userId: string | null = null;
-
-  try {
-    const authResult = await auth();
-    userId = authResult?.userId ?? null;
-  } catch {
-    redirect('/sign-in');
-  }
+  const { userId } = await auth();
 
   if (!userId) {
     redirect('/sign-in');
@@ -68,11 +66,14 @@ export default async function SectionPage({ params }: PageProps) {
     redirect('/onboarding');
   }
 
+  // Serialize the profile data to convert Date objects to strings for client component
+  const serializedProfile = serializeForClient(user.profile);
+
   // Handle SHARE section separately (not a profile section)
   if (sectionSlug === 'share') {
     return (
       <SectionEditor
-        profile={user.profile}
+        profile={serializedProfile}
         sectionType="SHARE"
         section={null}
         customSectionId={null}
@@ -95,13 +96,13 @@ export default async function SectionPage({ params }: PageProps) {
   }
 
   // Find the section configuration
-  const section = user.profile.sections.find(
+  const section = serializedProfile.sections.find(
     (s) => s.type === sectionType && (sectionType !== 'CUSTOM' || s.id === customSectionId)
   );
 
   return (
     <SectionEditor
-      profile={user.profile}
+      profile={serializedProfile}
       sectionType={sectionType}
       section={section || null}
       customSectionId={customSectionId}

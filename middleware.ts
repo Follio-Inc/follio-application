@@ -23,16 +23,10 @@ const isPublicRoute = createRouteMatcher([
 export default clerkMiddleware(async (auth, req) => {
   // Protect dashboard and builder routes
   if (isProtectedRoute(req)) {
-    try {
-      const authResult = await auth();
-      if (!authResult?.userId) {
-        const signInUrl = new URL('/sign-in', req.url);
-        signInUrl.searchParams.set('redirect_url', req.url);
-        return NextResponse.redirect(signInUrl);
-      }
-    } catch {
-      // If auth fails (e.g., during sign-out), redirect to sign-in
+    const { userId } = await auth();
+    if (!userId) {
       const signInUrl = new URL('/sign-in', req.url);
+      signInUrl.searchParams.set('redirect_url', req.url);
       return NextResponse.redirect(signInUrl);
     }
   }

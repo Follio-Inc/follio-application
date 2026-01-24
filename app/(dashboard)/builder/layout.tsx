@@ -4,15 +4,13 @@ import { redirect } from 'next/navigation';
 import { db } from '@/lib/db';
 import { BuilderLayoutClient } from './builder-layout-client';
 
-export default async function BuilderLayout({ children }: { children: React.ReactNode }) {
-  let userId: string | null = null;
+// Helper to serialize data for client components (converts Date objects to ISO strings)
+function serializeForClient<T>(data: T): T {
+  return JSON.parse(JSON.stringify(data));
+}
 
-  try {
-    const authResult = await auth();
-    userId = authResult?.userId ?? null;
-  } catch {
-    redirect('/sign-in');
-  }
+export default async function BuilderLayout({ children }: { children: React.ReactNode }) {
+  const { userId } = await auth();
 
   if (!userId) {
     redirect('/sign-in');
@@ -45,5 +43,8 @@ export default async function BuilderLayout({ children }: { children: React.Reac
     redirect('/onboarding');
   }
 
-  return <BuilderLayoutClient profile={user.profile}>{children}</BuilderLayoutClient>;
+  // Serialize the profile data to convert Date objects to strings for client component
+  const serializedProfile = serializeForClient(user.profile);
+
+  return <BuilderLayoutClient profile={serializedProfile}>{children}</BuilderLayoutClient>;
 }

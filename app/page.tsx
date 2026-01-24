@@ -15,12 +15,15 @@ import { redirect } from 'next/navigation';
 import { Logo } from '@/components/Logo';
 import { Button } from '@/components/ui/button';
 
+// Prevent caching during auth state changes
+export const dynamic = 'force-dynamic';
+
 export default async function HomePage() {
   let userId: string | null = null;
 
   try {
-    const authResult = await auth();
-    userId = authResult?.userId ?? null;
+    const { userId: authUserId } = await auth();
+    userId = authUserId;
   } catch {
     // Auth might fail during sign-out transition, treat as logged out
     userId = null;

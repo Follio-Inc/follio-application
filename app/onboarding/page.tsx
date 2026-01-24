@@ -60,6 +60,7 @@ interface PersistedOnboardingState {
   data: OnboardingData;
   resumeFileName?: string | null;
   linkedinFileName?: string | null;
+  importedGithubUsername?: string | null;
 }
 
 export default function OnboardingPage() {
@@ -79,6 +80,7 @@ export default function OnboardingPage() {
   const [githubError, setGithubError] = useState<string | null>(null);
   const [resumeFileName, setResumeFileName] = useState<string | null>(null);
   const [linkedinFileName, setLinkedinFileName] = useState<string | null>(null);
+  const [importedGithubUsername, setImportedGithubUsername] = useState<string | null>(null);
   const clerk = useClerk();
 
   const [data, setData] = useState<OnboardingData>({
@@ -110,12 +112,21 @@ export default function OnboardingPage() {
         data,
         resumeFileName,
         linkedinFileName,
+        importedGithubUsername,
       };
       sessionStorage.setItem(storageKey, JSON.stringify(stateToSave));
     } catch (err) {
       console.error('Failed to save onboarding state:', err);
     }
-  }, [importSources, manualLinks, data, resumeFileName, linkedinFileName, user?.id]);
+  }, [
+    importSources,
+    manualLinks,
+    data,
+    resumeFileName,
+    linkedinFileName,
+    importedGithubUsername,
+    user?.id,
+  ]);
 
   // Clear persisted state (called after successful profile creation)
   const clearPersistedState = useCallback(() => {
@@ -171,6 +182,11 @@ export default function OnboardingPage() {
         // Restore linkedin filename
         if (parsed.linkedinFileName) {
           setLinkedinFileName(parsed.linkedinFileName);
+        }
+
+        // Restore imported GitHub username
+        if (parsed.importedGithubUsername) {
+          setImportedGithubUsername(parsed.importedGithubUsername);
         }
       }
     } catch (err) {
@@ -309,8 +325,17 @@ export default function OnboardingPage() {
   };
 
   // GitHub import handler
-  const handleGitHubImport = async () => {
-    if (!githubUsername.trim()) {
+  const handleGitHubImport = async (overrideUsername?: string) => {
+    console.log(
+      '[GitHub Import] Called with overrideUsername:',
+      overrideUsername,
+      'githubUsername state:',
+      githubUsername
+    );
+    const resolvedUsername = (overrideUsername ?? githubUsername).trim();
+    console.log('[GitHub Import] resolvedUsername:', resolvedUsername);
+    if (!resolvedUsername) {
+      console.log('[GitHub Import] RETURNING EARLY - no username');
       return;
     }
 
@@ -321,7 +346,7 @@ export default function OnboardingPage() {
       const response = await fetch('/api/import/github', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: githubUsername.trim() }),
+        body: JSON.stringify({ username: resolvedUsername }),
       });
 
       if (!response.ok) {
@@ -329,9 +354,12 @@ export default function OnboardingPage() {
       }
 
       const result = await response.json();
+      console.log('[GitHub Import] SUCCESS - setting importedGithubUsername to:', resolvedUsername);
       updateImportSource('github', { status: 'success', data: result });
+      setImportedGithubUsername(resolvedUsername);
       setGithubUsername('');
     } catch (err) {
+      console.log('[GitHub Import] ERROR:', err);
       updateImportSource('github', {
         status: 'error',
         error: err instanceof Error ? err.message : 'Failed to import from GitHub',
@@ -408,7 +436,15 @@ export default function OnboardingPage() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to create profile');
+
+        // If profile already exists, redirect to builder
+        if (response.status === 409 && errorData.error === 'Profile already exists') {
+          clearPersistedState();
+          router.push('/builder');
+          return;
+        }
+
+        throw new Error(errorData.error || errorData.message || 'Failed to create profile');
       }
 
       // Add manual links if any
@@ -477,7 +513,10 @@ export default function OnboardingPage() {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => signOut({ redirectUrl: '/' })}
+          onClick={async () => {
+            await signOut();
+            window.location.href = '/';
+          }}
           className="text-muted-foreground hover:text-foreground"
         >
           <LogOut className="mr-2 h-4 w-4" />
@@ -685,9 +724,10 @@ export default function OnboardingPage() {
                               <div className="mb-4 rounded-lg border-2 border-green-500/30 bg-green-50 p-4 dark:bg-green-950/30">
                                 <button
                                   onClick={() => {
-                                    if (githubUsernameFromAccount) {
-                                      setGithubUsername(githubUsernameFromAccount);
-                                      handleGitHubImport();
+                                    const usernameToImport =
+                                      githubUsernameFromAccount || githubUsername.trim();
+                                    if (usernameToImport) {
+                                      handleGitHubImport(usernameToImport);
                                     }
                                   }}
                                   className="flex w-full items-center gap-3 text-left"
@@ -910,8 +950,13 @@ export default function OnboardingPage() {
                                 updateImportSource('linkedin', { status: 'idle', data: undefined });
                                 setLinkedinFileName(null);
                               } else if (source.type === 'github') {
-                                // Open Clerk profile to manage connected accounts
-                                clerk.openUserProfile();
+                                // Clear imported data and username
+                                updateImportSource('github', { status: 'idle', data: undefined });
+                                setImportedGithubUsername(null);
+                                // If connected via Clerk, open profile to manage
+                                if (githubAccount) {
+                                  clerk.openUserProfile();
+                                }
                               }
                             }}
                             className="absolute -right-1 -top-1 z-10 rounded-full bg-muted p-1 text-muted-foreground shadow-sm transition-colors hover:bg-destructive hover:text-destructive-foreground"
@@ -953,12 +998,21 @@ export default function OnboardingPage() {
                             getSourceIcon(source.type)
                           )}
                           <span className="text-sm font-medium">{getSourceLabel(source.type)}</span>
-                          {/* Show GitHub username if connected */}
-                          {connectedGithubUsername && source.type === 'github' && (
-                            <span className="text-xs text-green-600 dark:text-green-400">
-                              @{connectedGithubUsername}
-                            </span>
+                          {/* Show GitHub username if imported or connected */}
+                          {console.log(
+                            '[GitHub Display] source.type:',
+                            source.type,
+                            'importedGithubUsername:',
+                            importedGithubUsername,
+                            'connectedGithubUsername:',
+                            connectedGithubUsername
                           )}
+                          {source.type === 'github' &&
+                            (importedGithubUsername || connectedGithubUsername) && (
+                              <span className="max-w-full truncate text-xs text-green-600 dark:text-green-400">
+                                @{importedGithubUsername || connectedGithubUsername}
+                              </span>
+                            )}
                           {/* Show resume filename if uploaded */}
                           {resumeFileName &&
                             source.type === 'resume' &&

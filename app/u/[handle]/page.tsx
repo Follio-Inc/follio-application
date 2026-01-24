@@ -4,6 +4,11 @@ import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { ProfileViewer } from './profile-viewer';
 
+// Helper to serialize data for client components (converts Date objects to ISO strings)
+function serializeForClient<T>(data: T): T {
+  return JSON.parse(JSON.stringify(data));
+}
+
 interface ProfilePageProps {
   params: Promise<{ handle: string }>;
   searchParams: Promise<{ view?: string; token?: string }>;
@@ -100,9 +105,12 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
     }
   }
 
+  // Serialize the profile data to convert Date objects to strings for client component
+  const serializedProfile = serializeForClient(profile);
+
   return (
     <ProfileViewer
-      profile={profile}
+      profile={serializedProfile}
       initialView={view as 'resume' | 'portfolio' | 'timeline' | 'snapshot'}
     />
   );

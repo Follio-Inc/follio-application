@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { auth, currentUser } from '@clerk/nextjs/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 import { db } from '@/lib/db';
 import { CreateProfileSchema } from '@/lib/validations';
@@ -11,17 +11,29 @@ import { CreateProfileSchema } from '@/lib/validations';
 export async function POST(request: NextRequest) {
   try {
     const { userId } = await auth();
+    console.log('[POST /api/profile] userId:', userId);
 
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const body = await request.json();
+    console.log('[POST /api/profile] Request body:', JSON.stringify(body));
     const validatedData = CreateProfileSchema.safeParse(body);
 
     if (!validatedData.success) {
+      const flattenedErrors = validatedData.error.flatten();
+      const fieldErrors = flattenedErrors.fieldErrors;
+      // Get the first field error message for a user-friendly error
+      const firstFieldError = Object.entries(fieldErrors)
+        .map(([field, errors]) => `${field}: ${errors?.[0]}`)
+        .filter(Boolean)[0];
+
       return NextResponse.json(
-        { error: 'Validation failed', details: validatedData.error.flatten() },
+        {
+          error: firstFieldError || 'Validation failed',
+          details: flattenedErrors,
+        },
         { status: 400 }
       );
     }
@@ -40,12 +52,30 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Unable to get user details' }, { status: 400 });
       }
 
-      user = await db.user.create({
-        data: {
-          clerkId: userId,
-          email: clerkUser.emailAddresses[0].emailAddress,
-        },
+      const email = clerkUser.emailAddresses[0].emailAddress;
+
+      // Check if a user with this email already exists (might have different clerkId)
+      const existingUserByEmail = await db.user.findUnique({
+        where: { email },
       });
+
+      if (existingUserByEmail) {
+        // Update the existing user's clerkId to link accounts
+        user = await db.user.update({
+          where: { id: existingUserByEmail.id },
+          data: { clerkId: userId },
+        });
+        console.log('[POST /api/profile] Linked existing user by email:', email);
+      } else {
+        // Create new user
+        user = await db.user.create({
+          data: {
+            clerkId: userId,
+            email,
+          },
+        });
+        console.log('[POST /api/profile] Created new user:', email);
+      }
     }
 
     // Check if user already has a profile
@@ -92,7 +122,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, profile }, { status: 201 });
   } catch (error) {
-    console.error('Error creating profile:', error);
+    console.error('[POST /api/profile] Error creating profile:', error);
+    console.error('[POST /api/profile] Error stack:', error instanceof Error ? error.stack : 'N/A');
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

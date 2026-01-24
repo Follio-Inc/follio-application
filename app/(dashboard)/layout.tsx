@@ -25,6 +25,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </Button>
             </Link>
             <UserButton
+              afterSignOutUrl="/"
               appearance={{
                 elements: {
                   avatarBox: 'h-8 w-8',
