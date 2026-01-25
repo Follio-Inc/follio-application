@@ -1,10 +1,21 @@
-import { NextRequest, NextResponse } from 'next/server';
+/**
+ * Resume Import API
+ *
+ * Uses the OpenResume-style parser for robust PDF extraction.
+ * Handles partial data gracefully - saves whatever is available.
+ */
+
+import {
+  importResumeFromPdf,
+  saveResumeDataToProfile,
+} from '@/services/import/resume-openresume.service';
 import { auth } from '@clerk/nextjs/server';
-import { parseResume, normalizeResumeData } from '@/services/resume-parser.service';
+import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
     const { userId } = await auth();
+    console.log('[Resume Import API] Starting for userId:', userId);
 
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -12,49 +23,62 @@ export async function POST(request: NextRequest) {
 
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
-    const text = formData.get('text') as string | null;
+    const saveToProfile = formData.get('saveToProfile') === 'true';
 
-    if (!file && !text) {
-      return NextResponse.json({ error: 'Either file or text is required' }, { status: 400 });
+    console.log('[Resume Import API] File:', file?.name, 'Type:', file?.type, 'Size:', file?.size);
+    console.log('[Resume Import API] Save to profile:', saveToProfile);
+
+    if (!file) {
+      return NextResponse.json({ error: 'File is required' }, { status: 400 });
     }
 
-    let parsed;
+    // Validate file type - OpenResume parser only works with PDFs
+    if (file.type !== 'application/pdf') {
+      return NextResponse.json(
+        { error: 'Only PDF files are supported. Please upload a PDF resume.' },
+        { status: 400 }
+      );
+    }
 
-    if (file) {
-      // Validate file type
-      const allowedTypes = ['application/pdf', 'text/plain'];
-      if (!allowedTypes.includes(file.type)) {
-        return NextResponse.json(
-          { error: 'Only PDF and plain text files are supported' },
-          { status: 400 }
-        );
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      return NextResponse.json({ error: 'File size must be less than 5MB' }, { status: 400 });
+    }
+
+    const buffer = Buffer.from(await file.arrayBuffer());
+    console.log('[Resume Import API] Buffer size:', buffer.length);
+
+    // Parse the resume
+    const result = await importResumeFromPdf(buffer, userId);
+
+    if (!result.success || !result.data) {
+      console.log('[Resume Import API] Parsing failed:', result.error);
+      return NextResponse.json(
+        { error: result.error || 'Failed to parse resume' },
+        { status: 500 }
+      );
+    }
+
+    console.log('[Resume Import API] Parsing successful');
+    console.log('[Resume Import API] Confidence:', result.data.meta.confidence);
+
+    // Optionally save to profile
+    if (saveToProfile) {
+      const saveResult = await saveResumeDataToProfile(userId, result.data);
+      if (!saveResult.success) {
+        console.error('[Resume Import API] Failed to save to profile:', saveResult.error);
+        // Don't fail the whole request, just note the error
       }
-
-      // Validate file size (max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        return NextResponse.json({ error: 'File size must be less than 5MB' }, { status: 400 });
-      }
-
-      const buffer = Buffer.from(await file.arrayBuffer());
-      parsed = await parseResume(buffer, file.type);
-    } else if (text) {
-      parsed = await parseResume(text, 'text/plain');
     }
-
-    if (!parsed) {
-      return NextResponse.json({ error: 'Failed to parse resume' }, { status: 500 });
-    }
-
-    const normalized = normalizeResumeData(parsed);
 
     return NextResponse.json({
       success: true,
-      data: normalized,
-      confidence: parsed.confidence,
-      message: `Resume parsed with ${Math.round(parsed.confidence * 100)}% confidence`,
+      data: result.data,
+      confidence: result.data.meta.confidence,
+      message: result.message,
     });
   } catch (error) {
-    console.error('Resume import error:', error);
+    console.error('[Resume Import API] Error:', error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to import resume' },
       { status: 500 }

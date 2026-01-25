@@ -26,6 +26,9 @@ const nextConfig: NextConfig = {
     },
   },
 
+  // Externalize packages that don't work with webpack bundling
+  serverExternalPackages: ['pdf-parse'],
+
   // Headers for security and SEO
   async headers() {
     return [

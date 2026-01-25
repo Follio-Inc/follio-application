@@ -29,9 +29,9 @@ export default async function HomePage() {
     userId = null;
   }
 
-  // If user is logged in, redirect to builder
+  // If user is logged in, redirect to their Follio
   if (userId) {
-    redirect('/builder');
+    redirect('/me');
   }
 
   return (

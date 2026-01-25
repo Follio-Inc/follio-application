@@ -70,11 +70,22 @@ export default function OnboardingImportPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Validate file type - only PDFs supported
+    if (file.type !== 'application/pdf') {
+      updateImportStatus('resume', {
+        status: 'error',
+        message: 'Only PDF files are supported. Please upload a PDF resume.',
+      });
+      return;
+    }
+
     updateImportStatus('resume', { status: 'importing', message: 'Parsing resume...' });
 
     try {
       const formData = new FormData();
       formData.append('file', file);
+      // Don't auto-save - we'll review first
+      formData.append('saveToProfile', 'false');
 
       const response = await fetch('/api/import/resume', {
         method: 'POST',
@@ -88,10 +99,14 @@ export default function OnboardingImportPage() {
       }
 
       setImportedData((prev) => ({ ...prev, resume: data.data }));
+
+      // Count imported items
+      const itemCount = countResumeItems(data.data);
+
       updateImportStatus('resume', {
         status: 'success',
-        message: data.message || 'Resume imported successfully',
-        itemsImported: countImportedItems(data.data),
+        message: `Found ${itemCount} items (${Math.round((data.confidence || 0.5) * 100)}% confidence)`,
+        itemsImported: itemCount,
       });
     } catch (err) {
       updateImportStatus('resume', {
@@ -99,6 +114,19 @@ export default function OnboardingImportPage() {
         message: err instanceof Error ? err.message : 'Failed to import resume',
       });
     }
+  };
+
+  // Count items from resume import
+  const countResumeItems = (data: Record<string, unknown> | undefined): number => {
+    if (!data) return 0;
+    let count = 0;
+    if (data.profile && Object.keys(data.profile as object).length > 0) count += 1;
+    if (Array.isArray(data.experiences)) count += (data.experiences as unknown[]).length;
+    if (Array.isArray(data.educations)) count += (data.educations as unknown[]).length;
+    if (Array.isArray(data.projects)) count += (data.projects as unknown[]).length;
+    if (Array.isArray(data.skills)) count += (data.skills as unknown[]).length;
+    if (Array.isArray(data.links)) count += (data.links as unknown[]).length;
+    return count;
   };
 
   // GitHub import handler
@@ -206,6 +234,19 @@ export default function OnboardingImportPage() {
 
   // Create profile and continue
   const handleContinue = async () => {
+    console.log('[Import] handleContinue called');
+    console.log('[Import] importedData.resume:', importedData.resume);
+
+    // If we have resume data, go to review flow
+    if (importedData.resume) {
+      console.log('[Import] Storing resume data in sessionStorage and redirecting to review');
+      // Store parsed data in sessionStorage for the review page
+      sessionStorage.setItem('onboarding_parsed_resume', JSON.stringify(importedData.resume));
+      router.push('/onboarding/review');
+      return;
+    }
+
+    // If no resume data but has other imports, create profile directly
     setIsCreatingProfile(true);
     setError(null);
 
@@ -223,7 +264,9 @@ export default function OnboardingImportPage() {
         throw new Error(data.error || 'Failed to create profile');
       }
 
-      // Redirect to profile preview
+      // Force refresh to clear Router Cache, then navigate
+      // This ensures /me fetches fresh data from the server
+      router.refresh();
       router.push('/me');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
@@ -239,9 +282,9 @@ export default function OnboardingImportPage() {
   const hasAnyImport = Object.values(imports).some((i) => i.status === 'success');
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
+    <>
       {/* Progress bar */}
-      <div className="fixed left-0 right-0 top-0 h-1 bg-muted">
+      <div className="fixed left-0 right-0 top-16 z-40 h-1 bg-muted">
         <motion.div
           className="h-full bg-primary"
           initial={{ width: '33%' }}
@@ -277,7 +320,7 @@ export default function OnboardingImportPage() {
           <ImportCard
             icon={<FileText className="h-5 w-5" />}
             title="Upload Resume"
-            description="Import from PDF or text file"
+            description="Import your resume (PDF only)"
             status={imports.resume}
             onAction={() => document.getElementById('resume-upload')?.click()}
             actionLabel={imports.resume.status === 'success' ? 'Re-upload' : 'Upload'}
@@ -285,7 +328,7 @@ export default function OnboardingImportPage() {
             <input
               id="resume-upload"
               type="file"
-              accept=".pdf,.txt,.doc,.docx"
+              accept=".pdf,application/pdf"
               className="hidden"
               onChange={handleResumeUpload}
             />
@@ -434,6 +477,11 @@ export default function OnboardingImportPage() {
                 <Spinner size="sm" />
                 Creating your profile...
               </>
+            ) : importedData.resume ? (
+              <>
+                Review & Edit Parsed Data
+                <ArrowRight className="h-4 w-4" />
+              </>
             ) : (
               <>
                 Continue
@@ -460,7 +508,7 @@ export default function OnboardingImportPage() {
           <div className="h-2 w-8 rounded-full bg-primary" />
         </div>
       </div>
-    </div>
+    </>
   );
 }
 
