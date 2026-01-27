@@ -2,7 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 interface ParseResult {
   success: boolean;
@@ -71,11 +71,15 @@ interface ParseResult {
     sections?: string[];
     rawResume?: unknown;
   };
+  // AI parser specific fields
+  model?: string;
+  processingTimeMs?: number;
+  message?: string;
   error?: string;
   stack?: string;
 }
 
-type ParserType = 'old' | 'openresume';
+type ParserType = 'ai' | 'openresume' | 'old';
 
 export default function TestResumePage() {
   const [file, setFile] = useState<File | null>(null);
@@ -83,8 +87,17 @@ export default function TestResumePage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ParseResult | null>(null);
   const [activeTab, setActiveTab] = useState<'upload' | 'paste'>('upload');
-  const [parserType, setParserType] = useState<ParserType>('openresume');
+  const [parserType, setParserType] = useState<ParserType>('ai');
   const [debugMode, setDebugMode] = useState(false);
+  const [aiAvailable, setAiAvailable] = useState<boolean | null>(null);
+
+  // Check if AI parser is available on mount
+  useEffect(() => {
+    fetch('/api/test-resume')
+      .then((res) => res.json())
+      .then((data) => setAiAvailable(data.available))
+      .catch(() => setAiAvailable(false));
+  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -104,10 +117,13 @@ export default function TestResumePage() {
       formData.append('file', file);
 
       // Choose endpoint based on parser type
-      const endpoint =
-        parserType === 'openresume'
-          ? `/api/test-resume-openresume${debugMode ? '?debug=true' : ''}`
-          : '/api/test-resume';
+      let endpoint = '/api/test-resume';
+      if (parserType === 'openresume') {
+        endpoint = `/api/test-resume-openresume${debugMode ? '?debug=true' : ''}`;
+      } else if (parserType === 'old') {
+        endpoint = '/api/test-resume?ai=false';
+      }
+      // 'ai' uses /api/test-resume which defaults to AI
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -173,15 +189,23 @@ export default function TestResumePage() {
       <div className="mx-auto max-w-6xl">
         <h1 className="mb-2 text-3xl font-bold">Resume Parser Test Page</h1>
         <p className="mb-8 text-gray-600">
-          Upload a resume to test the parsing functionality. Choose between the OpenResume parser
-          (recommended, feature-scoring based) or the legacy parser.
+          Upload a resume to test the parsing functionality. Choose between AI (GPT-4o-mini),
+          OpenResume (feature-scoring), or the legacy parser.
         </p>
 
         {/* Parser Selection */}
         <Card className="mb-4">
           <CardContent className="pt-4">
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-4">
               <span className="font-medium">Parser:</span>
+              <Button
+                variant={parserType === 'ai' ? 'default' : 'outline'}
+                onClick={() => setParserType('ai')}
+                className={parserType === 'ai' ? 'bg-purple-600 hover:bg-purple-700' : ''}
+                disabled={aiAvailable === false}
+              >
+                🤖 AI Parser (GPT-4o-mini)
+              </Button>
               <Button
                 variant={parserType === 'openresume' ? 'default' : 'outline'}
                 onClick={() => setParserType('openresume')}
@@ -207,10 +231,17 @@ export default function TestResumePage() {
                 </label>
               )}
             </div>
+            {aiAvailable === false && (
+              <p className="mt-2 text-sm text-red-500">
+                ⚠️ AI Parser unavailable - OPENAI_API_KEY not configured in .env.local
+              </p>
+            )}
             <p className="mt-2 text-sm text-gray-500">
-              {parserType === 'openresume'
-                ? '✨ OpenResume: Feature-scoring based parser from open-resume.com. Uses PDF position metadata for accurate extraction.'
-                : '📋 Legacy: Rule-based parser with regex patterns.'}
+              {parserType === 'ai'
+                ? '🤖 AI: Uses OpenAI GPT-4o-mini for intelligent parsing. Best accuracy, understands context.'
+                : parserType === 'openresume'
+                  ? '✨ OpenResume: Feature-scoring based parser. Uses PDF position metadata for extraction.'
+                  : '📋 Legacy: Rule-based parser with regex patterns.'}
             </p>
           </CardContent>
         </Card>
@@ -330,6 +361,41 @@ export default function TestResumePage() {
 
             {result.parsed && (
               <>
+                {/* AI Parser Info (if using AI) */}
+                {result.model && (
+                  <Card className="border-purple-200 bg-purple-50">
+                    <CardHeader>
+                      <CardTitle className="text-purple-800">🤖 AI Parser Info</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                        <div>
+                          <p className="text-sm text-purple-600">Model</p>
+                          <p className="font-semibold text-purple-900">{result.model}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-purple-600">Processing Time</p>
+                          <p className="font-semibold text-purple-900">
+                            {result.processingTimeMs}ms
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-purple-600">Confidence</p>
+                          <p className="font-semibold text-purple-900">
+                            {Math.round((result.parsed.confidence || 0) * 100)}%
+                          </p>
+                        </div>
+                        {result.message && (
+                          <div className="col-span-2 md:col-span-1">
+                            <p className="text-sm text-purple-600">Status</p>
+                            <p className="font-semibold text-purple-900">{result.message}</p>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
                 {/* Confidence Score */}
                 <Card>
                   <CardHeader>
@@ -501,6 +567,13 @@ export default function TestResumePage() {
                               <p className="mt-2 whitespace-pre-wrap text-sm text-gray-700">
                                 {exp.description}
                               </p>
+                            )}
+                            {exp.bullets && exp.bullets.length > 0 && (
+                              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-700">
+                                {exp.bullets.map((bullet, bulletIdx) => (
+                                  <li key={bulletIdx}>{bullet}</li>
+                                ))}
+                              </ul>
                             )}
                           </div>
                         ))}

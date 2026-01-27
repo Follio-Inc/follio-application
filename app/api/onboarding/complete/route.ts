@@ -1,4 +1,5 @@
 import { db } from '@/lib/db';
+import { parseDateFlexible } from '@/lib/utils';
 import type { NormalizedImportResult } from '@/services/import/types';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import type { DataSource, Profile, User } from '@prisma/client';
@@ -9,13 +10,12 @@ const toDataSource = (source: string | undefined): DataSource => {
   return (source || 'MANUAL') as DataSource;
 };
 
-// Helper to safely parse a date string, returns null if invalid
+/**
+ * Safely parse a date string using the shared flexible parser.
+ * Returns null for invalid dates.
+ */
 const safeParseDate = (dateStr: string | undefined | null): Date | null => {
-  if (!dateStr) return null;
-  const date = new Date(dateStr);
-  // Check if the date is valid
-  if (isNaN(date.getTime())) return null;
-  return date;
+  return parseDateFlexible(dateStr);
 };
 
 interface ManualLinkInput {

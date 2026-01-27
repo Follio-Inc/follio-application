@@ -24,6 +24,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
+import { toMonthInputFormat } from '@/lib/utils';
 
 // Types for parsed resume data
 interface ParsedProfile {
@@ -156,7 +157,7 @@ function ReviewPageContent() {
           console.log('[Review] Educations:', parsed.educations?.length || 0);
           console.log('[Review] Skills:', parsed.skills?.length || 0);
 
-          // Transform to our format with IDs
+          // Transform to our format with IDs and convert dates to YYYY-MM format
           const transformedData: ReviewData = {
             profile: parsed.profile || {},
             experiences: (parsed.experiences || []).map((exp: Record<string, unknown>) => ({
@@ -164,8 +165,8 @@ function ReviewPageContent() {
               company: exp.company || '',
               role: exp.role || '',
               location: exp.location,
-              startDate: exp.startDate,
-              endDate: exp.endDate,
+              startDate: toMonthInputFormat(exp.startDate as string),
+              endDate: toMonthInputFormat(exp.endDate as string),
               isCurrent: exp.isCurrent,
               description: exp.description,
               bullets: exp.bullets,
@@ -175,8 +176,8 @@ function ReviewPageContent() {
               institution: edu.institution || '',
               degree: edu.degree,
               fieldOfStudy: edu.fieldOfStudy,
-              startDate: edu.startDate,
-              endDate: edu.endDate,
+              startDate: toMonthInputFormat(edu.startDate as string),
+              endDate: toMonthInputFormat(edu.endDate as string),
               gpa: edu.gpa,
             })),
             skills: (parsed.skills || []).map((skill: string | { name: string }) => ({
@@ -882,13 +883,33 @@ function ExperienceCard({
             </label>
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium">Description</label>
+            <label className="mb-1.5 block text-sm font-medium">Description / Achievements</label>
             <Textarea
-              placeholder="Describe your responsibilities and achievements..."
-              value={experience.description || ''}
-              onChange={(e) => onUpdate({ description: e.target.value })}
-              rows={3}
+              placeholder="Describe your responsibilities and achievements (one per line for bullet points)..."
+              value={
+                experience.description ||
+                (experience.bullets && experience.bullets.length > 0
+                  ? experience.bullets.join('\n')
+                  : '')
+              }
+              onChange={(e) => {
+                const text = e.target.value;
+                // If text has newlines, treat as bullets
+                if (text.includes('\n')) {
+                  const bullets = text
+                    .split('\n')
+                    .map((b) => b.trim())
+                    .filter((b) => b.length > 0);
+                  onUpdate({ description: undefined, bullets });
+                } else {
+                  onUpdate({ description: text, bullets: undefined });
+                }
+              }}
+              rows={4}
             />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Use new lines to separate bullet points
+            </p>
           </div>
           <div className="flex justify-end gap-2">
             <Button variant="ghost" size="sm" onClick={onDelete} className="text-destructive">
@@ -909,7 +930,7 @@ function ExperienceCard({
     <Card className="group relative">
       <CardContent className="p-4">
         <div className="flex items-start justify-between">
-          <div>
+          <div className="flex-1">
             <h4 className="font-medium">{experience.role || 'Untitled Role'}</h4>
             <p className="text-sm text-muted-foreground">
               {experience.company || 'Unknown Company'}
@@ -919,6 +940,16 @@ function ExperienceCard({
               <p className="text-xs text-muted-foreground">
                 {experience.startDate || '?'} — {experience.endDate || 'Present'}
               </p>
+            )}
+            {experience.description && (
+              <p className="mt-2 text-sm text-muted-foreground">{experience.description}</p>
+            )}
+            {experience.bullets && experience.bullets.length > 0 && (
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                {experience.bullets.map((bullet, idx) => (
+                  <li key={idx}>{bullet}</li>
+                ))}
+              </ul>
             )}
           </div>
           <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
