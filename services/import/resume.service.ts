@@ -97,8 +97,8 @@ function toNormalizedResult(
     result.profile!.headline = sanitizeText(parsed.headline);
     result.summary!.profileFields!++;
   }
-  if (parsed.summary) {
-    result.profile!.summary = sanitizeText(parsed.summary);
+  if (parsed.bio) {
+    result.profile!.summary = sanitizeText(parsed.bio);
     result.summary!.profileFields!++;
   }
   if (parsed.location) {
@@ -106,11 +106,11 @@ function toNormalizedResult(
     result.summary!.profileFields!++;
   }
 
-  // Contact info
-  if (parsed.contactInfo?.email || parsed.contactInfo?.phone) {
+  // Contact info - email and phone are at top level in NormalizedResumeData
+  if (parsed.email || parsed.phone) {
     result.contactInfo = {
-      email: parsed.contactInfo.email ? sanitizeText(parsed.contactInfo.email) : undefined,
-      phone: parsed.contactInfo.phone ? sanitizeText(parsed.contactInfo.phone) : undefined,
+      email: parsed.email ? sanitizeText(parsed.email) : undefined,
+      phone: parsed.phone ? sanitizeText(parsed.phone) : undefined,
     };
   }
 
@@ -124,8 +124,7 @@ function toNormalizedResult(
       endDate: exp.endDate,
       isCurrent: exp.isCurrent,
       description: exp.description ? sanitizeText(exp.description) : undefined,
-      bullets: exp.bullets?.map(sanitizeText),
-      source: 'RESUME',
+      source: 'RESUME' as const,
     }));
     result.summary!.experiences = result.experiences.length;
   }
@@ -158,8 +157,7 @@ function toNormalizedResult(
     result.links = parsed.links.map((link) => ({
       type: link.type,
       url: link.url,
-      label: link.label ? sanitizeText(link.label) : undefined,
-      source: 'RESUME',
+      source: 'RESUME' as const,
     }));
     result.summary!.links = result.links.length;
   }

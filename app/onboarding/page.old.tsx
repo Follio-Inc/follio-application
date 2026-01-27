@@ -956,7 +956,7 @@ export default function OnboardingPage() {
                             </Button>
                             <Button
                               className="flex-1"
-                              onClick={handleGitHubImport}
+                              onClick={() => handleGitHubImport()}
                               disabled={!githubUsername.trim()}
                             >
                               Import
@@ -1046,14 +1046,6 @@ export default function OnboardingPage() {
                           )}
                           <span className="text-sm font-medium">{getSourceLabel(source.type)}</span>
                           {/* Show GitHub username if imported or connected */}
-                          {console.log(
-                            '[GitHub Display] source.type:',
-                            source.type,
-                            'importedGithubUsername:',
-                            importedGithubUsername,
-                            'connectedGithubUsername:',
-                            connectedGithubUsername
-                          )}
                           {source.type === 'github' &&
                             (importedGithubUsername || connectedGithubUsername) && (
                               <span className="max-w-full truncate text-xs text-green-600 dark:text-green-400">

@@ -302,12 +302,11 @@ export async function extractTextFromPDFEnhanced(buffer: Buffer): Promise<string
   try {
     console.log('[PDF Enhanced] Starting extraction with pdf-parse...');
 
-    // pdf-parse v2 has named exports
-    const { PDFParse } = await import('pdf-parse');
+    // pdf-parse uses CommonJS-style default export
+    const pdfParse = (await import('pdf-parse')).default;
 
-    // Create parser with buffer data
-    const parser = new PDFParse({ data: buffer });
-    const result = await parser.getText();
+    // Parse the PDF buffer
+    const result = await pdfParse(buffer);
 
     console.log('[PDF Enhanced] Extracted text length:', result.text?.length);
     return result.text || '';

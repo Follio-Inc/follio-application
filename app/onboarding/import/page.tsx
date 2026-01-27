@@ -88,13 +88,15 @@ export default function OnboardingImportPage() {
   const githubUsernameFromAccount = connectedGithub?.username ?? null;
 
   // Get connected LinkedIn account from Clerk (check multiple possible provider names)
-  const connectedLinkedin = user?.externalAccounts?.find(
-    (a) =>
-      a.provider === 'linkedin_oidc' ||
-      a.provider === 'linkedin' ||
-      a.provider === 'oauth_linkedin_oidc' ||
-      a.provider === 'oauth_linkedin'
-  );
+  const connectedLinkedin = user?.externalAccounts?.find((a) => {
+    const provider = a.provider as string;
+    return (
+      provider === 'linkedin_oidc' ||
+      provider === 'linkedin' ||
+      provider === 'oauth_linkedin_oidc' ||
+      provider === 'oauth_linkedin'
+    );
+  });
   const linkedinName =
     connectedLinkedin?.firstName && connectedLinkedin?.lastName
       ? `${connectedLinkedin.firstName} ${connectedLinkedin.lastName}`
@@ -557,8 +559,31 @@ export default function OnboardingImportPage() {
     // If we have resume data, go to review flow
     if (importedData.resume) {
       console.log('[Import] Storing resume data in sessionStorage and redirecting to review');
-      // Store parsed data in sessionStorage for the review page
-      sessionStorage.setItem('onboarding_parsed_resume', JSON.stringify(importedData.resume));
+
+      // Merge avatar from LinkedIn or GitHub if not present in resume
+      const resumeData = importedData.resume as Record<string, unknown>;
+      const profile = (resumeData.profile as Record<string, unknown>) || {};
+
+      // Try to get avatar from LinkedIn first, then GitHub
+      const linkedinData = importedData.linkedin as Record<string, unknown> | undefined;
+      const githubData = importedData.github as Record<string, unknown> | undefined;
+
+      const linkedinProfile = linkedinData?.profile as Record<string, unknown> | undefined;
+      const githubProfile = githubData?.profile as Record<string, unknown> | undefined;
+
+      if (!profile.avatarUrl) {
+        if (linkedinProfile?.avatarUrl) {
+          profile.avatarUrl = linkedinProfile.avatarUrl;
+          console.log('[Import] Using LinkedIn avatar:', profile.avatarUrl);
+        } else if (githubProfile?.avatarUrl) {
+          profile.avatarUrl = githubProfile.avatarUrl;
+          console.log('[Import] Using GitHub avatar:', profile.avatarUrl);
+        }
+      }
+
+      // Store merged data in sessionStorage for the review page
+      const mergedData = { ...resumeData, profile };
+      sessionStorage.setItem('onboarding_parsed_resume', JSON.stringify(mergedData));
       router.push('/onboarding/review');
       return;
     }

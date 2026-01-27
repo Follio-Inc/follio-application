@@ -31,6 +31,7 @@ interface ReviewedData {
     headline?: string;
     summary?: string;
     location?: string;
+    avatarUrl?: string;
   };
   experiences: Array<{
     company: string;
@@ -477,6 +478,7 @@ async function handleReviewedData(
         headline: reviewedData.profile.headline,
         summary: reviewedData.profile.summary,
         location: reviewedData.profile.location,
+        avatarUrl: reviewedData.profile.avatarUrl,
         status: 'PUBLIC',
       },
     });
@@ -492,6 +494,7 @@ async function handleReviewedData(
         headline: reviewedData.profile.headline || user.profile.headline,
         summary: reviewedData.profile.summary || user.profile.summary,
         location: reviewedData.profile.location || user.profile.location,
+        avatarUrl: reviewedData.profile.avatarUrl || user.profile.avatarUrl,
       },
     });
     profileId = user.profile.id;
@@ -787,7 +790,7 @@ function mergeImportedData(importedData: Record<string, unknown>) {
     }
 
     // Handle GitHub/LinkedIn format (with profile object)
-    const data = rawData as NormalizedImportResult;
+    const data = rawData as unknown as NormalizedImportResult;
 
     // Profile info (first wins)
     if (data.profile) {

@@ -65,7 +65,8 @@ export async function getPublicProfile(handle: string): Promise<PublicProfile | 
 
   // Helper: check if section should be visible
   // If no sections configured, show everything by default
-  const isSectionVisible = (type: string) => hasNoSections || visibleSectionTypes.has(type);
+  const isSectionVisible = (type: string) =>
+    hasNoSections || visibleSectionTypes.has(type as import('@prisma/client').SectionType);
 
   // Filter contact info for public view
   const publicContactInfo = profile.contactInfo

@@ -33,6 +33,7 @@ interface ParsedProfile {
   headline?: string;
   summary?: string;
   location?: string;
+  avatarUrl?: string;
 }
 
 interface ParsedExperience {
