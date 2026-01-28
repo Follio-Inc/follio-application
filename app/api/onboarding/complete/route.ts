@@ -112,13 +112,34 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Unable to get user details' }, { status: 400 });
       }
 
-      user = await db.user.create({
-        data: {
-          clerkId: userId,
-          email: clerkUser.emailAddresses[0].emailAddress,
-        },
+      const email = clerkUser.emailAddresses[0].emailAddress;
+
+      // Check if a user with this email already exists (from a previous signup)
+      const existingUserByEmail = await db.user.findUnique({
+        where: { email },
         include: { profile: true },
       });
+
+      if (existingUserByEmail) {
+        // Update the existing user's clerkId to the new one
+        // This handles cases where user signed up again with the same email
+        user = await db.user.update({
+          where: { id: existingUserByEmail.id },
+          data: { clerkId: userId },
+          include: { profile: true },
+        });
+        console.log('[Onboarding Complete] Updated existing user clerkId:', user.id);
+      } else {
+        // Create new user
+        user = await db.user.create({
+          data: {
+            clerkId: userId,
+            email,
+          },
+          include: { profile: true },
+        });
+        console.log('[Onboarding Complete] Created new user:', user.id);
+      }
     }
 
     // If we have reviewedData from the review flow, use it directly
@@ -680,6 +701,14 @@ function mergeImportedData(importedData: Record<string, unknown>) {
     links: [],
   };
 
+  // Check for bestAvatarUrl passed from the import page
+  // This is the highest resolution image selected by comparing all sources
+  if (importedData.bestAvatarUrl) {
+    merged.avatarUrl = importedData.bestAvatarUrl as string;
+    merged.avatarUrlSource = 'MANUAL'; // Could be from upload or best resolution selection
+    console.log('[mergeImportedData] Using bestAvatarUrl:', merged.avatarUrl?.substring(0, 100));
+  }
+
   // Priority: resume > github > linkedin > manual links
   const sources = ['resume', 'github', 'linkedin', 'links'];
 
@@ -847,7 +876,13 @@ function mergeImportedData(importedData: Record<string, unknown>) {
       merged.educations.push(...data.educations.map((e) => ({ ...e, source: sourceType })));
     }
     if (data.links?.length) {
-      merged.links.push(...data.links.map((l) => ({ ...l, source: data.source })));
+      // Use the link's own source if available, otherwise use the import source type
+      merged.links.push(
+        ...data.links.map((l) => ({
+          ...l,
+          source: (l as { source?: string }).source || sourceType,
+        }))
+      );
     }
   }
 

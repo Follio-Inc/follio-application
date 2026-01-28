@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
 import { normalizeGitHubData } from '@/services/github.service';
+import { saveGitHubToProfile } from '@/services/import/github.service';
+import { auth } from '@clerk/nextjs/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,7 +12,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { username, accessToken } = body;
+    const { username, accessToken, saveToProfile } = body;
 
     if (!username) {
       return NextResponse.json({ error: 'GitHub username is required' }, { status: 400 });
@@ -23,6 +24,14 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await normalizeGitHubData(username, accessToken);
+
+    // Optionally save to profile
+    if (saveToProfile) {
+      const saveResult = await saveGitHubToProfile(userId, data);
+      if (!saveResult.success) {
+        console.error('[GitHub Import API] Failed to save to profile:', saveResult.error);
+      }
+    }
 
     return NextResponse.json({
       success: true,

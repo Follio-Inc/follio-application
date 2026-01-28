@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import {
   AlertCircle,
   ArrowRight,
+  Camera,
   CheckCircle2,
   FileText,
   Github,
@@ -12,16 +13,19 @@ import {
   Link as LinkIcon,
   Loader2,
   Plus,
+  Upload,
   X,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
+import { fileToBase64, getBestResolutionImage } from '@/lib/utils';
 
 // Storage key prefix for persisting onboarding state across OAuth redirects
 const ONBOARDING_IMPORT_STATE_KEY_PREFIX = 'follio_onboarding_import_state_';
@@ -79,6 +83,11 @@ export default function OnboardingImportPage() {
   const [githubUsername, setGithubUsername] = useState('');
   const [manualLinks, setManualLinks] = useState<ManualLink[]>([{ url: '' }]);
   const [showLinksForm, setShowLinksForm] = useState(false);
+
+  // Profile photo upload state
+  const [uploadedPhoto, setUploadedPhoto] = useState<string | null>(null);
+  const [uploadedPhotoPreview, setUploadedPhotoPreview] = useState<string | null>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
   // Imported data (for display)
   const [importedData, setImportedData] = useState<Record<string, unknown>>({});
@@ -543,6 +552,61 @@ export default function OnboardingImportPage() {
     }
   };
 
+  // Profile photo upload handler
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setError('Please upload an image file (JPEG, PNG, etc.)');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Image must be less than 5MB');
+      return;
+    }
+
+    setIsUploadingPhoto(true);
+    setError(null);
+
+    try {
+      // Convert to base64 for storage and preview
+      const base64 = await fileToBase64(file);
+      setUploadedPhoto(base64);
+      setUploadedPhotoPreview(base64);
+      setIsUploadingPhoto(false);
+    } catch (err) {
+      setError('Failed to process image');
+      setIsUploadingPhoto(false);
+    }
+  };
+
+  // Remove uploaded photo
+  const handleRemovePhoto = () => {
+    setUploadedPhoto(null);
+    setUploadedPhotoPreview(null);
+  };
+
+  // Get the current best avatar (from uploaded, Google, LinkedIn, or GitHub)
+  const getCurrentAvatar = (): string | null => {
+    // Priority: uploaded > Google (user.imageUrl) > LinkedIn > GitHub
+    if (uploadedPhotoPreview) return uploadedPhotoPreview;
+    if (user?.imageUrl) return user.imageUrl;
+
+    const linkedinData = importedData.linkedin as Record<string, unknown> | undefined;
+    const githubData = importedData.github as Record<string, unknown> | undefined;
+    const linkedinProfile = linkedinData?.profile as Record<string, unknown> | undefined;
+    const githubProfile = githubData?.profile as Record<string, unknown> | undefined;
+
+    if (linkedinProfile?.avatarUrl) return linkedinProfile.avatarUrl as string;
+    if (githubProfile?.avatarUrl) return githubProfile.avatarUrl as string;
+
+    return null;
+  };
+
   // Count imported items for display
   const countImportedItems = (data: Record<string, unknown> | undefined): number => {
     if (!data) return 0;
@@ -556,29 +620,41 @@ export default function OnboardingImportPage() {
     console.log('[Import] handleContinue called');
     console.log('[Import] importedData.resume:', importedData.resume);
 
+    // Collect all possible avatar URLs
+    const linkedinData = importedData.linkedin as Record<string, unknown> | undefined;
+    const githubData = importedData.github as Record<string, unknown> | undefined;
+    const linkedinProfile = linkedinData?.profile as Record<string, unknown> | undefined;
+    const githubProfile = githubData?.profile as Record<string, unknown> | undefined;
+
+    // If user uploaded a photo, use that (it's the highest priority)
+    let bestAvatarUrl: string | null = uploadedPhoto;
+
+    // Otherwise, compare resolutions of available photos to find the best one
+    if (!bestAvatarUrl) {
+      const avatarCandidates = [
+        user?.imageUrl, // Google or other SSO provider
+        linkedinProfile?.avatarUrl as string | undefined,
+        githubProfile?.avatarUrl as string | undefined,
+      ];
+
+      console.log('[Import] Avatar candidates:', avatarCandidates);
+
+      // Get best resolution image from URLs
+      bestAvatarUrl = await getBestResolutionImage(avatarCandidates);
+      console.log('[Import] Best resolution avatar:', bestAvatarUrl);
+    }
+
     // If we have resume data, go to review flow
     if (importedData.resume) {
       console.log('[Import] Storing resume data in sessionStorage and redirecting to review');
 
-      // Merge avatar from LinkedIn or GitHub if not present in resume
+      // Merge avatar from best source
       const resumeData = importedData.resume as Record<string, unknown>;
       const profile = (resumeData.profile as Record<string, unknown>) || {};
 
-      // Try to get avatar from LinkedIn first, then GitHub
-      const linkedinData = importedData.linkedin as Record<string, unknown> | undefined;
-      const githubData = importedData.github as Record<string, unknown> | undefined;
-
-      const linkedinProfile = linkedinData?.profile as Record<string, unknown> | undefined;
-      const githubProfile = githubData?.profile as Record<string, unknown> | undefined;
-
-      if (!profile.avatarUrl) {
-        if (linkedinProfile?.avatarUrl) {
-          profile.avatarUrl = linkedinProfile.avatarUrl;
-          console.log('[Import] Using LinkedIn avatar:', profile.avatarUrl);
-        } else if (githubProfile?.avatarUrl) {
-          profile.avatarUrl = githubProfile.avatarUrl;
-          console.log('[Import] Using GitHub avatar:', profile.avatarUrl);
-        }
+      if (!profile.avatarUrl && bestAvatarUrl) {
+        profile.avatarUrl = bestAvatarUrl;
+        console.log('[Import] Using best resolution avatar:', profile.avatarUrl);
       }
 
       // Store merged data in sessionStorage for the review page
@@ -593,11 +669,17 @@ export default function OnboardingImportPage() {
     setError(null);
 
     try {
+      // Include the best avatar URL in the imported data
+      const dataToSend = {
+        ...importedData,
+        bestAvatarUrl,
+      };
+
       // Create or update profile with imported data
       const response = await fetch('/api/onboarding/complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ importedData }),
+        body: JSON.stringify({ importedData: dataToSend }),
       });
 
       const data = await response.json();
@@ -658,6 +740,93 @@ export default function OnboardingImportPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.1 }}
         >
+          {/* Profile Photo */}
+          <Card className="">
+            <CardContent className="flex items-start gap-4 p-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
+                <Camera className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-medium">Profile Photo</h3>
+                    {isUploadingPhoto && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
+                    {(uploadedPhotoPreview || getCurrentAvatar()) && !isUploadingPhoto && (
+                      <CheckCircle2 className="h-4 w-4 text-green-500" />
+                    )}
+                  </div>
+                  {uploadedPhotoPreview ? (
+                    <Badge variant="default" className="bg-green-500/10 text-green-600">
+                      Custom photo
+                    </Badge>
+                  ) : getCurrentAvatar() ? (
+                    <Badge variant="default" className="bg-green-500/10 text-green-600">
+                      From account
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline">Not set</Badge>
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {uploadedPhotoPreview
+                    ? 'Using your uploaded photo'
+                    : getCurrentAvatar()
+                      ? 'Using photo from your account (you can upload a custom one)'
+                      : 'Upload a profile photo or connect accounts to import'}
+                </p>
+
+                {/* Photo Preview */}
+                {(uploadedPhotoPreview || getCurrentAvatar()) && (
+                  <div className="mt-3 flex items-center gap-3">
+                    <Avatar className="h-16 w-16 border-2 border-border">
+                      <AvatarImage
+                        src={uploadedPhotoPreview || getCurrentAvatar() || undefined}
+                        alt="Profile photo"
+                      />
+                      <AvatarFallback>
+                        {user?.firstName?.[0] || user?.username?.[0] || 'U'}
+                      </AvatarFallback>
+                    </Avatar>
+                    {uploadedPhotoPreview && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleRemovePhoto}
+                        className="text-muted-foreground hover:text-destructive"
+                      >
+                        <X className="mr-1 h-3 w-3" />
+                        Remove
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => document.getElementById('photo-upload')?.click()}
+                disabled={isUploadingPhoto}
+                className="shrink-0"
+              >
+                {isUploadingPhoto ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Upload
+                  </>
+                )}
+              </Button>
+              <input
+                id="photo-upload"
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handlePhotoUpload}
+              />
+            </CardContent>
+          </Card>
+
           {/* Resume Upload */}
           <ImportCard
             icon={<FileText className="h-5 w-5" />}

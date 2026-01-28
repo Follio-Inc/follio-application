@@ -6,6 +6,7 @@ import {
   Briefcase,
   Check,
   Code,
+  Download,
   ExternalLink,
   Eye,
   FolderKanban,
@@ -17,15 +18,17 @@ import {
   User,
 } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
+import { ImportDataDialog } from './components/import-data-dialog';
 import { UnsavedChangesDialog } from './components/unsaved-changes-dialog';
-import { BasicInfoForm } from './sections/basic-info-form';
+import { BasicInfoForm, ContactInfoForm } from './sections/basic-info-form';
 import { EducationSection } from './sections/education-section';
 import { ExperienceSection } from './sections/experience-section';
 import { LinksSection } from './sections/links-section';
@@ -52,22 +55,39 @@ const sections = [
 ];
 
 export function BuilderClient({ initialProfile }: BuilderClientProps) {
+  const router = useRouter();
   const [profile, setProfile] = useState(initialProfile);
   const [activeSection, setActiveSection] = useState('basic');
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [hasContactChanges, setHasContactChanges] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [pendingSection, setPendingSection] = useState<string | null>(null);
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
+  const [showImportDialog, setShowImportDialog] = useState(false);
+
+  // Contact info state
+  const [contactInfo, setContactInfo] = useState({
+    email: initialProfile.contactInfo?.email || '',
+    emailPublic: initialProfile.contactInfo?.emailPublic || false,
+    phone: initialProfile.contactInfo?.phone || '',
+    phonePublic: initialProfile.contactInfo?.phonePublic || false,
+    website: initialProfile.contactInfo?.website || '',
+  });
 
   // Debounce timer ref for auto-save
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
   const AUTO_SAVE_DELAY = 2000; // 2 seconds
 
+  // Handle import completion - refresh the page to get updated data
+  const handleImportComplete = useCallback(() => {
+    router.refresh();
+  }, [router]);
+
   // Warn user before closing/refreshing if there are unsaved changes
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (hasChanges) {
+      if (hasChanges || hasContactChanges) {
         e.preventDefault();
         e.returnValue = '';
         return '';
@@ -76,35 +96,52 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
 
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [hasChanges]);
+  }, [hasChanges, hasContactChanges]);
 
   // Auto-save function
   const performAutoSave = useCallback(async () => {
-    if (!hasChanges) return;
+    if (!hasChanges && !hasContactChanges) return;
 
     setSaveStatus('saving');
     setIsSaving(true);
 
     try {
-      const response = await fetch('/api/profile', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          firstName: profile.firstName,
-          lastName: profile.lastName,
-          headline: profile.headline,
-          summary: profile.summary,
-          location: profile.location,
-          avatarUrl: profile.avatarUrl,
-          status: profile.status,
-        }),
-      });
+      // Save profile info
+      if (hasChanges) {
+        const response = await fetch('/api/profile', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            firstName: profile.firstName,
+            lastName: profile.lastName,
+            headline: profile.headline,
+            summary: profile.summary,
+            location: profile.location,
+            avatarUrl: profile.avatarUrl,
+            status: profile.status,
+          }),
+        });
 
-      if (!response.ok) {
-        throw new Error('Failed to save');
+        if (!response.ok) {
+          throw new Error('Failed to save profile');
+        }
+      }
+
+      // Save contact info
+      if (hasContactChanges) {
+        const contactResponse = await fetch('/api/profile/contact', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(contactInfo),
+        });
+
+        if (!contactResponse.ok) {
+          throw new Error('Failed to save contact info');
+        }
       }
 
       setHasChanges(false);
+      setHasContactChanges(false);
       setSaveStatus('saved');
 
       // Reset to idle after showing "saved" status
@@ -115,11 +152,11 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
     } finally {
       setIsSaving(false);
     }
-  }, [hasChanges, profile]);
+  }, [hasChanges, hasContactChanges, profile, contactInfo]);
 
-  // Debounced auto-save on profile changes
+  // Debounced auto-save on profile or contact changes
   useEffect(() => {
-    if (hasChanges) {
+    if (hasChanges || hasContactChanges) {
       // Clear existing timer
       if (autoSaveTimerRef.current) {
         clearTimeout(autoSaveTimerRef.current);
@@ -136,12 +173,18 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
         clearTimeout(autoSaveTimerRef.current);
       }
     };
-  }, [hasChanges, profile, performAutoSave]);
+  }, [hasChanges, hasContactChanges, profile, contactInfo, performAutoSave]);
 
   const handleProfileUpdate = (updates: Partial<FullProfile>) => {
     setProfile((prev) => ({ ...prev, ...updates }));
     setHasChanges(true);
     setSaveStatus('idle'); // Reset status when new changes are made
+  };
+
+  const handleContactUpdate = (updates: Partial<typeof contactInfo>) => {
+    setContactInfo((prev) => ({ ...prev, ...updates }));
+    setHasContactChanges(true);
+    setSaveStatus('idle');
   };
 
   const handleSave = async () => {
@@ -154,7 +197,7 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
 
   // Handle section change with unsaved changes check
   const handleSectionChange = (newSection: string) => {
-    if (hasChanges) {
+    if (hasChanges || hasContactChanges) {
       setPendingSection(newSection);
       setShowUnsavedDialog(true);
     } else {
@@ -196,7 +239,17 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
       avatarUrl: initialProfile.avatarUrl,
     }));
 
+    // Reset contact info to initial values
+    setContactInfo({
+      email: initialProfile.contactInfo?.email || '',
+      emailPublic: initialProfile.contactInfo?.emailPublic || false,
+      phone: initialProfile.contactInfo?.phone || '',
+      phonePublic: initialProfile.contactInfo?.phonePublic || false,
+      website: initialProfile.contactInfo?.website || '',
+    });
+
     setHasChanges(false);
+    setHasContactChanges(false);
     setSaveStatus('idle');
     setShowUnsavedDialog(false);
     if (pendingSection) {
@@ -210,6 +263,9 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
     setShowUnsavedDialog(false);
     setPendingSection(null);
   };
+
+  // Check if there are any unsaved changes
+  const anyUnsavedChanges = hasChanges || hasContactChanges;
 
   // Save status indicator component
   const renderSaveStatus = () => {
@@ -236,7 +292,7 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
           </div>
         );
       default:
-        return hasChanges ? (
+        return anyUnsavedChanges ? (
           <div className="text-sm text-muted-foreground">Unsaved changes</div>
         ) : null;
     }
@@ -253,13 +309,21 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
         isSaving={isSaving}
       />
 
+      {/* Import Data Dialog */}
+      <ImportDataDialog
+        open={showImportDialog}
+        onOpenChange={setShowImportDialog}
+        profileId={profile.id}
+        onImportComplete={handleImportComplete}
+      />
+
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold">Profile Builder</h1>
           <p className="text-muted-foreground">Edit your Follio profile</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {/* Save Status Indicator */}
           {renderSaveStatus()}
 
@@ -275,7 +339,7 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
           </Link>
           <Button
             onClick={handleSave}
-            disabled={isSaving || !hasChanges}
+            disabled={isSaving || !anyUnsavedChanges}
             size="sm"
             className="gap-2"
           >
@@ -285,80 +349,137 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
         </div>
       </div>
 
-      {/* Builder Tabs */}
-      <Tabs value={activeSection} onValueChange={handleSectionChange} className="space-y-6">
-        <TabsList className="flex h-auto flex-wrap gap-2 bg-transparent p-0">
-          {sections.map((section) => {
-            const Icon = section.icon;
-            return (
-              <TabsTrigger
-                key={section.id}
-                value={section.id}
-                className="gap-2 rounded-lg border bg-card px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-              >
-                <Icon className="h-4 w-4" />
-                {section.label}
-              </TabsTrigger>
-            );
-          })}
-        </TabsList>
+      {/* Builder Layout - Sidebar + Main Content */}
+      <div className="flex flex-col gap-6 lg:flex-row">
+        {/* Left Sidebar */}
+        <div className="w-full space-y-4 lg:w-64 lg:shrink-0">
+          {/* Import Data Card */}
+          <div className="rounded-lg border bg-card p-4">
+            <h3 className="mb-3 text-sm font-medium text-muted-foreground">Quick Actions</h3>
+            <Button
+              variant="outline"
+              className="w-full justify-start gap-2"
+              onClick={() => setShowImportDialog(true)}
+            >
+              <Download className="h-4 w-4" />
+              Import Data
+            </Button>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Import from LinkedIn, GitHub, resume, or add links
+            </p>
+          </div>
 
-        <motion.div
-          key={activeSection}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.2 }}
-        >
-          <TabsContent value="basic" className="mt-0">
-            <BasicInfoForm profile={profile} onUpdate={handleProfileUpdate} />
-          </TabsContent>
+          {/* Section Navigation - Desktop */}
+          <div className="hidden rounded-lg border bg-card p-4 lg:block">
+            <h3 className="mb-3 text-sm font-medium text-muted-foreground">Sections</h3>
+            <nav className="space-y-1">
+              {sections.map((section) => {
+                const Icon = section.icon;
+                return (
+                  <button
+                    key={section.id}
+                    onClick={() => handleSectionChange(section.id)}
+                    className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors ${
+                      activeSection === section.id
+                        ? 'bg-primary text-primary-foreground'
+                        : 'hover:bg-muted'
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {section.label}
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+        </div>
 
-          <TabsContent value="experience" className="mt-0">
-            <ExperienceSection
-              experiences={profile.workExperiences}
-              profileId={profile.id}
-              onUpdate={(workExperiences) => handleProfileUpdate({ workExperiences })}
-            />
-          </TabsContent>
+        {/* Main Content */}
+        <div className="min-w-0 flex-1">
+          {/* Mobile Tabs */}
+          <Tabs
+            value={activeSection}
+            onValueChange={handleSectionChange}
+            className="space-y-6 lg:hidden"
+          >
+            <TabsList className="flex h-auto flex-wrap gap-2 bg-transparent p-0">
+              {sections.map((section) => {
+                const Icon = section.icon;
+                return (
+                  <TabsTrigger
+                    key={section.id}
+                    value={section.id}
+                    className="gap-2 rounded-lg border bg-card px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                  >
+                    <Icon className="h-4 w-4" />
+                    {section.label}
+                  </TabsTrigger>
+                );
+              })}
+            </TabsList>
+          </Tabs>
 
-          <TabsContent value="education" className="mt-0">
-            <EducationSection
-              educations={profile.educations}
-              profileId={profile.id}
-              onUpdate={(educations) => handleProfileUpdate({ educations })}
-            />
-          </TabsContent>
+          {/* Section Content */}
+          <motion.div
+            key={activeSection}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            {activeSection === 'basic' && (
+              <div className="space-y-6">
+                <BasicInfoForm profile={profile} onUpdate={handleProfileUpdate} />
+                <ContactInfoForm profile={profile} onContactUpdate={handleContactUpdate} />
+              </div>
+            )}
 
-          <TabsContent value="skills" className="mt-0">
-            <SkillsSection
-              skills={profile.skills}
-              skillGroups={profile.skillGroups}
-              profileId={profile.id}
-              onUpdate={(skills, skillGroups) => handleProfileUpdate({ skills, skillGroups })}
-            />
-          </TabsContent>
+            {activeSection === 'experience' && (
+              <ExperienceSection
+                experiences={profile.workExperiences}
+                profileId={profile.id}
+                onUpdate={(workExperiences) => handleProfileUpdate({ workExperiences })}
+              />
+            )}
 
-          <TabsContent value="projects" className="mt-0">
-            <ProjectsSection
-              projects={profile.projects}
-              profileId={profile.id}
-              onUpdate={(projects) => handleProfileUpdate({ projects })}
-            />
-          </TabsContent>
+            {activeSection === 'education' && (
+              <EducationSection
+                educations={profile.educations}
+                profileId={profile.id}
+                onUpdate={(educations) => handleProfileUpdate({ educations })}
+              />
+            )}
 
-          <TabsContent value="links" className="mt-0">
-            <LinksSection
-              links={profile.links}
-              profileId={profile.id}
-              onUpdate={(links) => handleProfileUpdate({ links })}
-            />
-          </TabsContent>
+            {activeSection === 'skills' && (
+              <SkillsSection
+                skills={profile.skills}
+                skillGroups={profile.skillGroups}
+                profileId={profile.id}
+                onUpdate={(skills, skillGroups) => handleProfileUpdate({ skills, skillGroups })}
+              />
+            )}
 
-          <TabsContent value="settings" className="mt-0">
-            <SettingsSection profile={profile} onUpdate={handleProfileUpdate} />
-          </TabsContent>
-        </motion.div>
-      </Tabs>
+            {activeSection === 'projects' && (
+              <ProjectsSection
+                projects={profile.projects}
+                profileId={profile.id}
+                onUpdate={(projects) => handleProfileUpdate({ projects })}
+              />
+            )}
+
+            {activeSection === 'links' && (
+              <LinksSection
+                links={profile.links}
+                profileId={profile.id}
+                onUpdate={(links) => handleProfileUpdate({ links })}
+              />
+            )}
+
+            {activeSection === 'settings' && (
+              <SettingsSection profile={profile} onUpdate={handleProfileUpdate} />
+            )}
+          </motion.div>
+        </div>
+      </div>
     </div>
   );
 }

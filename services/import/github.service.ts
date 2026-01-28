@@ -303,3 +303,156 @@ export class GitHubImportService implements IGitHubImportService {
 
 // Export singleton instance
 export const githubImportService = new GitHubImportService();
+
+/**
+ * Save GitHub data directly to user's profile
+ * Used when importing from Builder with saveToProfile=true
+ */
+export async function saveGitHubToProfile(
+  userId: string,
+  data: NormalizedGitHubData
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    console.log('[GitHub Save] Saving to profile for user:', userId);
+
+    // Get user by Clerk ID
+    const user = await db.user.findUnique({
+      where: { clerkId: userId },
+      include: { profile: true },
+    });
+
+    if (!user || !user.profile) {
+      return { success: false, error: 'Profile not found' };
+    }
+
+    const profileId = user.profile.id;
+
+    // Update profile with GitHub data if not already set
+    const profileUpdate: Partial<{
+      firstName: string;
+      lastName: string;
+      headline: string;
+      summary: string;
+      location: string;
+      avatarUrl: string;
+    }> = {};
+
+    if (!user.profile.firstName && data.profile.firstName) {
+      profileUpdate.firstName = data.profile.firstName;
+    }
+    if (!user.profile.lastName && data.profile.lastName) {
+      profileUpdate.lastName = data.profile.lastName;
+    }
+    if (!user.profile.headline && data.profile.headline) {
+      profileUpdate.headline = data.profile.headline;
+    }
+    if (!user.profile.summary && data.profile.summary) {
+      profileUpdate.summary = data.profile.summary;
+    }
+    if (!user.profile.location && data.profile.location) {
+      profileUpdate.location = data.profile.location;
+    }
+    if (!user.profile.avatarUrl && data.profile.avatarUrl) {
+      profileUpdate.avatarUrl = data.profile.avatarUrl;
+    }
+
+    if (Object.keys(profileUpdate).length > 0) {
+      await db.profile.update({
+        where: { id: profileId },
+        data: profileUpdate,
+      });
+    }
+
+    // Add projects (dedupe by repoUrl or title)
+    const existingProjects = await db.project.findMany({
+      where: { profileId },
+      select: { repoUrl: true, title: true },
+    });
+    const existingProjectKeys = new Set(
+      existingProjects.map((p) => p.repoUrl || p.title.toLowerCase())
+    );
+
+    for (const project of data.projects) {
+      const key = project.repoUrl || project.title.toLowerCase();
+      if (!existingProjectKeys.has(key)) {
+        await db.project.create({
+          data: {
+            profileId,
+            title: project.title,
+            description: project.description,
+            shortDesc: project.shortDesc,
+            url: project.url,
+            repoUrl: project.repoUrl,
+            techStack: project.techStack || [],
+            featured: project.featured || false,
+            githubStars: project.ghStars,
+            githubForks: project.ghForks,
+            githubLanguage: project.ghLanguage,
+            source: 'GITHUB',
+          },
+        });
+        existingProjectKeys.add(key);
+      }
+    }
+
+    // Add skills (dedupe by name)
+    const existingSkills = await db.skill.findMany({
+      where: { profileId },
+      select: { name: true },
+    });
+    const existingSkillNames = new Set(existingSkills.map((s) => s.name.toLowerCase()));
+
+    for (const skill of data.skills) {
+      if (!existingSkillNames.has(skill.name.toLowerCase())) {
+        await db.skill.create({
+          data: {
+            profileId,
+            name: skill.name,
+            source: 'GITHUB',
+          },
+        });
+        existingSkillNames.add(skill.name.toLowerCase());
+      }
+    }
+
+    // Add links (dedupe by URL)
+    const existingLinks = await db.link.findMany({
+      where: { profileId },
+      select: { url: true },
+    });
+    const existingLinkUrls = new Set(existingLinks.map((l) => l.url.toLowerCase()));
+
+    for (const link of data.links) {
+      if (!existingLinkUrls.has(link.url.toLowerCase())) {
+        // Map link type to valid LinkType enum
+        const upperType = link.type.toUpperCase();
+        let linkType: 'GITHUB' | 'LINKEDIN' | 'TWITTER' | 'PORTFOLIO' | 'BLOG' | 'OTHER' = 'OTHER';
+        if (upperType === 'GITHUB') linkType = 'GITHUB';
+        else if (upperType === 'LINKEDIN') linkType = 'LINKEDIN';
+        else if (upperType === 'TWITTER') linkType = 'TWITTER';
+        else if (upperType === 'WEBSITE' || upperType === 'PORTFOLIO') linkType = 'PORTFOLIO';
+        else if (upperType === 'BLOG') linkType = 'BLOG';
+
+        await db.link.create({
+          data: {
+            profileId,
+            type: linkType,
+            url: link.url,
+            label: link.label,
+            source: 'GITHUB',
+          },
+        });
+        existingLinkUrls.add(link.url.toLowerCase());
+      }
+    }
+
+    console.log('[GitHub Save] Successfully saved to profile');
+    return { success: true };
+  } catch (error) {
+    console.error('[GitHub Save] Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to save GitHub data to profile',
+    };
+  }
+}

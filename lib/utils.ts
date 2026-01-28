@@ -305,3 +305,83 @@ export function toMonthInputFormat(dateStr: string | undefined | null): string {
 
   return '';
 }
+
+/**
+ * Get image dimensions from a URL
+ * Returns null if the image cannot be loaded
+ */
+export function getImageDimensions(url: string): Promise<{ width: number; height: number } | null> {
+  return new Promise((resolve) => {
+    if (!url) {
+      resolve(null);
+      return;
+    }
+
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+
+    img.onload = () => {
+      resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    };
+
+    img.onerror = () => {
+      resolve(null);
+    };
+
+    // Set a timeout to prevent hanging
+    setTimeout(() => {
+      resolve(null);
+    }, 5000);
+
+    img.src = url;
+  });
+}
+
+/**
+ * Compare multiple image URLs and return the one with highest resolution
+ * Returns the URL with the highest pixel count (width * height)
+ */
+export async function getBestResolutionImage(
+  imageUrls: (string | undefined | null)[]
+): Promise<string | null> {
+  const validUrls = imageUrls.filter((url): url is string => !!url);
+
+  if (validUrls.length === 0) return null;
+  if (validUrls.length === 1) return validUrls[0];
+
+  const dimensionsPromises = validUrls.map(async (url) => {
+    const dims = await getImageDimensions(url);
+    return { url, dims };
+  });
+
+  const results = await Promise.all(dimensionsPromises);
+
+  let bestUrl = validUrls[0]; // Default to first valid URL
+  let bestPixels = 0;
+
+  for (const { url, dims } of results) {
+    if (dims) {
+      const pixels = dims.width * dims.height;
+      if (pixels > bestPixels) {
+        bestPixels = pixels;
+        bestUrl = url;
+      }
+    }
+  }
+
+  return bestUrl;
+}
+
+/**
+ * Convert a file to base64 data URL
+ */
+export function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      resolve(reader.result as string);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}

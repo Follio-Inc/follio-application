@@ -16,12 +16,13 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import { ChevronLeft, ExternalLink, Eye, PanelLeft, PanelLeftClose, Share2 } from 'lucide-react';
+import { ChevronLeft, Download, PanelLeft, PanelLeftClose, Share2 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
-import { Button } from '@/components/ui/button';
+import { ImportDataDialog } from './components/import-data-dialog';
+
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
@@ -42,6 +43,7 @@ export function BuilderLayoutClient({ profile, children }: BuilderLayoutClientPr
   const [sections, setSections] = useState<ProfileSection[]>(profile.sections || []);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
 
   // DnD sensors
   const sensors = useSensors(
@@ -222,13 +224,32 @@ export function BuilderLayoutClient({ profile, children }: BuilderLayoutClientPr
             className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
           >
             <ChevronLeft className="h-4 w-4" />
-            View Profile
+            Back
           </Link>
           {isSaving && <span className="text-xs text-muted-foreground">Saving...</span>}
         </div>
 
         {/* Section List with Drag & Drop */}
         <ScrollArea className="flex-1 p-2">
+          {/* Import & Sync Section */}
+          <nav className="space-y-1">
+            <button
+              onClick={() => setImportDialogOpen(true)}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-muted"
+            >
+              <Download className="h-4 w-4 shrink-0" />
+              <div className="flex flex-col">
+                <span className="text-sm font-medium">Import & Sync</span>
+                <span className="text-xs text-muted-foreground">
+                  Pull from LinkedIn, GitHub, Resume
+                </span>
+              </div>
+            </button>
+          </nav>
+
+          <Separator className="my-3" />
+
+          {/* Profile Sections */}
           <DndContext
             id="builder-sections-dnd"
             sensors={sensors}
@@ -271,22 +292,34 @@ export function BuilderLayoutClient({ profile, children }: BuilderLayoutClientPr
                   : 'hover:bg-muted'
               )}
             >
-              <Share2 className="h-4 w-4" />
-              <span className="text-sm font-medium">Share & Publish</span>
+              <Share2 className="h-4 w-4 shrink-0" />
+              <div className="flex flex-col">
+                <span className="text-sm font-medium">Share & Publish</span>
+                <span
+                  className={cn(
+                    'text-xs',
+                    pathname === '/builder/share'
+                      ? 'text-primary-foreground/70'
+                      : 'text-muted-foreground'
+                  )}
+                >
+                  Get your public profile link
+                </span>
+              </div>
             </Link>
           </nav>
         </ScrollArea>
 
-        {/* Sidebar Footer */}
-        <div className="border-t p-4">
-          <Link href={`/u/${profile.handle}`} target="_blank">
-            <Button variant="outline" size="sm" className="w-full gap-2">
-              <Eye className="h-4 w-4" />
-              Preview Profile
-              <ExternalLink className="h-3 w-3" />
-            </Button>
-          </Link>
-        </div>
+        {/* Import Data Dialog */}
+        <ImportDataDialog
+          open={importDialogOpen}
+          onOpenChange={setImportDialogOpen}
+          profileId={profile.id}
+          onImportComplete={() => {
+            // Refresh the page to show updated data
+            router.refresh();
+          }}
+        />
       </aside>
 
       {/* Toggle Sidebar Button */}
