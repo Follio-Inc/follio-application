@@ -168,7 +168,7 @@ export function ContactInfoForm({ profile, onContactUpdate }: ContactInfoFormPro
   const additionalEmails: AdditionalEmail[] = (() => {
     try {
       const raw = profile.contactInfo?.additionalEmails;
-      if (Array.isArray(raw)) return raw as AdditionalEmail[];
+      if (Array.isArray(raw)) return raw as unknown as AdditionalEmail[];
       if (typeof raw === 'string') return JSON.parse(raw) as AdditionalEmail[];
       return [];
     } catch {

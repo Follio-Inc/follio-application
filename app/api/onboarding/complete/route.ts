@@ -59,6 +59,7 @@ interface ReviewedData {
   }>;
   contactInfo?: {
     email?: string;
+    emailSource?: string;
     phone?: string;
   };
 }
@@ -673,6 +674,7 @@ function mergeImportedData(importedData: Record<string, unknown>) {
     location?: string;
     avatarUrl?: string;
     email?: string;
+    emailSource?: string;
     phone?: string;
     website?: string;
     firstNameSource?: string;
