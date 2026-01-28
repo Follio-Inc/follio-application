@@ -258,8 +258,6 @@ export function ShareSection({ profile, onUpdateAction }: ShareSectionProps) {
   const tokenUrl =
     shareToken?.token && origin ? `${origin}/u/${profile.handle}?token=${shareToken.token}` : null;
 
-  const displayUrl = profile.status === 'PRIVATE' && tokenUrl ? tokenUrl : publicUrl;
-
   const qrCodeUrl = profile.status === 'PRIVATE' && tokenUrl ? tokenUrl : publicUrl;
 
   return (
@@ -527,6 +525,7 @@ export function ShareSection({ profile, onUpdateAction }: ShareSectionProps) {
                 ref={qrRef}
                 className="flex h-40 w-40 items-center justify-center rounded-lg border bg-white p-2"
               >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrCodeUrl)}`}
                   alt="QR Code"

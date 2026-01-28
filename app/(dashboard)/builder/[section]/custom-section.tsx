@@ -36,7 +36,7 @@ const emptyItem: Partial<CustomSectionItem> = {
   tags: [],
 };
 
-export function CustomSection({ section, profileId }: CustomSectionProps) {
+export function CustomSection({ section }: CustomSectionProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<CustomSectionItem | null>(null);
   const [formData, setFormData] = useState<Partial<CustomSectionItem>>(emptyItem);

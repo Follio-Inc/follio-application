@@ -35,7 +35,7 @@ const emptyItem: Partial<VolunteeringItem> = {
   url: '',
 };
 
-export function VolunteeringSection({ section, profileId }: VolunteeringSectionProps) {
+export function VolunteeringSection({ section }: VolunteeringSectionProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<VolunteeringItem | null>(null);
   const [formData, setFormData] = useState<Partial<VolunteeringItem>>(emptyItem);

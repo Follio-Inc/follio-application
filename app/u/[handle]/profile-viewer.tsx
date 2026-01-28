@@ -1,6 +1,7 @@
 'use client';
 
 import { AnimatePresence, motion } from 'framer-motion';
+import Link from 'next/link';
 import { useState } from 'react';
 
 import { ViewSwitcher } from './view-switcher';
@@ -49,9 +50,9 @@ export function ProfileViewer({ profile, initialView }: ProfileViewerProps) {
         <div className="container text-center text-sm text-muted-foreground">
           <p>
             Built with{' '}
-            <a href="/" className="font-medium text-primary hover:underline">
+            <Link href="/" className="font-medium text-primary hover:underline">
               Follio
-            </a>{' '}
+            </Link>{' '}
             — Your professional identity, everywhere.
           </p>
         </div>

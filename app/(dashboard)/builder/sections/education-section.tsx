@@ -1,22 +1,22 @@
 'use client';
 
+import { GripVertical, Loader2, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import { Plus, Trash2, GripVertical, Loader2 } from 'lucide-react';
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogFooter,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
 
 import type { Education } from '@/types';
 
@@ -40,7 +40,7 @@ const emptyEducation: Partial<Education> = {
   honors: [],
 };
 
-export function EducationSection({ educations, profileId, onUpdate }: EducationSectionProps) {
+export function EducationSection({ educations, onUpdate }: EducationSectionProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingEducation, setEditingEducation] = useState<Education | null>(null);
   const [formData, setFormData] = useState<Partial<Education>>(emptyEducation);
@@ -296,7 +296,7 @@ export function EducationSection({ educations, profileId, onUpdate }: EducationS
       <CardContent>
         {educations.length === 0 ? (
           <div className="py-8 text-center text-muted-foreground">
-            No education added yet. Click "Add Education" to get started.
+            No education added yet. Click &quot;Add Education&quot; to get started.
           </div>
         ) : (
           <div className="space-y-4">

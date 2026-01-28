@@ -1,23 +1,23 @@
 'use client';
 
+import { ExternalLink, Github, GripVertical, Loader2, Plus, Star, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import { Plus, Trash2, GripVertical, Star, ExternalLink, Github, Loader2 } from 'lucide-react';
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogFooter,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
 
 import type { Project } from '@/types';
 
@@ -42,7 +42,7 @@ const emptyProject: Partial<Project> = {
   featured: false,
 };
 
-export function ProjectsSection({ projects, profileId, onUpdate }: ProjectsSectionProps) {
+export function ProjectsSection({ projects, onUpdate }: ProjectsSectionProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [formData, setFormData] = useState<Partial<Project>>(emptyProject);
@@ -376,7 +376,7 @@ export function ProjectsSection({ projects, profileId, onUpdate }: ProjectsSecti
       <CardContent>
         {projects.length === 0 ? (
           <div className="py-8 text-center text-muted-foreground">
-            No projects added yet. Click "Add Project" to get started.
+            No projects added yet. Click &quot;Add Project&quot; to get started.
           </div>
         ) : (
           <div className="space-y-4">

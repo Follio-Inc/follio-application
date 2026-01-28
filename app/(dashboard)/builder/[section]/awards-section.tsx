@@ -32,7 +32,7 @@ const emptyAward: Partial<AwardType> = {
   url: '',
 };
 
-export function AwardsSection({ awards, profileId, onUpdate }: AwardsSectionProps) {
+export function AwardsSection({ awards, onUpdate }: AwardsSectionProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingAward, setEditingAward] = useState<AwardType | null>(null);
   const [formData, setFormData] = useState<Partial<AwardType>>(emptyAward);

@@ -33,7 +33,7 @@ const emptyItem: Partial<PublicationItem> = {
   doi: '',
 };
 
-export function PublicationsSection({ section, profileId }: PublicationsSectionProps) {
+export function PublicationsSection({ section }: PublicationsSectionProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<PublicationItem | null>(null);
   const [formData, setFormData] = useState<Partial<PublicationItem>>(emptyItem);

@@ -49,13 +49,8 @@ interface ImportDataDialogProps {
   onImportComplete: () => void;
 }
 
-export function ImportDataDialog({
-  open,
-  onOpenChange,
-  profileId,
-  onImportComplete,
-}: ImportDataDialogProps) {
-  const { user, isLoaded: isUserLoaded } = useUser();
+export function ImportDataDialog({ open, onOpenChange, onImportComplete }: ImportDataDialogProps) {
+  const { user } = useUser();
 
   // GitHub OAuth states
   const [githubConnecting, setGithubConnecting] = useState(false);

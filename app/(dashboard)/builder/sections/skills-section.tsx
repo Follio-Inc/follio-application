@@ -1,13 +1,13 @@
 'use client';
 
+import { Loader2, Plus, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
-import { Plus, Trash2, X, Loader2 } from 'lucide-react';
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import {
   Select,
   SelectContent,
@@ -25,7 +25,7 @@ interface SkillsSectionProps {
   onUpdate: (skills: Skill[], skillGroups: (SkillGroup & { skills: Skill[] })[]) => void;
 }
 
-export function SkillsSection({ skills, skillGroups, profileId, onUpdate }: SkillsSectionProps) {
+export function SkillsSection({ skills, skillGroups, onUpdate }: SkillsSectionProps) {
   const [newSkillName, setNewSkillName] = useState('');
   const [newSkillLevel, setNewSkillLevel] = useState<string>('');
   const [newGroupName, setNewGroupName] = useState('');

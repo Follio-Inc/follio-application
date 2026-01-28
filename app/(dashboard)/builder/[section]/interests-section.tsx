@@ -43,7 +43,7 @@ const emptyItem: Partial<InterestItem> = {
   category: '',
 };
 
-export function InterestsSection({ section, profileId }: InterestsSectionProps) {
+export function InterestsSection({ section }: InterestsSectionProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InterestItem | null>(null);
   const [formData, setFormData] = useState<Partial<InterestItem>>(emptyItem);

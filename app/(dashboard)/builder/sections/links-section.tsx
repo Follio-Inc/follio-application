@@ -1,25 +1,30 @@
 'use client';
 
-import { useState } from 'react';
 import {
-  Plus,
-  Trash2,
-  GripVertical,
   ExternalLink,
   Github,
-  Linkedin,
-  Twitter,
   Globe,
-  Mail,
-  Youtube,
-  Instagram,
-  Facebook,
+  GripVertical,
+  Linkedin,
   Link as LinkIcon,
   Loader2,
+  Plus,
+  Trash2,
+  Twitter,
+  Youtube,
 } from 'lucide-react';
+import { useState } from 'react';
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -29,14 +34,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogFooter,
-} from '@/components/ui/dialog';
 
 import type { Link } from '@/types';
 
@@ -69,7 +66,7 @@ const emptyLink: Partial<Link> = {
   url: '',
 };
 
-export function LinksSection({ links, profileId, onUpdate }: LinksSectionProps) {
+export function LinksSection({ links, onUpdate }: LinksSectionProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingLink, setEditingLink] = useState<Link | null>(null);
   const [formData, setFormData] = useState<Partial<Link>>(emptyLink);
@@ -283,7 +280,7 @@ export function LinksSection({ links, profileId, onUpdate }: LinksSectionProps) 
       <CardContent>
         {links.length === 0 ? (
           <div className="py-8 text-center text-muted-foreground">
-            No links added yet. Click "Add Link" to connect your social profiles.
+            No links added yet. Click &quot;Add Link&quot; to connect your social profiles.
           </div>
         ) : (
           <div className="space-y-2">

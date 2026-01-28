@@ -114,6 +114,7 @@ export function PortfolioView({ profile }: PortfolioViewProps) {
                 <Card className="group overflow-hidden">
                   {project.imageUrl && (
                     <div className="relative aspect-video overflow-hidden">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={project.imageUrl}
                         alt={project.title}

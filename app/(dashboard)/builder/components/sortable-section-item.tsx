@@ -199,8 +199,8 @@ export function SortableSectionItem({
                     <span className="text-destructive">{deleteError}</span>
                   ) : (
                     <>
-                      Are you sure you want to delete the "{section.title}" section? This action
-                      cannot be undone.
+                      Are you sure you want to delete the &quot;{section.title}&quot; section? This
+                      action cannot be undone.
                       <br />
                       <br />
                       <strong>Note:</strong> You can only delete empty sections. If you want to keep

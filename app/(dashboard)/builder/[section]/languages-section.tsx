@@ -43,7 +43,7 @@ const emptyItem: Partial<LanguageItem> = {
   proficiency: 'INTERMEDIATE',
 };
 
-export function LanguagesSection({ section, profileId }: LanguagesSectionProps) {
+export function LanguagesSection({ section }: LanguagesSectionProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<LanguageItem | null>(null);
   const [formData, setFormData] = useState<Partial<LanguageItem>>(emptyItem);

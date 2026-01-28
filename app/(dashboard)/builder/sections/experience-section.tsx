@@ -1,12 +1,20 @@
 'use client';
 
+import { GripVertical, Loader2, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import { Plus, Trash2, GripVertical, Loader2 } from 'lucide-react';
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -16,15 +24,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { Badge } from '@/components/ui/badge';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogFooter,
-} from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 
 import type { WorkExperience } from '@/types';
 
@@ -48,7 +48,7 @@ const emptyExperience: Partial<WorkExperience> = {
   tags: [],
 };
 
-export function ExperienceSection({ experiences, profileId, onUpdate }: ExperienceSectionProps) {
+export function ExperienceSection({ experiences, onUpdate }: ExperienceSectionProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingExperience, setEditingExperience] = useState<WorkExperience | null>(null);
   const [formData, setFormData] = useState<Partial<WorkExperience>>(emptyExperience);
@@ -248,7 +248,10 @@ export function ExperienceSection({ experiences, profileId, onUpdate }: Experien
                   <Select
                     value={formData.locationType || ''}
                     onValueChange={(value) =>
-                      setFormData((prev) => ({ ...prev, locationType: value as any }))
+                      setFormData((prev) => ({
+                        ...prev,
+                        locationType: value as WorkExperience['locationType'],
+                      }))
                     }
                   >
                     <SelectTrigger>
@@ -269,7 +272,10 @@ export function ExperienceSection({ experiences, profileId, onUpdate }: Experien
                   <Select
                     value={formData.employmentType || ''}
                     onValueChange={(value) =>
-                      setFormData((prev) => ({ ...prev, employmentType: value as any }))
+                      setFormData((prev) => ({
+                        ...prev,
+                        employmentType: value as WorkExperience['employmentType'],
+                      }))
                     }
                   >
                     <SelectTrigger>
@@ -415,7 +421,7 @@ export function ExperienceSection({ experiences, profileId, onUpdate }: Experien
       <CardContent>
         {experiences.length === 0 ? (
           <div className="py-8 text-center text-muted-foreground">
-            No work experience added yet. Click "Add Experience" to get started.
+            No work experience added yet. Click &quot;Add Experience&quot; to get started.
           </div>
         ) : (
           <div className="space-y-4">

@@ -48,12 +48,7 @@ const SECTION_TITLES: Record<string, string> = {
   SHARE: 'Share & Publish',
 };
 
-export function SectionEditor({
-  profile,
-  sectionType,
-  section,
-  customSectionId,
-}: SectionEditorProps) {
+export function SectionEditor({ profile, sectionType, section }: SectionEditorProps) {
   const [currentProfile, setCurrentProfile] = useState(profile);
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);

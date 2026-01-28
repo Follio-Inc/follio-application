@@ -148,7 +148,7 @@ export default async function HomePage() {
               <h2 className="mb-4 text-3xl font-bold">100% correct parsing, guaranteed</h2>
               <p className="mb-6 text-lg text-muted-foreground">
                 No more broken exports. Your data is structured from the start, so exports are
-                always accurate — whether it's JSON, plain text, or PDF.
+                always accurate — whether it&apos;s JSON, plain text, or PDF.
               </p>
               <ul className="space-y-3">
                 {[
@@ -195,8 +195,8 @@ export default async function HomePage() {
         <div className="text-center">
           <h2 className="mb-4 text-3xl font-bold">Import from anywhere</h2>
           <p className="mx-auto mb-12 max-w-2xl text-muted-foreground">
-            Upload your existing resume, connect GitHub, or start fresh. We'll help you build your
-            canonical profile.
+            Upload your existing resume, connect GitHub, or start fresh. We&apos;ll help you build
+            your canonical profile.
           </p>
           <div className="mx-auto grid max-w-3xl gap-6 md:grid-cols-3">
             <div className="rounded-2xl border bg-card p-6 text-center">

@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 import { db } from '@/lib/db';
-import { SkillSchema, SkillGroupSchema } from '@/lib/validations';
+import { SkillSchema } from '@/lib/validations';
 import { z } from 'zod';
 
 /**

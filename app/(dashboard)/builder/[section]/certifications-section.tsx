@@ -32,11 +32,7 @@ const emptyCertification: Partial<Certification> = {
   expirationDate: undefined,
 };
 
-export function CertificationsSection({
-  certifications,
-  profileId,
-  onUpdate,
-}: CertificationsSectionProps) {
+export function CertificationsSection({ certifications, onUpdate }: CertificationsSectionProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCertification, setEditingCertification] = useState<Certification | null>(null);
   const [formData, setFormData] = useState<Partial<Certification>>(emptyCertification);

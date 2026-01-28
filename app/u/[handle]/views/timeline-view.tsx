@@ -9,6 +9,8 @@ import {
   FolderKanban,
   GraduationCap,
   LayoutGrid,
+  Mail,
+  MapPin,
 } from 'lucide-react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';

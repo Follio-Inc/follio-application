@@ -62,7 +62,8 @@ export function BuilderLayoutClient({ profile, children }: BuilderLayoutClientPr
     if (!sections.length) {
       fetchSections();
     }
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sections.length]);
 
   const fetchSections = async () => {
     try {

@@ -55,7 +55,7 @@ const THEME_OPTIONS: {
   },
 ];
 
-export function SettingsSection({ profile, onUpdate }: SettingsSectionProps) {
+export function SettingsSection({ profile }: SettingsSectionProps) {
   const [theme, setTheme] = useState<ThemeMode>('system');
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [profileViewAlerts, setProfileViewAlerts] = useState(false);

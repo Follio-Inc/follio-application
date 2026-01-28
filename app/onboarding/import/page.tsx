@@ -564,7 +564,7 @@ export default function OnboardingImportPage() {
       setUploadedPhoto(base64);
       setUploadedPhotoPreview(base64);
       setIsUploadingPhoto(false);
-    } catch (err) {
+    } catch {
       setError('Failed to process image');
       setIsUploadingPhoto(false);
     }
@@ -591,14 +591,6 @@ export default function OnboardingImportPage() {
     if (githubProfile?.avatarUrl) return githubProfile.avatarUrl as string;
 
     return null;
-  };
-
-  // Count imported items for display
-  const countImportedItems = (data: Record<string, unknown> | undefined): number => {
-    if (!data) return 0;
-    const summary = data.summary as Record<string, number> | undefined;
-    if (!summary) return 0;
-    return Object.values(summary).reduce((acc, val) => acc + (val || 0), 0);
   };
 
   // Create profile and continue
