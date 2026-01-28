@@ -148,15 +148,9 @@ function ReviewPageContent() {
       try {
         // Try to get data from sessionStorage
         const storedData = sessionStorage.getItem('onboarding_parsed_resume');
-        console.log('[Review] Loaded from sessionStorage:', storedData ? 'yes' : 'no');
 
         if (storedData) {
           const parsed = JSON.parse(storedData);
-          console.log('[Review] Parsed data:', parsed);
-          console.log('[Review] Profile:', parsed.profile);
-          console.log('[Review] Experiences:', parsed.experiences?.length || 0);
-          console.log('[Review] Educations:', parsed.educations?.length || 0);
-          console.log('[Review] Skills:', parsed.skills?.length || 0);
 
           // Transform to our format with IDs and convert dates to YYYY-MM format
           const transformedData: ReviewData = {

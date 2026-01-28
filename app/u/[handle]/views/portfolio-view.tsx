@@ -1,11 +1,11 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { ExternalLink, Github, Star, ArrowUpRight } from 'lucide-react';
+import { ArrowUpRight, ExternalLink, Github, Mail, MapPin, Star } from 'lucide-react';
 
-import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
 
 import type { PublicProfile } from '@/types';
 
@@ -48,6 +48,27 @@ export function PortfolioView({ profile }: PortfolioViewProps) {
           )}
           {profile.summary && (
             <p className="mx-auto mt-4 max-w-2xl text-muted-foreground">{profile.summary}</p>
+          )}
+
+          {/* Contact Info */}
+          {(profile.location || profile.contactInfo?.email) && (
+            <div className="mt-4 flex flex-wrap justify-center gap-4 text-sm text-muted-foreground">
+              {profile.location && (
+                <span className="flex items-center gap-1">
+                  <MapPin className="h-4 w-4" />
+                  {profile.location}
+                </span>
+              )}
+              {profile.contactInfo?.email && (
+                <a
+                  href={`mailto:${profile.contactInfo.email}`}
+                  className="flex items-center gap-1 hover:text-primary"
+                >
+                  <Mail className="h-4 w-4" />
+                  {profile.contactInfo.email}
+                </a>
+              )}
+            </div>
           )}
         </motion.div>
 

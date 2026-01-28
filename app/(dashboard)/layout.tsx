@@ -1,5 +1,5 @@
 import { UserButton } from '@clerk/nextjs';
-import { Eye, Settings } from 'lucide-react';
+import { Eye } from 'lucide-react';
 import Link from 'next/link';
 
 import { Logo } from '@/components/Logo';
@@ -17,11 +17,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <Button variant="outline" size="sm" className="gap-2">
                 <Eye className="h-4 w-4" />
                 Your Follio
-              </Button>
-            </Link>
-            <Link href="/settings">
-              <Button variant="ghost" size="icon">
-                <Settings className="h-4 w-4" />
               </Button>
             </Link>
             <UserButton

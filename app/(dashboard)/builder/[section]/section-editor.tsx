@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 
-import { BasicInfoForm } from '../sections/basic-info-form';
+import { BasicInfoForm, ContactInfoForm } from '../sections/basic-info-form';
 import { EducationSection } from '../sections/education-section';
 import { ExperienceSection } from '../sections/experience-section';
 import { LinksSection } from '../sections/links-section';
@@ -32,6 +32,7 @@ interface SectionEditorProps {
 
 const SECTION_TITLES: Record<string, string> = {
   BASIC_INFO: 'Basic Info',
+  CONTACT: 'Contact',
   EXPERIENCE: 'Work Experience',
   EDUCATION: 'Education',
   SKILLS: 'Skills',
@@ -56,39 +57,71 @@ export function SectionEditor({
   const [currentProfile, setCurrentProfile] = useState(profile);
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [hasContactChanges, setHasContactChanges] = useState(false);
+
+  // Contact info state
+  const [contactInfo, setContactInfo] = useState({
+    email: profile.contactInfo?.email || '',
+    emailPublic: profile.contactInfo?.emailPublic || false,
+    phone: profile.contactInfo?.phone || '',
+    phonePublic: profile.contactInfo?.phonePublic || false,
+    website: profile.contactInfo?.website || '',
+  });
 
   const handleProfileUpdate = (updates: Partial<FullProfile>) => {
     setCurrentProfile((prev) => ({ ...prev, ...updates }));
     setHasChanges(true);
   };
 
+  const handleContactUpdate = (updates: Partial<typeof contactInfo>) => {
+    setContactInfo((prev) => ({ ...prev, ...updates }));
+    setHasContactChanges(true);
+  };
+
   const handleSave = async () => {
-    if (sectionType !== 'BASIC_INFO') {
-      // For non-basic info sections, changes are saved inline
+    if (sectionType !== 'BASIC_INFO' && sectionType !== 'CONTACT') {
+      // For other sections, changes are saved inline
       return;
     }
 
     setIsSaving(true);
     try {
-      const response = await fetch('/api/profile', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          firstName: currentProfile.firstName,
-          lastName: currentProfile.lastName,
-          headline: currentProfile.headline,
-          summary: currentProfile.summary,
-          location: currentProfile.location,
-          avatarUrl: currentProfile.avatarUrl,
-          status: currentProfile.status,
-        }),
-      });
+      // Save profile info (for BASIC_INFO)
+      if (sectionType === 'BASIC_INFO' && hasChanges) {
+        const response = await fetch('/api/profile', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            firstName: currentProfile.firstName,
+            lastName: currentProfile.lastName,
+            headline: currentProfile.headline,
+            summary: currentProfile.summary,
+            location: currentProfile.location,
+            avatarUrl: currentProfile.avatarUrl,
+            status: currentProfile.status,
+          }),
+        });
 
-      if (!response.ok) {
-        throw new Error('Failed to save');
+        if (!response.ok) {
+          throw new Error('Failed to save profile');
+        }
+      }
+
+      // Save contact info (for CONTACT section)
+      if (sectionType === 'CONTACT' && hasContactChanges) {
+        const contactResponse = await fetch('/api/profile/contact', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(contactInfo),
+        });
+
+        if (!contactResponse.ok) {
+          throw new Error('Failed to save contact info');
+        }
       }
 
       setHasChanges(false);
+      setHasContactChanges(false);
     } catch (error) {
       console.error('Save error:', error);
     } finally {
@@ -100,6 +133,9 @@ export function SectionEditor({
     switch (sectionType) {
       case 'BASIC_INFO':
         return <BasicInfoForm profile={currentProfile} onUpdate={handleProfileUpdate} />;
+
+      case 'CONTACT':
+        return <ContactInfoForm profile={currentProfile} onContactUpdate={handleContactUpdate} />;
 
       case 'EXPERIENCE':
         return (
@@ -206,13 +242,19 @@ export function SectionEditor({
           <p className="text-muted-foreground">
             {sectionType === 'BASIC_INFO'
               ? 'Update your basic profile information'
-              : sectionType === 'SHARE'
-                ? 'Control visibility and share your profile'
-                : 'Add, edit, or remove items'}
+              : sectionType === 'CONTACT'
+                ? 'Manage your contact information and visibility'
+                : sectionType === 'SHARE'
+                  ? 'Control visibility and share your profile'
+                  : 'Add, edit, or remove items'}
           </p>
         </div>
-        {sectionType === 'BASIC_INFO' && (
-          <Button onClick={handleSave} disabled={isSaving || !hasChanges} className="gap-2">
+        {(sectionType === 'BASIC_INFO' || sectionType === 'CONTACT') && (
+          <Button
+            onClick={handleSave}
+            disabled={isSaving || (sectionType === 'BASIC_INFO' ? !hasChanges : !hasContactChanges)}
+            className="gap-2"
+          >
             {isSaving ? <Spinner size="sm" /> : <Save className="h-4 w-4" />}
             {isSaving ? 'Saving...' : 'Save Changes'}
           </Button>

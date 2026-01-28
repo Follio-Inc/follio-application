@@ -84,12 +84,15 @@ export function ShareSection({ profile, onUpdateAction }: ShareSectionProps) {
   const [shareToken, setShareToken] = useState<ShareTokenData | null>(null);
   const [isLoadingToken, setIsLoadingToken] = useState(false);
   const [isGeneratingToken, setIsGeneratingToken] = useState(false);
+  const [origin, setOrigin] = useState('');
   const qrRef = useRef<HTMLDivElement>(null);
 
-  const publicUrl =
-    typeof window !== 'undefined'
-      ? `${window.location.origin}/u/${profile.handle}`
-      : `/u/${profile.handle}`;
+  // Set origin on client side to avoid hydration mismatch
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
+
+  const publicUrl = origin ? `${origin}/u/${profile.handle}` : `/u/${profile.handle}`;
 
   // Fetch share token on mount and when status changes to PRIVATE
   useEffect(() => {
@@ -152,8 +155,8 @@ export function ShareSection({ profile, onUpdateAction }: ShareSectionProps) {
   };
 
   const handleCopyTokenUrl = async () => {
-    if (!shareToken?.token) return;
-    const tokenUrl = `${window.location.origin}/u/${profile.handle}?token=${shareToken.token}`;
+    if (!shareToken?.token || !origin) return;
+    const tokenUrl = `${origin}/u/${profile.handle}?token=${shareToken.token}`;
     await navigator.clipboard.writeText(tokenUrl);
     setCopiedToken(true);
     setTimeout(() => setCopiedToken(false), 2000);
@@ -252,9 +255,8 @@ export function ShareSection({ profile, onUpdateAction }: ShareSectionProps) {
   const StatusIcon = currentStatus.icon;
 
   // Determine which URL to show based on status
-  const tokenUrl = shareToken?.token
-    ? `${typeof window !== 'undefined' ? window.location.origin : ''}/u/${profile.handle}?token=${shareToken.token}`
-    : null;
+  const tokenUrl =
+    shareToken?.token && origin ? `${origin}/u/${profile.handle}?token=${shareToken.token}` : null;
 
   const displayUrl = profile.status === 'PRIVATE' && tokenUrl ? tokenUrl : publicUrl;
 

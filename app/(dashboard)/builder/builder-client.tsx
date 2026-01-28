@@ -6,6 +6,7 @@ import {
   Briefcase,
   Check,
   Code,
+  Contact,
   Download,
   ExternalLink,
   Eye,
@@ -15,6 +16,7 @@ import {
   Loader2,
   Save,
   Settings,
+  Share2,
   User,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -34,6 +36,7 @@ import { ExperienceSection } from './sections/experience-section';
 import { LinksSection } from './sections/links-section';
 import { ProjectsSection } from './sections/projects-section';
 import { SettingsSection } from './sections/settings-section';
+import { ShareSection } from './sections/share-section';
 import { SkillsSection } from './sections/skills-section';
 
 import type { FullProfile } from '@/types';
@@ -46,11 +49,13 @@ interface BuilderClientProps {
 
 const sections = [
   { id: 'basic', label: 'Basic Info', icon: User },
+  { id: 'contact', label: 'Contact', icon: Contact },
   { id: 'experience', label: 'Experience', icon: Briefcase },
   { id: 'education', label: 'Education', icon: GraduationCap },
   { id: 'skills', label: 'Skills', icon: Code },
   { id: 'projects', label: 'Projects', icon: FolderKanban },
   { id: 'links', label: 'Links', icon: LinkIcon },
+  { id: 'share', label: 'Share & Publish', icon: Share2 },
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
@@ -427,10 +432,11 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
             transition={{ duration: 0.2 }}
           >
             {activeSection === 'basic' && (
-              <div className="space-y-6">
-                <BasicInfoForm profile={profile} onUpdate={handleProfileUpdate} />
-                <ContactInfoForm profile={profile} onContactUpdate={handleContactUpdate} />
-              </div>
+              <BasicInfoForm profile={profile} onUpdate={handleProfileUpdate} />
+            )}
+
+            {activeSection === 'contact' && (
+              <ContactInfoForm profile={profile} onContactUpdate={handleContactUpdate} />
             )}
 
             {activeSection === 'experience' && (
@@ -472,6 +478,10 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
                 profileId={profile.id}
                 onUpdate={(links) => handleProfileUpdate({ links })}
               />
+            )}
+
+            {activeSection === 'share' && (
+              <ShareSection profile={profile} onUpdateAction={handleProfileUpdate} />
             )}
 
             {activeSection === 'settings' && (

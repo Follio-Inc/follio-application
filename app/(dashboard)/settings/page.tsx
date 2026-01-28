@@ -1,4 +1,4 @@
-import { UnderConstruction } from '@/components/UnderConstruction';
+import { redirect } from 'next/navigation';
 
 export const metadata = {
   title: 'Settings - Follio',
@@ -6,11 +6,6 @@ export const metadata = {
 };
 
 export default function SettingsPage() {
-  return (
-    <UnderConstruction
-      title="Settings"
-      description="Account settings and preferences are coming soon. You'll be able to customize your experience here."
-      showHomeButton={false}
-    />
-  );
+  // Redirect to builder settings section
+  redirect('/builder?section=settings');
 }

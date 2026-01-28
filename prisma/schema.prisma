@@ -155,6 +155,7 @@ model ProfileSection {
 
 enum SectionType {
   BASIC_INFO
+  CONTACT
   EXPERIENCE
   EDUCATION
   SKILLS

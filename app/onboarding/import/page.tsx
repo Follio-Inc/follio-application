@@ -111,20 +111,6 @@ export default function OnboardingImportPage() {
       ? `${connectedLinkedin.firstName} ${connectedLinkedin.lastName}`
       : (connectedLinkedin?.username ?? null);
 
-  // Debug: Log external accounts when user is loaded
-  useEffect(() => {
-    if (isUserLoaded && user) {
-      console.log(
-        '[Onboarding] External accounts:',
-        user.externalAccounts?.map((a) => ({
-          provider: a.provider,
-          username: a.username,
-          firstName: a.firstName,
-        }))
-      );
-    }
-  }, [isUserLoaded, user]);
-
   // Save import state to sessionStorage (used before OAuth redirects)
   const saveImportState = useCallback(() => {
     const storageKey = getStorageKey(user?.id);
@@ -617,9 +603,6 @@ export default function OnboardingImportPage() {
 
   // Create profile and continue
   const handleContinue = async () => {
-    console.log('[Import] handleContinue called');
-    console.log('[Import] importedData.resume:', importedData.resume);
-
     // Collect all possible avatar URLs
     const linkedinData = importedData.linkedin as Record<string, unknown> | undefined;
     const githubData = importedData.github as Record<string, unknown> | undefined;
@@ -637,24 +620,18 @@ export default function OnboardingImportPage() {
         githubProfile?.avatarUrl as string | undefined,
       ];
 
-      console.log('[Import] Avatar candidates:', avatarCandidates);
-
       // Get best resolution image from URLs
       bestAvatarUrl = await getBestResolutionImage(avatarCandidates);
-      console.log('[Import] Best resolution avatar:', bestAvatarUrl);
     }
 
     // If we have resume data, go to review flow
     if (importedData.resume) {
-      console.log('[Import] Storing resume data in sessionStorage and redirecting to review');
-
       // Merge avatar from best source
       const resumeData = importedData.resume as Record<string, unknown>;
       const profile = (resumeData.profile as Record<string, unknown>) || {};
 
       if (!profile.avatarUrl && bestAvatarUrl) {
         profile.avatarUrl = bestAvatarUrl;
-        console.log('[Import] Using best resolution avatar:', profile.avatarUrl);
       }
 
       // Store merged data in sessionStorage for the review page

@@ -9,6 +9,7 @@ import type { SectionType } from '@prisma/client';
 // Default sections for new users
 const DEFAULT_SECTION_CONFIGS: { type: SectionType; title: string }[] = [
   { type: 'BASIC_INFO', title: 'Basic Info' },
+  { type: 'CONTACT', title: 'Contact' },
   { type: 'EXPERIENCE', title: 'Experience' },
   { type: 'EDUCATION', title: 'Education' },
   { type: 'SKILLS', title: 'Skills' },

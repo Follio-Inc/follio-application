@@ -12,6 +12,7 @@ function serializeForClient<T>(data: T): T {
 // Map URL slugs to section types
 const SLUG_TO_SECTION: Record<string, string> = {
   'basic-info': 'BASIC_INFO',
+  contact: 'CONTACT',
   experience: 'EXPERIENCE',
   education: 'EDUCATION',
   skills: 'SKILLS',

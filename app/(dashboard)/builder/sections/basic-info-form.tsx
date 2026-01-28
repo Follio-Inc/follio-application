@@ -5,7 +5,6 @@ import { Eye, EyeOff, Globe, Mail, Phone } from 'lucide-react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -14,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ProfileBasicInfoSchema, type ProfileBasicInfo } from '@/lib/validations';
 
 import type { FullProfile } from '@/types';
+import { ProfilePhotoUpload } from './profile-photo-upload';
 
 interface BasicInfoFormProps {
   profile: FullProfile;
@@ -45,25 +45,13 @@ export function BasicInfoForm({ profile, onUpdate }: BasicInfoFormProps) {
         <CardDescription>Your personal details and professional summary</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Avatar */}
-        <div className="flex items-center gap-6">
-          <Avatar className="h-20 w-20">
-            <AvatarImage src={form.watch('avatarUrl') || undefined} />
-            <AvatarFallback className="text-xl">
-              {profile.firstName?.[0]}
-              {profile.lastName?.[0]}
-            </AvatarFallback>
-          </Avatar>
-          <div className="flex-1 space-y-2">
-            <Label htmlFor="avatarUrl">Profile Photo URL</Label>
-            <Input
-              id="avatarUrl"
-              value={form.watch('avatarUrl')}
-              onChange={(e) => handleChange('avatarUrl', e.target.value)}
-              placeholder="https://example.com/avatar.jpg"
-            />
-          </div>
-        </div>
+        {/* Profile Photo */}
+        <ProfilePhotoUpload
+          currentPhotoUrl={form.watch('avatarUrl')}
+          initials={`${profile.firstName?.[0] || ''}${profile.lastName?.[0] || ''}`}
+          onPhotoChange={(url) => handleChange('avatarUrl', url)}
+          onPhotoRemove={() => handleChange('avatarUrl', '')}
+        />
 
         {/* Name */}
         <div className="grid gap-4 sm:grid-cols-2">

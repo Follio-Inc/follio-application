@@ -176,6 +176,26 @@ export function TimelineView({ profile }: TimelineViewProps) {
         {profile.headline && (
           <p className="mt-1 text-lg text-muted-foreground">{profile.headline}</p>
         )}
+        {/* Contact Info */}
+        {(profile.location || profile.contactInfo?.email) && (
+          <div className="mt-3 flex flex-wrap justify-center gap-4 text-sm text-muted-foreground">
+            {profile.location && (
+              <span className="flex items-center gap-1">
+                <MapPin className="h-4 w-4" />
+                {profile.location}
+              </span>
+            )}
+            {profile.contactInfo?.email && (
+              <a
+                href={`mailto:${profile.contactInfo.email}`}
+                className="flex items-center gap-1 hover:text-primary"
+              >
+                <Mail className="h-4 w-4" />
+                {profile.contactInfo.email}
+              </a>
+            )}
+          </div>
+        )}
         <p className="mt-2 text-sm text-muted-foreground">Career Timeline</p>
       </header>
 
