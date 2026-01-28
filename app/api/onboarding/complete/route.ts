@@ -225,15 +225,30 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // Create contact info
+      // Create contact info - signup email is always primary
+      // Imported emails go to additionalEmails
+      const signupEmail = user.email;
+      const importedEmail = mergedProfile.email;
+
+      // Build additionalEmails array from imported data
+      const additionalEmails: Array<{ email: string; source: string }> = [];
+      if (importedEmail && importedEmail.toLowerCase() !== signupEmail.toLowerCase()) {
+        additionalEmails.push({
+          email: importedEmail,
+          source: mergedProfile.emailSource || 'RESUME',
+        });
+      }
+
       await db.contactInfo.create({
         data: {
           profileId: profile.id,
-          email: mergedProfile.email,
+          email: signupEmail, // Signup email is always primary
+          emailSource: 'MANUAL',
           emailPublic: false,
           phone: mergedProfile.phone,
           phonePublic: false,
           website: mergedProfile.website,
+          additionalEmails: additionalEmails.length > 0 ? additionalEmails : undefined,
         },
       });
 
@@ -522,23 +537,38 @@ async function handleReviewedData(
     console.log('[handleReviewedData] Updated existing profile:', profileId);
   }
 
-  // Create contact info if provided
-  if (reviewedData.contactInfo?.email || reviewedData.contactInfo?.phone) {
-    await db.contactInfo.upsert({
-      where: { profileId },
-      create: {
-        profileId,
-        email: reviewedData.contactInfo.email,
-        emailPublic: false,
-        phone: reviewedData.contactInfo.phone,
-        phonePublic: false,
-      },
-      update: {
-        email: reviewedData.contactInfo.email,
-        phone: reviewedData.contactInfo.phone,
-      },
+  // Create contact info - signup email is always primary
+  // Imported emails go to additionalEmails
+  const signupEmail = user.email; // This is always the Clerk signup email
+  const importedEmail = reviewedData.contactInfo?.email;
+
+  // Build additionalEmails array from imported data
+  const additionalEmails: Array<{ email: string; source: string }> = [];
+  if (importedEmail && importedEmail.toLowerCase() !== signupEmail.toLowerCase()) {
+    additionalEmails.push({
+      email: importedEmail,
+      source: reviewedData.contactInfo?.emailSource || 'RESUME',
     });
   }
+
+  await db.contactInfo.upsert({
+    where: { profileId },
+    create: {
+      profileId,
+      email: signupEmail, // Signup email is always primary
+      emailSource: 'MANUAL', // Signup = MANUAL source
+      emailPublic: false,
+      phone: reviewedData.contactInfo?.phone,
+      phonePublic: false,
+      additionalEmails: additionalEmails.length > 0 ? additionalEmails : undefined,
+    },
+    update: {
+      // Don't overwrite primary email if it already exists
+      // Only update phone and add to additionalEmails
+      phone: reviewedData.contactInfo?.phone,
+      additionalEmails: additionalEmails.length > 0 ? additionalEmails : undefined,
+    },
+  });
 
   // Create skills
   if (reviewedData.skills?.length) {

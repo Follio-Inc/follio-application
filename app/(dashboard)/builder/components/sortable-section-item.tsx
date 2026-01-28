@@ -21,6 +21,7 @@ import {
   BookOpen,
   Briefcase,
   Code,
+  Contact,
   Eye,
   EyeOff,
   FolderKanban,
@@ -42,6 +43,7 @@ import type { ProfileSection, SectionType } from '@/types';
 // Icon mapping
 const SECTION_ICONS: Record<SectionType, React.ComponentType<{ className?: string }>> = {
   BASIC_INFO: User,
+  CONTACT: Contact,
   EXPERIENCE: Briefcase,
   EDUCATION: GraduationCap,
   SKILLS: Code,

@@ -819,23 +819,73 @@ export async function saveAIResumeToProfile(
       });
     }
 
-    // Update or create contact info
+    // Update or create contact info with intelligent email handling
     if (data.contactInfo?.email || data.contactInfo?.phone) {
+      // Get existing contact info to check if there's already a primary email
+      const existingContact = await db.contactInfo.findUnique({
+        where: { profileId },
+      });
+
+      const incomingEmail = data.contactInfo?.email?.toLowerCase();
+
+      interface AdditionalEmail {
+        email: string;
+        source: string;
+      }
+
+      let emailToSet = existingContact?.email;
+      let emailSourceToSet = existingContact?.emailSource || DataSource.MANUAL;
+      let additionalEmails: AdditionalEmail[] = [];
+
+      // Parse existing additional emails
+      if (existingContact?.additionalEmails) {
+        try {
+          const parsed = existingContact.additionalEmails as unknown;
+          if (Array.isArray(parsed)) {
+            additionalEmails = parsed as AdditionalEmail[];
+          }
+        } catch {
+          additionalEmails = [];
+        }
+      }
+
+      if (incomingEmail) {
+        // If no primary email set yet, set as primary
+        if (!existingContact?.email) {
+          emailToSet = incomingEmail;
+          emailSourceToSet = DataSource.RESUME;
+        } else if (existingContact.email.toLowerCase() !== incomingEmail) {
+          // Different email - add to additional emails if not already there
+          const alreadyExists = additionalEmails.some(
+            (e) => e.email.toLowerCase() === incomingEmail
+          );
+          if (!alreadyExists) {
+            additionalEmails.push({
+              email: incomingEmail,
+              source: 'RESUME',
+            });
+          }
+        }
+        // If same email, just update the source if needed
+      }
+
       await db.contactInfo.upsert({
         where: { profileId },
         create: {
           profileId,
-          email: data.contactInfo.email,
-          emailSource: DataSource.RESUME,
-          phone: data.contactInfo.phone,
+          email: emailToSet || incomingEmail,
+          emailSource: emailSourceToSet,
+          additionalEmails: JSON.parse(JSON.stringify(additionalEmails)),
+          phone: data.contactInfo?.phone,
           phoneSource: DataSource.RESUME,
         },
         update: {
-          ...(data.contactInfo.email && {
-            email: data.contactInfo.email,
-            emailSource: DataSource.RESUME,
+          ...(emailToSet && {
+            email: emailToSet,
+            emailSource: emailSourceToSet,
           }),
-          ...(data.contactInfo.phone && {
+          additionalEmails: JSON.parse(JSON.stringify(additionalEmails)),
+          ...(data.contactInfo?.phone && {
             phone: data.contactInfo.phone,
             phoneSource: DataSource.RESUME,
           }),
@@ -843,38 +893,92 @@ export async function saveAIResumeToProfile(
       });
     }
 
-    // Add work experiences
+    // Add work experiences (with deduplication)
     for (const exp of data.experiences) {
-      await db.workExperience.create({
-        data: {
+      // Check for existing experience by company + role (case-insensitive)
+      const existingExp = await db.workExperience.findFirst({
+        where: {
           profileId,
-          company: exp.company,
-          role: exp.role,
-          location: exp.location,
-          startDate: parseDateSafe(exp.startDate) || new Date(),
-          endDate: parseDateSafe(exp.endDate),
-          isCurrent: exp.isCurrent || false,
-          description: exp.description || exp.bullets?.join('\n'),
-          bullets: exp.bullets || [],
-          source: DataSource.RESUME,
+          company: { equals: exp.company, mode: 'insensitive' },
+          role: { equals: exp.role, mode: 'insensitive' },
         },
       });
+
+      if (existingExp) {
+        // Update existing record if it came from resume source (don't overwrite manual edits)
+        if (existingExp.source === DataSource.RESUME) {
+          await db.workExperience.update({
+            where: { id: existingExp.id },
+            data: {
+              location: exp.location || existingExp.location,
+              startDate: parseDateSafe(exp.startDate) || existingExp.startDate,
+              endDate: parseDateSafe(exp.endDate) || existingExp.endDate,
+              isCurrent: exp.isCurrent ?? existingExp.isCurrent,
+              description: exp.description || exp.bullets?.join('\n') || existingExp.description,
+              bullets: exp.bullets?.length ? exp.bullets : existingExp.bullets,
+            },
+          });
+        }
+        // Skip if manually edited - don't overwrite
+      } else {
+        // Create new experience
+        await db.workExperience.create({
+          data: {
+            profileId,
+            company: exp.company,
+            role: exp.role,
+            location: exp.location,
+            startDate: parseDateSafe(exp.startDate) || new Date(),
+            endDate: parseDateSafe(exp.endDate),
+            isCurrent: exp.isCurrent || false,
+            description: exp.description || exp.bullets?.join('\n'),
+            bullets: exp.bullets || [],
+            source: DataSource.RESUME,
+          },
+        });
+      }
     }
 
-    // Add education
+    // Add education (with deduplication)
     for (const edu of data.educations) {
-      await db.education.create({
-        data: {
+      // Check for existing education by institution + degree (case-insensitive)
+      const existingEdu = await db.education.findFirst({
+        where: {
           profileId,
-          institution: edu.institution,
-          degree: edu.degree,
-          fieldOfStudy: edu.fieldOfStudy,
-          startDate: parseDateSafe(edu.startDate),
-          endDate: parseDateSafe(edu.endDate),
-          gpa: edu.gpa,
-          source: DataSource.RESUME,
+          institution: { equals: edu.institution, mode: 'insensitive' },
+          degree: { equals: edu.degree, mode: 'insensitive' },
         },
       });
+
+      if (existingEdu) {
+        // Update existing record if it came from resume source
+        if (existingEdu.source === DataSource.RESUME) {
+          await db.education.update({
+            where: { id: existingEdu.id },
+            data: {
+              fieldOfStudy: edu.fieldOfStudy || existingEdu.fieldOfStudy,
+              startDate: parseDateSafe(edu.startDate) || existingEdu.startDate,
+              endDate: parseDateSafe(edu.endDate) || existingEdu.endDate,
+              gpa: edu.gpa || existingEdu.gpa,
+            },
+          });
+        }
+        // Skip if manually edited
+      } else {
+        // Create new education
+        await db.education.create({
+          data: {
+            profileId,
+            institution: edu.institution,
+            degree: edu.degree,
+            fieldOfStudy: edu.fieldOfStudy,
+            startDate: parseDateSafe(edu.startDate),
+            endDate: parseDateSafe(edu.endDate),
+            gpa: edu.gpa,
+            source: DataSource.RESUME,
+          },
+        });
+      }
     }
 
     // Add skills
@@ -894,20 +998,46 @@ export async function saveAIResumeToProfile(
       }
     }
 
-    // Add projects
+    // Add projects (with deduplication)
     for (const proj of data.projects) {
-      await db.project.create({
-        data: {
+      // Check for existing project by title (case-insensitive)
+      const existingProj = await db.project.findFirst({
+        where: {
           profileId,
-          title: proj.name,
-          description: proj.description,
-          url: proj.url,
-          techStack: proj.technologies || [],
-          startDate: parseDateSafe(proj.startDate),
-          endDate: parseDateSafe(proj.endDate),
-          source: DataSource.RESUME,
+          title: { equals: proj.name, mode: 'insensitive' },
         },
       });
+
+      if (existingProj) {
+        // Update existing record if it came from resume source
+        if (existingProj.source === DataSource.RESUME) {
+          await db.project.update({
+            where: { id: existingProj.id },
+            data: {
+              description: proj.description || existingProj.description,
+              url: proj.url || existingProj.url,
+              techStack: proj.technologies?.length ? proj.technologies : existingProj.techStack,
+              startDate: parseDateSafe(proj.startDate) || existingProj.startDate,
+              endDate: parseDateSafe(proj.endDate) || existingProj.endDate,
+            },
+          });
+        }
+        // Skip if manually edited
+      } else {
+        // Create new project
+        await db.project.create({
+          data: {
+            profileId,
+            title: proj.name,
+            description: proj.description,
+            url: proj.url,
+            techStack: proj.technologies || [],
+            startDate: parseDateSafe(proj.startDate),
+            endDate: parseDateSafe(proj.endDate),
+            source: DataSource.RESUME,
+          },
+        });
+      }
     }
 
     // Add links
@@ -929,17 +1059,40 @@ export async function saveAIResumeToProfile(
       }
     }
 
-    // Add certifications
+    // Add certifications (with deduplication)
     for (const cert of data.certifications) {
-      await db.certification.create({
-        data: {
+      // Check for existing certification by name + issuer (case-insensitive)
+      const existingCert = await db.certification.findFirst({
+        where: {
           profileId,
-          name: cert.name,
-          issuer: cert.issuer || 'Unknown',
-          issueDate: parseDateSafe(cert.date),
-          source: DataSource.RESUME,
+          name: { equals: cert.name, mode: 'insensitive' },
         },
       });
+
+      if (existingCert) {
+        // Update existing record if it came from resume source
+        if (existingCert.source === DataSource.RESUME) {
+          await db.certification.update({
+            where: { id: existingCert.id },
+            data: {
+              issuer: cert.issuer || existingCert.issuer,
+              issueDate: parseDateSafe(cert.date) || existingCert.issueDate,
+            },
+          });
+        }
+        // Skip if manually edited
+      } else {
+        // Create new certification
+        await db.certification.create({
+          data: {
+            profileId,
+            name: cert.name,
+            issuer: cert.issuer || 'Unknown',
+            issueDate: parseDateSafe(cert.date),
+            source: DataSource.RESUME,
+          },
+        });
+      }
     }
 
     // Store raw import data for debugging

@@ -1,15 +1,17 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Eye, EyeOff, Globe, Mail, Phone } from 'lucide-react';
+import { Eye, EyeOff, Globe, Info, Mail, Phone } from 'lucide-react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ProfileBasicInfoSchema, type ProfileBasicInfo } from '@/lib/validations';
 
 import type { FullProfile } from '@/types';
@@ -133,12 +135,46 @@ interface ContactInfoFormProps {
   }) => void;
 }
 
+// Helper type for additional emails
+interface AdditionalEmail {
+  email: string;
+  source: string;
+}
+
+// Helper to get source badge color
+function getSourceBadgeVariant(
+  source: string
+): 'default' | 'secondary' | 'destructive' | 'outline' {
+  switch (source.toUpperCase()) {
+    case 'GITHUB':
+      return 'secondary';
+    case 'LINKEDIN':
+      return 'default';
+    case 'RESUME':
+      return 'outline';
+    default:
+      return 'outline';
+  }
+}
+
 export function ContactInfoForm({ profile, onContactUpdate }: ContactInfoFormProps) {
   const [email, setEmail] = useState(profile.contactInfo?.email || '');
   const [emailPublic, setEmailPublic] = useState(profile.contactInfo?.emailPublic || false);
   const [phone, setPhone] = useState(profile.contactInfo?.phone || '');
   const [phonePublic, setPhonePublic] = useState(profile.contactInfo?.phonePublic || false);
   const [website, setWebsite] = useState(profile.contactInfo?.website || '');
+
+  // Parse additional emails from contactInfo
+  const additionalEmails: AdditionalEmail[] = (() => {
+    try {
+      const raw = profile.contactInfo?.additionalEmails;
+      if (Array.isArray(raw)) return raw as AdditionalEmail[];
+      if (typeof raw === 'string') return JSON.parse(raw) as AdditionalEmail[];
+      return [];
+    } catch {
+      return [];
+    }
+  })();
 
   const handleEmailChange = (value: string) => {
     setEmail(value);
@@ -178,7 +214,12 @@ export function ContactInfoForm({ profile, onContactUpdate }: ContactInfoFormPro
         <div className="space-y-2">
           <Label htmlFor="email" className="flex items-center gap-2">
             <Mail className="h-4 w-4" />
-            Email Address
+            Primary Email
+            {profile.contactInfo?.emailSource && (
+              <Badge variant="outline" className="text-xs">
+                from {profile.contactInfo.emailSource.toLowerCase()}
+              </Badge>
+            )}
           </Label>
           <div className="flex gap-2">
             <Input
@@ -204,6 +245,43 @@ export function ContactInfoForm({ profile, onContactUpdate }: ContactInfoFormPro
               ? 'This email will be visible on your public profile'
               : 'This email is hidden from your public profile'}
           </p>
+
+          {/* Additional Emails */}
+          {additionalEmails.length > 0 && (
+            <div className="mt-3 rounded-lg border bg-muted/30 p-3">
+              <div className="mb-2 flex items-center gap-2 text-sm font-medium">
+                <Info className="h-4 w-4 text-muted-foreground" />
+                Additional Emails from Imports
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger>
+                      <span className="cursor-help text-muted-foreground">(?)</span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="max-w-xs">
+                        These emails were found in your imported data. Click on one to make it your
+                        primary email.
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {additionalEmails.map((item, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => handleEmailChange(item.email)}
+                    className="flex items-center gap-1.5 rounded-full border bg-background px-3 py-1 text-sm transition-colors hover:bg-muted"
+                  >
+                    <span>{item.email}</span>
+                    <Badge variant={getSourceBadgeVariant(item.source)} className="text-xs">
+                      {item.source.toLowerCase()}
+                    </Badge>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Phone */}

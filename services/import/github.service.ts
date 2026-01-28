@@ -363,6 +363,69 @@ export async function saveGitHubToProfile(
       });
     }
 
+    // Handle email from GitHub (add to additional emails, don't overwrite primary)
+    if (data.contactInfo?.email) {
+      const existingContact = await db.contactInfo.findUnique({
+        where: { profileId },
+      });
+
+      const incomingEmail = data.contactInfo.email.toLowerCase();
+
+      interface AdditionalEmail {
+        email: string;
+        source: string;
+      }
+
+      let additionalEmails: AdditionalEmail[] = [];
+      if (existingContact?.additionalEmails) {
+        try {
+          const parsed = existingContact.additionalEmails as unknown;
+          if (Array.isArray(parsed)) {
+            additionalEmails = parsed as AdditionalEmail[];
+          }
+        } catch {
+          additionalEmails = [];
+        }
+      }
+
+      // Only add if different from primary and not already in additional emails
+      const isDifferentFromPrimary =
+        !existingContact?.email || existingContact.email.toLowerCase() !== incomingEmail;
+      const notAlreadyAdditional = !additionalEmails.some(
+        (e) => e.email.toLowerCase() === incomingEmail
+      );
+
+      if (isDifferentFromPrimary && notAlreadyAdditional) {
+        additionalEmails.push({
+          email: incomingEmail,
+          source: 'GITHUB',
+        });
+
+        await db.contactInfo.upsert({
+          where: { profileId },
+          create: {
+            profileId,
+            email: incomingEmail,
+            emailSource: 'GITHUB',
+            additionalEmails: JSON.parse(JSON.stringify([])),
+          },
+          update: {
+            additionalEmails: JSON.parse(JSON.stringify(additionalEmails)),
+          },
+        });
+      } else if (!existingContact) {
+        // No contact info exists, create with GitHub email as primary
+        await db.contactInfo.create({
+          data: {
+            profileId,
+            email: incomingEmail,
+            emailSource: 'GITHUB',
+            additionalEmails: JSON.parse(JSON.stringify([])),
+          },
+        });
+      }
+    }
+
     // Add projects (dedupe by repoUrl or title)
     const existingProjects = await db.project.findMany({
       where: { profileId },
