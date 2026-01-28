@@ -96,7 +96,7 @@ jobs:
           SKIP_ENV_VALIDATION: true
           # Provide dummy values for required env vars during build
           DATABASE_URL: 'postgresql://dummy:dummy@localhost:5432/dummy'
-          # Use minimal placeholder values for Clerk (these won't be used at runtime)
+          # Use placeholder values for Clerk (app uses force-dynamic so these won't cause issues)
           NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: 'pk_test_placeholder'
           CLERK_SECRET_KEY: 'sk_test_placeholder'
           # Skip Clerk JWKS validation during build

@@ -1,3 +1,6 @@
+// Force dynamic rendering to avoid static generation issues with Clerk in CI
+export const dynamic = 'force-dynamic';
+
 export default function NotFound() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center">
