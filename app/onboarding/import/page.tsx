@@ -65,10 +65,12 @@ export default function OnboardingImportPage() {
 
   // GitHub OAuth states
   const [githubConnecting, setGithubConnecting] = useState(false);
+  const [githubDisconnecting, setGithubDisconnecting] = useState(false);
   const [githubError, setGithubError] = useState<string | null>(null);
 
   // LinkedIn OAuth states
   const [linkedinConnecting, setLinkedinConnecting] = useState(false);
+  const [linkedinDisconnecting, setLinkedinDisconnecting] = useState(false);
   const [linkedinError, setLinkedinError] = useState<string | null>(null);
 
   // Import states
@@ -89,6 +91,9 @@ export default function OnboardingImportPage() {
   const [uploadedPhotoPreview, setUploadedPhotoPreview] = useState<string | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
+  // Resume filename state
+  const [resumeFileName, setResumeFileName] = useState<string | null>(null);
+
   // Imported data (for display)
   const [importedData, setImportedData] = useState<Record<string, unknown>>({});
 
@@ -106,10 +111,42 @@ export default function OnboardingImportPage() {
       provider === 'oauth_linkedin'
     );
   });
-  const linkedinName =
-    connectedLinkedin?.firstName && connectedLinkedin?.lastName
-      ? `${connectedLinkedin.firstName} ${connectedLinkedin.lastName}`
-      : (connectedLinkedin?.username ?? null);
+  // Build LinkedIn display - prioritize username, then fall back to name
+  const linkedinName = (() => {
+    // First check if we have imported data from LinkedIn
+    const linkedinImport = importedData.linkedin as
+      | {
+          profile?: { firstName?: string; lastName?: string };
+          email?: string;
+          fromLinkedIn?: { username?: string };
+        }
+      | undefined;
+
+    // Prioritize username from imported data
+    if (linkedinImport?.fromLinkedIn?.username) {
+      return linkedinImport.fromLinkedIn.username;
+    }
+    // Try external account username
+    if (connectedLinkedin?.username) {
+      return connectedLinkedin.username;
+    }
+    // Fall back to name from imported data
+    if (linkedinImport?.profile?.firstName && linkedinImport?.profile?.lastName) {
+      return `${linkedinImport.profile.firstName} ${linkedinImport.profile.lastName}`;
+    }
+    if (linkedinImport?.profile?.firstName || linkedinImport?.profile?.lastName) {
+      return linkedinImport.profile.firstName || linkedinImport.profile.lastName;
+    }
+    // Try external account name
+    if (connectedLinkedin?.firstName && connectedLinkedin?.lastName) {
+      return `${connectedLinkedin.firstName} ${connectedLinkedin.lastName}`;
+    }
+    if (connectedLinkedin?.firstName || connectedLinkedin?.lastName) {
+      return connectedLinkedin.firstName || connectedLinkedin.lastName;
+    }
+    // No LinkedIn data available yet
+    return null;
+  })();
 
   // Save import state to sessionStorage (used before OAuth redirects)
   const saveImportState = useCallback(() => {
@@ -160,13 +197,16 @@ export default function OnboardingImportPage() {
 
         // Clear the saved state after restoring
         sessionStorage.removeItem(storageKey);
+
+        // Reload user to get updated external accounts after OAuth redirect
+        user.reload().catch(console.error);
       }
     } catch (err) {
       console.error('Failed to restore import state:', err);
     }
 
     setHasRestoredPersistedState(true);
-  }, [hasRestoredPersistedState, isUserLoaded, user?.id]);
+  }, [hasRestoredPersistedState, isUserLoaded, user]);
 
   // Auto-import from connected GitHub if just connected via OAuth
   useEffect(() => {
@@ -305,6 +345,32 @@ export default function OnboardingImportPage() {
     }
   };
 
+  // GitHub disconnect handler
+  const handleGitHubDisconnect = async () => {
+    if (!connectedGithub) return;
+
+    setGithubDisconnecting(true);
+    setGithubError(null);
+
+    try {
+      await connectedGithub.destroy();
+      await user?.reload();
+      // Reset import status for GitHub
+      updateImportStatus('github', {
+        status: 'idle',
+        message: undefined,
+        itemsImported: undefined,
+      });
+      setGithubUsername('');
+    } catch (err: unknown) {
+      console.error('GitHub disconnect error:', err);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      setGithubError(`Failed to disconnect: ${errorMessage}`);
+    } finally {
+      setGithubDisconnecting(false);
+    }
+  };
+
   // Resume upload handler
   const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -320,6 +386,9 @@ export default function OnboardingImportPage() {
     }
 
     updateImportStatus('resume', { status: 'importing', message: 'Parsing resume...' });
+
+    // Save the filename for display
+    setResumeFileName(file.name);
 
     try {
       const formData = new FormData();
@@ -452,6 +521,31 @@ export default function OnboardingImportPage() {
         setLinkedinError(`Connection failed: ${errorMessage}`);
       }
       setLinkedinConnecting(false);
+    }
+  };
+
+  // LinkedIn disconnect handler
+  const handleLinkedInDisconnect = async () => {
+    if (!connectedLinkedin) return;
+
+    setLinkedinDisconnecting(true);
+    setLinkedinError(null);
+
+    try {
+      await connectedLinkedin.destroy();
+      await user?.reload();
+      // Reset import status for LinkedIn
+      updateImportStatus('linkedin', {
+        status: 'idle',
+        message: undefined,
+        itemsImported: undefined,
+      });
+    } catch (err: unknown) {
+      console.error('LinkedIn disconnect error:', err);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      setLinkedinError(`Failed to disconnect: ${errorMessage}`);
+    } finally {
+      setLinkedinDisconnecting(false);
     }
   };
 
@@ -817,19 +911,28 @@ export default function OnboardingImportPage() {
                   </p>
 
                   {imports.resume.status === 'success' ? (
-                    <div className="flex items-center justify-between">
-                      <Badge variant="secondary" className="bg-green-500/10 text-green-600">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Badge
+                          variant="secondary"
+                          className="max-w-[140px] truncate bg-green-500/10 text-green-600"
+                          title={resumeFileName || undefined}
+                        >
+                          {resumeFileName || 'Imported'}
+                        </Badge>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => document.getElementById('resume-upload')?.click()}
+                        >
+                          Replace
+                        </Button>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
                         {imports.resume.itemsImported
-                          ? `${imports.resume.itemsImported} items`
-                          : 'Imported'}
-                      </Badge>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => document.getElementById('resume-upload')?.click()}
-                      >
-                        Replace
-                      </Button>
+                          ? `${imports.resume.itemsImported} items found`
+                          : ''}
+                      </p>
                     </div>
                   ) : (
                     <Button
@@ -892,32 +995,49 @@ export default function OnboardingImportPage() {
                   </p>
 
                   {connectedGithub ? (
-                    <div className="flex items-center justify-between">
-                      <Badge
-                        variant="secondary"
-                        className={
-                          imports.github.status === 'success'
-                            ? 'bg-green-500/10 text-green-600'
-                            : ''
-                        }
-                      >
-                        @{githubUsernameFromAccount}
-                      </Badge>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Badge
+                          variant="secondary"
+                          className={
+                            imports.github.status === 'success'
+                              ? 'bg-green-500/10 text-green-600'
+                              : ''
+                          }
+                        >
+                          @{githubUsernameFromAccount}
+                        </Badge>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            githubUsernameFromAccount &&
+                            handleGitHubImport(githubUsernameFromAccount)
+                          }
+                          disabled={imports.github.status === 'importing'}
+                        >
+                          {imports.github.status === 'importing' ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : imports.github.status === 'success' ? (
+                            'Refresh'
+                          ) : (
+                            'Import'
+                          )}
+                        </Button>
+                      </div>
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() =>
-                          githubUsernameFromAccount && handleGitHubImport(githubUsernameFromAccount)
-                        }
-                        disabled={imports.github.status === 'importing'}
+                        className="h-7 w-full text-xs text-muted-foreground hover:text-destructive"
+                        onClick={handleGitHubDisconnect}
+                        disabled={githubDisconnecting}
                       >
-                        {imports.github.status === 'importing' ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : imports.github.status === 'success' ? (
-                          'Refresh'
+                        {githubDisconnecting ? (
+                          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
                         ) : (
-                          'Import'
+                          <X className="mr-1 h-3 w-3" />
                         )}
+                        {githubDisconnecting ? 'Disconnecting...' : 'Disconnect'}
                       </Button>
                     </div>
                   ) : (
@@ -976,30 +1096,51 @@ export default function OnboardingImportPage() {
                   </p>
 
                   {connectedLinkedin ? (
-                    <div className="flex items-center justify-between">
-                      <Badge
-                        variant="secondary"
-                        className={
-                          imports.linkedin.status === 'success'
-                            ? 'bg-green-500/10 text-green-600'
-                            : ''
-                        }
-                      >
-                        {linkedinName || 'Connected'}
-                      </Badge>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Badge
+                          variant="secondary"
+                          className={
+                            imports.linkedin.status === 'success'
+                              ? 'bg-green-500/10 text-green-600'
+                              : ''
+                          }
+                        >
+                          {linkedinName || (
+                            <span className="flex items-center gap-1">
+                              <CheckCircle2 className="h-3 w-3" />
+                              Account Linked
+                            </span>
+                          )}
+                        </Badge>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleLinkedInImport}
+                          disabled={imports.linkedin.status === 'importing'}
+                        >
+                          {imports.linkedin.status === 'importing' ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : imports.linkedin.status === 'success' ? (
+                            'Refresh'
+                          ) : (
+                            'Import'
+                          )}
+                        </Button>
+                      </div>
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={handleLinkedInImport}
-                        disabled={imports.linkedin.status === 'importing'}
+                        className="h-7 w-full text-xs text-muted-foreground hover:text-destructive"
+                        onClick={handleLinkedInDisconnect}
+                        disabled={linkedinDisconnecting}
                       >
-                        {imports.linkedin.status === 'importing' ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : imports.linkedin.status === 'success' ? (
-                          'Refresh'
+                        {linkedinDisconnecting ? (
+                          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
                         ) : (
-                          'Import'
+                          <X className="mr-1 h-3 w-3" />
                         )}
+                        {linkedinDisconnecting ? 'Disconnecting...' : 'Disconnect'}
                       </Button>
                     </div>
                   ) : (

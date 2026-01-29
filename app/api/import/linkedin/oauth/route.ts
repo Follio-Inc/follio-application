@@ -75,10 +75,20 @@ export async function POST(request: NextRequest) {
 
     console.log('[LinkedIn OAuth] Found LinkedIn account:', {
       provider: linkedinAccount.provider,
+      username: linkedinAccount.username,
       firstName: linkedinAccount.firstName,
       lastName: linkedinAccount.lastName,
+      emailAddress: linkedinAccount.emailAddress,
       imageUrl: linkedinAccount.imageUrl,
+      // Log all available properties
+      allKeys: Object.keys(linkedinAccount),
     });
+
+    // Log full external account object for debugging
+    console.log(
+      '[LinkedIn OAuth] Full external account:',
+      JSON.stringify(linkedinAccount, null, 2)
+    );
 
     // Log the main user object's imageUrl as well
     console.log('[LinkedIn OAuth] User object:', {
@@ -89,57 +99,70 @@ export async function POST(request: NextRequest) {
     });
 
     // Extract available data from the LinkedIn account
-    // LinkedIn OIDC provides: firstName, lastName, emailAddress, imageUrl
-    // Note: Sometimes the imageUrl is on the main user object, not the external account
-    const firstName = linkedinAccount.firstName || user.firstName || '';
-    const lastName = linkedinAccount.lastName || user.lastName || '';
-    const email = linkedinAccount.emailAddress || user.emailAddresses?.[0]?.emailAddress || '';
-    // Try external account imageUrl first, then fall back to user's main imageUrl
-    const avatarUrl = linkedinAccount.imageUrl || user.imageUrl || '';
-    const username = linkedinAccount.username || '';
+    // With custom LinkedIn app, we should get: firstName, lastName, emailAddress, imageUrl, username
+    const linkedinFirstName = linkedinAccount.firstName || '';
+    const linkedinLastName = linkedinAccount.lastName || '';
+    const linkedinEmail = linkedinAccount.emailAddress || '';
+    const linkedinAvatarUrl = linkedinAccount.imageUrl || '';
+    const linkedinUsername = linkedinAccount.username || '';
+
+    console.log('[LinkedIn OAuth] Extracted LinkedIn data:', {
+      firstName: linkedinFirstName,
+      lastName: linkedinLastName,
+      email: linkedinEmail,
+      avatarUrl: linkedinAvatarUrl,
+      username: linkedinUsername,
+    });
+
+    // For saving to profile, we can use fallbacks, but track what's from LinkedIn
+    const firstName = linkedinFirstName || user.firstName || '';
+    const lastName = linkedinLastName || user.lastName || '';
+    const avatarUrl = linkedinAvatarUrl || user.imageUrl || '';
 
     // Build LinkedIn profile URL if we have a username
-    const linkedinProfileUrl = username ? `https://linkedin.com/in/${username}` : '';
+    const linkedinProfileUrl = linkedinUsername
+      ? `https://linkedin.com/in/${linkedinUsername}`
+      : '';
 
     // Create links array
     const links: NormalizedLink[] = linkedinProfileUrl
       ? [{ url: linkedinProfileUrl, type: 'linkedin', label: 'LinkedIn', source: 'LINKEDIN' }]
       : [];
 
-    // Create normalized profile data
+    // Create normalized profile data - only what actually came from LinkedIn
     const profile: NormalizedProfileData = {
-      firstName,
-      lastName,
-      avatarUrl,
+      firstName: linkedinFirstName, // Only LinkedIn data
+      lastName: linkedinLastName, // Only LinkedIn data
+      avatarUrl: linkedinAvatarUrl, // Only LinkedIn data
       headline: '', // Not available via OIDC
       summary: '', // Not available via OIDC
       location: '', // Not available via OIDC
     };
 
-    // Summary of what was imported
+    // Summary of what was actually imported FROM LinkedIn
     const summary = {
-      hasName: !!(firstName || lastName),
-      hasEmail: !!email,
-      hasProfilePicture: !!avatarUrl,
+      hasName: !!(linkedinFirstName || linkedinLastName),
+      hasEmail: !!linkedinEmail,
+      hasProfilePicture: !!linkedinAvatarUrl,
       hasLinkedInUrl: !!linkedinProfileUrl,
       total:
-        (firstName || lastName ? 1 : 0) +
-        (email ? 1 : 0) +
-        (avatarUrl ? 1 : 0) +
+        (linkedinFirstName || linkedinLastName ? 1 : 0) +
+        (linkedinEmail ? 1 : 0) +
+        (linkedinAvatarUrl ? 1 : 0) +
         (linkedinProfileUrl ? 1 : 0),
     };
 
-    // Build message about what was imported
+    // Build message about what was imported FROM LinkedIn
     const importedItems: string[] = [];
-    if (firstName || lastName) importedItems.push('name');
-    if (email) importedItems.push('email');
-    if (avatarUrl) importedItems.push('profile picture');
+    if (linkedinFirstName || linkedinLastName) importedItems.push('name');
+    if (linkedinEmail) importedItems.push('email');
+    if (linkedinAvatarUrl) importedItems.push('profile picture');
     if (linkedinProfileUrl) importedItems.push('LinkedIn URL');
 
     const message =
       importedItems.length > 0
-        ? `Imported ${importedItems.join(', ')}`
-        : 'Connected but no data available';
+        ? `Imported ${importedItems.join(', ')} from LinkedIn`
+        : 'LinkedIn connected but no profile data available (LinkedIn restricts API access)';
 
     // Optionally save to profile
     if (saveToProfile) {
@@ -204,17 +227,18 @@ export async function POST(request: NextRequest) {
       success: true,
       message,
       data: {
-        profile,
+        profile, // Contains ONLY data from LinkedIn
         links,
-        email, // Include email separately since it's contact info
+        email: linkedinEmail, // Only LinkedIn email
         summary,
-        // Include raw data for debugging/transparency
-        raw: {
-          firstName,
-          lastName,
-          email,
-          avatarUrl,
-          linkedinProfileUrl,
+        // Include what actually came from LinkedIn for transparency
+        fromLinkedIn: {
+          firstName: linkedinFirstName,
+          lastName: linkedinLastName,
+          email: linkedinEmail,
+          avatarUrl: linkedinAvatarUrl,
+          username: linkedinUsername,
+          profileUrl: linkedinProfileUrl,
         },
       },
     });
