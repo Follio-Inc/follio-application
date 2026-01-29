@@ -686,396 +686,470 @@ export default function OnboardingImportPage() {
         />
       </div>
 
-      <div className="mx-auto max-w-2xl px-4 py-16">
+      <div className="mx-auto max-w-4xl px-4 py-16">
         {/* Header */}
         <motion.div
-          className="mb-8 text-center"
+          className="mb-12 text-center"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
-          <div className="mb-4 inline-flex h-14 w-14 items-center justify-center rounded-xl bg-primary">
-            <span className="text-2xl font-bold text-primary-foreground">F</span>
-          </div>
-          <h1 className="text-3xl font-bold">Bring your data</h1>
-          <p className="mt-2 text-muted-foreground">
-            Import from anywhere—or start fresh. You can always add more later.
+          <h1 className="text-4xl font-bold tracking-tight">Bring your data</h1>
+          <p className="mt-3 text-lg text-muted-foreground">
+            Connect your sources and watch your profile come to life
           </p>
         </motion.div>
 
-        <motion.div
-          className="space-y-4"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
-        >
-          {/* Profile Photo */}
-          <Card className="">
-            <CardContent className="flex items-start gap-4 p-4">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-                <Camera className="h-5 w-5" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-medium">Profile Photo</h3>
-                    {isUploadingPhoto && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
-                    {(uploadedPhotoPreview || getCurrentAvatar()) && !isUploadingPhoto && (
-                      <CheckCircle2 className="h-4 w-4 text-green-500" />
+        {/* Floating Cards Grid */}
+        <div className="relative">
+          {/* Decorative gradient blur */}
+          <div className="pointer-events-none absolute -top-20 left-1/2 h-64 w-64 -translate-x-1/2 rounded-full bg-primary/20 blur-3xl" />
+
+          <motion.div
+            className="relative grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+          >
+            {/* Profile Photo Card */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.1 }}
+              whileHover={{ y: -4, transition: { duration: 0.2 } }}
+              className="group"
+            >
+              <Card className="relative h-full overflow-hidden border-2 border-transparent bg-gradient-to-br from-background to-muted/30 transition-all duration-300 hover:border-primary/20 hover:shadow-xl hover:shadow-primary/5">
+                <CardContent className="flex h-full flex-col p-5">
+                  <div className="mb-4 flex items-start justify-between">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500/10 to-purple-500/10 ring-1 ring-violet-500/20">
+                      <Camera className="h-6 w-6 text-violet-500" />
+                    </div>
+                    {(uploadedPhotoPreview || getCurrentAvatar()) && !isUploadingPhoto ? (
+                      <CheckCircle2 className="h-5 w-5 text-green-500" />
+                    ) : isUploadingPhoto ? (
+                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                    ) : null}
+                  </div>
+
+                  <h3 className="mb-1 font-semibold">Profile Photo</h3>
+                  <p className="mb-4 flex-1 text-sm text-muted-foreground">
+                    Add a photo to personalize your profile
+                  </p>
+
+                  <div className="flex items-center gap-3">
+                    {uploadedPhotoPreview || getCurrentAvatar() ? (
+                      <>
+                        <Avatar className="h-10 w-10 ring-2 ring-background">
+                          <AvatarImage
+                            src={uploadedPhotoPreview || getCurrentAvatar() || undefined}
+                          />
+                          <AvatarFallback>{user?.firstName?.[0] || 'U'}</AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1">
+                          <Badge variant="secondary" className="text-xs">
+                            {uploadedPhotoPreview ? 'Custom' : 'From account'}
+                          </Badge>
+                        </div>
+                        {uploadedPhotoPreview && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleRemovePhoto}
+                            className="h-8 w-8 p-0"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </>
+                    ) : (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="w-full"
+                        onClick={() => document.getElementById('photo-upload')?.click()}
+                        disabled={isUploadingPhoto}
+                      >
+                        <Upload className="mr-2 h-4 w-4" />
+                        Upload
+                      </Button>
                     )}
                   </div>
-                  {uploadedPhotoPreview ? (
-                    <Badge variant="default" className="bg-green-500/10 text-green-600">
-                      Custom photo
-                    </Badge>
-                  ) : getCurrentAvatar() ? (
-                    <Badge variant="default" className="bg-green-500/10 text-green-600">
-                      From account
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline">Not set</Badge>
-                  )}
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  {uploadedPhotoPreview
-                    ? 'Using your uploaded photo'
-                    : getCurrentAvatar()
-                      ? 'Using photo from your account (you can upload a custom one)'
-                      : 'Upload a profile photo or connect accounts to import'}
-                </p>
+                  <input
+                    id="photo-upload"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handlePhotoUpload}
+                  />
+                </CardContent>
+              </Card>
+            </motion.div>
 
-                {/* Photo Preview */}
-                {(uploadedPhotoPreview || getCurrentAvatar()) && (
-                  <div className="mt-3 flex items-center gap-3">
-                    <Avatar className="h-16 w-16 border-2 border-border">
-                      <AvatarImage
-                        src={uploadedPhotoPreview || getCurrentAvatar() || undefined}
-                        alt="Profile photo"
-                      />
-                      <AvatarFallback>
-                        {user?.firstName?.[0] || user?.username?.[0] || 'U'}
-                      </AvatarFallback>
-                    </Avatar>
-                    {uploadedPhotoPreview && (
+            {/* Resume Card */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.15 }}
+              whileHover={{ y: -4, transition: { duration: 0.2 } }}
+              className="group"
+            >
+              <Card className="relative h-full overflow-hidden border-2 border-transparent bg-gradient-to-br from-background to-muted/30 transition-all duration-300 hover:border-primary/20 hover:shadow-xl hover:shadow-primary/5">
+                <CardContent className="flex h-full flex-col p-5">
+                  <div className="mb-4 flex items-start justify-between">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500/10 to-red-500/10 ring-1 ring-orange-500/20">
+                      <FileText className="h-6 w-6 text-orange-500" />
+                    </div>
+                    {imports.resume.status === 'success' && (
+                      <CheckCircle2 className="h-5 w-5 text-green-500" />
+                    )}
+                    {imports.resume.status === 'importing' && (
+                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                    )}
+                    {imports.resume.status === 'error' && (
+                      <AlertCircle className="h-5 w-5 text-destructive" />
+                    )}
+                  </div>
+
+                  <h3 className="mb-1 font-semibold">Resume</h3>
+                  <p className="mb-4 flex-1 text-sm text-muted-foreground">
+                    Upload your resume to auto-fill your profile
+                  </p>
+
+                  {imports.resume.status === 'success' ? (
+                    <div className="flex items-center justify-between">
+                      <Badge variant="secondary" className="bg-green-500/10 text-green-600">
+                        {imports.resume.itemsImported
+                          ? `${imports.resume.itemsImported} items`
+                          : 'Imported'}
+                      </Badge>
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={handleRemovePhoto}
-                        className="text-muted-foreground hover:text-destructive"
+                        onClick={() => document.getElementById('resume-upload')?.click()}
                       >
-                        <X className="mr-1 h-3 w-3" />
-                        Remove
+                        Replace
                       </Button>
-                    )}
-                  </div>
-                )}
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => document.getElementById('photo-upload')?.click()}
-                disabled={isUploadingPhoto}
-                className="shrink-0"
-              >
-                {isUploadingPhoto ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <>
-                    <Upload className="mr-2 h-4 w-4" />
-                    Upload
-                  </>
-                )}
-              </Button>
-              <input
-                id="photo-upload"
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handlePhotoUpload}
-              />
-            </CardContent>
-          </Card>
+                    </div>
+                  ) : (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => document.getElementById('resume-upload')?.click()}
+                      disabled={imports.resume.status === 'importing'}
+                    >
+                      {imports.resume.status === 'importing' ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Upload className="mr-2 h-4 w-4" />
+                      )}
+                      {imports.resume.status === 'importing' ? 'Parsing...' : 'Upload PDF'}
+                    </Button>
+                  )}
+                  {imports.resume.message && imports.resume.status === 'error' && (
+                    <p className="mt-2 text-xs text-destructive">{imports.resume.message}</p>
+                  )}
+                  <input
+                    id="resume-upload"
+                    type="file"
+                    accept=".pdf,application/pdf"
+                    className="hidden"
+                    onChange={handleResumeUpload}
+                  />
+                </CardContent>
+              </Card>
+            </motion.div>
 
-          {/* Resume Upload */}
-          <ImportCard
-            icon={<FileText className="h-5 w-5" />}
-            title="Upload Resume"
-            description="Import your resume (PDF only)"
-            status={imports.resume}
-            onAction={() => document.getElementById('resume-upload')?.click()}
-            actionLabel={imports.resume.status === 'success' ? 'Re-upload' : 'Upload'}
-          >
-            <input
-              id="resume-upload"
-              type="file"
-              accept=".pdf,application/pdf"
-              className="hidden"
-              onChange={handleResumeUpload}
-            />
-          </ImportCard>
-
-          {/* GitHub Connect */}
-          <Card className="">
-            <CardContent className="flex items-start gap-4 p-4">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-                <Github className="h-5 w-5" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-medium">Connect GitHub</h3>
-                    {imports.github.status === 'importing' && (
-                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                    )}
+            {/* GitHub Card */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.2 }}
+              whileHover={{ y: -4, transition: { duration: 0.2 } }}
+              className="group"
+            >
+              <Card className="relative h-full overflow-hidden border-2 border-transparent bg-gradient-to-br from-background to-muted/30 transition-all duration-300 hover:border-primary/20 hover:shadow-xl hover:shadow-primary/5">
+                <CardContent className="flex h-full flex-col p-5">
+                  <div className="mb-4 flex items-start justify-between">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-gray-500/10 to-slate-500/10 ring-1 ring-gray-500/20 dark:from-white/10 dark:to-gray-400/10 dark:ring-white/20">
+                      <Github className="h-6 w-6 text-gray-700 dark:text-white" />
+                    </div>
                     {imports.github.status === 'success' && (
-                      <CheckCircle2 className="h-4 w-4 text-green-500" />
+                      <CheckCircle2 className="h-5 w-5 text-green-500" />
+                    )}
+                    {imports.github.status === 'importing' && (
+                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
                     )}
                     {imports.github.status === 'error' && (
-                      <AlertCircle className="h-4 w-4 text-destructive" />
+                      <AlertCircle className="h-5 w-5 text-destructive" />
                     )}
                   </div>
-                  {imports.github.status === 'importing' && (
-                    <Badge variant="secondary">Importing...</Badge>
-                  )}
-                  {imports.github.status === 'success' && (
-                    <Badge variant="default" className="bg-green-500/10 text-green-600">
-                      {imports.github.itemsImported
-                        ? `${imports.github.itemsImported} items`
-                        : 'Connected'}
-                    </Badge>
-                  )}
-                  {imports.github.status === 'error' && <Badge variant="destructive">Error</Badge>}
-                  {imports.github.status === 'idle' && !connectedGithub && (
-                    <Badge variant="outline">Not connected</Badge>
-                  )}
-                  {imports.github.status === 'idle' && connectedGithub && (
-                    <Badge variant="default" className="bg-green-500/10 text-green-600">
-                      @{githubUsernameFromAccount}
-                    </Badge>
-                  )}
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  {connectedGithub && imports.github.status === 'idle'
-                    ? 'Click Import to fetch your projects and skills'
-                    : 'Import projects, skills, and profile info'}
-                </p>
-                {imports.github.message && imports.github.status !== 'idle' && (
-                  <p
-                    className={`mt-1 text-xs ${
-                      imports.github.status === 'error'
-                        ? 'text-destructive'
-                        : 'text-muted-foreground'
-                    }`}
-                  >
-                    {imports.github.message}
-                  </p>
-                )}
-                {githubError && (
-                  <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">{githubError}</p>
-                )}
-              </div>
-              {/* Show black GitHub button when not connected, normal button otherwise */}
-              {!connectedGithub && imports.github.status !== 'success' ? (
-                <Button
-                  onClick={handleGitHubConnect}
-                  disabled={githubConnecting || imports.github.status === 'importing'}
-                  className="shrink-0 bg-[#24292e] text-white hover:bg-[#1b1f23]"
-                  size="sm"
-                >
-                  {githubConnecting ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Github className="mr-2 h-4 w-4" />
-                  )}
-                  {githubConnecting ? 'Connecting...' : 'Connect'}
-                </Button>
-              ) : (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    if (connectedGithub && githubUsernameFromAccount) {
-                      handleGitHubImport(githubUsernameFromAccount);
-                    }
-                  }}
-                  disabled={imports.github.status === 'importing'}
-                  className="shrink-0"
-                >
-                  {imports.github.status === 'importing' ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : imports.github.status === 'success' ? (
-                    'Re-import'
-                  ) : (
-                    'Import'
-                  )}
-                </Button>
-              )}
-            </CardContent>
-          </Card>
 
-          {/* LinkedIn Connect */}
-          <Card className="">
-            <CardContent className="flex items-start gap-4 p-4">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-                <Linkedin className="h-5 w-5" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-medium">Connect LinkedIn</h3>
-                    {imports.linkedin.status === 'importing' && (
-                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                    )}
+                  <h3 className="mb-1 font-semibold">GitHub</h3>
+                  <p className="mb-4 flex-1 text-sm text-muted-foreground">
+                    Import projects, skills & contributions
+                  </p>
+
+                  {connectedGithub ? (
+                    <div className="flex items-center justify-between">
+                      <Badge
+                        variant="secondary"
+                        className={
+                          imports.github.status === 'success'
+                            ? 'bg-green-500/10 text-green-600'
+                            : ''
+                        }
+                      >
+                        @{githubUsernameFromAccount}
+                      </Badge>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          githubUsernameFromAccount && handleGitHubImport(githubUsernameFromAccount)
+                        }
+                        disabled={imports.github.status === 'importing'}
+                      >
+                        {imports.github.status === 'importing' ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : imports.github.status === 'success' ? (
+                          'Refresh'
+                        ) : (
+                          'Import'
+                        )}
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      size="sm"
+                      className="w-full bg-[#24292e] text-white hover:bg-[#1b1f23]"
+                      onClick={handleGitHubConnect}
+                      disabled={githubConnecting}
+                    >
+                      {githubConnecting ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Github className="mr-2 h-4 w-4" />
+                      )}
+                      {githubConnecting ? 'Connecting...' : 'Connect'}
+                    </Button>
+                  )}
+                  {(githubError ||
+                    (imports.github.message && imports.github.status === 'error')) && (
+                    <p className="mt-2 text-xs text-destructive">
+                      {githubError || imports.github.message}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            {/* LinkedIn Card */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.25 }}
+              whileHover={{ y: -4, transition: { duration: 0.2 } }}
+              className="group"
+            >
+              <Card className="relative h-full overflow-hidden border-2 border-transparent bg-gradient-to-br from-background to-muted/30 transition-all duration-300 hover:border-primary/20 hover:shadow-xl hover:shadow-primary/5">
+                <CardContent className="flex h-full flex-col p-5">
+                  <div className="mb-4 flex items-start justify-between">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500/10 to-sky-500/10 ring-1 ring-blue-500/20">
+                      <Linkedin className="h-6 w-6 text-[#0A66C2]" />
+                    </div>
                     {imports.linkedin.status === 'success' && (
-                      <CheckCircle2 className="h-4 w-4 text-green-500" />
+                      <CheckCircle2 className="h-5 w-5 text-green-500" />
+                    )}
+                    {imports.linkedin.status === 'importing' && (
+                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
                     )}
                     {imports.linkedin.status === 'error' && (
-                      <AlertCircle className="h-4 w-4 text-destructive" />
+                      <AlertCircle className="h-5 w-5 text-destructive" />
                     )}
                   </div>
-                  {imports.linkedin.status === 'importing' && (
-                    <Badge variant="secondary">Importing...</Badge>
-                  )}
-                  {imports.linkedin.status === 'success' && (
-                    <Badge variant="default" className="bg-green-500/10 text-green-600">
-                      {imports.linkedin.itemsImported
-                        ? `${imports.linkedin.itemsImported} items`
-                        : 'Connected'}
-                    </Badge>
-                  )}
-                  {imports.linkedin.status === 'error' && (
-                    <Badge variant="destructive">Error</Badge>
-                  )}
-                  {imports.linkedin.status === 'idle' && !connectedLinkedin && (
-                    <Badge variant="outline">Not connected</Badge>
-                  )}
-                  {imports.linkedin.status === 'idle' && connectedLinkedin && (
-                    <Badge variant="default" className="bg-green-500/10 text-green-600">
-                      {linkedinName || 'Connected'}
-                    </Badge>
-                  )}
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  {connectedLinkedin && imports.linkedin.status === 'idle'
-                    ? 'Click Import to fetch your profile info & photo'
-                    : 'Import profile picture, name, and headline'}
-                </p>
-                {imports.linkedin.message && imports.linkedin.status !== 'idle' && (
-                  <p
-                    className={`mt-1 text-xs ${
-                      imports.linkedin.status === 'error'
-                        ? 'text-destructive'
-                        : 'text-muted-foreground'
-                    }`}
-                  >
-                    {imports.linkedin.message}
-                  </p>
-                )}
-                {linkedinError && (
-                  <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">{linkedinError}</p>
-                )}
-              </div>
-              {/* Show LinkedIn blue button when not connected, normal button otherwise */}
-              {!connectedLinkedin && imports.linkedin.status !== 'success' ? (
-                <Button
-                  onClick={handleLinkedInConnect}
-                  disabled={linkedinConnecting || imports.linkedin.status === 'importing'}
-                  className="shrink-0 bg-[#0A66C2] text-white hover:bg-[#004182]"
-                  size="sm"
-                >
-                  {linkedinConnecting ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Linkedin className="mr-2 h-4 w-4" />
-                  )}
-                  {linkedinConnecting ? 'Connecting...' : 'Connect'}
-                </Button>
-              ) : (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleLinkedInImport}
-                  disabled={imports.linkedin.status === 'importing'}
-                  className="shrink-0"
-                >
-                  {imports.linkedin.status === 'importing' ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : imports.linkedin.status === 'success' ? (
-                    'Re-import'
-                  ) : (
-                    'Import'
-                  )}
-                </Button>
-              )}
-            </CardContent>
-          </Card>
 
-          {/* Manual Links */}
-          <ImportCard
-            icon={<LinkIcon className="h-5 w-5" />}
-            title="Add Links"
-            description="Website, Notion, Medium, or any URL"
-            status={imports.links}
-            onAction={() => setShowLinksForm(true)}
-            actionLabel={imports.links.status === 'success' ? 'Edit Links' : 'Add Links'}
-          >
-            {showLinksForm && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="mt-4 space-y-3"
-              >
-                {manualLinks.map((link, index) => (
-                  <div key={index} className="flex gap-2">
-                    <Input
-                      placeholder="https://..."
-                      value={link.url}
-                      onChange={(e) => handleLinkChange(index, e.target.value)}
-                    />
-                    {manualLinks.length > 1 && (
-                      <Button variant="ghost" size="icon" onClick={() => handleRemoveLink(index)}>
-                        <X className="h-4 w-4" />
+                  <h3 className="mb-1 font-semibold">LinkedIn</h3>
+                  <p className="mb-4 flex-1 text-sm text-muted-foreground">
+                    Import profile info, headline & photo
+                  </p>
+
+                  {connectedLinkedin ? (
+                    <div className="flex items-center justify-between">
+                      <Badge
+                        variant="secondary"
+                        className={
+                          imports.linkedin.status === 'success'
+                            ? 'bg-green-500/10 text-green-600'
+                            : ''
+                        }
+                      >
+                        {linkedinName || 'Connected'}
+                      </Badge>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleLinkedInImport}
+                        disabled={imports.linkedin.status === 'importing'}
+                      >
+                        {imports.linkedin.status === 'importing' ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : imports.linkedin.status === 'success' ? (
+                          'Refresh'
+                        ) : (
+                          'Import'
+                        )}
                       </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      size="sm"
+                      className="w-full bg-[#0A66C2] text-white hover:bg-[#004182]"
+                      onClick={handleLinkedInConnect}
+                      disabled={linkedinConnecting}
+                    >
+                      {linkedinConnecting ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Linkedin className="mr-2 h-4 w-4" />
+                      )}
+                      {linkedinConnecting ? 'Connecting...' : 'Connect'}
+                    </Button>
+                  )}
+                  {(linkedinError ||
+                    (imports.linkedin.message && imports.linkedin.status === 'error')) && (
+                    <p className="mt-2 text-xs text-destructive">
+                      {linkedinError || imports.linkedin.message}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            {/* Links Card */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.3 }}
+              whileHover={{ y: -4, transition: { duration: 0.2 } }}
+              className="group sm:col-span-2 lg:col-span-1"
+            >
+              <Card className="relative h-full overflow-hidden border-2 border-transparent bg-gradient-to-br from-background to-muted/30 transition-all duration-300 hover:border-primary/20 hover:shadow-xl hover:shadow-primary/5">
+                <CardContent className="flex h-full flex-col p-5">
+                  <div className="mb-4 flex items-start justify-between">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500/10 to-teal-500/10 ring-1 ring-emerald-500/20">
+                      <LinkIcon className="h-6 w-6 text-emerald-500" />
+                    </div>
+                    {imports.links.status === 'success' && (
+                      <CheckCircle2 className="h-5 w-5 text-green-500" />
+                    )}
+                    {imports.links.status === 'importing' && (
+                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
                     )}
                   </div>
-                ))}
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={handleAddLink} className="gap-1">
-                    <Plus className="h-3 w-3" />
-                    Add another
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleSaveLinks}
-                    disabled={imports.links.status === 'importing'}
-                  >
-                    {imports.links.status === 'importing' ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
+
+                  <h3 className="mb-1 font-semibold">Links</h3>
+                  <p className="mb-4 flex-1 text-sm text-muted-foreground">
+                    Website, portfolio, blog, or any URL
+                  </p>
+
+                  {!showLinksForm ? (
+                    imports.links.status === 'success' ? (
+                      <div className="flex items-center justify-between">
+                        <Badge variant="secondary" className="bg-green-500/10 text-green-600">
+                          {imports.links.itemsImported} links
+                        </Badge>
+                        <Button variant="ghost" size="sm" onClick={() => setShowLinksForm(true)}>
+                          Edit
+                        </Button>
+                      </div>
                     ) : (
-                      'Save Links'
-                    )}
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setShowLinksForm(false)}>
-                    Cancel
-                  </Button>
-                </div>
-              </motion.div>
-            )}
-          </ImportCard>
-        </motion.div>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="w-full"
+                        onClick={() => setShowLinksForm(true)}
+                      >
+                        <Plus className="mr-2 h-4 w-4" />
+                        Add Links
+                      </Button>
+                    )
+                  ) : (
+                    <div className="space-y-2">
+                      {manualLinks.map((link, index) => (
+                        <div key={index} className="flex gap-2">
+                          <Input
+                            placeholder="https://..."
+                            value={link.url}
+                            onChange={(e) => handleLinkChange(index, e.target.value)}
+                            className="h-8 text-sm"
+                          />
+                          {manualLinks.length > 1 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                              onClick={() => handleRemoveLink(index)}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                      <div className="flex gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleAddLink}
+                          className="h-7 text-xs"
+                        >
+                          <Plus className="mr-1 h-3 w-3" />
+                          Add
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={handleSaveLinks}
+                          disabled={imports.links.status === 'importing'}
+                          className="h-7 text-xs"
+                        >
+                          {imports.links.status === 'importing' ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            'Save'
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShowLinksForm(false)}
+                          className="h-7 text-xs"
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+          </motion.div>
+        </div>
 
         {/* Summary */}
         {hasAnyImport && (
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="mt-6 rounded-lg bg-muted/50 p-4 text-center"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="mt-8 rounded-2xl bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5 p-6 text-center"
           >
-            <p className="text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">{getTotalImported()}</span> items ready
-              to import
-            </p>
+            <div className="flex items-center justify-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-primary" />
+              <p className="text-sm">
+                <span className="font-semibold text-foreground">{getTotalImported()}</span>{' '}
+                <span className="text-muted-foreground">items ready to import</span>
+              </p>
+            </div>
           </motion.div>
         )}
 
@@ -1092,12 +1166,17 @@ export default function OnboardingImportPage() {
 
         {/* Actions */}
         <motion.div
-          className="mt-8 flex flex-col gap-3"
+          className="mt-10 flex flex-col items-center gap-4"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 0.3 }}
+          transition={{ delay: 0.4 }}
         >
-          <Button onClick={handleContinue} disabled={isCreatingProfile} className="gap-2" size="lg">
+          <Button
+            onClick={handleContinue}
+            disabled={isCreatingProfile}
+            className="gap-2 px-8"
+            size="lg"
+          >
             {isCreatingProfile ? (
               <>
                 <Spinner size="sm" />
@@ -1135,101 +1214,5 @@ export default function OnboardingImportPage() {
         </div>
       </div>
     </>
-  );
-}
-
-// Import Card Component
-interface ImportCardProps {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-  status: ImportStatus;
-  onAction: () => void;
-  actionLabel: string;
-  disabled?: boolean;
-  children?: React.ReactNode;
-}
-
-function ImportCard({
-  icon,
-  title,
-  description,
-  status,
-  onAction,
-  actionLabel,
-  disabled,
-  children,
-}: ImportCardProps) {
-  const getStatusIcon = () => {
-    switch (status.status) {
-      case 'importing':
-        return <Loader2 className="h-4 w-4 animate-spin text-primary" />;
-      case 'success':
-        return <CheckCircle2 className="h-4 w-4 text-green-500" />;
-      case 'error':
-        return <AlertCircle className="h-4 w-4 text-destructive" />;
-      default:
-        return null;
-    }
-  };
-
-  const getStatusBadge = () => {
-    switch (status.status) {
-      case 'importing':
-        return <Badge variant="secondary">Importing...</Badge>;
-      case 'success':
-        return (
-          <Badge variant="default" className="bg-green-500/10 text-green-600">
-            {status.itemsImported ? `${status.itemsImported} items` : 'Connected'}
-          </Badge>
-        );
-      case 'error':
-        return <Badge variant="destructive">Error</Badge>;
-      default:
-        return <Badge variant="outline">Not connected</Badge>;
-    }
-  };
-
-  return (
-    <Card className={disabled ? 'opacity-60' : ''}>
-      <CardContent className="flex items-start gap-4 p-4">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-          {icon}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <h3 className="font-medium">{title}</h3>
-              {getStatusIcon()}
-            </div>
-            {getStatusBadge()}
-          </div>
-          <p className="text-sm text-muted-foreground">{description}</p>
-          {status.message && status.status !== 'idle' && (
-            <p
-              className={`mt-1 text-xs ${
-                status.status === 'error' ? 'text-destructive' : 'text-muted-foreground'
-              }`}
-            >
-              {status.message}
-            </p>
-          )}
-          {children}
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onAction}
-          disabled={disabled || status.status === 'importing'}
-          className="shrink-0"
-        >
-          {status.status === 'importing' ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            actionLabel
-          )}
-        </Button>
-      </CardContent>
-    </Card>
   );
 }
