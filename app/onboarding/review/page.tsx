@@ -255,9 +255,13 @@ function ReviewPageContent() {
       sessionStorage.removeItem('onboarding_parsed_resume');
       sessionStorage.removeItem('onboarding_handle');
 
-      // Redirect to profile
+      // Check if there's a return URL (e.g., coming from builder's Import & Sync)
+      const returnUrl = sessionStorage.getItem('importReturnUrl');
+      sessionStorage.removeItem('importReturnUrl');
+
+      // Redirect to return URL or default to profile
       router.refresh();
-      router.push('/me');
+      router.push(returnUrl || '/me');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {

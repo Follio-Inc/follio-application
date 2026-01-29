@@ -113,11 +113,11 @@
 
 /* Animation utilities */
 @layer utilities {
-  .animate-in {
-    animation: animate-in 0.3s ease-out;
+  .animate-fade-up {
+    animation: fade-up-anim 0.3s ease-out;
   }
 
-  @keyframes animate-in {
+  @keyframes fade-up-anim {
     from {
       opacity: 0;
       transform: translateY(10px);
@@ -142,6 +142,65 @@
   }
   .stagger-5 {
     animation-delay: 0.5s;
+  }
+}
+
+/* Dialog animation - proper centered fade + scale */
+@layer base {
+  [data-radix-dialog-content] {
+    animation: dialog-content-show 150ms ease-out;
+  }
+
+  [data-radix-dialog-content][data-state='closed'] {
+    animation: dialog-content-hide 100ms ease-in;
+  }
+
+  @keyframes dialog-content-show {
+    from {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.96);
+    }
+    to {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+  }
+
+  @keyframes dialog-content-hide {
+    from {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.96);
+    }
+  }
+
+  [data-radix-dialog-overlay] {
+    animation: dialog-overlay-show 150ms ease-out;
+  }
+
+  [data-radix-dialog-overlay][data-state='closed'] {
+    animation: dialog-overlay-hide 100ms ease-in;
+  }
+
+  @keyframes dialog-overlay-show {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes dialog-overlay-hide {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
   }
 }
 
