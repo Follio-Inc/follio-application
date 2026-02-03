@@ -71,6 +71,22 @@ export const ContactInfoSchema = z.object({
   phone: z.string().max(20).optional(),
   phonePublic: z.boolean().optional(),
   website: z.string().url().optional().or(z.literal('')),
+  additionalEmails: z
+    .array(
+      z.object({
+        email: z.string().email(),
+        source: z.string(),
+      })
+    )
+    .optional(),
+  additionalPhones: z
+    .array(
+      z.object({
+        phone: z.string(),
+        source: z.string(),
+      })
+    )
+    .optional(),
 });
 
 // ===========================================

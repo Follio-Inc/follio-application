@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { db } from '@/lib/db';
 import type { NormalizedLink, NormalizedProfileData } from '@/services/import/types';
+import { shouldOverrideSource } from '@/services/multi-source-merger.service';
+import { DataSource } from '@prisma/client';
 
 /**
  * LinkedIn OAuth Import API
@@ -175,16 +177,38 @@ export async function POST(request: NextRequest) {
         if (dbUser?.profile) {
           const profileId = dbUser.profile.id;
 
-          // Update profile with LinkedIn data (only fill in missing fields)
-          const profileUpdate: Record<string, string> = {};
-          if (!dbUser.profile.firstName && firstName) {
+          // Update profile with LinkedIn data based on source priority
+          const profileUpdate: Record<string, string | DataSource> = {};
+          const currentProfile = dbUser.profile;
+
+          if (
+            firstName &&
+            shouldOverrideSource(
+              currentProfile.firstNameSource,
+              'LINKEDIN',
+              currentProfile.firstName
+            )
+          ) {
             profileUpdate.firstName = firstName;
+            profileUpdate.firstNameSource = DataSource.LINKEDIN;
           }
-          if (!dbUser.profile.lastName && lastName) {
+          if (
+            lastName &&
+            shouldOverrideSource(currentProfile.lastNameSource, 'LINKEDIN', currentProfile.lastName)
+          ) {
             profileUpdate.lastName = lastName;
+            profileUpdate.lastNameSource = DataSource.LINKEDIN;
           }
-          if (!dbUser.profile.avatarUrl && avatarUrl) {
+          if (
+            avatarUrl &&
+            shouldOverrideSource(
+              currentProfile.avatarUrlSource,
+              'LINKEDIN',
+              currentProfile.avatarUrl
+            )
+          ) {
             profileUpdate.avatarUrl = avatarUrl;
+            profileUpdate.avatarUrlSource = DataSource.LINKEDIN;
           }
 
           if (Object.keys(profileUpdate).length > 0) {

@@ -1,6 +1,7 @@
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { syncAvatarToClerk } from '@/lib/clerk-avatar-sync';
 import { db } from '@/lib/db';
 import { CreateProfileSchema } from '@/lib/validations';
 
@@ -48,34 +49,51 @@ export async function POST(request: NextRequest) {
     if (!user) {
       // Get user details from Clerk and create user in database
       const clerkUser = await currentUser();
-      if (!clerkUser || !clerkUser.emailAddresses?.[0]?.emailAddress) {
+      // Use primaryEmailAddress to get the user's primary email (first signup email)
+      const primaryEmailAddr = clerkUser?.primaryEmailAddress?.emailAddress;
+      if (!primaryEmailAddr) {
         return NextResponse.json({ error: 'Unable to get user details' }, { status: 400 });
       }
 
-      const email = clerkUser.emailAddresses[0].emailAddress;
+      const email = primaryEmailAddr;
 
-      // Check if a user with this email already exists (might have different clerkId)
+      // Check if a user with this email already exists
       const existingUserByEmail = await db.user.findUnique({
         where: { email },
       });
 
       if (existingUserByEmail) {
-        // Update the existing user's clerkId to link accounts
-        user = await db.user.update({
-          where: { id: existingUserByEmail.id },
-          data: { clerkId: userId },
-        });
-        console.log('[POST /api/profile] Linked existing user by email:', email);
-      } else {
-        // Create new user
-        user = await db.user.create({
-          data: {
-            clerkId: userId,
-            email,
+        // SECURITY: Do NOT allow a new Clerk user to take over an existing account
+        // This prevents account hijacking when someone connects an OAuth provider
+        // that has the same email as an existing user's account.
+        console.error(
+          '[POST /api/profile] Email conflict detected:',
+          email,
+          'already belongs to user:',
+          existingUserByEmail.id,
+          'but Clerk user:',
+          userId,
+          'is trying to use it'
+        );
+        return NextResponse.json(
+          {
+            error: 'Email already in use',
+            message:
+              'This email is already associated with another account. Please sign in with your original account or use a different email.',
+            code: 'EMAIL_CONFLICT',
           },
-        });
-        console.log('[POST /api/profile] Created new user:', email);
+          { status: 409 }
+        );
       }
+
+      // Create new user - email is unique and not used by anyone else
+      user = await db.user.create({
+        data: {
+          clerkId: userId,
+          email,
+        },
+      });
+      console.log('[POST /api/profile] Created new user:', email);
     }
 
     // Check if user already has a profile
@@ -207,6 +225,13 @@ export async function PATCH(request: NextRequest) {
         updatedAt: new Date(),
       },
     });
+
+    // Sync avatar to Clerk if it was updated
+    if (body.avatarUrl && body.avatarUrl !== user.profile.avatarUrl) {
+      syncAvatarToClerk(userId, body.avatarUrl).catch((err) => {
+        console.error('[PATCH /api/profile] Failed to sync avatar to Clerk:', err);
+      });
+    }
 
     return NextResponse.json({ success: true, profile });
   } catch (error) {

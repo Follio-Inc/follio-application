@@ -30,9 +30,69 @@ import { fileToBase64, getBestResolutionImage } from '@/lib/utils';
 // Storage key prefix for persisting onboarding state across OAuth redirects
 const ONBOARDING_IMPORT_STATE_KEY_PREFIX = 'follio_onboarding_import_state_';
 
+// IndexedDB key for storing large uploaded photos
+const UPLOADED_PHOTO_DB_NAME = 'follio_onboarding';
+const UPLOADED_PHOTO_STORE_NAME = 'uploaded_photos';
+
 // Helper to get user-specific storage key
 const getStorageKey = (userId: string | undefined) => {
   return userId ? `${ONBOARDING_IMPORT_STATE_KEY_PREFIX}${userId}` : null;
+};
+
+// IndexedDB helpers for storing large uploaded photos (sessionStorage has ~5MB limit)
+const openPhotoDatabase = (): Promise<IDBDatabase> => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(UPLOADED_PHOTO_DB_NAME, 1);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+    request.onupgradeneeded = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result;
+      if (!db.objectStoreNames.contains(UPLOADED_PHOTO_STORE_NAME)) {
+        db.createObjectStore(UPLOADED_PHOTO_STORE_NAME, { keyPath: 'key' });
+      }
+    };
+  });
+};
+
+const savePhotoToIndexedDB = async (key: string, photoBase64: string): Promise<void> => {
+  const db = await openPhotoDatabase();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(UPLOADED_PHOTO_STORE_NAME, 'readwrite');
+    const store = transaction.objectStore(UPLOADED_PHOTO_STORE_NAME);
+    const request = store.put({ key, data: photoBase64 });
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve();
+  });
+};
+
+const getPhotoFromIndexedDB = async (key: string): Promise<string | null> => {
+  try {
+    const db = await openPhotoDatabase();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(UPLOADED_PHOTO_STORE_NAME, 'readonly');
+      const store = transaction.objectStore(UPLOADED_PHOTO_STORE_NAME);
+      const request = store.get(key);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result?.data || null);
+    });
+  } catch {
+    return null;
+  }
+};
+
+const clearPhotosFromIndexedDB = async (): Promise<void> => {
+  try {
+    const db = await openPhotoDatabase();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(UPLOADED_PHOTO_STORE_NAME, 'readwrite');
+      const store = transaction.objectStore(UPLOADED_PHOTO_STORE_NAME);
+      const request = store.clear();
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve();
+    });
+  } catch {
+    // Ignore errors when clearing
+  }
 };
 
 type ImportSource = 'resume' | 'github' | 'linkedin' | 'links';
@@ -86,9 +146,9 @@ export default function OnboardingImportPage() {
   const [manualLinks, setManualLinks] = useState<ManualLink[]>([{ url: '' }]);
   const [showLinksForm, setShowLinksForm] = useState(false);
 
-  // Profile photo upload state
-  const [uploadedPhoto, setUploadedPhoto] = useState<string | null>(null);
-  const [uploadedPhotoPreview, setUploadedPhotoPreview] = useState<string | null>(null);
+  // Profile photo state - grid-based picker
+  const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]); // Array of uploaded base64 photos
+  const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null); // 'google', 'linkedin', 'github', 'upload-0', 'upload-1', etc. or null for none
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
   // Resume filename state
@@ -643,9 +703,9 @@ export default function OnboardingImportPage() {
       return;
     }
 
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      setError('Image must be less than 5MB');
+    // Validate file size (max 40MB - modern smartphone photos can be large)
+    if (file.size > 40 * 1024 * 1024) {
+      setError('Image must be less than 40MB');
       return;
     }
 
@@ -655,8 +715,9 @@ export default function OnboardingImportPage() {
     try {
       // Convert to base64 for storage and preview
       const base64 = await fileToBase64(file);
-      setUploadedPhoto(base64);
-      setUploadedPhotoPreview(base64);
+      const newIndex = uploadedPhotos.length;
+      setUploadedPhotos((prev) => [...prev, base64]);
+      setSelectedPhotoId(`upload-${newIndex}`); // Auto-select newly uploaded photo
       setIsUploadingPhoto(false);
     } catch {
       setError('Failed to process image');
@@ -664,101 +725,344 @@ export default function OnboardingImportPage() {
     }
   };
 
-  // Remove uploaded photo
-  const handleRemovePhoto = () => {
-    setUploadedPhoto(null);
-    setUploadedPhotoPreview(null);
+  // Remove an uploaded photo
+  const handleRemoveUploadedPhoto = (index: number) => {
+    setUploadedPhotos((prev) => prev.filter((_, i) => i !== index));
+    // If the removed photo was selected, clear selection
+    if (selectedPhotoId === `upload-${index}`) {
+      setSelectedPhotoId(null);
+    }
+    // Adjust selectedPhotoId if it's an upload with higher index
+    if (selectedPhotoId?.startsWith('upload-')) {
+      const selectedIndex = parseInt(selectedPhotoId.split('-')[1]);
+      if (selectedIndex > index) {
+        setSelectedPhotoId(`upload-${selectedIndex - 1}`);
+      }
+    }
   };
 
-  // Get the current best avatar (from uploaded, Google, LinkedIn, or GitHub)
-  const getCurrentAvatar = (): string | null => {
-    // Priority: uploaded > Google (user.imageUrl) > LinkedIn > GitHub
-    if (uploadedPhotoPreview) return uploadedPhotoPreview;
-    if (user?.imageUrl) return user.imageUrl;
+  // Get all available photos as an array with source info
+  interface PhotoOption {
+    id: string;
+    url: string;
+    source: string;
+    label: string;
+  }
 
-    const linkedinData = importedData.linkedin as Record<string, unknown> | undefined;
-    const githubData = importedData.github as Record<string, unknown> | undefined;
-    const linkedinProfile = linkedinData?.profile as Record<string, unknown> | undefined;
-    const githubProfile = githubData?.profile as Record<string, unknown> | undefined;
+  // Detect the primary OAuth provider that provided the user's profile image
+  const getPrimaryAuthProvider = (): { id: string; label: string } | null => {
+    if (!user) return null;
 
-    if (linkedinProfile?.avatarUrl) return linkedinProfile.avatarUrl as string;
-    if (githubProfile?.avatarUrl) return githubProfile.avatarUrl as string;
+    // Check verified external accounts in order of priority
+    const verifiedAccounts =
+      user.externalAccounts?.filter((a) => a.verification?.status === 'verified') || [];
 
+    // Find the first OAuth provider that likely provided the profile image
+    // Priority: Google > LinkedIn > GitHub > others
+    const googleAccount = verifiedAccounts.find(
+      (a) => a.provider === 'oauth_google' || a.provider === 'google'
+    );
+    if (googleAccount) return { id: 'google', label: 'Google' };
+
+    const linkedinAccount = verifiedAccounts.find(
+      (a) =>
+        a.provider === 'linkedin_oidc' ||
+        a.provider === 'linkedin' ||
+        a.provider === 'oauth_linkedin_oidc' ||
+        a.provider === 'oauth_linkedin'
+    );
+    if (linkedinAccount) return { id: 'linkedin-sso', label: 'LinkedIn' };
+
+    const githubAccount = verifiedAccounts.find(
+      (a) => a.provider === 'github' || a.provider === 'oauth_github'
+    );
+    if (githubAccount) return { id: 'github-sso', label: 'GitHub' };
+
+    // If there's any other OAuth provider
+    if (verifiedAccounts.length > 0) {
+      const provider = verifiedAccounts[0].provider || 'sso';
+      // Clean up provider name for display (e.g., 'oauth_facebook' -> 'Facebook')
+      const label = provider.replace('oauth_', '').replace('_oidc', '').replace(/_/g, ' ');
+      const capitalizedLabel = label.charAt(0).toUpperCase() + label.slice(1);
+      return { id: 'sso', label: capitalizedLabel };
+    }
+
+    // User signed up with email/password - no OAuth provider
     return null;
   };
 
-  // Create profile and continue
+  const getAvailablePhotos = (): PhotoOption[] => {
+    const photos: PhotoOption[] = [];
+    const seenUrls = new Set<string>(); // Track URLs to avoid duplicates
+
+    // Helper to add photo only if URL is unique
+    const addPhoto = (photo: PhotoOption) => {
+      // Normalize URL for comparison (ignore query params, protocol differences)
+      const normalizedUrl = photo.url.split('?')[0].toLowerCase();
+      if (!seenUrls.has(normalizedUrl)) {
+        seenUrls.add(normalizedUrl);
+        photos.push(photo);
+      }
+    };
+
+    // LinkedIn photo from import (prioritize imported data over SSO)
+    const linkedinData = importedData.linkedin as Record<string, unknown> | undefined;
+    const linkedinProfile = linkedinData?.profile as Record<string, unknown> | undefined;
+    if (linkedinProfile?.avatarUrl) {
+      addPhoto({
+        id: 'linkedin',
+        url: linkedinProfile.avatarUrl as string,
+        source: 'linkedin',
+        label: 'LinkedIn',
+      });
+    }
+
+    // GitHub photo from import (prioritize imported data over SSO)
+    const githubData = importedData.github as Record<string, unknown> | undefined;
+    const githubProfile = githubData?.profile as Record<string, unknown> | undefined;
+    if (githubProfile?.avatarUrl) {
+      addPhoto({
+        id: 'github',
+        url: githubProfile.avatarUrl as string,
+        source: 'github',
+        label: 'GitHub',
+      });
+    }
+
+    // SSO/OAuth profile photo (only if not already added from import and user has real image)
+    const primaryAuthProvider = getPrimaryAuthProvider();
+    if (user?.imageUrl && user?.hasImage && primaryAuthProvider) {
+      addPhoto({
+        id: primaryAuthProvider.id,
+        url: user.imageUrl,
+        source: primaryAuthProvider.id,
+        label: primaryAuthProvider.label,
+      });
+    }
+
+    // Uploaded photos
+    uploadedPhotos.forEach((photo, index) => {
+      addPhoto({
+        id: `upload-${index}`,
+        url: photo,
+        source: 'upload',
+        label: `Upload ${index + 1}`,
+      });
+    });
+
+    return photos;
+  };
+
+  // Get the currently selected photo URL
+  const getSelectedPhotoUrl = (): string | null => {
+    if (!selectedPhotoId) return null;
+    const photos = getAvailablePhotos();
+    const selected = photos.find((p) => p.id === selectedPhotoId);
+    return selected?.url || null;
+  };
+
+  // Create profile and continue - ALWAYS goes to review
   const handleContinue = async () => {
-    // Collect all possible avatar URLs
+    // Use the selected photo from the grid, or pick the best resolution if none selected
+    let bestAvatarUrl: string | null = getSelectedPhotoUrl();
+
+    // If no photo selected, compare resolutions of available photos to find the best one
+    if (!bestAvatarUrl) {
+      const photos = getAvailablePhotos();
+      if (photos.length > 0) {
+        const avatarCandidates = photos.map((p) => p.url);
+        bestAvatarUrl = await getBestResolutionImage(avatarCandidates);
+      }
+    }
+
+    // Collect data from ALL sources
+    const resumeData = importedData.resume as Record<string, unknown> | undefined;
     const linkedinData = importedData.linkedin as Record<string, unknown> | undefined;
     const githubData = importedData.github as Record<string, unknown> | undefined;
-    const linkedinProfile = linkedinData?.profile as Record<string, unknown> | undefined;
-    const githubProfile = githubData?.profile as Record<string, unknown> | undefined;
 
-    // If user uploaded a photo, use that (it's the highest priority)
-    let bestAvatarUrl: string | null = uploadedPhoto;
+    // Get profile data from various sources
+    const resumeProfile = (resumeData?.profile as Record<string, unknown>) || {};
+    const linkedinProfile = (linkedinData?.profile as Record<string, unknown>) || {};
+    const githubProfile = (githubData?.profile as Record<string, unknown>) || {};
+    const resumeContactInfo = resumeData?.contactInfo as Record<string, unknown> | undefined;
 
-    // Otherwise, compare resolutions of available photos to find the best one
-    if (!bestAvatarUrl) {
-      const avatarCandidates = [
-        user?.imageUrl, // Google or other SSO provider
-        linkedinProfile?.avatarUrl as string | undefined,
-        githubProfile?.avatarUrl as string | undefined,
-      ];
+    // Collect ALL names from ALL sources for review
+    // Format: { firstName, lastName, source }
+    const allNames: Array<{ firstName?: string; lastName?: string; source: string }> = [];
 
-      // Get best resolution image from URLs
-      bestAvatarUrl = await getBestResolutionImage(avatarCandidates);
-    }
-
-    // If we have resume data, go to review flow
-    if (importedData.resume) {
-      // Merge avatar from best source
-      const resumeData = importedData.resume as Record<string, unknown>;
-      const profile = (resumeData.profile as Record<string, unknown>) || {};
-
-      if (!profile.avatarUrl && bestAvatarUrl) {
-        profile.avatarUrl = bestAvatarUrl;
-      }
-
-      // Store merged data in sessionStorage for the review page
-      const mergedData = { ...resumeData, profile };
-      sessionStorage.setItem('onboarding_parsed_resume', JSON.stringify(mergedData));
-      router.push('/onboarding/review');
-      return;
-    }
-
-    // If no resume data but has other imports, create profile directly
-    setIsCreatingProfile(true);
-    setError(null);
-
-    try {
-      // Include the best avatar URL in the imported data
-      const dataToSend = {
-        ...importedData,
-        bestAvatarUrl,
-      };
-
-      // Create or update profile with imported data
-      const response = await fetch('/api/onboarding/complete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ importedData: dataToSend }),
+    // FIRST: Add signup name (from Clerk)
+    if (user?.firstName || user?.lastName) {
+      allNames.push({
+        firstName: user.firstName || undefined,
+        lastName: user.lastName || undefined,
+        source: 'SIGNUP',
       });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to create profile');
-      }
-
-      // Force refresh to clear Router Cache, then navigate
-      // This ensures /me fetches fresh data from the server
-      router.refresh();
-      router.push('/me');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong');
-      setIsCreatingProfile(false);
     }
+
+    // Name from resume
+    if (resumeProfile.firstName || resumeProfile.lastName) {
+      allNames.push({
+        firstName: resumeProfile.firstName as string | undefined,
+        lastName: resumeProfile.lastName as string | undefined,
+        source: 'RESUME',
+      });
+    }
+
+    // Name from LinkedIn
+    if (linkedinProfile.firstName || linkedinProfile.lastName) {
+      allNames.push({
+        firstName: linkedinProfile.firstName as string | undefined,
+        lastName: linkedinProfile.lastName as string | undefined,
+        source: 'LINKEDIN',
+      });
+    }
+
+    // Name from GitHub
+    if (githubProfile.firstName || githubProfile.lastName) {
+      allNames.push({
+        firstName: githubProfile.firstName as string | undefined,
+        lastName: githubProfile.lastName as string | undefined,
+        source: 'GITHUB',
+      });
+    }
+
+    // Build merged profile - use resume data as base if available, otherwise build from other sources
+    // Name precedence for display: Resume > LinkedIn > GitHub > Signup (but all shown in review)
+    const mergedProfile: Record<string, unknown> = {
+      firstName:
+        resumeProfile.firstName ||
+        linkedinProfile.firstName ||
+        githubProfile.firstName ||
+        user?.firstName,
+      lastName:
+        resumeProfile.lastName ||
+        linkedinProfile.lastName ||
+        githubProfile.lastName ||
+        user?.lastName,
+      headline: resumeProfile.headline || linkedinProfile.headline || githubProfile.headline,
+      summary: resumeProfile.summary || linkedinProfile.summary || githubProfile.bio,
+      location: resumeProfile.location || linkedinProfile.location || githubProfile.location,
+      avatarUrl: bestAvatarUrl,
+    };
+
+    // Collect ALL emails from ALL sources for the review page
+    const allEmails: Array<{ email: string; source: string }> = [];
+
+    // FIRST: Add signup email as primary (from Clerk)
+    const signupEmail = user?.primaryEmailAddress?.emailAddress;
+    if (signupEmail) {
+      allEmails.push({ email: signupEmail, source: 'SIGNUP' });
+    }
+
+    // Email from resume
+    if (resumeContactInfo?.email) {
+      allEmails.push({ email: resumeContactInfo.email as string, source: 'RESUME' });
+    }
+
+    // Email from LinkedIn
+    if (linkedinData) {
+      const linkedinContactInfo = linkedinData.contactInfo as Record<string, unknown> | undefined;
+      if (linkedinContactInfo?.email) {
+        allEmails.push({ email: linkedinContactInfo.email as string, source: 'LINKEDIN' });
+      }
+      if (linkedinData.email && typeof linkedinData.email === 'string') {
+        allEmails.push({ email: linkedinData.email, source: 'LINKEDIN' });
+      }
+    }
+
+    // Email from GitHub
+    if (githubData) {
+      const githubContactInfo = githubData.contactInfo as Record<string, unknown> | undefined;
+      if (githubContactInfo?.email) {
+        allEmails.push({ email: githubContactInfo.email as string, source: 'GITHUB' });
+      }
+    }
+
+    // Deduplicate emails (signup email stays first since it was added first)
+    const seenEmails = new Set<string>();
+    const uniqueEmails = allEmails.filter((e) => {
+      const normalized = e.email.toLowerCase().trim();
+      if (seenEmails.has(normalized)) return false;
+      seenEmails.add(normalized);
+      return true;
+    });
+
+    // Collect ALL phones from ALL sources
+    const allPhones: Array<{ phone: string; source: string }> = [];
+
+    if (resumeContactInfo?.phone) {
+      allPhones.push({ phone: resumeContactInfo.phone as string, source: 'RESUME' });
+    }
+
+    if (linkedinData) {
+      const linkedinContactInfo = linkedinData.contactInfo as Record<string, unknown> | undefined;
+      if (linkedinContactInfo?.phone) {
+        allPhones.push({ phone: linkedinContactInfo.phone as string, source: 'LINKEDIN' });
+      }
+    }
+
+    // Deduplicate phones
+    const seenPhones = new Set<string>();
+    const uniquePhones = allPhones.filter((p) => {
+      const normalized = p.phone.replace(/\D/g, '');
+      if (seenPhones.has(normalized)) return false;
+      seenPhones.add(normalized);
+      return true;
+    });
+
+    // Build contact info
+    const contactInfo = {
+      ...(resumeContactInfo || {}),
+      allEmails: uniqueEmails,
+      allPhones: uniquePhones,
+    };
+
+    // Handle large uploaded photos - store in IndexedDB instead of sessionStorage
+    let avatarUrlForStorage = mergedProfile.avatarUrl as string | undefined;
+    if (avatarUrlForStorage?.startsWith('data:')) {
+      try {
+        const photoKey = `uploaded_avatar_${Date.now()}`;
+        await savePhotoToIndexedDB(photoKey, avatarUrlForStorage);
+        mergedProfile.avatarUrl = `indexeddb:${photoKey}`;
+      } catch (err) {
+        console.error('Failed to store photo in IndexedDB:', err);
+        delete mergedProfile.avatarUrl;
+      }
+    }
+
+    // Merge all data for review - include data from all sources
+    const dataForReview = {
+      profile: mergedProfile,
+      contactInfo,
+      // Include all name options for review
+      allNames,
+      // Include experiences, education, skills, etc. from resume if available
+      experiences: resumeData?.experiences || [],
+      educations: resumeData?.educations || [],
+      skills: [
+        ...((resumeData?.skills as string[]) || []),
+        ...((githubData?.skills as string[]) || []),
+      ].filter((s, i, arr) => arr.indexOf(s) === i), // Dedupe
+      links: [
+        ...((resumeData?.links as Array<Record<string, unknown>>) || []),
+        ...((linkedinData?.links as Array<Record<string, unknown>>) || []),
+        ...((githubData?.links as Array<Record<string, unknown>>) || []),
+      ],
+      certifications: resumeData?.certifications || [],
+      projects: [
+        ...((resumeData?.projects as Array<Record<string, unknown>>) || []),
+        ...((githubData?.projects as Array<Record<string, unknown>>) || []),
+      ],
+      // Pass through original imported data for reference
+      _sources: {
+        hasResume: !!resumeData,
+        hasLinkedIn: !!linkedinData,
+        hasGitHub: !!githubData,
+      },
+    };
+
+    sessionStorage.setItem('onboarding_parsed_resume', JSON.stringify(dataForReview));
+    router.push('/onboarding/review');
   };
 
   // Get overall import count
@@ -819,7 +1123,7 @@ export default function OnboardingImportPage() {
                     <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500/10 to-purple-500/10 ring-1 ring-violet-500/20">
                       <Camera className="h-6 w-6 text-violet-500" />
                     </div>
-                    {(uploadedPhotoPreview || getCurrentAvatar()) && !isUploadingPhoto ? (
+                    {selectedPhotoId && !isUploadingPhoto ? (
                       <CheckCircle2 className="h-5 w-5 text-green-500" />
                     ) : isUploadingPhoto ? (
                       <Loader2 className="h-5 w-5 animate-spin text-primary" />
@@ -827,48 +1131,77 @@ export default function OnboardingImportPage() {
                   </div>
 
                   <h3 className="mb-1 font-semibold">Profile Photo</h3>
-                  <p className="mb-4 flex-1 text-sm text-muted-foreground">
-                    Add a photo to personalize your profile
+                  <p className="mb-4 text-sm text-muted-foreground">
+                    {getAvailablePhotos().length > 0
+                      ? 'Select a photo or upload your own'
+                      : 'Upload a photo to personalize your profile'}
                   </p>
 
-                  <div className="flex items-center gap-3">
-                    {uploadedPhotoPreview || getCurrentAvatar() ? (
-                      <>
-                        <Avatar className="h-10 w-10 ring-2 ring-background">
-                          <AvatarImage
-                            src={uploadedPhotoPreview || getCurrentAvatar() || undefined}
-                          />
-                          <AvatarFallback>{user?.firstName?.[0] || 'U'}</AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1">
-                          <Badge variant="secondary" className="text-xs">
-                            {uploadedPhotoPreview ? 'Custom' : 'From account'}
-                          </Badge>
-                        </div>
-                        {uploadedPhotoPreview && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={handleRemovePhoto}
-                            className="h-8 w-8 p-0"
+                  {/* Photo Grid */}
+                  <div className="grid grid-cols-4 gap-2">
+                    {getAvailablePhotos().map((photo) => (
+                      <div key={photo.id} className="group/photo relative">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSelectedPhotoId(selectedPhotoId === photo.id ? null : photo.id)
+                          }
+                          className={`relative aspect-square w-full overflow-hidden rounded-lg border-2 transition-all ${
+                            selectedPhotoId === photo.id
+                              ? 'border-primary ring-2 ring-primary/20'
+                              : 'border-transparent hover:border-muted-foreground/30'
+                          }`}
+                        >
+                          <Avatar className="h-full w-full rounded-lg">
+                            <AvatarImage src={photo.url} className="h-full w-full object-cover" />
+                            <AvatarFallback className="rounded-lg">{photo.label[0]}</AvatarFallback>
+                          </Avatar>
+                          {selectedPhotoId === photo.id && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-primary/10">
+                              <CheckCircle2 className="h-5 w-5 text-primary" />
+                            </div>
+                          )}
+                        </button>
+                        {/* Source label */}
+                        <span className="mt-1 block truncate text-center text-[10px] text-muted-foreground">
+                          {photo.label}
+                        </span>
+                        {/* Remove button for uploaded photos */}
+                        {photo.source === 'upload' && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const index = parseInt(photo.id.split('-')[1]);
+                              handleRemoveUploadedPhoto(index);
+                            }}
+                            className="absolute -right-1 -top-1 hidden h-5 w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-sm group-hover/photo:flex"
                           >
-                            <X className="h-4 w-4" />
-                          </Button>
+                            <X className="h-3 w-3" />
+                          </button>
                         )}
-                      </>
-                    ) : (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        className="w-full"
+                      </div>
+                    ))}
+                    {/* Upload button - always shown as last item */}
+                    <div className="relative">
+                      <button
+                        type="button"
                         onClick={() => document.getElementById('photo-upload')?.click()}
                         disabled={isUploadingPhoto}
+                        className="flex aspect-square w-full items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/30 transition-all hover:border-primary hover:bg-primary/5"
                       >
-                        <Upload className="mr-2 h-4 w-4" />
+                        {isUploadingPhoto ? (
+                          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                        ) : (
+                          <Plus className="h-5 w-5 text-muted-foreground" />
+                        )}
+                      </button>
+                      <span className="mt-1 block text-center text-[10px] text-muted-foreground">
                         Upload
-                      </Button>
-                    )}
+                      </span>
+                    </div>
                   </div>
+
                   <input
                     id="photo-upload"
                     type="file"

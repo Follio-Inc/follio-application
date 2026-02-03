@@ -4,7 +4,7 @@ import { UserButton } from '@clerk/nextjs';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Edit, ExternalLink, Eye, Settings } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { ViewSwitcher } from '@/app/u/[handle]/view-switcher';
 import { PortfolioView } from '@/app/u/[handle]/views/portfolio-view';
@@ -30,6 +30,12 @@ export function ProfilePreview({
 }: ProfilePreviewProps) {
   const [currentView, setCurrentView] = useState<ProfileView>('resume');
   const [showBanner, setShowBanner] = useState(initialShowBanner);
+  const [isMounted, setIsMounted] = useState(false);
+
+  // Prevent hydration mismatch with Clerk components
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const handleViewChange = (view: ProfileView) => {
     setCurrentView(view);
@@ -76,13 +82,15 @@ export function ProfilePreview({
                   <Settings className="h-4 w-4" />
                 </Button>
               </Link>
-              <UserButton
-                appearance={{
-                  elements: {
-                    avatarBox: 'h-8 w-8',
-                  },
-                }}
-              />
+              {isMounted && (
+                <UserButton
+                  appearance={{
+                    elements: {
+                      avatarBox: 'h-8 w-8',
+                    },
+                  }}
+                />
+              )}
             </div>
           </div>
         </header>

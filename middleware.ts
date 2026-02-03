@@ -21,6 +21,13 @@ const isPublicRoute = createRouteMatcher([
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
+  // Allow Clerk's internal sign-out requests without interference
+  // This prevents "Failed to fetch" errors during sign-out
+  const pathname = req.nextUrl.pathname;
+  if (pathname.includes('clerk') || pathname.includes('__clerk')) {
+    return NextResponse.next();
+  }
+
   // Protect dashboard and builder routes
   if (isProtectedRoute(req)) {
     const { userId } = await auth();

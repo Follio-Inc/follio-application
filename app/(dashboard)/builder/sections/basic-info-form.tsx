@@ -1,7 +1,7 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Eye, EyeOff, Globe, Info, Mail, Phone } from 'lucide-react';
+import { Eye, EyeOff, Globe, Mail, Phone, Star, X } from 'lucide-react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 
@@ -11,7 +11,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ProfileBasicInfoSchema, type ProfileBasicInfo } from '@/lib/validations';
 
 import type { FullProfile } from '@/types';
@@ -132,12 +131,20 @@ interface ContactInfoFormProps {
     phone?: string;
     phonePublic?: boolean;
     website?: string;
+    additionalEmails?: Array<{ email: string; source: string }>;
+    additionalPhones?: Array<{ phone: string; source: string }>;
   }) => void;
 }
 
 // Helper type for additional emails
 interface AdditionalEmail {
   email: string;
+  source: string;
+}
+
+// Helper type for additional phones
+interface AdditionalPhone {
+  phone: string;
   source: string;
 }
 
@@ -152,20 +159,22 @@ function getSourceBadgeVariant(
       return 'default';
     case 'RESUME':
       return 'outline';
+    case 'SIGNUP':
+      return 'default';
     default:
       return 'outline';
   }
 }
 
 export function ContactInfoForm({ profile, onContactUpdate }: ContactInfoFormProps) {
-  const [email, setEmail] = useState(profile.contactInfo?.email || '');
+  const [primaryEmail, setPrimaryEmail] = useState(profile.contactInfo?.email || '');
   const [emailPublic, setEmailPublic] = useState(profile.contactInfo?.emailPublic || false);
-  const [phone, setPhone] = useState(profile.contactInfo?.phone || '');
+  const [primaryPhone, setPrimaryPhone] = useState(profile.contactInfo?.phone || '');
   const [phonePublic, setPhonePublic] = useState(profile.contactInfo?.phonePublic || false);
   const [website, setWebsite] = useState(profile.contactInfo?.website || '');
 
   // Parse additional emails from contactInfo
-  const additionalEmails: AdditionalEmail[] = (() => {
+  const [additionalEmails, setAdditionalEmails] = useState<AdditionalEmail[]>(() => {
     try {
       const raw = profile.contactInfo?.additionalEmails;
       if (Array.isArray(raw)) return raw as unknown as AdditionalEmail[];
@@ -174,11 +183,72 @@ export function ContactInfoForm({ profile, onContactUpdate }: ContactInfoFormPro
     } catch {
       return [];
     }
-  })();
+  });
 
-  const handleEmailChange = (value: string) => {
-    setEmail(value);
-    onContactUpdate({ email: value });
+  // Parse additional phones from contactInfo
+  const [additionalPhones, setAdditionalPhones] = useState<AdditionalPhone[]>(() => {
+    try {
+      const raw = (profile.contactInfo as Record<string, unknown>)?.additionalPhones;
+      if (Array.isArray(raw)) return raw as unknown as AdditionalPhone[];
+      if (typeof raw === 'string') return JSON.parse(raw) as AdditionalPhone[];
+      return [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Build combined email list: primary email first, then additional emails
+  const allEmails: Array<{ email: string; source: string; isPrimary: boolean }> = [
+    ...(primaryEmail
+      ? [
+          {
+            email: primaryEmail,
+            source: profile.contactInfo?.emailSource || 'MANUAL',
+            isPrimary: true,
+          },
+        ]
+      : []),
+    ...additionalEmails.map((e) => ({ ...e, isPrimary: false })),
+  ];
+
+  // Build combined phone list: primary phone first, then additional phones
+  const allPhones: Array<{ phone: string; source: string; isPrimary: boolean }> = [
+    ...(primaryPhone
+      ? [
+          {
+            phone: primaryPhone,
+            source:
+              ((profile.contactInfo as Record<string, unknown>)?.phoneSource as string) || 'MANUAL',
+            isPrimary: true,
+          },
+        ]
+      : []),
+    ...additionalPhones.map((p) => ({ ...p, isPrimary: false })),
+  ];
+
+  const handleMakePrimary = (emailToMakePrimary: string, source: string) => {
+    // Current primary becomes additional (if it exists)
+    const newAdditionalEmails = additionalEmails.filter((e) => e.email !== emailToMakePrimary);
+    if (primaryEmail) {
+      newAdditionalEmails.unshift({
+        email: primaryEmail,
+        source: profile.contactInfo?.emailSource || 'MANUAL',
+      });
+    }
+
+    setPrimaryEmail(emailToMakePrimary);
+    setAdditionalEmails(newAdditionalEmails);
+
+    onContactUpdate({
+      email: emailToMakePrimary,
+      additionalEmails: newAdditionalEmails,
+    });
+  };
+
+  const handleDeleteEmail = (emailToDelete: string) => {
+    const newAdditionalEmails = additionalEmails.filter((e) => e.email !== emailToDelete);
+    setAdditionalEmails(newAdditionalEmails);
+    onContactUpdate({ additionalEmails: newAdditionalEmails });
   };
 
   const handleEmailPublicChange = (checked: boolean) => {
@@ -186,9 +256,30 @@ export function ContactInfoForm({ profile, onContactUpdate }: ContactInfoFormPro
     onContactUpdate({ emailPublic: checked });
   };
 
-  const handlePhoneChange = (value: string) => {
-    setPhone(value);
-    onContactUpdate({ phone: value });
+  const handleMakePhonePrimary = (phoneToMakePrimary: string, source: string) => {
+    // Current primary becomes additional (if it exists)
+    const newAdditionalPhones = additionalPhones.filter((p) => p.phone !== phoneToMakePrimary);
+    if (primaryPhone) {
+      newAdditionalPhones.unshift({
+        phone: primaryPhone,
+        source:
+          ((profile.contactInfo as Record<string, unknown>)?.phoneSource as string) || 'MANUAL',
+      });
+    }
+
+    setPrimaryPhone(phoneToMakePrimary);
+    setAdditionalPhones(newAdditionalPhones);
+
+    onContactUpdate({
+      phone: phoneToMakePrimary,
+      additionalPhones: newAdditionalPhones,
+    });
+  };
+
+  const handleDeletePhone = (phoneToDelete: string) => {
+    const newAdditionalPhones = additionalPhones.filter((p) => p.phone !== phoneToDelete);
+    setAdditionalPhones(newAdditionalPhones);
+    onContactUpdate({ additionalPhones: newAdditionalPhones });
   };
 
   const handlePhonePublicChange = (checked: boolean) => {
@@ -210,109 +301,183 @@ export function ContactInfoForm({ profile, onContactUpdate }: ContactInfoFormPro
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Email */}
-        <div className="space-y-2">
-          <Label htmlFor="email" className="flex items-center gap-2">
-            <Mail className="h-4 w-4" />
-            Primary Email
-            {profile.contactInfo?.emailSource && (
-              <Badge variant="outline" className="text-xs">
-                from {profile.contactInfo.emailSource.toLowerCase()}
-              </Badge>
-            )}
-          </Label>
-          <div className="flex gap-2">
-            <Input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => handleEmailChange(e.target.value)}
-              placeholder="you@example.com"
-              className="flex-1"
-            />
+        {/* Email Section */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Label className="flex items-center gap-2">
+              <Mail className="h-4 w-4" />
+              Email Addresses
+            </Label>
             <Button
               type="button"
               variant="outline"
-              size="icon"
+              size="sm"
               onClick={() => handleEmailPublicChange(!emailPublic)}
-              title={emailPublic ? 'Visible on profile' : 'Hidden from profile'}
+              className="h-8 gap-2"
+              title={
+                emailPublic
+                  ? 'Primary email visible on profile'
+                  : 'Primary email hidden from profile'
+              }
             >
               {emailPublic ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+              <span className="text-xs">{emailPublic ? 'Visible' : 'Hidden'}</span>
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">
-            {emailPublic
-              ? 'This email will be visible on your public profile'
-              : 'This email is hidden from your public profile'}
-          </p>
 
-          {/* Additional Emails */}
-          {additionalEmails.length > 0 && (
-            <div className="mt-3 rounded-lg border bg-muted/30 p-3">
-              <div className="mb-2 flex items-center gap-2 text-sm font-medium">
-                <Info className="h-4 w-4 text-muted-foreground" />
-                Additional Emails from Imports
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger>
-                      <span className="cursor-help text-muted-foreground">(?)</span>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p className="max-w-xs">
-                        These emails were found in your imported data. Click on one to make it your
-                        primary email.
+          {allEmails.length > 0 ? (
+            <div className="space-y-2">
+              {allEmails.map((item, idx) => (
+                <div
+                  key={idx}
+                  className={`flex items-center justify-between rounded-lg border p-3 transition-colors ${
+                    item.isPrimary
+                      ? 'border-primary/30 bg-primary/5'
+                      : 'border-border bg-background hover:bg-muted/30'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    {item.isPrimary && <Star className="h-4 w-4 fill-primary text-primary" />}
+                    <div>
+                      <p className={`text-sm ${item.isPrimary ? 'font-medium' : ''}`}>
+                        {item.email}
                       </p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {additionalEmails.map((item, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => handleEmailChange(item.email)}
-                    className="flex items-center gap-1.5 rounded-full border bg-background px-3 py-1 text-sm transition-colors hover:bg-muted"
-                  >
-                    <span>{item.email}</span>
-                    <Badge variant={getSourceBadgeVariant(item.source)} className="text-xs">
-                      {item.source.toLowerCase()}
-                    </Badge>
-                  </button>
-                ))}
-              </div>
+                      <div className="mt-0.5 flex items-center gap-2">
+                        <Badge variant={getSourceBadgeVariant(item.source)} className="text-xs">
+                          {item.source.toLowerCase()}
+                        </Badge>
+                        {item.isPrimary && (
+                          <span className="text-xs font-medium text-primary">Primary</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {!item.isPrimary && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleMakePrimary(item.email, item.source)}
+                          className="h-7 text-xs"
+                        >
+                          <Star className="mr-1 h-3 w-3" />
+                          Make Primary
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteEmail(item.email)}
+                          className="h-7 text-xs text-muted-foreground hover:text-destructive"
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
+              No email addresses found.
             </div>
           )}
+
+          <p className="text-xs text-muted-foreground">
+            {emailPublic
+              ? 'Your primary email will be visible on your public profile'
+              : 'Your primary email is hidden from your public profile'}
+          </p>
         </div>
 
-        {/* Phone */}
-        <div className="space-y-2">
-          <Label htmlFor="phone" className="flex items-center gap-2">
-            <Phone className="h-4 w-4" />
-            Phone Number
-          </Label>
-          <div className="flex gap-2">
-            <Input
-              id="phone"
-              type="tel"
-              value={phone}
-              onChange={(e) => handlePhoneChange(e.target.value)}
-              placeholder="+1 (555) 123-4567"
-              className="flex-1"
-            />
+        {/* Phone Section */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Label className="flex items-center gap-2">
+              <Phone className="h-4 w-4" />
+              Phone Numbers
+            </Label>
             <Button
               type="button"
               variant="outline"
-              size="icon"
+              size="sm"
               onClick={() => handlePhonePublicChange(!phonePublic)}
-              title={phonePublic ? 'Visible on profile' : 'Hidden from profile'}
+              className="h-8 gap-2"
+              title={
+                phonePublic
+                  ? 'Primary phone visible on profile'
+                  : 'Primary phone hidden from profile'
+              }
             >
               {phonePublic ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+              <span className="text-xs">{phonePublic ? 'Visible' : 'Hidden'}</span>
             </Button>
           </div>
+
+          {allPhones.length > 0 ? (
+            <div className="space-y-2">
+              {allPhones.map((item, idx) => (
+                <div
+                  key={idx}
+                  className={`flex items-center justify-between rounded-lg border p-3 transition-colors ${
+                    item.isPrimary
+                      ? 'border-primary/30 bg-primary/5'
+                      : 'border-border bg-background hover:bg-muted/30'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    {item.isPrimary && <Star className="h-4 w-4 fill-primary text-primary" />}
+                    <div>
+                      <p className={`text-sm ${item.isPrimary ? 'font-medium' : ''}`}>
+                        {item.phone}
+                      </p>
+                      <div className="mt-0.5 flex items-center gap-2">
+                        <Badge variant={getSourceBadgeVariant(item.source)} className="text-xs">
+                          {item.source.toLowerCase()}
+                        </Badge>
+                        {item.isPrimary && (
+                          <span className="text-xs font-medium text-primary">Primary</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {!item.isPrimary && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleMakePhonePrimary(item.phone, item.source)}
+                          className="h-7 text-xs"
+                        >
+                          <Star className="mr-1 h-3 w-3" />
+                          Make Primary
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeletePhone(item.phone)}
+                          className="h-7 text-xs text-muted-foreground hover:text-destructive"
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
+              No phone numbers found.
+            </div>
+          )}
+
           <p className="text-xs text-muted-foreground">
             {phonePublic
-              ? 'This phone number will be visible on your public profile'
-              : 'This phone number is hidden from your public profile'}
+              ? 'Your primary phone will be visible on your public profile'
+              : 'Your primary phone is hidden from your public profile'}
           </p>
         </div>
 

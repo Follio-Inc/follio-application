@@ -23,6 +23,8 @@ const nextConfig: NextConfig = {
     // Enable server actions
     serverActions: {
       bodySizeLimit: '2mb',
+      // Allow Clerk's sign-out server actions to work properly
+      allowedOrigins: ['localhost:3000'],
     },
   },
 

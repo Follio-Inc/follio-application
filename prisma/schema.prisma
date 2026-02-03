@@ -92,6 +92,7 @@ model ContactInfo {
   phone            String?
   phoneSource      DataSource @default(MANUAL)
   phonePublic      Boolean    @default(false)
+  additionalPhones Json?      @default("[]")
   website          String?
   websiteSource    DataSource @default(MANUAL)
   createdAt        DateTime   @default(now())

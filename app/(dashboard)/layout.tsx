@@ -20,7 +20,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </Button>
             </Link>
             <UserButton
-              afterSignOutUrl="/"
+              signInUrl="/sign-in"
               appearance={{
                 elements: {
                   avatarBox: 'h-8 w-8',

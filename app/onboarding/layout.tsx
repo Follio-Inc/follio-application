@@ -13,7 +13,7 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
           <Logo href="/" size="md" />
           <div className="flex items-center gap-3">
             <UserButton
-              afterSignOutUrl="/"
+              signInUrl="/sign-in"
               appearance={{
                 elements: {
                   avatarBox: 'h-8 w-8',

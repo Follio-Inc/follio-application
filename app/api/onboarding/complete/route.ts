@@ -1,6 +1,8 @@
+import { syncAvatarToClerk } from '@/lib/clerk-avatar-sync';
 import { db } from '@/lib/db';
 import { parseDateFlexible } from '@/lib/utils';
 import type { NormalizedImportResult } from '@/services/import/types';
+import { resolveEmails } from '@/services/multi-source-merger.service';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import type { DataSource, Profile, User } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
@@ -8,6 +10,21 @@ import { NextRequest, NextResponse } from 'next/server';
 // Helper to safely cast string to DataSource enum
 const toDataSource = (source: string | undefined): DataSource => {
   return (source || 'MANUAL') as DataSource;
+};
+
+/**
+ * Helper to filter out base64 data URLs from avatar storage.
+ * Base64 images should only be synced to Clerk, not stored in the database.
+ * Returns undefined if it's a base64 data URL, otherwise returns the URL.
+ */
+const filterBase64Avatar = (avatarUrl: string | undefined | null): string | undefined => {
+  if (!avatarUrl) return undefined;
+  // Don't store base64 data URLs in the database - they're too large and break the UI
+  if (avatarUrl.startsWith('data:')) {
+    console.log('[Avatar Filter] Filtering out base64 avatar for database storage');
+    return undefined;
+  }
+  return avatarUrl;
 };
 
 /**
@@ -61,6 +78,11 @@ interface ReviewedData {
     email?: string;
     emailSource?: string;
     phone?: string;
+    phoneSource?: string;
+    // Support for all collected emails from all import sources
+    allEmails?: Array<{ email: string; source: string }>;
+    // Support for all collected phones from all import sources
+    allPhones?: Array<{ phone: string; source: string }>;
   };
 }
 
@@ -109,38 +131,55 @@ export async function POST(request: NextRequest) {
 
     if (!user) {
       const clerkUser = await currentUser();
-      if (!clerkUser?.emailAddresses?.[0]?.emailAddress) {
+      // Use primaryEmailAddress to get the user's primary email (first signup email)
+      // This ensures Google signup email stays primary even if user later connects GitHub
+      const primaryEmailAddr = clerkUser?.primaryEmailAddress?.emailAddress;
+      if (!primaryEmailAddr) {
         return NextResponse.json({ error: 'Unable to get user details' }, { status: 400 });
       }
 
-      const email = clerkUser.emailAddresses[0].emailAddress;
+      const email = primaryEmailAddr;
 
-      // Check if a user with this email already exists (from a previous signup)
+      // Check if a user with this email already exists
       const existingUserByEmail = await db.user.findUnique({
         where: { email },
         include: { profile: true },
       });
 
       if (existingUserByEmail) {
-        // Update the existing user's clerkId to the new one
-        // This handles cases where user signed up again with the same email
-        user = await db.user.update({
-          where: { id: existingUserByEmail.id },
-          data: { clerkId: userId },
-          include: { profile: true },
-        });
-        console.log('[Onboarding Complete] Updated existing user clerkId:', user.id);
-      } else {
-        // Create new user
-        user = await db.user.create({
-          data: {
-            clerkId: userId,
-            email,
+        // SECURITY: Do NOT allow a new Clerk user to take over an existing account
+        // This prevents account hijacking when someone connects an OAuth provider
+        // that has the same email as an existing user's account.
+        // Users must link accounts through Clerk's account linking, not database overwrites.
+        console.error(
+          '[Onboarding Complete] Email conflict detected:',
+          email,
+          'already belongs to user:',
+          existingUserByEmail.id,
+          'but Clerk user:',
+          userId,
+          'is trying to use it'
+        );
+        return NextResponse.json(
+          {
+            error: 'Email already in use',
+            message:
+              'This email is already associated with another account. Please sign in with your original account or use a different email.',
+            code: 'EMAIL_CONFLICT',
           },
-          include: { profile: true },
-        });
-        console.log('[Onboarding Complete] Created new user:', user.id);
+          { status: 409 }
+        );
       }
+
+      // Create new user - email is unique and not used by anyone else
+      user = await db.user.create({
+        data: {
+          clerkId: userId,
+          email,
+        },
+        include: { profile: true },
+      });
+      console.log('[Onboarding Complete] Created new user:', user.id);
     }
 
     // If we have reviewedData from the review flow, use it directly
@@ -169,12 +208,45 @@ export async function POST(request: NextRequest) {
       JSON.stringify(mergedProfile, null, 2)?.substring(0, 1000)
     );
 
+    // Get Clerk user to access signup name
+    const clerkUser = await currentUser();
+    const signupName = getSignupName({
+      firstName: clerkUser?.firstName,
+      lastName: clerkUser?.lastName,
+    });
+
+    // Apply name precedence: Signup > Resume > LinkedIn > GitHub
+    // Build name entries for resolution
+    const nameEntries: NameEntry[] = [];
+
+    // Add signup name if present (highest priority after manual entry)
+    if (signupName?.firstName || signupName?.lastName) {
+      nameEntries.push({
+        firstName: signupName.firstName,
+        lastName: signupName.lastName,
+        source: 'SIGNUP',
+      });
+    }
+
+    // Add imported name
+    if (mergedProfile.firstName || mergedProfile.lastName) {
+      nameEntries.push({
+        firstName: mergedProfile.firstName,
+        lastName: mergedProfile.lastName,
+        source: mergedProfile.firstNameSource || mergedProfile.lastNameSource || 'RESUME',
+      });
+    }
+
+    // Resolve final name with proper precedence
+    const resolvedName = resolveName(nameEntries);
+    console.log('[Onboarding Complete] Resolved name:', resolvedName);
+
     // Use provided handle or generate one
     let handle =
       providedHandle ||
       generateHandle(
-        providedFirstName || mergedProfile.firstName,
-        providedLastName || mergedProfile.lastName,
+        providedFirstName || resolvedName.firstName,
+        providedLastName || resolvedName.lastName,
         user.email
       );
 
@@ -195,9 +267,13 @@ export async function POST(request: NextRequest) {
       handle = await ensureUniqueHandle(handle, user.profile?.id);
     }
 
-    // Use provided name or fall back to merged data
-    const finalFirstName = providedFirstName || mergedProfile.firstName || 'New';
-    const finalLastName = providedLastName || mergedProfile.lastName;
+    // Use provided name or fall back to resolved name with precedence
+    // Precedence: Manual provided > Signup > Resume > LinkedIn > GitHub
+    const finalFirstName = providedFirstName || resolvedName.firstName || 'New';
+    const finalLastName = providedLastName || resolvedName.lastName;
+    const finalNameSource = providedFirstName
+      ? 'MANUAL'
+      : String(resolvedName.source).toUpperCase();
 
     // Create or update profile
     if (!user.profile) {
@@ -211,42 +287,40 @@ export async function POST(request: NextRequest) {
           headline: mergedProfile.headline,
           summary: mergedProfile.summary,
           location: mergedProfile.location,
-          avatarUrl: mergedProfile.avatarUrl,
+          avatarUrl: filterBase64Avatar(mergedProfile.avatarUrl),
           status: 'PUBLIC', // Make profile public by default
-          // TODO: Uncomment after running migration
-          // isAutoGenerated: true,
-          // autoGeneratedAt: new Date(),
           // Set sources for provenance
-          // firstNameSource: toDataSource(mergedProfile.firstNameSource),
-          // lastNameSource: toDataSource(mergedProfile.lastNameSource),
-          // headlineSource: toDataSource(mergedProfile.headlineSource),
-          // summarySource: toDataSource(mergedProfile.summarySource),
-          // locationSource: toDataSource(mergedProfile.locationSource),
-          // avatarUrlSource: toDataSource(mergedProfile.avatarUrlSource),
+          firstNameSource: toDataSource(finalNameSource),
+          lastNameSource: toDataSource(finalNameSource),
+          headlineSource: toDataSource(mergedProfile.headlineSource),
+          summarySource: toDataSource(mergedProfile.summarySource),
+          locationSource: toDataSource(mergedProfile.locationSource),
+          avatarUrlSource: toDataSource(mergedProfile.avatarUrlSource),
         },
       });
 
       // Create contact info - signup email is always primary
-      // Imported emails go to additionalEmails
+      // ALL imported emails (from all sources) go to additionalEmails
       const signupEmail = user.email;
-      const importedEmail = mergedProfile.email;
 
-      // Build additionalEmails array from imported data
-      const additionalEmails: Array<{ email: string; source: string }> = [];
-      if (importedEmail && importedEmail.toLowerCase() !== signupEmail.toLowerCase()) {
-        additionalEmails.push({
-          email: importedEmail,
-          source: mergedProfile.emailSource || 'RESUME',
-        });
-      }
+      // Build additionalEmails array from ALL collected emails, excluding signup email
+      const additionalEmails = resolveEmails(
+        signupEmail,
+        mergedProfile.allEmails.map((e) => ({ email: e.email, source: e.source }))
+      ).additionalEmails;
+
+      console.log('[Onboarding Complete] Signup email:', signupEmail);
+      console.log('[Onboarding Complete] All collected emails:', mergedProfile.allEmails);
+      console.log('[Onboarding Complete] Additional emails:', additionalEmails);
 
       await db.contactInfo.create({
         data: {
           profileId: profile.id,
           email: signupEmail, // Signup email is always primary
-          emailSource: 'MANUAL',
+          emailSource: 'MANUAL', // Signup email source is always MANUAL
           emailPublic: false,
           phone: mergedProfile.phone,
+          phoneSource: toDataSource(mergedProfile.phoneSource),
           phonePublic: false,
           website: mergedProfile.website,
           additionalEmails: additionalEmails.length > 0 ? additionalEmails : undefined,
@@ -370,7 +444,7 @@ export async function POST(request: NextRequest) {
           headline: mergedProfile.headline || user.profile.headline,
           summary: mergedProfile.summary || user.profile.summary,
           location: mergedProfile.location || user.profile.location,
-          avatarUrl: mergedProfile.avatarUrl || user.profile.avatarUrl,
+          avatarUrl: filterBase64Avatar(mergedProfile.avatarUrl) || user.profile.avatarUrl,
           // TODO: Uncomment after running migration
           // isAutoGenerated: true,
           // autoGeneratedAt: new Date(),
@@ -445,6 +519,14 @@ export async function POST(request: NextRequest) {
     //   },
     // });
 
+    // Sync avatar to Clerk (fire and forget - don't block the response)
+    const avatarToSync = mergedProfile.avatarUrl || user.profile?.avatarUrl;
+    if (avatarToSync) {
+      syncAvatarToClerk(userId, avatarToSync).catch((err) => {
+        console.error('[Onboarding Complete] Failed to sync avatar to Clerk:', err);
+      });
+    }
+
     return NextResponse.json({
       success: true,
       handle,
@@ -504,6 +586,9 @@ async function handleReviewedData(
   // Create or update profile
   let profileId: string;
 
+  // Filter out base64 avatars for database storage (they'll still be synced to Clerk)
+  const avatarUrlForDb = filterBase64Avatar(reviewedData.profile.avatarUrl);
+
   if (!user.profile) {
     // Create new profile
     const profile = await db.profile.create({
@@ -515,7 +600,7 @@ async function handleReviewedData(
         headline: reviewedData.profile.headline,
         summary: reviewedData.profile.summary,
         location: reviewedData.profile.location,
-        avatarUrl: reviewedData.profile.avatarUrl,
+        avatarUrl: avatarUrlForDb,
         status: 'PUBLIC',
       },
     });
@@ -531,26 +616,92 @@ async function handleReviewedData(
         headline: reviewedData.profile.headline || user.profile.headline,
         summary: reviewedData.profile.summary || user.profile.summary,
         location: reviewedData.profile.location || user.profile.location,
-        avatarUrl: reviewedData.profile.avatarUrl || user.profile.avatarUrl,
+        avatarUrl: avatarUrlForDb || user.profile.avatarUrl,
       },
     });
     profileId = user.profile.id;
     console.log('[handleReviewedData] Updated existing profile:', profileId);
+
+    // For existing profile, delete old imported data before re-creating
+    // This prevents duplicates when re-uploading resume
+    console.log('[handleReviewedData] Cleaning up old imported data for re-import');
+    await Promise.all([
+      db.skill.deleteMany({ where: { profileId, source: 'RESUME' } }),
+      db.workExperience.deleteMany({ where: { profileId, source: 'RESUME' } }),
+      db.education.deleteMany({ where: { profileId, source: 'RESUME' } }),
+      db.link.deleteMany({ where: { profileId, source: 'RESUME' } }),
+    ]);
   }
 
   // Create contact info - signup email is always primary
-  // Imported emails go to additionalEmails
+  // All imported emails go to additionalEmails
   const signupEmail = user.email; // This is always the Clerk signup email
-  const importedEmail = reviewedData.contactInfo?.email;
 
-  // Build additionalEmails array from imported data
-  const additionalEmails: Array<{ email: string; source: string }> = [];
-  if (importedEmail && importedEmail.toLowerCase() !== signupEmail.toLowerCase()) {
-    additionalEmails.push({
-      email: importedEmail,
-      source: reviewedData.contactInfo?.emailSource || 'RESUME',
-    });
+  // Fetch existing contact info to merge additional emails (if updating)
+  const existingContactInfo = await db.contactInfo.findUnique({
+    where: { profileId },
+    select: { additionalEmails: true },
+  });
+
+  // Build additionalEmails array from all collected emails
+  // If we have allEmails from the review data, use that; otherwise fall back to single email
+  let newAdditionalEmails: Array<{ email: string; source: string }> = [];
+
+  if (reviewedData.contactInfo?.allEmails?.length) {
+    // Use the multi-source email resolver to deduplicate and exclude signup
+    newAdditionalEmails = resolveEmails(
+      signupEmail,
+      reviewedData.contactInfo.allEmails
+    ).additionalEmails;
+  } else if (reviewedData.contactInfo?.email) {
+    // Fallback to single email if allEmails not provided
+    const importedEmail = reviewedData.contactInfo.email;
+    if (importedEmail.toLowerCase() !== signupEmail.toLowerCase()) {
+      newAdditionalEmails.push({
+        email: importedEmail,
+        source: reviewedData.contactInfo.emailSource || 'RESUME',
+      });
+    }
   }
+
+  // Merge with existing additional emails (if any) and deduplicate
+  const existingEmails =
+    (existingContactInfo?.additionalEmails as Array<{ email: string; source: string }>) || [];
+  const seenEmails = new Set<string>();
+  seenEmails.add(signupEmail.toLowerCase()); // Always exclude signup email
+
+  const mergedAdditionalEmails: Array<{ email: string; source: string }> = [];
+
+  // Add existing emails first (they have priority since user already has them)
+  for (const entry of existingEmails) {
+    const normalized = entry.email.toLowerCase().trim();
+    if (!seenEmails.has(normalized)) {
+      seenEmails.add(normalized);
+      mergedAdditionalEmails.push(entry);
+    }
+  }
+
+  // Add new emails
+  for (const entry of newAdditionalEmails) {
+    const normalized = entry.email.toLowerCase().trim();
+    if (!seenEmails.has(normalized)) {
+      seenEmails.add(normalized);
+      mergedAdditionalEmails.push(entry);
+    }
+  }
+
+  console.log('[handleReviewedData] Signup email:', signupEmail);
+  console.log('[handleReviewedData] Merged additional emails:', mergedAdditionalEmails);
+
+  // Get primary phone - from allPhones[0] or fallback to phone field
+  const primaryPhone =
+    reviewedData.contactInfo?.allPhones?.[0]?.phone || reviewedData.contactInfo?.phone;
+  const phoneSource =
+    reviewedData.contactInfo?.allPhones?.[0]?.source ||
+    reviewedData.contactInfo?.phoneSource ||
+    'RESUME';
+
+  console.log('[handleReviewedData] Primary phone:', primaryPhone);
 
   await db.contactInfo.upsert({
     where: { profileId },
@@ -559,15 +710,17 @@ async function handleReviewedData(
       email: signupEmail, // Signup email is always primary
       emailSource: 'MANUAL', // Signup = MANUAL source
       emailPublic: false,
-      phone: reviewedData.contactInfo?.phone,
+      phone: primaryPhone,
+      phoneSource: primaryPhone ? toDataSource(phoneSource) : undefined,
       phonePublic: false,
-      additionalEmails: additionalEmails.length > 0 ? additionalEmails : undefined,
+      additionalEmails: mergedAdditionalEmails.length > 0 ? mergedAdditionalEmails : undefined,
     },
     update: {
       // Don't overwrite primary email if it already exists
-      // Only update phone and add to additionalEmails
-      phone: reviewedData.contactInfo?.phone,
-      additionalEmails: additionalEmails.length > 0 ? additionalEmails : undefined,
+      // Only update phone and merge additionalEmails (already deduplicated above)
+      phone: primaryPhone,
+      phoneSource: primaryPhone ? toDataSource(phoneSource) : undefined,
+      additionalEmails: mergedAdditionalEmails.length > 0 ? mergedAdditionalEmails : undefined,
     },
   });
 
@@ -654,6 +807,34 @@ async function handleReviewedData(
 
   console.log('[handleReviewedData] Complete! Profile handle:', handle);
 
+  // Sync avatar to Clerk (fire and forget - don't block the response)
+  const avatarToSync = reviewedData.profile.avatarUrl || user.profile?.avatarUrl;
+  console.log(
+    '[handleReviewedData] Avatar to sync:',
+    avatarToSync ? `${avatarToSync.substring(0, 50)}... (length: ${avatarToSync.length})` : 'none'
+  );
+
+  if (avatarToSync) {
+    // Check if it's still an indexeddb reference (shouldn't be, but just in case)
+    if (avatarToSync.startsWith('indexeddb:')) {
+      console.error(
+        '[handleReviewedData] Avatar is still an IndexedDB reference! Client should have resolved this.'
+      );
+    } else {
+      syncAvatarToClerk(user.clerkId, avatarToSync)
+        .then((result) => {
+          if (result.success) {
+            console.log('[handleReviewedData] Successfully synced avatar to Clerk');
+          } else {
+            console.error('[handleReviewedData] Failed to sync avatar to Clerk:', result.error);
+          }
+        })
+        .catch((err) => {
+          console.error('[handleReviewedData] Error syncing avatar to Clerk:', err);
+        });
+    }
+  }
+
   return NextResponse.json({
     success: true,
     handle,
@@ -664,6 +845,9 @@ async function handleReviewedData(
 /**
  * Merge data from multiple import sources
  * Handles different data formats from resume, GitHub, LinkedIn APIs
+ *
+ * Name Precedence: Signup > Resume > LinkedIn > GitHub
+ * Email: Signup is primary, all unique emails collected for additionalEmails
  */
 function mergeImportedData(importedData: Record<string, unknown>) {
   const merged: {
@@ -676,6 +860,7 @@ function mergeImportedData(importedData: Record<string, unknown>) {
     email?: string;
     emailSource?: string;
     phone?: string;
+    phoneSource?: string;
     website?: string;
     firstNameSource?: string;
     lastNameSource?: string;
@@ -683,6 +868,10 @@ function mergeImportedData(importedData: Record<string, unknown>) {
     summarySource?: string;
     locationSource?: string;
     avatarUrlSource?: string;
+    // Collect ALL emails from all sources
+    allEmails: Array<{ email: string; source: string }>;
+    // Collect ALL phones from all sources
+    allPhones: Array<{ phone: string; source: string }>;
     skills: Array<{ name: string; source: string }>;
     projects: Array<{
       title: string;
@@ -726,6 +915,8 @@ function mergeImportedData(importedData: Record<string, unknown>) {
       source: string;
     }>;
   } = {
+    allEmails: [],
+    allPhones: [],
     skills: [],
     projects: [],
     experiences: [],
@@ -778,14 +969,26 @@ function mergeImportedData(importedData: Record<string, unknown>) {
         }
       }
 
-      // Contact info from resume
+      // Contact info from resume - collect ALL emails and phones
       const contactInfo = rawData.contactInfo as Record<string, unknown> | undefined;
       if (contactInfo) {
-        if (!merged.email && contactInfo.email) {
-          merged.email = contactInfo.email as string;
+        // Collect email (first wins for primary, but also add to allEmails)
+        if (contactInfo.email) {
+          const emailStr = contactInfo.email as string;
+          merged.allEmails.push({ email: emailStr, source: 'RESUME' });
+          if (!merged.email) {
+            merged.email = emailStr;
+            merged.emailSource = 'RESUME';
+          }
         }
-        if (!merged.phone && contactInfo.phone) {
-          merged.phone = contactInfo.phone as string;
+        // Collect phone (first wins for primary, but also add to allPhones)
+        if (contactInfo.phone) {
+          const phoneStr = contactInfo.phone as string;
+          merged.allPhones.push({ phone: phoneStr, source: 'RESUME' });
+          if (!merged.phone) {
+            merged.phone = phoneStr;
+            merged.phoneSource = 'RESUME';
+          }
         }
       }
 
@@ -881,13 +1084,23 @@ function mergeImportedData(importedData: Record<string, unknown>) {
       }
     }
 
-    // Contact info
+    // Contact info - collect ALL emails and phones from all sources
     if (data.contactInfo) {
-      if (!merged.email && data.contactInfo.email) {
-        merged.email = data.contactInfo.email;
+      // Collect email
+      if (data.contactInfo.email) {
+        merged.allEmails.push({ email: data.contactInfo.email, source: sourceType });
+        if (!merged.email) {
+          merged.email = data.contactInfo.email;
+          merged.emailSource = sourceType;
+        }
       }
-      if (!merged.phone && data.contactInfo.phone) {
-        merged.phone = data.contactInfo.phone;
+      // Collect phone
+      if (data.contactInfo.phone) {
+        merged.allPhones.push({ phone: data.contactInfo.phone, source: sourceType });
+        if (!merged.phone) {
+          merged.phone = data.contactInfo.phone;
+          merged.phoneSource = sourceType;
+        }
       }
       if (!merged.website && data.contactInfo.website) {
         merged.website = data.contactInfo.website;
@@ -942,6 +1155,25 @@ function mergeImportedData(importedData: Record<string, unknown>) {
     const key = l.url.toLowerCase();
     if (seenLinks.has(key)) return false;
     seenLinks.add(key);
+    return true;
+  });
+
+  // Deduplicate emails (keep first occurrence with its source)
+  const seenEmails = new Set<string>();
+  merged.allEmails = merged.allEmails.filter((e) => {
+    const key = e.email.toLowerCase().trim();
+    if (seenEmails.has(key)) return false;
+    seenEmails.add(key);
+    return true;
+  });
+
+  // Deduplicate phones (keep first occurrence with its source)
+  const seenPhones = new Set<string>();
+  merged.allPhones = merged.allPhones.filter((p) => {
+    // Normalize phone by removing non-digits for comparison
+    const key = p.phone.replace(/\D/g, '');
+    if (seenPhones.has(key)) return false;
+    seenPhones.add(key);
     return true;
   });
 

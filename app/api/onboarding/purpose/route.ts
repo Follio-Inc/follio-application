@@ -38,14 +38,16 @@ export async function POST(request: NextRequest) {
 
     if (!user) {
       const clerkUser = await currentUser();
-      if (!clerkUser?.emailAddresses?.[0]?.emailAddress) {
+      // Use primaryEmailAddress to get the user's primary email (first signup email)
+      const primaryEmailAddr = clerkUser?.primaryEmailAddress?.emailAddress;
+      if (!primaryEmailAddr) {
         return NextResponse.json({ error: 'Unable to get user details' }, { status: 400 });
       }
 
       user = await db.user.create({
         data: {
           clerkId: userId,
-          email: clerkUser.emailAddresses[0].emailAddress,
+          email: primaryEmailAddr,
           mainPurpose: purpose || null,
         },
       });

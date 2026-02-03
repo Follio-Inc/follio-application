@@ -61,6 +61,28 @@ export function SectionEditor({ profile, sectionType, section }: SectionEditorPr
     phone: profile.contactInfo?.phone || '',
     phonePublic: profile.contactInfo?.phonePublic || false,
     website: profile.contactInfo?.website || '',
+    additionalEmails: (() => {
+      try {
+        const raw = profile.contactInfo?.additionalEmails;
+        if (Array.isArray(raw)) return raw as Array<{ email: string; source: string }>;
+        if (typeof raw === 'string')
+          return JSON.parse(raw) as Array<{ email: string; source: string }>;
+        return [];
+      } catch {
+        return [];
+      }
+    })(),
+    additionalPhones: (() => {
+      try {
+        const raw = (profile.contactInfo as Record<string, unknown>)?.additionalPhones;
+        if (Array.isArray(raw)) return raw as Array<{ phone: string; source: string }>;
+        if (typeof raw === 'string')
+          return JSON.parse(raw) as Array<{ phone: string; source: string }>;
+        return [];
+      } catch {
+        return [];
+      }
+    })(),
   });
 
   const handleProfileUpdate = (updates: Partial<FullProfile>) => {

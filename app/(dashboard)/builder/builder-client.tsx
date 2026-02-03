@@ -78,6 +78,28 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
     phone: initialProfile.contactInfo?.phone || '',
     phonePublic: initialProfile.contactInfo?.phonePublic || false,
     website: initialProfile.contactInfo?.website || '',
+    additionalEmails: (() => {
+      try {
+        const raw = initialProfile.contactInfo?.additionalEmails;
+        if (Array.isArray(raw)) return raw as Array<{ email: string; source: string }>;
+        if (typeof raw === 'string')
+          return JSON.parse(raw) as Array<{ email: string; source: string }>;
+        return [];
+      } catch {
+        return [];
+      }
+    })(),
+    additionalPhones: (() => {
+      try {
+        const raw = (initialProfile.contactInfo as Record<string, unknown>)?.additionalPhones;
+        if (Array.isArray(raw)) return raw as Array<{ phone: string; source: string }>;
+        if (typeof raw === 'string')
+          return JSON.parse(raw) as Array<{ phone: string; source: string }>;
+        return [];
+      } catch {
+        return [];
+      }
+    })(),
   });
 
   // Debounce timer ref for auto-save
@@ -251,6 +273,28 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
       phone: initialProfile.contactInfo?.phone || '',
       phonePublic: initialProfile.contactInfo?.phonePublic || false,
       website: initialProfile.contactInfo?.website || '',
+      additionalEmails: (() => {
+        try {
+          const raw = initialProfile.contactInfo?.additionalEmails;
+          if (Array.isArray(raw)) return raw as Array<{ email: string; source: string }>;
+          if (typeof raw === 'string')
+            return JSON.parse(raw) as Array<{ email: string; source: string }>;
+          return [];
+        } catch {
+          return [];
+        }
+      })(),
+      additionalPhones: (() => {
+        try {
+          const raw = (initialProfile.contactInfo as Record<string, unknown>)?.additionalPhones;
+          if (Array.isArray(raw)) return raw as Array<{ phone: string; source: string }>;
+          if (typeof raw === 'string')
+            return JSON.parse(raw) as Array<{ phone: string; source: string }>;
+          return [];
+        } catch {
+          return [];
+        }
+      })(),
     });
 
     setHasChanges(false);

@@ -11,7 +11,8 @@ import {
   normalizeGitHubData,
   type NormalizedGitHubData,
 } from '@/services/github.service';
-import type { Prisma } from '@prisma/client';
+import { shouldOverrideSource } from '@/services/multi-source-merger.service';
+import { DataSource, type Prisma } from '@prisma/client';
 import type { IGitHubImportService, ImportServiceResult, NormalizedImportResult } from './types';
 
 /**
@@ -327,33 +328,65 @@ export async function saveGitHubToProfile(
 
     const profileId = user.profile.id;
 
-    // Update profile with GitHub data if not already set
+    // Update profile with GitHub data based on source priority
     const profileUpdate: Partial<{
       firstName: string;
+      firstNameSource: DataSource;
       lastName: string;
+      lastNameSource: DataSource;
       headline: string;
+      headlineSource: DataSource;
       summary: string;
+      summarySource: DataSource;
       location: string;
+      locationSource: DataSource;
       avatarUrl: string;
+      avatarUrlSource: DataSource;
     }> = {};
 
-    if (!user.profile.firstName && data.profile.firstName) {
+    const currentProfile = user.profile;
+
+    if (
+      data.profile.firstName &&
+      shouldOverrideSource(currentProfile.firstNameSource, 'GITHUB', currentProfile.firstName)
+    ) {
       profileUpdate.firstName = data.profile.firstName;
+      profileUpdate.firstNameSource = DataSource.GITHUB;
     }
-    if (!user.profile.lastName && data.profile.lastName) {
+    if (
+      data.profile.lastName &&
+      shouldOverrideSource(currentProfile.lastNameSource, 'GITHUB', currentProfile.lastName)
+    ) {
       profileUpdate.lastName = data.profile.lastName;
+      profileUpdate.lastNameSource = DataSource.GITHUB;
     }
-    if (!user.profile.headline && data.profile.headline) {
+    if (
+      data.profile.headline &&
+      shouldOverrideSource(currentProfile.headlineSource, 'GITHUB', currentProfile.headline)
+    ) {
       profileUpdate.headline = data.profile.headline;
+      profileUpdate.headlineSource = DataSource.GITHUB;
     }
-    if (!user.profile.summary && data.profile.summary) {
+    if (
+      data.profile.summary &&
+      shouldOverrideSource(currentProfile.summarySource, 'GITHUB', currentProfile.summary)
+    ) {
       profileUpdate.summary = data.profile.summary;
+      profileUpdate.summarySource = DataSource.GITHUB;
     }
-    if (!user.profile.location && data.profile.location) {
+    if (
+      data.profile.location &&
+      shouldOverrideSource(currentProfile.locationSource, 'GITHUB', currentProfile.location)
+    ) {
       profileUpdate.location = data.profile.location;
+      profileUpdate.locationSource = DataSource.GITHUB;
     }
-    if (!user.profile.avatarUrl && data.profile.avatarUrl) {
+    if (
+      data.profile.avatarUrl &&
+      shouldOverrideSource(currentProfile.avatarUrlSource, 'GITHUB', currentProfile.avatarUrl)
+    ) {
       profileUpdate.avatarUrl = data.profile.avatarUrl;
+      profileUpdate.avatarUrlSource = DataSource.GITHUB;
     }
 
     if (Object.keys(profileUpdate).length > 0) {
