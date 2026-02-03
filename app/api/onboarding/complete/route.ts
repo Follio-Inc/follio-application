@@ -2,7 +2,12 @@ import { syncAvatarToClerk } from '@/lib/clerk-avatar-sync';
 import { db } from '@/lib/db';
 import { parseDateFlexible } from '@/lib/utils';
 import type { NormalizedImportResult } from '@/services/import/types';
-import { resolveEmails } from '@/services/multi-source-merger.service';
+import {
+  getSignupName,
+  resolveEmails,
+  resolveName,
+  type NameEntry,
+} from '@/services/multi-source-merger.service';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import type { DataSource, Profile, User } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';

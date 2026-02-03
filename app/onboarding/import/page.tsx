@@ -759,8 +759,9 @@ export default function OnboardingImportPage() {
 
     // Find the first OAuth provider that likely provided the profile image
     // Priority: Google > LinkedIn > GitHub > others
+    // Cast to string to handle various provider naming conventions
     const googleAccount = verifiedAccounts.find(
-      (a) => a.provider === 'oauth_google' || a.provider === 'google'
+      (a) => (a.provider as string) === 'oauth_google' || a.provider === 'google'
     );
     if (googleAccount) return { id: 'google', label: 'Google' };
 
@@ -768,13 +769,13 @@ export default function OnboardingImportPage() {
       (a) =>
         a.provider === 'linkedin_oidc' ||
         a.provider === 'linkedin' ||
-        a.provider === 'oauth_linkedin_oidc' ||
-        a.provider === 'oauth_linkedin'
+        (a.provider as string) === 'oauth_linkedin_oidc' ||
+        (a.provider as string) === 'oauth_linkedin'
     );
     if (linkedinAccount) return { id: 'linkedin-sso', label: 'LinkedIn' };
 
     const githubAccount = verifiedAccounts.find(
-      (a) => a.provider === 'github' || a.provider === 'oauth_github'
+      (a) => a.provider === 'github' || (a.provider as string) === 'oauth_github'
     );
     if (githubAccount) return { id: 'github-sso', label: 'GitHub' };
 
