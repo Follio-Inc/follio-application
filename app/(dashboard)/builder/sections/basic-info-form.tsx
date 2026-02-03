@@ -226,7 +226,7 @@ export function ContactInfoForm({ profile, onContactUpdate }: ContactInfoFormPro
     ...additionalPhones.map((p) => ({ ...p, isPrimary: false })),
   ];
 
-  const handleMakePrimary = (emailToMakePrimary: string, source: string) => {
+  const handleMakePrimary = (emailToMakePrimary: string, _source: string) => {
     // Current primary becomes additional (if it exists)
     const newAdditionalEmails = additionalEmails.filter((e) => e.email !== emailToMakePrimary);
     if (primaryEmail) {
@@ -256,7 +256,7 @@ export function ContactInfoForm({ profile, onContactUpdate }: ContactInfoFormPro
     onContactUpdate({ emailPublic: checked });
   };
 
-  const handleMakePhonePrimary = (phoneToMakePrimary: string, source: string) => {
+  const handleMakePhonePrimary = (phoneToMakePrimary: string, _source: string) => {
     // Current primary becomes additional (if it exists)
     const newAdditionalPhones = additionalPhones.filter((p) => p.phone !== phoneToMakePrimary);
     if (primaryPhone) {

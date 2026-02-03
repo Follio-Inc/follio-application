@@ -65,7 +65,7 @@ const savePhotoToIndexedDB = async (key: string, photoBase64: string): Promise<v
   });
 };
 
-const getPhotoFromIndexedDB = async (key: string): Promise<string | null> => {
+const _getPhotoFromIndexedDB = async (key: string): Promise<string | null> => {
   try {
     const db = await openPhotoDatabase();
     return new Promise((resolve, reject) => {
@@ -80,7 +80,7 @@ const getPhotoFromIndexedDB = async (key: string): Promise<string | null> => {
   }
 };
 
-const clearPhotosFromIndexedDB = async (): Promise<void> => {
+const _clearPhotosFromIndexedDB = async (): Promise<void> => {
   try {
     const db = await openPhotoDatabase();
     return new Promise((resolve, reject) => {
@@ -119,7 +119,7 @@ interface PersistedImportState {
 export default function OnboardingImportPage() {
   const router = useRouter();
   const { user, isLoaded: isUserLoaded } = useUser();
-  const [isCreatingProfile, setIsCreatingProfile] = useState(false);
+  const [isCreatingProfile, _setIsCreatingProfile] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasRestoredPersistedState, setHasRestoredPersistedState] = useState(false);
 
@@ -1018,7 +1018,7 @@ export default function OnboardingImportPage() {
     };
 
     // Handle large uploaded photos - store in IndexedDB instead of sessionStorage
-    let avatarUrlForStorage = mergedProfile.avatarUrl as string | undefined;
+    const avatarUrlForStorage = mergedProfile.avatarUrl as string | undefined;
     if (avatarUrlForStorage?.startsWith('data:')) {
       try {
         const photoKey = `uploaded_avatar_${Date.now()}`;

@@ -91,7 +91,7 @@ const base64ToFile = async (base64: string, filename: string): Promise<File> => 
 /**
  * Compress an image file to a target size (for Clerk's 5MB limit)
  */
-const compressImageForClerk = async (file: File, maxSizeKB = 500): Promise<File> => {
+const compressImageForClerk = async (file: File, _maxSizeKB = 500): Promise<File> => {
   return new Promise((resolve, reject) => {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
@@ -511,7 +511,7 @@ function ReviewPageContent() {
       // Handle avatar upload to Clerk directly from client
       // Don't send base64 through API - it's too large
       const avatarUrl = data.profile.avatarUrl;
-      let profileForApi = { ...data.profile };
+      const profileForApi = { ...data.profile };
 
       if (avatarUrl?.startsWith('data:')) {
         console.log('[Review] Uploading avatar directly to Clerk...');
@@ -610,7 +610,7 @@ function ReviewPageContent() {
   };
 
   // Contact info update handlers
-  const updateContactInfo = (field: 'email' | 'phone', value: string) => {
+  const _updateContactInfo = (field: 'email' | 'phone', value: string) => {
     setData((prev) => ({
       ...prev,
       contactInfo: { ...prev.contactInfo, [field]: value },
