@@ -7,11 +7,16 @@ import {
   ArrowRight,
   Briefcase,
   Check,
+  Eye,
+  EyeOff,
+  FolderGit2,
+  Github,
   GraduationCap,
   Link as LinkIcon,
   Mail,
   Pencil,
   Phone,
+  Pin,
   Plus,
   Sparkles,
   Star,
@@ -179,12 +184,44 @@ interface ParsedLink {
   label?: string;
 }
 
+// Project from GitHub or resume
+interface ParsedProject {
+  id: string;
+  title: string;
+  description?: string;
+  technologies?: string[];
+  repoUrl?: string;
+  liveUrl?: string;
+  // GitHub-specific fields
+  ghStars?: number;
+  ghForks?: number;
+  ghLanguage?: string;
+  ghPinned?: boolean;
+  ghTopics?: string[];
+  ghOwner?: string;
+  ghRepo?: string;
+  ghReadme?: string;
+  ghLastPush?: string;
+  ghLicense?: string;
+  ghWatchers?: number;
+  // Visibility controls
+  isVisible: boolean;
+  showOnPortfolio: boolean;
+  showOnResume: boolean;
+  showStats: boolean;
+  showReadme: boolean;
+  customDescription?: string;
+  // Source tracking
+  source?: string;
+}
+
 interface ReviewData {
   profile: ParsedProfile;
   experiences: ParsedExperience[];
   educations: ParsedEducation[];
   skills: ParsedSkill[];
   links: ParsedLink[];
+  projects: ParsedProject[];
   contactInfo?: {
     email?: string;
     phone?: string;
@@ -207,6 +244,7 @@ type ReviewStep =
   | 'education'
   | 'skills'
   | 'links'
+  | 'projects'
   | 'complete';
 
 const STEPS: ReviewStep[] = [
@@ -216,6 +254,7 @@ const STEPS: ReviewStep[] = [
   'education',
   'skills',
   'links',
+  'projects',
   'complete',
 ];
 
@@ -249,6 +288,11 @@ const STEP_INFO: Record<ReviewStep, { title: string; description: string; icon: 
     title: 'Links',
     description: 'Add your social and portfolio links',
     icon: LinkIcon,
+  },
+  projects: {
+    title: 'Projects',
+    description: 'Review your GitHub repositories and projects',
+    icon: FolderGit2,
   },
   complete: {
     title: 'All Done!',
@@ -354,6 +398,7 @@ function ReviewPageContent() {
     educations: [],
     skills: [],
     links: [],
+    projects: [],
   });
 
   // Editing states
@@ -414,6 +459,73 @@ function ReviewPageContent() {
               url: link.url as string,
               label: link.label as string | undefined,
             })),
+            // Transform projects with smart visibility defaults
+            projects: (parsed.projects || []).map((proj: Record<string, unknown>) => {
+              const title = (proj.title as string) || (proj.name as string) || 'Untitled';
+              const description = proj.description as string | undefined;
+              const isPinned = (proj.ghPinned as boolean) || (proj.pinned as boolean) || false;
+              const stars = (proj.ghStars as number) || (proj.stars as number) || 0;
+              const forks = (proj.ghForks as number) || (proj.forks as number) || 0;
+              const repoUrl = proj.repoUrl as string | undefined;
+
+              // Smart visibility defaults
+              const lowQualityPatterns = [
+                /^test$/i,
+                /^testing$/i,
+                /^my-?first/i,
+                /^hello-?world/i,
+                /^learn/i,
+                /^tutorial/i,
+                /^practice/i,
+                /^playground/i,
+                /^experiment/i,
+                /^sandbox/i,
+                /^temp$/i,
+                /^tmp$/i,
+                /^scratch/i,
+                /^demo$/i,
+                /^example$/i,
+                /^sample$/i,
+                /^dotfiles$/i,
+                /^config$/i,
+                /^\.[a-z]+$/,
+              ];
+
+              const isFork = repoUrl?.includes('/fork/') || false;
+              const isLowQuality =
+                isFork ||
+                lowQualityPatterns.some((p) => p.test(title)) ||
+                (!description && stars < 1 && !isPinned);
+              const isHighQuality =
+                isPinned || stars >= 5 || (description && description.length > 30);
+
+              return {
+                id: generateId(),
+                title,
+                description,
+                technologies: (proj.technologies as string[]) || [],
+                repoUrl,
+                liveUrl: proj.liveUrl as string | undefined,
+                ghStars: stars,
+                ghForks: forks,
+                ghLanguage: proj.ghLanguage as string | undefined,
+                ghPinned: isPinned,
+                ghTopics: (proj.ghTopics as string[]) || [],
+                ghOwner: proj.ghOwner as string | undefined,
+                ghRepo: proj.ghRepo as string | undefined,
+                ghReadme: proj.ghReadme as string | undefined,
+                ghLastPush: proj.ghLastPush as string | undefined,
+                ghLicense: proj.ghLicense as string | undefined,
+                ghWatchers: proj.ghWatchers as number | undefined,
+                // Visibility defaults
+                isVisible: !isLowQuality,
+                showOnPortfolio: !isLowQuality,
+                showOnResume: isHighQuality || stars >= 2,
+                showStats: stars >= 3 || forks >= 2,
+                showReadme: isPinned,
+                source: repoUrl?.includes('github.com') ? 'GITHUB' : 'RESUME',
+              };
+            }),
             contactInfo: {
               ...parsed.contactInfo,
               // allEmails will be processed after to ensure signup email is first
@@ -572,6 +684,31 @@ function ReviewPageContent() {
             skills: data.skills.map((s) => s.name),
             links: data.links,
             contactInfo: data.contactInfo,
+            // Include projects with visibility settings
+            projects: data.projects.map((p) => ({
+              title: p.title,
+              description: p.description,
+              technologies: p.technologies,
+              repoUrl: p.repoUrl,
+              liveUrl: p.liveUrl,
+              ghStars: p.ghStars,
+              ghForks: p.ghForks,
+              ghLanguage: p.ghLanguage,
+              ghPinned: p.ghPinned,
+              ghTopics: p.ghTopics,
+              ghOwner: p.ghOwner,
+              ghRepo: p.ghRepo,
+              ghReadme: p.ghReadme,
+              ghLastPush: p.ghLastPush,
+              ghLicense: p.ghLicense,
+              ghWatchers: p.ghWatchers,
+              isVisible: p.isVisible,
+              showOnPortfolio: p.showOnPortfolio,
+              showOnResume: p.showOnResume,
+              showStats: p.showStats,
+              showReadme: p.showReadme,
+              customDescription: p.customDescription,
+            })),
           },
         }),
       });
@@ -793,6 +930,53 @@ function ReviewPageContent() {
     setData((prev) => ({
       ...prev,
       links: [...prev.links, { id: generateId(), type: 'OTHER', url: '' }],
+    }));
+  };
+
+  // Project handlers
+  const updateProject = (id: string, updates: Partial<ParsedProject>) => {
+    setData((prev) => ({
+      ...prev,
+      projects: prev.projects.map((proj) => (proj.id === id ? { ...proj, ...updates } : proj)),
+    }));
+  };
+
+  const toggleProjectVisibility = (
+    id: string,
+    field: 'isVisible' | 'showOnPortfolio' | 'showOnResume' | 'showStats' | 'showReadme'
+  ) => {
+    setData((prev) => ({
+      ...prev,
+      projects: prev.projects.map((proj) =>
+        proj.id === id ? { ...proj, [field]: !proj[field] } : proj
+      ),
+    }));
+  };
+
+  const deleteProject = (id: string) => {
+    setData((prev) => ({
+      ...prev,
+      projects: prev.projects.filter((proj) => proj.id !== id),
+    }));
+  };
+
+  // Batch operations for projects
+  const showAllProjects = () => {
+    setData((prev) => ({
+      ...prev,
+      projects: prev.projects.map((proj) => ({ ...proj, isVisible: true, showOnPortfolio: true })),
+    }));
+  };
+
+  const hideAllProjects = () => {
+    setData((prev) => ({
+      ...prev,
+      projects: prev.projects.map((proj) => ({
+        ...proj,
+        isVisible: false,
+        showOnPortfolio: false,
+        showOnResume: false,
+      })),
     }));
   };
 
@@ -1237,6 +1421,72 @@ function ReviewPageContent() {
                 </Button>
               </div>
 
+              <StepNavigation onBack={goToPreviousStep} onNext={goToNextStep} />
+            </StepContainer>
+          )}
+
+          {/* Projects Step */}
+          {currentStep === 'projects' && (
+            <StepContainer key="projects">
+              <StepHeader
+                icon={STEP_INFO.projects.icon}
+                title={STEP_INFO.projects.title}
+                description={STEP_INFO.projects.description}
+                count={data.projects.filter((p) => p.isVisible).length}
+              />
+
+              {data.projects.length === 0 ? (
+                <div className="py-8 text-center text-muted-foreground">
+                  <FolderGit2 className="mx-auto mb-4 h-12 w-12 opacity-50" />
+                  <p>No projects found.</p>
+                  <p className="text-sm">
+                    Connect GitHub to import your repositories, or add projects manually in the
+                    Builder.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {/* Batch actions */}
+                  <div className="mb-4 flex items-center justify-between">
+                    <p className="text-sm text-muted-foreground">
+                      {data.projects.filter((p) => p.isVisible).length} of {data.projects.length}{' '}
+                      visible
+                    </p>
+                    <div className="flex gap-2">
+                      <Button variant="ghost" size="sm" onClick={showAllProjects}>
+                        <Eye className="mr-1 h-4 w-4" />
+                        Show All
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={hideAllProjects}>
+                        <EyeOff className="mr-1 h-4 w-4" />
+                        Hide All
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* GitHub repos first, sorted by pinned then stars */}
+                  <div className="max-h-[50vh] space-y-3 overflow-y-auto pr-2">
+                    {data.projects
+                      .sort((a, b) => {
+                        // Pinned first
+                        if (a.ghPinned && !b.ghPinned) return -1;
+                        if (!a.ghPinned && b.ghPinned) return 1;
+                        // Then by stars
+                        return (b.ghStars || 0) - (a.ghStars || 0);
+                      })
+                      .map((project) => (
+                        <ProjectCard
+                          key={project.id}
+                          project={project}
+                          onToggleVisibility={(field) => toggleProjectVisibility(project.id, field)}
+                          onUpdate={(updates) => updateProject(project.id, updates)}
+                          onDelete={() => deleteProject(project.id)}
+                        />
+                      ))}
+                  </div>
+                </>
+              )}
+
               <StepNavigation
                 onBack={goToPreviousStep}
                 onNext={goToNextStep}
@@ -1275,6 +1525,10 @@ function ReviewPageContent() {
                   <SummaryCard label="Experiences" value={`${data.experiences.length} entries`} />
                   <SummaryCard label="Education" value={`${data.educations.length} entries`} />
                   <SummaryCard label="Skills" value={`${data.skills.length} skills`} />
+                  <SummaryCard
+                    label="Projects"
+                    value={`${data.projects.filter((p) => p.isVisible).length} visible`}
+                  />
                 </div>
 
                 {error && (
@@ -1821,6 +2075,194 @@ function LinkCard({
         >
           <Trash2 className="h-4 w-4" />
         </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Project card for GitHub repos and other projects
+function ProjectCard({
+  project,
+  onToggleVisibility,
+  onUpdate,
+  onDelete,
+}: {
+  project: ParsedProject;
+  onToggleVisibility: (
+    field: 'isVisible' | 'showOnPortfolio' | 'showOnResume' | 'showStats' | 'showReadme'
+  ) => void;
+  onUpdate: (updates: Partial<ParsedProject>) => void;
+  onDelete: () => void;
+}) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const isGitHub = project.source === 'GITHUB' || project.repoUrl?.includes('github.com');
+
+  return (
+    <Card className={`transition-opacity ${!project.isVisible ? 'opacity-60' : ''}`}>
+      <CardContent className="p-4">
+        {/* Header row */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h4 className="truncate font-medium">{project.title}</h4>
+              {isGitHub && (
+                <Badge variant="secondary" className="shrink-0 gap-1">
+                  <Github className="h-3 w-3" />
+                  GitHub
+                </Badge>
+              )}
+              {project.ghPinned && (
+                <Badge variant="outline" className="shrink-0 gap-1 border-amber-300 text-amber-600">
+                  <Pin className="h-3 w-3" />
+                  Pinned
+                </Badge>
+              )}
+            </div>
+
+            {/* Stats row */}
+            {isGitHub && (project.ghStars || project.ghForks || project.ghLanguage) && (
+              <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
+                {project.ghStars !== undefined && project.ghStars > 0 && (
+                  <span className="flex items-center gap-1">
+                    <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                    {project.ghStars}
+                  </span>
+                )}
+                {project.ghForks !== undefined && project.ghForks > 0 && (
+                  <span className="flex items-center gap-1">
+                    <FolderGit2 className="h-3 w-3" />
+                    {project.ghForks} forks
+                  </span>
+                )}
+                {project.ghLanguage && <span>{project.ghLanguage}</span>}
+              </div>
+            )}
+
+            {/* Description */}
+            {project.description && (
+              <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
+                {project.description}
+              </p>
+            )}
+          </div>
+
+          {/* Main visibility toggle */}
+          <Button
+            variant={project.isVisible ? 'default' : 'outline'}
+            size="sm"
+            className="shrink-0"
+            onClick={() => onToggleVisibility('isVisible')}
+          >
+            {project.isVisible ? (
+              <>
+                <Eye className="mr-1 h-4 w-4" />
+                Visible
+              </>
+            ) : (
+              <>
+                <EyeOff className="mr-1 h-4 w-4" />
+                Hidden
+              </>
+            )}
+          </Button>
+        </div>
+
+        {/* Expandable options */}
+        <button
+          type="button"
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="mt-3 flex items-center gap-1 text-xs text-primary hover:underline"
+        >
+          {isExpanded ? 'Less options' : 'More options'}
+          <ArrowRight className={`h-3 w-3 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+        </button>
+
+        {isExpanded && (
+          <div className="mt-3 space-y-3 border-t pt-3">
+            {/* Visibility checkboxes */}
+            <div className="flex flex-wrap gap-4 text-sm">
+              <label className="flex cursor-pointer items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={project.showOnPortfolio}
+                  onChange={() => onToggleVisibility('showOnPortfolio')}
+                  className="rounded"
+                />
+                Show on Portfolio
+              </label>
+              <label className="flex cursor-pointer items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={project.showOnResume}
+                  onChange={() => onToggleVisibility('showOnResume')}
+                  className="rounded"
+                />
+                Show on Resume
+              </label>
+              {isGitHub && (
+                <>
+                  <label className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={project.showStats}
+                      onChange={() => onToggleVisibility('showStats')}
+                      className="rounded"
+                    />
+                    Show Stars/Forks
+                  </label>
+                  {project.ghReadme && (
+                    <label className="flex cursor-pointer items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={project.showReadme}
+                        onChange={() => onToggleVisibility('showReadme')}
+                        className="rounded"
+                      />
+                      Show README
+                    </label>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Custom description */}
+            <div>
+              <label className="mb-1 block text-xs text-muted-foreground">
+                Custom description (overrides default)
+              </label>
+              <Textarea
+                placeholder="Write a custom description for this project..."
+                value={project.customDescription || ''}
+                onChange={(e) => onUpdate({ customDescription: e.target.value || undefined })}
+                className="min-h-[60px] text-sm"
+              />
+            </div>
+
+            {/* Topics/Technologies */}
+            {project.ghTopics && project.ghTopics.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {project.ghTopics.map((topic) => (
+                  <Badge key={topic} variant="secondary" className="text-xs">
+                    {topic}
+                  </Badge>
+                ))}
+              </div>
+            )}
+
+            {/* Delete button */}
+            <div className="flex justify-end">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:text-destructive"
+                onClick={onDelete}
+              >
+                <Trash2 className="mr-1 h-4 w-4" />
+                Remove Project
+              </Button>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

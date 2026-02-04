@@ -50,6 +50,7 @@ model Profile {
   contactInfo            ContactInfo?
   dataSourceConnections  DataSourceConnection[]
   educations             Education[]
+  githubProfile          GitHubProfile?
   links                  Link[]
   user                   User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   sections               ProfileSection[]
@@ -201,33 +202,51 @@ model SkillGroup {
 }
 
 model Project {
-  id             String     @id @default(cuid())
-  profileId      String
-  title          String
-  description    String?
-  shortDesc      String?
-  url            String?
-  repoUrl        String?
-  imageUrl       String?
-  images         String[]
-  techStack      String[]
-  highlights     String[]
-  githubStars    Int?
-  githubForks    Int?
-  githubLanguage String?
-  githubTopics   String[]
-  startDate      DateTime?
-  endDate        DateTime?
-  isCurrent      Boolean    @default(false)
-  featured       Boolean    @default(false)
-  source         DataSource @default(MANUAL)
-  sortOrder      Int        @default(0)
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
-  profile        Profile    @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  id                String     @id @default(cuid())
+  profileId         String
+  title             String
+  description       String?
+  shortDesc         String?
+  url               String?
+  repoUrl           String?
+  imageUrl          String?
+  images            String[]
+  techStack         String[]
+  highlights        String[]
+  // GitHub-specific fields
+  githubStars       Int?
+  githubForks       Int?
+  githubLanguage    String?
+  githubTopics      String[]
+  githubOwner       String? // Owner/username for the repo
+  githubRepo        String? // Repository name
+  githubReadme      String? // README content (first ~500 chars)
+  githubPinned      Boolean    @default(false) // Is this a pinned repo?
+  githubLastPush    DateTime? // Last push date
+  githubLicense     String? // License type (MIT, Apache, etc.)
+  githubWatchers    Int? // Watchers count
+  // Visibility & display controls
+  isVisible         Boolean    @default(true) // User can hide completely
+  showOnPortfolio   Boolean    @default(true) // Show on portfolio view
+  showOnResume      Boolean    @default(true) // Show on resume view
+  showStats         Boolean    @default(true) // Show GitHub stars/forks
+  showReadme        Boolean    @default(false) // Show README preview on portfolio
+  customDescription String? // User override for GitHub description
+  // General fields
+  startDate         DateTime?
+  endDate           DateTime?
+  isCurrent         Boolean    @default(false)
+  featured          Boolean    @default(false)
+  source            DataSource @default(MANUAL)
+  sortOrder         Int        @default(0)
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  profile           Profile    @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
   @@index([profileId])
   @@index([featured])
+  @@index([githubPinned])
+  @@index([isVisible])
 }
 
 model Award {
@@ -360,6 +379,51 @@ model DataSourceConnection {
   @@unique([profileId, source])
   @@index([profileId])
   @@index([source])
+}
+
+// GitHub-specific profile data (extended info not in main Profile)
+model GitHubProfile {
+  id                  String    @id @default(cuid())
+  profileId           String    @unique
+  username            String
+  githubId            Int? // GitHub user ID
+  avatarUrl           String?
+  htmlUrl             String? // Profile URL
+  bio                 String?
+  company             String?
+  blog                String?
+  location            String?
+  hireable            Boolean?
+  publicRepos         Int       @default(0)
+  publicGists         Int       @default(0)
+  followers           Int       @default(0)
+  following           Int       @default(0)
+  accountCreatedAt    DateTime?
+  // Computed statistics
+  totalStars          Int       @default(0) // Sum of all repo stars
+  totalForks          Int       @default(0) // Sum of all repo forks
+  primaryLanguages    String[] // Top languages by usage
+  languageStats       Json? // { "TypeScript": 45.5, "Python": 30.2, ... }
+  contributionStats   Json? // Yearly contribution data if available
+  // Organizations
+  organizations       Json? // Array of { login, avatarUrl, url }
+  // Display preferences (user-controlled)
+  showOnPortfolio     Boolean   @default(true) // Show GitHub section on portfolio
+  showStats           Boolean   @default(true) // Show follower/repo counts
+  showOrganizations   Boolean   @default(true) // Show org badges
+  showLanguageChart   Boolean   @default(true) // Show language breakdown
+  showContributions   Boolean   @default(true) // Show contribution stats
+  hiddenLanguages     String[] // Languages to exclude from display
+  hiddenOrganizations String[] // Orgs to exclude from display
+  // Sync metadata
+  lastSyncAt          DateTime?
+  syncStatus          String? // 'success' | 'error' | 'partial'
+  syncError           String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  profile             Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([username])
 }
 
 enum MainPurpose {

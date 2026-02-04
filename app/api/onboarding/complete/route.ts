@@ -33,6 +33,77 @@ const filterBase64Avatar = (avatarUrl: string | undefined | null): string | unde
 };
 
 /**
+ * Smart visibility defaults for GitHub projects
+ * Determines what projects should be visible by default based on quality signals
+ */
+interface ProjectVisibilityDefaults {
+  isVisible: boolean;
+  showOnPortfolio: boolean;
+  showOnResume: boolean;
+  showStats: boolean;
+  showReadme: boolean;
+}
+
+interface ProjectForDefaults {
+  title: string;
+  description?: string | null;
+  ghPinned?: boolean;
+  ghStars?: number | null;
+  ghForks?: number | null;
+  repoUrl?: string | null;
+}
+
+function getProjectVisibilityDefaults(project: ProjectForDefaults): ProjectVisibilityDefaults {
+  const title = project.title.toLowerCase();
+  const description = project.description?.toLowerCase() || '';
+  const stars = project.ghStars || 0;
+  const isPinned = project.ghPinned || false;
+
+  // Patterns that indicate low-quality or uninteresting repos
+  const lowQualityPatterns = [
+    /^test$/,
+    /^testing$/,
+    /^my-?first/,
+    /^hello-?world/,
+    /^learn/,
+    /^tutorial/,
+    /^practice/,
+    /^playground/,
+    /^experiment/,
+    /^sandbox/,
+    /^temp$/,
+    /^tmp$/,
+    /^scratch/,
+    /^demo$/,
+    /^example$/,
+    /^sample$/,
+    /^dotfiles$/,
+    /^config$/,
+    /^\.[a-z]+$/, // Hidden folders like .vim, .emacs
+  ];
+
+  // Check for fork indicator in URL
+  const isFork = project.repoUrl?.includes('/fork/') || false;
+
+  // Determine if this is a low-quality project
+  const isLowQuality =
+    isFork ||
+    lowQualityPatterns.some((pattern) => pattern.test(title)) ||
+    (!description && stars < 1 && !isPinned);
+
+  // High-quality projects: pinned OR >5 stars OR has meaningful description
+  const isHighQuality = isPinned || stars >= 5 || (description && description.length > 30);
+
+  return {
+    isVisible: !isLowQuality,
+    showOnPortfolio: !isLowQuality,
+    showOnResume: isHighQuality || stars >= 2,
+    showStats: stars >= 3 || (project.ghForks || 0) >= 2,
+    showReadme: isPinned,
+  };
+}
+
+/**
  * Safely parse a date string using the shared flexible parser.
  * Returns null for invalid dates.
  */
@@ -78,6 +149,46 @@ interface ReviewedData {
     type: string;
     url: string;
     label?: string;
+  }>;
+  // Projects from GitHub and resume
+  projects?: Array<{
+    title: string;
+    description?: string;
+    technologies?: string[];
+    techStack?: string[];
+    repoUrl?: string;
+    liveUrl?: string;
+    url?: string;
+    // GitHub-specific fields (support both naming conventions)
+    ghStars?: number;
+    githubStars?: number;
+    ghForks?: number;
+    githubForks?: number;
+    ghLanguage?: string;
+    githubLanguage?: string;
+    ghPinned?: boolean;
+    githubPinned?: boolean;
+    ghTopics?: string[];
+    githubTopics?: string[];
+    ghOwner?: string;
+    githubOwner?: string;
+    ghRepo?: string;
+    githubRepo?: string;
+    ghReadme?: string;
+    githubReadme?: string;
+    ghLastPush?: string;
+    githubLastPush?: string;
+    ghLicense?: string;
+    githubLicense?: string;
+    ghWatchers?: number;
+    githubWatchers?: number;
+    // Visibility controls (user can adjust during review)
+    isVisible?: boolean;
+    showOnPortfolio?: boolean;
+    showOnResume?: boolean;
+    showStats?: boolean;
+    showReadme?: boolean;
+    customDescription?: string;
   }>;
   contactInfo?: {
     email?: string;
@@ -359,9 +470,24 @@ export async function POST(request: NextRequest) {
             featured: project.featured || index < 3,
             source: toDataSource(project.source),
             sortOrder: index,
+            // Enhanced GitHub fields
             githubStars: project.ghStars,
             githubForks: project.ghForks,
             githubLanguage: project.ghLanguage,
+            githubTopics: project.ghTopics || [],
+            githubOwner: project.ghOwner,
+            githubRepo: project.ghRepo,
+            githubReadme: project.ghReadme,
+            githubPinned: project.ghPinned || false,
+            githubLastPush: project.ghLastPush || null,
+            githubLicense: project.ghLicense,
+            githubWatchers: project.ghWatchers,
+            // Smart visibility defaults
+            isVisible: getProjectVisibilityDefaults(project).isVisible,
+            showOnPortfolio: getProjectVisibilityDefaults(project).showOnPortfolio,
+            showOnResume: getProjectVisibilityDefaults(project).showOnResume,
+            showStats: getProjectVisibilityDefaults(project).showStats,
+            showReadme: getProjectVisibilityDefaults(project).showReadme,
           })),
         });
       }
@@ -505,9 +631,24 @@ export async function POST(request: NextRequest) {
               featured: project.featured || false,
               source: toDataSource(project.source),
               sortOrder: existingProjects.length + index,
+              // Enhanced GitHub fields
               githubStars: project.ghStars,
               githubForks: project.ghForks,
               githubLanguage: project.ghLanguage,
+              githubTopics: project.ghTopics || [],
+              githubOwner: project.ghOwner,
+              githubRepo: project.ghRepo,
+              githubReadme: project.ghReadme,
+              githubPinned: project.ghPinned || false,
+              githubLastPush: project.ghLastPush || null,
+              githubLicense: project.ghLicense,
+              githubWatchers: project.ghWatchers,
+              // Smart visibility defaults
+              isVisible: getProjectVisibilityDefaults(project).isVisible,
+              showOnPortfolio: getProjectVisibilityDefaults(project).showOnPortfolio,
+              showOnResume: getProjectVisibilityDefaults(project).showOnResume,
+              showStats: getProjectVisibilityDefaults(project).showStats,
+              showReadme: getProjectVisibilityDefaults(project).showReadme,
             })),
           });
         }
@@ -635,6 +776,8 @@ async function handleReviewedData(
       db.workExperience.deleteMany({ where: { profileId, source: 'RESUME' } }),
       db.education.deleteMany({ where: { profileId, source: 'RESUME' } }),
       db.link.deleteMany({ where: { profileId, source: 'RESUME' } }),
+      // Also clean up GitHub and resume projects when re-importing
+      db.project.deleteMany({ where: { profileId, source: { in: ['RESUME', 'GITHUB'] } } }),
     ]);
   }
 
@@ -810,6 +953,73 @@ async function handleReviewedData(
     });
   }
 
+  // Create projects (from GitHub and/or resume)
+  if (reviewedData.projects?.length) {
+    console.log('[handleReviewedData] Creating projects:', reviewedData.projects.length);
+
+    for (const [index, project] of reviewedData.projects.entries()) {
+      // Use user-provided visibility settings if available, otherwise compute smart defaults
+      const hasUserVisibilitySettings =
+        project.isVisible !== undefined ||
+        project.showOnPortfolio !== undefined ||
+        project.showOnResume !== undefined;
+
+      const visibilityDefaults = hasUserVisibilitySettings
+        ? {
+            isVisible: project.isVisible ?? true,
+            showOnPortfolio: project.showOnPortfolio ?? true,
+            showOnResume: project.showOnResume ?? false,
+            showStats: project.showStats ?? false,
+            showReadme: project.showReadme ?? false,
+          }
+        : getProjectVisibilityDefaults({
+            title: project.title,
+            description: project.description,
+            ghPinned: project.ghPinned ?? project.githubPinned,
+            ghStars: project.ghStars ?? project.githubStars,
+            ghForks: project.ghForks ?? project.githubForks,
+            repoUrl: project.repoUrl,
+          });
+
+      await db.project.create({
+        data: {
+          profileId,
+          title: project.title || 'Untitled Project',
+          description: project.customDescription || project.description,
+          techStack: project.technologies || project.techStack || [],
+          repoUrl: project.repoUrl,
+          url: project.liveUrl || project.url,
+          // GitHub-specific fields
+          githubStars: project.ghStars ?? project.githubStars,
+          githubForks: project.ghForks ?? project.githubForks,
+          githubLanguage: project.ghLanguage || project.githubLanguage,
+          githubPinned: project.ghPinned ?? project.githubPinned ?? false,
+          githubTopics: project.ghTopics || project.githubTopics || [],
+          githubOwner: project.ghOwner || project.githubOwner,
+          githubRepo: project.ghRepo || project.githubRepo,
+          githubReadme: project.ghReadme || project.githubReadme,
+          githubLastPush: project.ghLastPush
+            ? new Date(project.ghLastPush)
+            : project.githubLastPush
+              ? new Date(project.githubLastPush)
+              : null,
+          githubLicense: project.ghLicense || project.githubLicense,
+          githubWatchers: project.ghWatchers ?? project.githubWatchers,
+          // Visibility controls
+          isVisible: visibilityDefaults.isVisible,
+          showOnPortfolio: visibilityDefaults.showOnPortfolio,
+          showOnResume: visibilityDefaults.showOnResume,
+          showStats: visibilityDefaults.showStats,
+          showReadme: visibilityDefaults.showReadme,
+          // Source detection
+          source: project.repoUrl?.includes('github.com') ? 'GITHUB' : 'RESUME',
+          sortOrder: index,
+        },
+      });
+    }
+    console.log('[handleReviewedData] Created all projects');
+  }
+
   console.log('[handleReviewedData] Complete! Profile handle:', handle);
 
   // Sync avatar to Clerk (fire and forget - don't block the response)
@@ -887,9 +1097,18 @@ function mergeImportedData(importedData: Record<string, unknown>) {
       techStack?: string[];
       featured?: boolean;
       source: string;
+      // GitHub fields
       ghStars?: number;
       ghForks?: number;
       ghLanguage?: string;
+      ghTopics?: string[];
+      ghOwner?: string;
+      ghRepo?: string;
+      ghReadme?: string;
+      ghPinned?: boolean;
+      ghLastPush?: Date;
+      ghLicense?: string;
+      ghWatchers?: number;
     }>;
     experiences: Array<{
       company: string;

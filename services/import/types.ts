@@ -65,6 +65,14 @@ export interface NormalizedProject {
   ghStars?: number;
   ghForks?: number;
   ghLanguage?: string;
+  ghTopics?: string[];
+  ghOwner?: string;
+  ghRepo?: string;
+  ghReadme?: string;
+  ghPinned?: boolean;
+  ghLastPush?: Date;
+  ghLicense?: string;
+  ghWatchers?: number;
 }
 
 export interface NormalizedEducation {

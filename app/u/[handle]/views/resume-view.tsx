@@ -16,6 +16,7 @@ import {
   Mail,
   MapPin,
   Sparkles,
+  Star,
   Twitter,
 } from 'lucide-react';
 
@@ -196,6 +197,82 @@ export function ResumeView({ profile }: ResumeViewProps) {
           </CardContent>
         </Card>
       )}
+
+      {/* Projects - filtered by visibility */}
+      {(() => {
+        const visibleProjects =
+          profile.projects?.filter((p) => p.isVisible !== false && p.showOnResume !== false) || [];
+        if (visibleProjects.length === 0) return null;
+
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Github className="h-5 w-5" />
+                Projects
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {visibleProjects.slice(0, 6).map((project) => (
+                  <div key={project.id} className="rounded-lg border p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="font-medium">{project.title}</h3>
+                      {project.showStats !== false &&
+                        project.githubStars != null &&
+                        project.githubStars > 0 && (
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Star className="h-3 w-3 text-yellow-500" />
+                            {project.githubStars}
+                          </span>
+                        )}
+                    </div>
+                    <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+                      {project.customDescription || project.shortDesc || project.description}
+                    </p>
+                    {project.techStack && project.techStack.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {project.techStack.slice(0, 3).map((tech) => (
+                          <Badge key={tech} variant="outline" className="text-xs">
+                            {tech}
+                          </Badge>
+                        ))}
+                        {project.techStack.length > 3 && (
+                          <Badge variant="outline" className="text-xs">
+                            +{project.techStack.length - 3}
+                          </Badge>
+                        )}
+                      </div>
+                    )}
+                    <div className="mt-2 flex gap-2">
+                      {project.url && (
+                        <a
+                          href={project.url}
+                          target="_blank"
+                          rel="noopener"
+                          className="text-xs text-primary hover:underline"
+                        >
+                          Demo
+                        </a>
+                      )}
+                      {project.repoUrl && (
+                        <a
+                          href={project.repoUrl}
+                          target="_blank"
+                          rel="noopener"
+                          className="text-xs text-primary hover:underline"
+                        >
+                          Code
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {/* Work Experience */}
       {profile.workExperiences && profile.workExperiences.length > 0 && (

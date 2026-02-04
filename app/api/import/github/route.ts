@@ -1,8 +1,18 @@
-import { normalizeGitHubData } from '@/services/github.service';
-import { saveGitHubToProfile } from '@/services/import/github.service';
+import { getEnhancedGitHubData } from '@/services/github-enhanced.service';
+import { saveEnhancedGitHubToProfile } from '@/services/import/github-enhanced.service';
 import { auth } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 
+/**
+ * POST /api/import/github
+ *
+ * Import enhanced GitHub data including:
+ * - Pinned repositories (featured projects)
+ * - README content for project descriptions
+ * - Organization memberships
+ * - Language statistics (percentage-based)
+ * - Repository topics as skills
+ */
 export async function POST(request: NextRequest) {
   try {
     const { userId } = await auth();
@@ -23,20 +33,35 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid GitHub username format' }, { status: 400 });
     }
 
-    const data = await normalizeGitHubData(username, accessToken);
+    // Use enhanced GitHub data fetching
+    const data = await getEnhancedGitHubData(username, accessToken);
 
     // Optionally save to profile
     if (saveToProfile) {
-      const saveResult = await saveGitHubToProfile(userId, data);
+      const saveResult = await saveEnhancedGitHubToProfile(userId, data);
       if (!saveResult.success) {
         console.error('[GitHub Import API] Failed to save to profile:', saveResult.error);
       }
     }
 
+    // Calculate stats for response
+    const pinnedCount = data.projects.filter((p) => p.ghPinned).length;
+    const languageCount = Object.keys(data.githubProfile.languageStats).length;
+    const orgCount = data.githubProfile.organizations.length;
+
     return NextResponse.json({
       success: true,
       data,
-      message: `Imported ${data.projects.length} projects and ${data.skills.length} skills from GitHub`,
+      stats: {
+        projects: data.projects.length,
+        pinnedProjects: pinnedCount,
+        skills: data.skills.length,
+        languages: languageCount,
+        organizations: orgCount,
+        totalStars: data.githubProfile.totalStars,
+        totalForks: data.githubProfile.totalForks,
+      },
+      message: `Imported ${data.projects.length} projects (${pinnedCount} pinned), ${data.skills.length} skills, and ${languageCount} languages from GitHub`,
     });
   } catch (error) {
     console.error('GitHub import error:', error);

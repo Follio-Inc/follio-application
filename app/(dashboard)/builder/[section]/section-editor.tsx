@@ -9,6 +9,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { BasicInfoForm, ContactInfoForm } from '../sections/basic-info-form';
 import { EducationSection } from '../sections/education-section';
 import { ExperienceSection } from '../sections/experience-section';
+import { GitHubProjectsSection } from '../sections/github-projects-section';
 import { LinksSection } from '../sections/links-section';
 import { ProjectsSection } from '../sections/projects-section';
 import { ShareSection } from '../sections/share-section';
@@ -37,6 +38,7 @@ const SECTION_TITLES: Record<string, string> = {
   EDUCATION: 'Education',
   SKILLS: 'Skills',
   PROJECTS: 'Projects',
+  GITHUB: 'GitHub Repositories',
   LINKS: 'Links',
   AWARDS: 'Awards',
   CERTIFICATIONS: 'Certifications',
@@ -188,6 +190,15 @@ export function SectionEditor({ profile, sectionType, section }: SectionEditorPr
             projects={currentProfile.projects}
             profileId={currentProfile.id}
             onUpdate={(projects) => handleProfileUpdate({ projects })}
+          />
+        );
+
+      case 'GITHUB':
+        return (
+          <GitHubProjectsSection
+            projects={currentProfile.projects}
+            profileId={currentProfile.id}
+            onUpdateAction={(projects) => handleProfileUpdate({ projects })}
           />
         );
 

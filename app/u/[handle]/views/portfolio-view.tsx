@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { ArrowUpRight, ExternalLink, Github, Mail, MapPin, Star } from 'lucide-react';
+import { ArrowUpRight, ExternalLink, GitFork, Github, Mail, MapPin, Pin, Star } from 'lucide-react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -15,8 +15,12 @@ interface PortfolioViewProps {
 
 export function PortfolioView({ profile }: PortfolioViewProps) {
   const initials = `${profile.firstName?.[0] || ''}${profile.lastName?.[0] || ''}`;
-  const featuredProjects = profile.projects?.filter((p) => p.featured) || [];
-  const otherProjects = profile.projects?.filter((p) => !p.featured) || [];
+
+  // Filter projects by visibility settings
+  const visibleProjects =
+    profile.projects?.filter((p) => p.isVisible !== false && p.showOnPortfolio !== false) || [];
+  const featuredProjects = visibleProjects.filter((p) => p.featured);
+  const otherProjects = visibleProjects.filter((p) => !p.featured);
 
   return (
     <div className="space-y-12">
@@ -127,15 +131,52 @@ export function PortfolioView({ profile }: PortfolioViewProps) {
                     </div>
                   )}
                   <CardContent className={project.imageUrl ? 'pt-4' : 'pt-6'}>
-                    {!project.imageUrl && <h3 className="text-xl font-bold">{project.title}</h3>}
-                    {project.shortDesc && (
-                      <p className="mt-2 text-muted-foreground">{project.shortDesc}</p>
+                    {!project.imageUrl && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-xl font-bold">{project.title}</h3>
+                        {project.githubPinned && (
+                          <Badge variant="outline" className="gap-1 text-xs">
+                            <Pin className="h-3 w-3" />
+                            Pinned
+                          </Badge>
+                        )}
+                      </div>
                     )}
-                    {project.description && !project.shortDesc && (
+                    {/* Custom description overrides GitHub description */}
+                    {(project.customDescription || project.shortDesc) && (
+                      <p className="mt-2 text-muted-foreground">
+                        {project.customDescription || project.shortDesc}
+                      </p>
+                    )}
+                    {project.description && !project.shortDesc && !project.customDescription && (
                       <p className="mt-2 line-clamp-3 text-muted-foreground">
                         {project.description}
                       </p>
                     )}
+                    {/* GitHub Stats - only when showStats is enabled */}
+                    {project.showStats !== false &&
+                      (project.githubStars || project.githubForks || project.githubLanguage) && (
+                        <div className="mt-3 flex items-center gap-4 text-sm text-muted-foreground">
+                          {project.githubStars != null && (
+                            <span className="flex items-center gap-1">
+                              <Star className="h-4 w-4 text-yellow-500" />
+                              {project.githubStars}
+                            </span>
+                          )}
+                          {project.githubForks != null && (
+                            <span className="flex items-center gap-1">
+                              <GitFork className="h-4 w-4" />
+                              {project.githubForks}
+                            </span>
+                          )}
+                          {project.githubLanguage && (
+                            <span className="flex items-center gap-1">
+                              <span className="h-3 w-3 rounded-full bg-primary" />
+                              {project.githubLanguage}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     {project.techStack && project.techStack.length > 0 && (
                       <div className="mt-4 flex flex-wrap gap-1">
                         {project.techStack.slice(0, 6).map((tech) => (

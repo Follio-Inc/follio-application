@@ -17,6 +17,7 @@ const SLUG_TO_SECTION: Record<string, string> = {
   education: 'EDUCATION',
   skills: 'SKILLS',
   projects: 'PROJECTS',
+  github: 'GITHUB', // GitHub projects management
   links: 'LINKS',
   awards: 'AWARDS',
   certifications: 'CERTIFICATIONS',
@@ -76,6 +77,18 @@ export default async function SectionPage({ params }: PageProps) {
       <SectionEditor
         profile={serializedProfile}
         sectionType="SHARE"
+        section={null}
+        customSectionId={null}
+      />
+    );
+  }
+
+  // Handle GITHUB section separately (not a profile section, manages GitHub repos)
+  if (sectionSlug === 'github') {
+    return (
+      <SectionEditor
+        profile={serializedProfile}
+        sectionType="GITHUB"
         section={null}
         customSectionId={null}
       />
