@@ -156,31 +156,6 @@ export async function fetchGitHubRepos(
 }
 
 /**
- * Fetch languages for a repository
- */
-export async function fetchRepoLanguages(
-  fullName: string,
-  accessToken?: string
-): Promise<GitHubLanguages> {
-  const headers: HeadersInit = {
-    Accept: 'application/vnd.github.v3+json',
-    'User-Agent': 'Follio-App',
-  };
-
-  if (accessToken) {
-    headers.Authorization = `Bearer ${accessToken}`;
-  }
-
-  const response = await fetch(`${GITHUB_API_BASE}/repos/${fullName}/languages`, { headers });
-
-  if (!response.ok) {
-    return {};
-  }
-
-  return response.json();
-}
-
-/**
  * Get aggregated language statistics across all repos
  */
 export function aggregateLanguages(repos: GitHubRepo[]): string[] {
