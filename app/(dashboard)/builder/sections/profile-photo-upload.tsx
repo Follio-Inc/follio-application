@@ -18,6 +18,44 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 
+/**
+ * Compress an image file to a target size (for Clerk's 5MB limit)
+ * Resizes to 512x512 with center crop and JPEG compression
+ */
+const compressImageForClerk = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+
+    img.onload = () => {
+      // Target size: 512x512 for profile photos
+      const targetSize = 512;
+      canvas.width = targetSize;
+      canvas.height = targetSize;
+
+      // Calculate crop to center the image (cover fit)
+      const scale = Math.max(targetSize / img.width, targetSize / img.height);
+      const scaledWidth = img.width * scale;
+      const scaledHeight = img.height * scale;
+      const offsetX = (targetSize - scaledWidth) / 2;
+      const offsetY = (targetSize - scaledHeight) / 2;
+
+      ctx?.drawImage(img, offsetX, offsetY, scaledWidth, scaledHeight);
+
+      // Convert to JPEG data URL with compression
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      console.log(
+        `[Image Compress] Compressed from ${file.size} bytes to ~${Math.round(dataUrl.length * 0.75)} bytes`
+      );
+      resolve(dataUrl);
+    };
+
+    img.onerror = () => reject(new Error('Failed to load image'));
+    img.src = URL.createObjectURL(file);
+  });
+};
+
 interface ProfilePhotoUploadProps {
   currentPhotoUrl: string | null | undefined;
   initials: string;
@@ -78,30 +116,31 @@ export function ProfilePhotoUpload({
     img.src = urlInput;
   };
 
-  const handleFileSelect = useCallback((file: File) => {
+  const handleFileSelect = useCallback(async (file: File) => {
     if (!file.type.startsWith('image/')) {
       setUrlError('Please select an image file');
       return;
     }
 
-    // Max file size: 5MB
-    if (file.size > 5 * 1024 * 1024) {
-      setUrlError('Image size must be less than 5MB');
+    // Max file size: 40MB (same as onboarding)
+    if (file.size > 40 * 1024 * 1024) {
+      setUrlError('Image size must be less than 40MB');
       return;
     }
 
     setIsLoading(true);
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const dataUrl = e.target?.result as string;
-      setPreviewUrl(dataUrl);
+    setUrlError('');
+
+    try {
+      // Compress and resize image for Clerk compatibility (512x512, JPEG)
+      const compressedDataUrl = await compressImageForClerk(file);
+      setPreviewUrl(compressedDataUrl);
+    } catch (err) {
+      console.error('Failed to process image:', err);
+      setUrlError('Failed to process image');
+    } finally {
       setIsLoading(false);
-    };
-    reader.onerror = () => {
-      setUrlError('Failed to read file');
-      setIsLoading(false);
-    };
-    reader.readAsDataURL(file);
+    }
   }, []);
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -256,7 +295,7 @@ export function ProfilePhotoUpload({
                     />
                     <Upload className="mx-auto mb-4 h-10 w-10 text-muted-foreground" />
                     <p className="text-sm font-medium">Drop an image here or click to browse</p>
-                    <p className="mt-1 text-xs text-muted-foreground">PNG, JPG, GIF up to 5MB</p>
+                    <p className="mt-1 text-xs text-muted-foreground">PNG, JPG, GIF</p>
                   </div>
                 )}
 

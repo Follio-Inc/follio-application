@@ -16,7 +16,15 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import { ChevronLeft, Download, Github, PanelLeft, PanelLeftClose, Share2 } from 'lucide-react';
+import {
+  ChevronLeft,
+  Download,
+  Github,
+  PanelLeft,
+  PanelLeftClose,
+  Settings,
+  Share2,
+} from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -330,6 +338,31 @@ export function BuilderLayoutClient({ profile, children }: BuilderLayoutClientPr
                   )}
                 >
                   Get your public profile link
+                </span>
+              </div>
+            </Link>
+            {/* Settings */}
+            <Link
+              href="/builder/settings"
+              className={cn(
+                'flex items-center gap-3 rounded-lg px-3 py-2 transition-colors',
+                pathname === '/builder/settings'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'hover:bg-muted'
+              )}
+            >
+              <Settings className="h-4 w-4 shrink-0" />
+              <div className="flex flex-col">
+                <span className="text-sm font-medium">Settings</span>
+                <span
+                  className={cn(
+                    'text-xs',
+                    pathname === '/builder/settings'
+                      ? 'text-primary-foreground/70'
+                      : 'text-muted-foreground'
+                  )}
+                >
+                  Account & preferences
                 </span>
               </div>
             </Link>

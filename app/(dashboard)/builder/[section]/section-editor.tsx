@@ -12,6 +12,7 @@ import { ExperienceSection } from '../sections/experience-section';
 import { GitHubProjectsSection } from '../sections/github-projects-section';
 import { LinksSection } from '../sections/links-section';
 import { ProjectsSection } from '../sections/projects-section';
+import { SettingsSection } from '../sections/settings-section';
 import { ShareSection } from '../sections/share-section';
 import { SkillsSection } from '../sections/skills-section';
 import { AwardsSection } from './awards-section';
@@ -48,6 +49,7 @@ const SECTION_TITLES: Record<string, string> = {
   INTERESTS: 'Interests',
   CUSTOM: 'Custom Section',
   SHARE: 'Share & Publish',
+  SETTINGS: 'Settings',
 };
 
 export function SectionEditor({ profile, sectionType, section }: SectionEditorProps) {
@@ -246,6 +248,9 @@ export function SectionEditor({ profile, sectionType, section }: SectionEditorPr
 
       case 'SHARE':
         return <ShareSection profile={currentProfile} onUpdateAction={handleProfileUpdate} />;
+
+      case 'SETTINGS':
+        return <SettingsSection profile={currentProfile} onUpdate={handleProfileUpdate} />;
 
       // Placeholder for sections not yet implemented
       default:

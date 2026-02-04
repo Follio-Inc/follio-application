@@ -26,6 +26,7 @@ const SLUG_TO_SECTION: Record<string, string> = {
   languages: 'LANGUAGES',
   interests: 'INTERESTS',
   share: 'SHARE', // Share & Publish section
+  settings: 'SETTINGS', // Account settings
 };
 
 interface PageProps {
@@ -89,6 +90,18 @@ export default async function SectionPage({ params }: PageProps) {
       <SectionEditor
         profile={serializedProfile}
         sectionType="GITHUB"
+        section={null}
+        customSectionId={null}
+      />
+    );
+  }
+
+  // Handle SETTINGS section separately (not a profile section, account settings)
+  if (sectionSlug === 'settings') {
+    return (
+      <SectionEditor
+        profile={serializedProfile}
+        sectionType="SETTINGS"
         section={null}
         customSectionId={null}
       />

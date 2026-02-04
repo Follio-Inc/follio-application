@@ -405,6 +405,12 @@ function ReviewPageContent() {
   const [editingExperienceId, setEditingExperienceId] = useState<string | null>(null);
   const [editingEducationId, setEditingEducationId] = useState<string | null>(null);
 
+  // Manual contact input states
+  const [newEmailInput, setNewEmailInput] = useState('');
+  const [newPhoneInput, setNewPhoneInput] = useState('');
+  const [showEmailInput, setShowEmailInput] = useState(false);
+  const [showPhoneInput, setShowPhoneInput] = useState(false);
+
   // Get signup email from Clerk (always primary)
   const signupEmail = user?.primaryEmailAddress?.emailAddress;
 
@@ -840,6 +846,79 @@ function ReviewPageContent() {
     });
   };
 
+  // Add email manually
+  const addEmail = (email: string) => {
+    const trimmedEmail = email.trim().toLowerCase();
+    if (!trimmedEmail) return;
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmedEmail)) return;
+
+    setData((prev) => {
+      const allEmails = prev.contactInfo?.allEmails || [];
+
+      // Check for duplicates (case-insensitive)
+      const isDuplicate = allEmails.some((e) => e.email.toLowerCase() === trimmedEmail);
+      if (isDuplicate) return prev;
+
+      return {
+        ...prev,
+        contactInfo: {
+          ...prev.contactInfo,
+          allEmails: [...allEmails, { email: trimmedEmail, source: 'MANUAL' }],
+        },
+      };
+    });
+
+    setNewEmailInput('');
+    setShowEmailInput(false);
+  };
+
+  // Add phone manually
+  const addPhone = (phone: string) => {
+    let trimmedPhone = phone.trim();
+    if (!trimmedPhone) return;
+
+    // Ensure phone starts with + for country code
+    // If user enters digits starting with country code but no +, add it
+    if (!trimmedPhone.startsWith('+')) {
+      // If it starts with a digit, assume they forgot the +
+      if (/^\d/.test(trimmedPhone)) {
+        trimmedPhone = '+' + trimmedPhone;
+      } else {
+        // Invalid format
+        return;
+      }
+    }
+
+    // Basic validation: must have + followed by at least 7 digits (country code + number)
+    const digitsOnly = trimmedPhone.replace(/\D/g, '');
+    if (digitsOnly.length < 7) return;
+
+    setData((prev) => {
+      const allPhones = prev.contactInfo?.allPhones || [];
+
+      // Check for duplicates (normalize by removing non-digits for comparison)
+      const normalizePhone = (p: string) => p.replace(/\D/g, '');
+      const isDuplicate = allPhones.some(
+        (p) => normalizePhone(p.phone) === normalizePhone(trimmedPhone)
+      );
+      if (isDuplicate) return prev;
+
+      return {
+        ...prev,
+        contactInfo: {
+          ...prev.contactInfo,
+          allPhones: [...allPhones, { phone: trimmedPhone, source: 'MANUAL' }],
+        },
+      };
+    });
+
+    setNewPhoneInput('');
+    setShowPhoneInput(false);
+  };
+
   // Experience handlers
   const updateExperience = (id: string, updates: Partial<ParsedExperience>) => {
     setData((prev) => ({
@@ -1033,49 +1112,85 @@ function ReviewPageContent() {
               />
 
               <div className="space-y-4">
-                {/* Show name sources if multiple names available */}
-                {data.allNames && data.allNames.length > 1 && (
-                  <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
-                    <label className="mb-2 block text-sm font-medium text-primary">
-                      We found different names from your imports. Select one or edit below:
-                    </label>
-                    <div className="space-y-2">
-                      {data.allNames.map((nameEntry, idx) => {
-                        const fullName =
-                          `${nameEntry.firstName || ''} ${nameEntry.lastName || ''}`.trim();
-                        const isSelected =
-                          data.profile.firstName === nameEntry.firstName &&
-                          data.profile.lastName === nameEntry.lastName;
-                        return (
-                          <button
-                            key={idx}
-                            type="button"
-                            onClick={() => {
-                              setData((prev) => ({
-                                ...prev,
-                                profile: {
-                                  ...prev.profile,
-                                  firstName: nameEntry.firstName || '',
-                                  lastName: nameEntry.lastName || '',
-                                },
-                              }));
-                            }}
-                            className={`flex w-full items-center justify-between rounded-lg border p-3 text-left transition-colors ${
-                              isSelected
-                                ? 'border-primary bg-primary/10'
-                                : 'border-border bg-background hover:bg-muted/30'
-                            }`}
-                          >
-                            <span className="font-medium">{fullName || 'No name'}</span>
-                            <span className="text-xs text-muted-foreground">
-                              {nameEntry.source}
-                            </span>
-                          </button>
-                        );
-                      })}
+                {/* Show name sources if multiple unique names available */}
+                {(() => {
+                  // Compute unique names by combining firstName + lastName
+                  const uniqueNamesMap = new Map<
+                    string,
+                    { firstName: string; lastName: string; sources: string[] }
+                  >();
+
+                  if (data.allNames) {
+                    for (const nameEntry of data.allNames) {
+                      const firstName = (nameEntry.firstName || '').trim();
+                      const lastName = (nameEntry.lastName || '').trim();
+                      const key = `${firstName.toLowerCase()}|${lastName.toLowerCase()}`;
+
+                      if (key === '|') continue; // Skip empty names
+
+                      if (uniqueNamesMap.has(key)) {
+                        // Add source to existing entry
+                        const existing = uniqueNamesMap.get(key)!;
+                        if (!existing.sources.includes(nameEntry.source)) {
+                          existing.sources.push(nameEntry.source);
+                        }
+                      } else {
+                        uniqueNamesMap.set(key, {
+                          firstName,
+                          lastName,
+                          sources: [nameEntry.source],
+                        });
+                      }
+                    }
+                  }
+
+                  const uniqueNames = Array.from(uniqueNamesMap.values());
+
+                  // Only show the list if there are multiple unique names
+                  if (uniqueNames.length <= 1) return null;
+
+                  return (
+                    <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
+                      <label className="mb-2 block text-sm font-medium text-primary">
+                        We found different names from your imports. Select one or edit below:
+                      </label>
+                      <div className="space-y-2">
+                        {uniqueNames.map((nameEntry, idx) => {
+                          const fullName = `${nameEntry.firstName} ${nameEntry.lastName}`.trim();
+                          const isSelected =
+                            data.profile.firstName === nameEntry.firstName &&
+                            data.profile.lastName === nameEntry.lastName;
+                          return (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => {
+                                setData((prev) => ({
+                                  ...prev,
+                                  profile: {
+                                    ...prev.profile,
+                                    firstName: nameEntry.firstName,
+                                    lastName: nameEntry.lastName,
+                                  },
+                                }));
+                              }}
+                              className={`flex w-full items-center justify-between rounded-lg border p-3 text-left transition-colors ${
+                                isSelected
+                                  ? 'border-primary bg-primary/10'
+                                  : 'border-border bg-background hover:bg-muted/30'
+                              }`}
+                            >
+                              <span className="font-medium">{fullName || 'No name'}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {nameEntry.sources.join(', ')}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -1213,8 +1328,57 @@ function ReviewPageContent() {
                     </div>
                   ) : (
                     <div className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
-                      No email addresses found. You can add them in your profile settings.
+                      No email addresses found. Add one below.
                     </div>
+                  )}
+
+                  {/* Add Email Input */}
+                  {showEmailInput ? (
+                    <div className="mt-3 flex items-center gap-2">
+                      <Input
+                        type="email"
+                        placeholder="Enter email address"
+                        value={newEmailInput}
+                        onChange={(e) => setNewEmailInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            addEmail(newEmailInput);
+                          } else if (e.key === 'Escape') {
+                            setShowEmailInput(false);
+                            setNewEmailInput('');
+                          }
+                        }}
+                        className="flex-1"
+                        autoFocus
+                      />
+                      <Button
+                        size="sm"
+                        onClick={() => addEmail(newEmailInput)}
+                        disabled={!newEmailInput.trim()}
+                      >
+                        Add
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setShowEmailInput(false);
+                          setNewEmailInput('');
+                        }}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-3"
+                      onClick={() => setShowEmailInput(true)}
+                    >
+                      <Plus className="mr-1 h-4 w-4" />
+                      Add Email
+                    </Button>
                   )}
                 </div>
 
@@ -1280,8 +1444,57 @@ function ReviewPageContent() {
                     </div>
                   ) : (
                     <div className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
-                      No phone numbers found. You can add them in your profile settings.
+                      No phone numbers found. Add one below.
                     </div>
+                  )}
+
+                  {/* Add Phone Input */}
+                  {showPhoneInput ? (
+                    <div className="mt-3 flex items-center gap-2">
+                      <Input
+                        type="tel"
+                        placeholder="+1 234 567 8900"
+                        value={newPhoneInput}
+                        onChange={(e) => setNewPhoneInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            addPhone(newPhoneInput);
+                          } else if (e.key === 'Escape') {
+                            setShowPhoneInput(false);
+                            setNewPhoneInput('');
+                          }
+                        }}
+                        className="flex-1"
+                        autoFocus
+                      />
+                      <Button
+                        size="sm"
+                        onClick={() => addPhone(newPhoneInput)}
+                        disabled={!newPhoneInput.trim()}
+                      >
+                        Add
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setShowPhoneInput(false);
+                          setNewPhoneInput('');
+                        }}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-3"
+                      onClick={() => setShowPhoneInput(true)}
+                    >
+                      <Plus className="mr-1 h-4 w-4" />
+                      Add Phone
+                    </Button>
                   )}
                 </div>
               </div>

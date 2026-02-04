@@ -1,11 +1,21 @@
 'use client';
 
-import { AlertTriangle, Bell, Monitor, Moon, Palette, Shield, Sun, Trash2 } from 'lucide-react';
+import { useClerk } from '@clerk/nextjs';
+import {
+  AlertTriangle,
+  Bell,
+  Loader2,
+  Monitor,
+  Moon,
+  Palette,
+  Shield,
+  Sun,
+  Trash2,
+} from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -17,12 +27,35 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 
 import type { Profile } from '@/types';
 
 type ThemeMode = 'light' | 'dark' | 'system';
+
+interface AccountDataSummary {
+  user: {
+    email: string;
+    createdAt: string;
+  };
+  profile: {
+    handle: string;
+    status: string;
+  } | null;
+  dataSummary: {
+    workExperiences: number;
+    educations: number;
+    skills: number;
+    projects: number;
+    awards: number;
+    certifications: number;
+    links: number;
+    importJobs: number;
+    shareTokens: number;
+  };
+}
 
 interface SettingsSectionProps {
   profile: Profile;
@@ -56,10 +89,17 @@ const THEME_OPTIONS: {
 ];
 
 export function SettingsSection({ profile }: SettingsSectionProps) {
+  const { signOut } = useClerk();
   const [theme, setTheme] = useState<ThemeMode>('system');
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [profileViewAlerts, setProfileViewAlerts] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Delete account state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteStep, setDeleteStep] = useState<'warning' | 'confirm' | 'deleting'>('warning');
+  const [confirmText, setConfirmText] = useState('');
+  const [accountData, setAccountData] = useState<AccountDataSummary | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Load theme preference from localStorage on mount
   useEffect(() => {
@@ -86,24 +126,69 @@ export function SettingsSection({ profile }: SettingsSectionProps) {
     }
   };
 
-  const handleDeleteProfile = async () => {
-    setIsDeleting(true);
+  // Fetch account data when delete dialog opens
+  const handleOpenDeleteDialog = async () => {
+    setDeleteDialogOpen(true);
+    setDeleteStep('warning');
+    setConfirmText('');
+    setDeleteError(null);
+
     try {
-      const response = await fetch('/api/profile', {
+      const response = await fetch('/api/account');
+      if (response.ok) {
+        const data = await response.json();
+        setAccountData(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch account data:', error);
+    }
+  };
+
+  const handleCloseDeleteDialog = () => {
+    setDeleteDialogOpen(false);
+    setDeleteStep('warning');
+    setConfirmText('');
+    setDeleteError(null);
+  };
+
+  const handleDeleteAccount = async () => {
+    if (confirmText !== 'DELETE') return;
+
+    setDeleteStep('deleting');
+    setDeleteError(null);
+
+    try {
+      const response = await fetch('/api/account', {
         method: 'DELETE',
       });
 
       if (response.ok) {
-        // Redirect to home or show success
-        window.location.href = '/';
+        // Sign out and redirect to home
+        await signOut({ redirectUrl: '/' });
       } else {
-        console.error('Failed to delete profile');
+        const data = await response.json();
+        setDeleteError(data.message || 'Failed to delete account');
+        setDeleteStep('confirm');
       }
     } catch (error) {
-      console.error('Error deleting profile:', error);
-    } finally {
-      setIsDeleting(false);
+      console.error('Error deleting account:', error);
+      setDeleteError('An unexpected error occurred. Please try again.');
+      setDeleteStep('confirm');
     }
+  };
+
+  const getTotalDataCount = () => {
+    if (!accountData) return 0;
+    const { dataSummary } = accountData;
+    return (
+      dataSummary.workExperiences +
+      dataSummary.educations +
+      dataSummary.skills +
+      dataSummary.projects +
+      dataSummary.awards +
+      dataSummary.certifications +
+      dataSummary.links
+    );
   };
 
   return (
@@ -233,42 +318,136 @@ export function SettingsSection({ profile }: SettingsSectionProps) {
             <AlertTriangle className="h-5 w-5 text-destructive" />
             <CardTitle className="text-destructive">Danger Zone</CardTitle>
           </div>
-          <CardDescription>Irreversible actions for your profile</CardDescription>
+          <CardDescription>Irreversible actions for your account</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <div className="font-medium">Delete Profile</div>
+              <div className="font-medium">Delete Account</div>
               <p className="text-sm text-muted-foreground">
-                Permanently delete your profile and all associated data. This action cannot be
-                undone.
+                Permanently delete your account, profile, and all associated data. This action
+                cannot be undone.
               </p>
             </div>
-            <AlertDialog>
+            <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
               <AlertDialogTrigger asChild>
-                <Button variant="destructive" className="shrink-0 gap-2">
+                <Button
+                  variant="destructive"
+                  className="shrink-0 gap-2"
+                  onClick={handleOpenDeleteDialog}
+                >
                   <Trash2 className="h-4 w-4" />
-                  Delete Profile
+                  Delete Account
                 </Button>
               </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This action cannot be undone. This will permanently delete your profile,
-                    including all your work experience, education, projects, and other data.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={handleDeleteProfile}
-                    disabled={isDeleting}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  >
-                    {isDeleting ? 'Deleting...' : 'Yes, delete my profile'}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
+              <AlertDialogContent className="max-w-md">
+                {deleteStep === 'warning' && (
+                  <>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+                        <AlertTriangle className="h-5 w-5" />
+                        Delete Your Account?
+                      </AlertDialogTitle>
+                      <AlertDialogDescription asChild>
+                        <div className="space-y-4">
+                          <p>
+                            This will <strong>permanently delete</strong> your entire Follio account
+                            including:
+                          </p>
+                          {accountData && (
+                            <div className="rounded-lg border bg-muted/50 p-3 text-sm">
+                              <div className="mb-2 font-medium text-foreground">
+                                Data to be deleted:
+                              </div>
+                              <ul className="grid grid-cols-2 gap-1 text-muted-foreground">
+                                <li>
+                                  • {accountData.dataSummary.workExperiences} work experiences
+                                </li>
+                                <li>• {accountData.dataSummary.educations} education records</li>
+                                <li>• {accountData.dataSummary.skills} skills</li>
+                                <li>• {accountData.dataSummary.projects} projects</li>
+                                <li>• {accountData.dataSummary.certifications} certifications</li>
+                                <li>• {accountData.dataSummary.links} links</li>
+                              </ul>
+                              {accountData.profile && (
+                                <p className="mt-2 text-muted-foreground">
+                                  Your profile{' '}
+                                  <strong>follio.me/{accountData.profile.handle}</strong> will be
+                                  permanently removed.
+                                </p>
+                              )}
+                            </div>
+                          )}
+                          <p className="text-destructive">
+                            ⚠️ This action is irreversible. You will not be able to recover your
+                            data.
+                          </p>
+                        </div>
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel onClick={handleCloseDeleteDialog}>
+                        Cancel
+                      </AlertDialogCancel>
+                      <Button variant="destructive" onClick={() => setDeleteStep('confirm')}>
+                        I understand, continue
+                      </Button>
+                    </AlertDialogFooter>
+                  </>
+                )}
+
+                {deleteStep === 'confirm' && (
+                  <>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+                        <AlertTriangle className="h-5 w-5" />
+                        Confirm Deletion
+                      </AlertDialogTitle>
+                      <AlertDialogDescription asChild>
+                        <div className="space-y-4">
+                          <p>
+                            To confirm, please type <strong>DELETE</strong> in the box below:
+                          </p>
+                          <Input
+                            value={confirmText}
+                            onChange={(e) => setConfirmText(e.target.value.toUpperCase())}
+                            placeholder="Type DELETE to confirm"
+                            className="font-mono"
+                            autoComplete="off"
+                            autoFocus
+                          />
+                          {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
+                        </div>
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel onClick={handleCloseDeleteDialog}>
+                        Cancel
+                      </AlertDialogCancel>
+                      <Button
+                        variant="destructive"
+                        onClick={handleDeleteAccount}
+                        disabled={confirmText !== 'DELETE'}
+                      >
+                        Permanently Delete My Account
+                      </Button>
+                    </AlertDialogFooter>
+                  </>
+                )}
+
+                {deleteStep === 'deleting' && (
+                  <>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Deleting Account...</AlertDialogTitle>
+                      <AlertDialogDescription asChild>
+                        <div className="flex flex-col items-center gap-4 py-6">
+                          <Loader2 className="h-8 w-8 animate-spin text-destructive" />
+                          <p>Please wait while we delete your account and all associated data...</p>
+                        </div>
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                  </>
+                )}
               </AlertDialogContent>
             </AlertDialog>
           </div>
