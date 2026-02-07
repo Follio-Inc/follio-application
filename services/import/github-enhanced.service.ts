@@ -200,10 +200,24 @@ export class EnhancedGitHubImportService {
         };
       }
 
-      // Create job for tracking
+      // Get user by Clerk ID to get database user ID
+      const user = await db.user.findUnique({
+        where: { clerkId: userId },
+        include: { profile: true },
+      });
+
+      if (!user) {
+        return {
+          success: false,
+          error: 'User not found',
+          errorCode: 'NOT_FOUND',
+        };
+      }
+
+      // Create job for tracking (use database user ID, not Clerk ID)
       const job = await db.importJob.create({
         data: {
-          userId,
+          userId: user.id,
           source: 'GITHUB',
           status: 'PROCESSING',
           inputType: 'oauth',
@@ -248,13 +262,8 @@ export class EnhancedGitHubImportService {
           data: { progress: 70, currentStep: 'Saving to profile...' },
         });
 
-        // Get user's profile
-        const user = await db.user.findUnique({
-          where: { clerkId: userId },
-          include: { profile: true },
-        });
-
-        if (user?.profile) {
+        // User already fetched at start of function
+        if (user.profile) {
           // Store raw import data
           await db.rawImportPayload.upsert({
             where: {
@@ -399,7 +408,7 @@ export class EnhancedGitHubImportService {
         // Log the import
         await db.importLog.create({
           data: {
-            userId: user?.id || '',
+            userId: user.id,
             source: 'GITHUB',
             status: 'COMPLETED',
             itemsFound: result.summary!.projects! + result.summary!.skills!,
@@ -430,13 +439,8 @@ export class EnhancedGitHubImportService {
           },
         });
 
-        // Update connection status
-        const user = await db.user.findUnique({
-          where: { clerkId: userId },
-          include: { profile: true },
-        });
-
-        if (user?.profile) {
+        // Update connection status (user already fetched at start of function)
+        if (user.profile) {
           await db.dataSourceConnection.upsert({
             where: {
               profileId_source: {

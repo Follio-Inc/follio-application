@@ -195,10 +195,24 @@ export class ResumeImportService implements IResumeImportService {
         };
       }
 
-      // Create job for tracking (even for sync processing)
+      // Get user by Clerk ID to get database user ID
+      const user = await db.user.findUnique({
+        where: { clerkId: userId },
+        include: { profile: true },
+      });
+
+      if (!user) {
+        return {
+          success: false,
+          error: 'User not found',
+          errorCode: 'NOT_FOUND',
+        };
+      }
+
+      // Create job for tracking (use database user ID, not Clerk ID)
       const job = await db.importJob.create({
         data: {
-          userId,
+          userId: user.id,
           source: 'RESUME',
           status: 'PROCESSING',
           inputType: 'file',
@@ -225,13 +239,8 @@ export class ResumeImportService implements IResumeImportService {
         const normalized = normalizeResumeData(parsed);
         const result = toNormalizedResult(normalized, parsed.rawText);
 
-        // Store raw data for debugging
-        const user = await db.user.findUnique({
-          where: { clerkId: userId },
-          include: { profile: true },
-        });
-
-        if (user?.profile) {
+        // User already fetched at start of function
+        if (user.profile) {
           await db.rawImportPayload.create({
             data: {
               profileId: user.profile.id,
@@ -266,7 +275,7 @@ export class ResumeImportService implements IResumeImportService {
         // Log the import
         await db.importLog.create({
           data: {
-            userId: user?.id || '',
+            userId: user.id,
             source: 'RESUME',
             status: 'COMPLETED',
             itemsFound:
