@@ -90,7 +90,7 @@ jobs:
         run: npx prisma generate
 
       - name: Build application
-        run: npm run build
+        run: npm run build:ci
         env:
           # Skip env validation during build for CI
           SKIP_ENV_VALIDATION: true
