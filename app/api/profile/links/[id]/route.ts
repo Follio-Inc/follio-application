@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 import { db } from '@/lib/db';
 import { LinkSchema } from '@/lib/validations';
@@ -46,6 +46,24 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     if (!existingLink) {
       return NextResponse.json({ error: 'Link not found' }, { status: 404 });
+    }
+
+    // Check for duplicate URL (if URL is being updated)
+    if (validatedData.data.url) {
+      const duplicateLink = await db.link.findFirst({
+        where: {
+          profileId: user.profile.id,
+          url: { equals: validatedData.data.url, mode: 'insensitive' },
+          id: { not: id }, // Exclude the current link being updated
+        },
+      });
+
+      if (duplicateLink) {
+        return NextResponse.json(
+          { error: 'This URL already exists in your links' },
+          { status: 400 }
+        );
+      }
     }
 
     const link = await db.link.update({

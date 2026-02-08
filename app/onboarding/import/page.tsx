@@ -25,7 +25,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
-import { fileToBase64, getBestResolutionImage } from '@/lib/utils';
+import { fileToBase64, getBestResolutionImage, parsePhoneWithCountryCode } from '@/lib/utils';
 
 // Storage key prefix for persisting onboarding state across OAuth redirects
 const ONBOARDING_IMPORT_STATE_KEY_PREFIX = 'follio_onboarding_import_state_';
@@ -99,7 +99,8 @@ type ImportSource = 'resume' | 'github' | 'linkedin' | 'links';
 
 interface ImportStatus {
   source: ImportSource;
-  status: 'idle' | 'importing' | 'success' | 'error';
+  // 'added' = file uploaded, parsing in background (shows instant success feedback)
+  status: 'idle' | 'added' | 'importing' | 'success' | 'error';
   message?: string;
   itemsImported?: number;
 }
@@ -122,6 +123,32 @@ export default function OnboardingImportPage() {
   const [isCreatingProfile, _setIsCreatingProfile] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasRestoredPersistedState, setHasRestoredPersistedState] = useState(false);
+  const [isCheckingProfile, setIsCheckingProfile] = useState(true);
+
+  // Check if user already has a profile (for returning users who land here via sign-up flow)
+  useEffect(() => {
+    if (!isUserLoaded) return;
+
+    const checkExistingProfile = async () => {
+      try {
+        const response = await fetch('/api/profile');
+        if (response.ok) {
+          const data = await response.json();
+          // If user has a profile with a handle, redirect to their profile page
+          if (data?.profile?.handle) {
+            router.replace('/me');
+            return;
+          }
+        }
+      } catch (err) {
+        // If there's an error, just continue with onboarding
+        console.error('Error checking for existing profile:', err);
+      }
+      setIsCheckingProfile(false);
+    };
+
+    checkExistingProfile();
+  }, [isUserLoaded, router]);
 
   // GitHub OAuth states
   const [githubConnecting, setGithubConnecting] = useState(false);
@@ -153,6 +180,10 @@ export default function OnboardingImportPage() {
 
   // Resume filename state
   const [resumeFileName, setResumeFileName] = useState<string | null>(null);
+
+  // Track resume parsing promise for Continue button to wait on
+  const [resumeParsingPromise, setResumeParsingPromise] = useState<Promise<void> | null>(null);
+  const [isWaitingForParsing, setIsWaitingForParsing] = useState(false);
 
   // Imported data (for display)
   const [importedData, setImportedData] = useState<Record<string, unknown>>({});
@@ -431,7 +462,7 @@ export default function OnboardingImportPage() {
     }
   };
 
-  // Resume upload handler
+  // Resume upload handler - provides instant feedback, parses in background
   const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -445,44 +476,56 @@ export default function OnboardingImportPage() {
       return;
     }
 
-    updateImportStatus('resume', { status: 'importing', message: 'Parsing resume...' });
-
     // Save the filename for display
     setResumeFileName(file.name);
 
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      // Don't auto-save - we'll review first
-      formData.append('saveToProfile', 'false');
+    // INSTANT FEEDBACK: Show "added" status immediately so user feels the upload worked
+    updateImportStatus('resume', {
+      status: 'added',
+      message: 'Resume added! Parsing in background...',
+    });
 
-      const response = await fetch('/api/import/resume', {
-        method: 'POST',
-        body: formData,
-      });
+    // Create parsing promise that can be awaited by Continue button
+    const parsingPromise = (async () => {
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        // Don't auto-save - we'll review first
+        formData.append('saveToProfile', 'false');
 
-      const data = await response.json();
+        const response = await fetch('/api/import/resume', {
+          method: 'POST',
+          body: formData,
+        });
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to parse resume');
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to parse resume');
+        }
+
+        setImportedData((prev) => ({ ...prev, resume: data.data }));
+
+        // Count imported items
+        const itemCount = countResumeItems(data.data);
+
+        updateImportStatus('resume', {
+          status: 'success',
+          message: `Found ${itemCount} items (${Math.round((data.confidence || 0.5) * 100)}% confidence)`,
+          itemsImported: itemCount,
+        });
+      } catch (err) {
+        updateImportStatus('resume', {
+          status: 'error',
+          message: err instanceof Error ? err.message : 'Failed to import resume',
+        });
+      } finally {
+        setResumeParsingPromise(null);
       }
+    })();
 
-      setImportedData((prev) => ({ ...prev, resume: data.data }));
-
-      // Count imported items
-      const itemCount = countResumeItems(data.data);
-
-      updateImportStatus('resume', {
-        status: 'success',
-        message: `Found ${itemCount} items (${Math.round((data.confidence || 0.5) * 100)}% confidence)`,
-        itemsImported: itemCount,
-      });
-    } catch (err) {
-      updateImportStatus('resume', {
-        status: 'error',
-        message: err instanceof Error ? err.message : 'Failed to import resume',
-      });
-    }
+    // Store the promise so Continue can wait for it if needed
+    setResumeParsingPromise(parsingPromise);
   };
 
   // Count items from resume import
@@ -864,6 +907,17 @@ export default function OnboardingImportPage() {
 
   // Create profile and continue - ALWAYS goes to review
   const handleContinue = async () => {
+    // If resume is still being parsed, wait for it to complete
+    // This ensures the user gets their resume data even if they click Continue quickly
+    if (resumeParsingPromise) {
+      setIsWaitingForParsing(true);
+      try {
+        await resumeParsingPromise;
+      } finally {
+        setIsWaitingForParsing(false);
+      }
+    }
+
     // Use the selected photo from the grid, or pick the best resolution if none selected
     let bestAvatarUrl: string | null = getSelectedPhotoUrl();
 
@@ -988,24 +1042,45 @@ export default function OnboardingImportPage() {
       return true;
     });
 
-    // Collect ALL phones from ALL sources
-    const allPhones: Array<{ phone: string; source: string }> = [];
+    // Collect ALL phones from ALL sources (with optional country code)
+    const allPhones: Array<{
+      phone?: string;
+      countryCode?: string | null;
+      number?: string;
+      source: string;
+    }> = [];
 
     if (resumeContactInfo?.phone) {
-      allPhones.push({ phone: resumeContactInfo.phone as string, source: 'RESUME' });
+      // Resume phone - try to parse country code from the raw string
+      const phoneStr = resumeContactInfo.phone as string;
+      const parsed = parsePhoneWithCountryCode(phoneStr);
+      allPhones.push({
+        phone: phoneStr,
+        countryCode: parsed.countryCode,
+        number: parsed.number || phoneStr,
+        source: 'RESUME',
+      });
     }
 
     if (linkedinData) {
       const linkedinContactInfo = linkedinData.contactInfo as Record<string, unknown> | undefined;
       if (linkedinContactInfo?.phone) {
-        allPhones.push({ phone: linkedinContactInfo.phone as string, source: 'LINKEDIN' });
+        const phoneStr = linkedinContactInfo.phone as string;
+        const parsed = parsePhoneWithCountryCode(phoneStr);
+        allPhones.push({
+          phone: phoneStr,
+          countryCode: parsed.countryCode,
+          number: parsed.number || phoneStr,
+          source: 'LINKEDIN',
+        });
       }
     }
 
     // Deduplicate phones
     const seenPhones = new Set<string>();
     const uniquePhones = allPhones.filter((p) => {
-      const normalized = p.phone.replace(/\D/g, '');
+      const phoneNum = p.number || p.phone || '';
+      const normalized = phoneNum.replace(/\D/g, '');
       if (seenPhones.has(normalized)) return false;
       seenPhones.add(normalized);
       return true;
@@ -1031,6 +1106,20 @@ export default function OnboardingImportPage() {
       }
     }
 
+    // Merge and deduplicate links from all sources by URL
+    const allLinks = [
+      ...((resumeData?.links as Array<Record<string, unknown>>) || []),
+      ...((linkedinData?.links as Array<Record<string, unknown>>) || []),
+      ...((githubData?.links as Array<Record<string, unknown>>) || []),
+    ];
+    const seenUrls = new Set<string>();
+    const uniqueLinks = allLinks.filter((link) => {
+      const url = (link.url as string)?.toLowerCase().trim();
+      if (!url || seenUrls.has(url)) return false;
+      seenUrls.add(url);
+      return true;
+    });
+
     // Merge all data for review - include data from all sources
     const dataForReview = {
       profile: mergedProfile,
@@ -1044,11 +1133,7 @@ export default function OnboardingImportPage() {
         ...((resumeData?.skills as string[]) || []),
         ...((githubData?.skills as string[]) || []),
       ].filter((s, i, arr) => arr.indexOf(s) === i), // Dedupe
-      links: [
-        ...((resumeData?.links as Array<Record<string, unknown>>) || []),
-        ...((linkedinData?.links as Array<Record<string, unknown>>) || []),
-        ...((githubData?.links as Array<Record<string, unknown>>) || []),
-      ],
+      links: uniqueLinks,
       certifications: resumeData?.certifications || [],
       projects: [
         ...((resumeData?.projects as Array<Record<string, unknown>>) || []),
@@ -1071,7 +1156,22 @@ export default function OnboardingImportPage() {
     return Object.values(imports).reduce((acc, imp) => acc + (imp.itemsImported || 0), 0);
   };
 
-  const hasAnyImport = Object.values(imports).some((i) => i.status === 'success');
+  // Consider both 'added' (parsing in background) and 'success' as having an import
+  const hasAnyImport = Object.values(imports).some(
+    (i) => i.status === 'success' || i.status === 'added'
+  );
+
+  // Show loading state while checking for existing profile
+  if (isCheckingProfile) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Spinner size="lg" />
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -1228,7 +1328,8 @@ export default function OnboardingImportPage() {
                     <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500/10 to-red-500/10 ring-1 ring-orange-500/20">
                       <FileText className="h-6 w-6 text-orange-500" />
                     </div>
-                    {imports.resume.status === 'success' && (
+                    {/* Show checkmark for both 'added' and 'success' states for instant feedback */}
+                    {(imports.resume.status === 'success' || imports.resume.status === 'added') && (
                       <CheckCircle2 className="h-5 w-5 text-green-500" />
                     )}
                     {imports.resume.status === 'importing' && (
@@ -1244,7 +1345,8 @@ export default function OnboardingImportPage() {
                     Upload your resume to auto-fill your profile
                   </p>
 
-                  {imports.resume.status === 'success' ? (
+                  {/* Show success-like UI for both 'added' (parsing in background) and 'success' states */}
+                  {imports.resume.status === 'success' || imports.resume.status === 'added' ? (
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <Badge
@@ -1258,14 +1360,26 @@ export default function OnboardingImportPage() {
                           variant="ghost"
                           size="sm"
                           onClick={() => document.getElementById('resume-upload')?.click()}
+                          disabled={imports.resume.status === 'added'}
                         >
-                          Replace
+                          {imports.resume.status === 'added' ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            'Replace'
+                          )}
                         </Button>
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        {imports.resume.itemsImported
-                          ? `${imports.resume.itemsImported} items found`
-                          : ''}
+                        {imports.resume.status === 'added' ? (
+                          <span className="flex items-center gap-1">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            Parsing in background...
+                          </span>
+                        ) : imports.resume.itemsImported ? (
+                          `${imports.resume.itemsImported} items found`
+                        ) : (
+                          ''
+                        )}
                       </p>
                     </div>
                   ) : (
@@ -1648,7 +1762,7 @@ export default function OnboardingImportPage() {
         >
           <Button
             onClick={handleContinue}
-            disabled={isCreatingProfile}
+            disabled={isCreatingProfile || isWaitingForParsing}
             className="gap-2 px-8"
             size="lg"
           >
@@ -1657,9 +1771,19 @@ export default function OnboardingImportPage() {
                 <Spinner size="sm" />
                 Creating your profile...
               </>
+            ) : isWaitingForParsing ? (
+              <>
+                <Spinner size="sm" />
+                Finishing resume parsing...
+              </>
             ) : importedData.resume ? (
               <>
                 Review & Edit Parsed Data
+                <ArrowRight className="h-4 w-4" />
+              </>
+            ) : imports.resume.status === 'added' ? (
+              <>
+                Continue
                 <ArrowRight className="h-4 w-4" />
               </>
             ) : (

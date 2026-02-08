@@ -91,7 +91,9 @@ model ContactInfo {
   emailSource      DataSource @default(MANUAL)
   emailPublic      Boolean    @default(false)
   additionalEmails Json?      @default("[]")
-  phone            String?
+  phone            String? // Legacy: full phone string for backward compat
+  phoneCountryCode String? // New: country code (e.g., "+91")
+  phoneNumber      String? // New: number without country code
   phoneSource      DataSource @default(MANUAL)
   phonePublic      Boolean    @default(false)
   additionalPhones Json?      @default("[]")

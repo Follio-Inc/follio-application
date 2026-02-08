@@ -76,6 +76,12 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
     email: initialProfile.contactInfo?.email || '',
     emailPublic: initialProfile.contactInfo?.emailPublic || false,
     phone: initialProfile.contactInfo?.phone || '',
+    phoneCountryCode:
+      ((initialProfile.contactInfo as Record<string, unknown>)?.phoneCountryCode as
+        | string
+        | null) || null,
+    phoneNumber:
+      ((initialProfile.contactInfo as Record<string, unknown>)?.phoneNumber as string) || '',
     phonePublic: initialProfile.contactInfo?.phonePublic || false,
     website: initialProfile.contactInfo?.website || '',
     additionalEmails: (() => {
@@ -92,9 +98,14 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
     additionalPhones: (() => {
       try {
         const raw = (initialProfile.contactInfo as Record<string, unknown>)?.additionalPhones;
-        if (Array.isArray(raw)) return raw as Array<{ phone: string; source: string }>;
+        if (Array.isArray(raw))
+          return raw as Array<{ countryCode: string | null; number: string; source: string }>;
         if (typeof raw === 'string')
-          return JSON.parse(raw) as Array<{ phone: string; source: string }>;
+          return JSON.parse(raw) as Array<{
+            countryCode: string | null;
+            number: string;
+            source: string;
+          }>;
         return [];
       } catch {
         return [];
@@ -271,6 +282,12 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
       email: initialProfile.contactInfo?.email || '',
       emailPublic: initialProfile.contactInfo?.emailPublic || false,
       phone: initialProfile.contactInfo?.phone || '',
+      phoneCountryCode:
+        ((initialProfile.contactInfo as Record<string, unknown>)?.phoneCountryCode as
+          | string
+          | null) || null,
+      phoneNumber:
+        ((initialProfile.contactInfo as Record<string, unknown>)?.phoneNumber as string) || '',
       phonePublic: initialProfile.contactInfo?.phonePublic || false,
       website: initialProfile.contactInfo?.website || '',
       additionalEmails: (() => {
@@ -287,9 +304,14 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
       additionalPhones: (() => {
         try {
           const raw = (initialProfile.contactInfo as Record<string, unknown>)?.additionalPhones;
-          if (Array.isArray(raw)) return raw as Array<{ phone: string; source: string }>;
+          if (Array.isArray(raw))
+            return raw as Array<{ countryCode: string | null; number: string; source: string }>;
           if (typeof raw === 'string')
-            return JSON.parse(raw) as Array<{ phone: string; source: string }>;
+            return JSON.parse(raw) as Array<{
+              countryCode: string | null;
+              number: string;
+              source: string;
+            }>;
           return [];
         } catch {
           return [];

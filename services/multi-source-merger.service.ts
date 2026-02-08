@@ -258,7 +258,7 @@ export function mergeProfileFromSources(
     avatarUrlSource: string;
   };
   emails: ResolvedEmails;
-  phone?: { phone: string; source: string };
+  phone?: { phone: string; countryCode?: string | null; number?: string; source: string };
   website?: { website: string; source: string };
 } {
   // Build name entries

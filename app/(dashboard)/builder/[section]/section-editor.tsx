@@ -63,6 +63,9 @@ export function SectionEditor({ profile, sectionType, section }: SectionEditorPr
     email: profile.contactInfo?.email || '',
     emailPublic: profile.contactInfo?.emailPublic || false,
     phone: profile.contactInfo?.phone || '',
+    phoneCountryCode:
+      ((profile.contactInfo as Record<string, unknown>)?.phoneCountryCode as string | null) || null,
+    phoneNumber: ((profile.contactInfo as Record<string, unknown>)?.phoneNumber as string) || '',
     phonePublic: profile.contactInfo?.phonePublic || false,
     website: profile.contactInfo?.website || '',
     additionalEmails: (() => {
@@ -79,9 +82,14 @@ export function SectionEditor({ profile, sectionType, section }: SectionEditorPr
     additionalPhones: (() => {
       try {
         const raw = (profile.contactInfo as Record<string, unknown>)?.additionalPhones;
-        if (Array.isArray(raw)) return raw as Array<{ phone: string; source: string }>;
+        if (Array.isArray(raw))
+          return raw as Array<{ countryCode: string | null; number: string; source: string }>;
         if (typeof raw === 'string')
-          return JSON.parse(raw) as Array<{ phone: string; source: string }>;
+          return JSON.parse(raw) as Array<{
+            countryCode: string | null;
+            number: string;
+            source: string;
+          }>;
         return [];
       } catch {
         return [];

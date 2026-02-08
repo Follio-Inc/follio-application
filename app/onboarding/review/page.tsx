@@ -1,12 +1,13 @@
 'use client';
 
-import { useUser } from '@clerk/nextjs';
+import { useReverification, useUser } from '@clerk/nextjs';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   ArrowLeft,
   ArrowRight,
   Briefcase,
   Check,
+  Edit2,
   Eye,
   EyeOff,
   FolderGit2,
@@ -32,6 +33,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { PhoneInput, formatPhoneValue, type PhoneValue } from '@/components/ui/phone-input';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 import { toMonthInputFormat } from '@/lib/utils';
@@ -225,10 +227,20 @@ interface ReviewData {
   contactInfo?: {
     email?: string;
     phone?: string;
-    // All emails collected from all import sources
-    allEmails?: Array<{ email: string; source: string }>;
-    // All phones collected from all import sources
-    allPhones?: Array<{ phone: string; source: string }>;
+    // All emails - now includes Clerk ID and verification status
+    allEmails?: Array<{
+      email: string;
+      source: string;
+      clerkEmailId?: string; // Clerk's email ID for managing it
+      verified?: boolean; // Whether verified in Clerk
+    }>;
+    // All phones collected from all import sources (supports both legacy and new format)
+    allPhones?: Array<{
+      phone?: string; // Legacy: full phone string
+      countryCode?: string | null; // New: country code
+      number?: string; // New: number without country code
+      source: string;
+    }>;
     // Track which email/phone is primary (index in the array)
     primaryEmailIndex?: number;
     primaryPhoneIndex?: number;
@@ -266,7 +278,7 @@ const STEP_INFO: Record<ReviewStep, { title: string; description: string; icon: 
   },
   contact: {
     title: 'Contact Details',
-    description: 'Review your email and phone number',
+    description: 'Choose which contact info to display on your profile',
     icon: Mail,
   },
   experience: {
@@ -383,13 +395,88 @@ function detectLinkType(url: string, parsedType?: string): LinkType {
   return 'OTHER';
 }
 
+/**
+ * Build emails list combining Clerk emails (verified) and imported emails (unverified).
+ * Clerk emails are the source of truth for verified emails.
+ */
+function buildEmailsList(
+  clerkEmails: Array<{
+    id: string;
+    email: string;
+    verified: boolean;
+    isPrimary: boolean;
+  }>,
+  importedEmails: Array<{ email: string; source: string }>
+): Array<{
+  email: string;
+  source: string;
+  clerkEmailId?: string;
+  verified: boolean;
+}> {
+  const result: Array<{
+    email: string;
+    source: string;
+    clerkEmailId?: string;
+    verified: boolean;
+  }> = [];
+  const seen = new Set<string>();
+
+  // Add Clerk emails first (these are verified or pending verification)
+  for (const clerkEmail of clerkEmails) {
+    result.push({
+      email: clerkEmail.email,
+      source: clerkEmail.isPrimary ? 'SIGNUP' : 'MANUAL',
+      clerkEmailId: clerkEmail.id,
+      verified: clerkEmail.verified,
+    });
+    seen.add(clerkEmail.email.toLowerCase());
+  }
+
+  // Add imported emails that aren't already in Clerk (these will need to be added/verified)
+  for (const entry of importedEmails) {
+    const normalized = entry.email.toLowerCase().trim();
+    if (!seen.has(normalized)) {
+      seen.add(normalized);
+      result.push({
+        email: entry.email,
+        source: entry.source,
+        clerkEmailId: undefined, // Not in Clerk yet
+        verified: false,
+      });
+    }
+  }
+
+  return result;
+}
+
 function ReviewPageContent() {
   const router = useRouter();
   const { user } = useUser();
+
+  // Wrap Clerk email operations with reverification to handle step-up auth automatically
+  // This will show a modal asking user to re-enter password if needed
+  const createEmailWithReverification = useReverification(async (email: string) => {
+    if (!user) throw new Error('User not found');
+    const newEmail = await user.createEmailAddress({ email });
+    await newEmail.prepareVerification({ strategy: 'email_code' });
+    return newEmail;
+  });
+
+  // Wrap setting primary email with reverification
+  const setPrimaryEmailWithReverification = useReverification(async (emailId: string) => {
+    if (!user) throw new Error('User not found');
+    await user.update({ primaryEmailAddressId: emailId });
+    return true;
+  });
+
   const [currentStep, setCurrentStep] = useState<ReviewStep>('profile');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Email operation states
+  const [emailOperationLoading, setEmailOperationLoading] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
 
   // Review data state
   const [data, setData] = useState<ReviewData>({
@@ -407,9 +494,20 @@ function ReviewPageContent() {
 
   // Manual contact input states
   const [newEmailInput, setNewEmailInput] = useState('');
-  const [newPhoneInput, setNewPhoneInput] = useState('');
+  const [newPhoneInput, setNewPhoneInput] = useState<PhoneValue>({ countryCode: null, number: '' });
   const [showEmailInput, setShowEmailInput] = useState(false);
   const [showPhoneInput, setShowPhoneInput] = useState(false);
+
+  // Phone editing state
+  const [editingPhoneIndex, setEditingPhoneIndex] = useState<number | null>(null);
+  const [editingPhoneValue, setEditingPhoneValue] = useState<PhoneValue>({
+    countryCode: null,
+    number: '',
+  });
+
+  // Verification code state (for emails pending verification)
+  const [verificationCode, setVerificationCode] = useState('');
+  const [verifyingEmailId, setVerifyingEmailId] = useState<string | null>(null);
 
   // Get signup email from Clerk (always primary)
   const signupEmail = user?.primaryEmailAddress?.emailAddress;
@@ -534,8 +632,9 @@ function ReviewPageContent() {
             }),
             contactInfo: {
               ...parsed.contactInfo,
-              // allEmails will be processed after to ensure signup email is first
+              // allEmails will be built from Clerk + imported emails in useEffect
               allEmails: parsed.contactInfo?.allEmails || [],
+              primaryEmailIndex: 0, // Primary email index
               // Ensure allPhones is populated from phone if not present
               allPhones:
                 parsed.contactInfo?.allPhones?.length > 0
@@ -543,6 +642,7 @@ function ReviewPageContent() {
                   : parsed.contactInfo?.phone
                     ? [{ phone: parsed.contactInfo.phone, source: 'RESUME' }]
                     : [],
+              primaryPhoneIndex: 0, // First phone is default primary
             },
             // Load allNames from all import sources (signup, resume, linkedin, github)
             allNames: parsed.allNames || [],
@@ -558,46 +658,50 @@ function ReviewPageContent() {
     };
 
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Ensure signup email is always first in allEmails when user loads
+  // Build emails list from Clerk + imported emails
   useEffect(() => {
-    if (!signupEmail || !data.contactInfo?.allEmails) return;
+    if (!user || isLoading) return;
 
-    const currentEmails = data.contactInfo.allEmails;
-    const signupEmailLower = signupEmail.toLowerCase();
+    // Get Clerk emails with verification status
+    const clerkEmails = user.emailAddresses.map((emailAddr) => ({
+      id: emailAddr.id,
+      email: emailAddr.emailAddress,
+      verified: emailAddr.verification?.status === 'verified',
+      isPrimary: emailAddr.id === user.primaryEmailAddressId,
+    }));
 
-    // Check if signup email is already first
-    if (currentEmails.length > 0 && currentEmails[0].email.toLowerCase() === signupEmailLower) {
-      return; // Already correct
-    }
+    // Get imported emails from data (excluding any that match Clerk emails)
+    const importedEmails =
+      data.contactInfo?.allEmails?.filter(
+        (e) =>
+          !e.clerkEmailId &&
+          !clerkEmails.some((c) => c.email.toLowerCase() === e.email.toLowerCase())
+      ) || [];
 
-    // Build new array with signup email first
-    const newEmails: Array<{ email: string; source: string }> = [
-      { email: signupEmail, source: 'SIGNUP' },
-    ];
+    // Build combined list
+    const combinedEmails = buildEmailsList(clerkEmails, importedEmails);
 
-    // Add other emails, excluding signup email (case-insensitive)
-    for (const entry of currentEmails) {
-      if (entry.email.toLowerCase() !== signupEmailLower) {
-        newEmails.push(entry);
-      }
-    }
+    // Find the primary email index (the one that matches Clerk's primary)
+    const primaryClerkEmail = clerkEmails.find((e) => e.isPrimary);
+    const primaryIndex = primaryClerkEmail
+      ? combinedEmails.findIndex(
+          (e) => e.email.toLowerCase() === primaryClerkEmail.email.toLowerCase()
+        )
+      : 0;
 
-    // Update state only if there's a change
-    if (
-      newEmails.length !== currentEmails.length ||
-      newEmails[0].email.toLowerCase() !== (currentEmails[0]?.email || '').toLowerCase()
-    ) {
-      setData((prev) => ({
-        ...prev,
-        contactInfo: {
-          ...prev.contactInfo,
-          allEmails: newEmails,
-        },
-      }));
-    }
-  }, [signupEmail, data.contactInfo?.allEmails]);
+    setData((prev) => ({
+      ...prev,
+      contactInfo: {
+        ...prev.contactInfo,
+        allEmails: combinedEmails,
+        primaryEmailIndex: primaryIndex >= 0 ? primaryIndex : 0,
+        email: combinedEmails[primaryIndex >= 0 ? primaryIndex : 0]?.email,
+      },
+    }));
+  }, [user, isLoading]);
 
   const currentStepIndex = STEPS.indexOf(currentStep);
   const progress = ((currentStepIndex + 1) / STEPS.length) * 100;
@@ -760,68 +864,228 @@ function ReviewPageContent() {
     }));
   };
 
-  // Set primary email (reorder allEmails array so primary is first)
-  const setPrimaryEmail = (index: number) => {
-    setData((prev) => {
-      const allEmails = prev.contactInfo?.allEmails || [];
-      if (index < 0 || index >= allEmails.length) return prev;
+  // Set primary email - must be verified in Clerk
+  // Uses reverification wrapper which will show password prompt if needed
+  const setPrimaryEmailClerk = async (index: number) => {
+    const allEmails = data.contactInfo?.allEmails || [];
+    const emailEntry = allEmails[index];
+    if (!emailEntry) return;
 
-      // Move the selected email to the front
-      const newEmails = [...allEmails];
-      const [selected] = newEmails.splice(index, 1);
-      newEmails.unshift(selected);
+    // Check if verified
+    if (!emailEntry.verified) {
+      setEmailError('Email must be verified before setting as primary. Click "Verify" first.');
+      return;
+    }
 
-      return {
+    // Check if it's a Clerk email
+    if (!emailEntry.clerkEmailId) {
+      setEmailError('This email needs to be added to your account first. Click "Add & Verify".');
+      return;
+    }
+
+    setEmailOperationLoading(emailEntry.email);
+    setEmailError(null);
+
+    try {
+      // Set as primary in Clerk using reverification wrapper
+      await setPrimaryEmailWithReverification(emailEntry.clerkEmailId);
+
+      // Reload user to get updated state
+      await user?.reload();
+
+      // Update local state
+      setData((prev) => ({
         ...prev,
         contactInfo: {
           ...prev.contactInfo,
-          allEmails: newEmails,
-          email: selected.email, // Update the primary email field
+          primaryEmailIndex: index,
+          email: emailEntry.email,
         },
-      };
-    });
+      }));
+    } catch (err) {
+      console.error('Failed to set primary email:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to set primary email';
+      // Handle cancellation (user closed the reverification modal)
+      if (errorMessage.includes('cancelled') || errorMessage.includes('canceled')) {
+        setEmailError(null); // User cancelled, no error
+      } else {
+        setEmailError(errorMessage);
+      }
+    } finally {
+      setEmailOperationLoading(null);
+    }
   };
 
-  // Set primary phone (reorder allPhones array so primary is first)
+  // Add email to Clerk (triggers verification)
+  // Uses reverification wrapper which will show password prompt if needed
+  const addEmailToClerk = async (email: string) => {
+    const trimmedEmail = email.trim().toLowerCase();
+    if (!trimmedEmail || !user) return;
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmedEmail)) {
+      setEmailError('Please enter a valid email address');
+      return;
+    }
+
+    // Check for duplicates
+    const allEmails = data.contactInfo?.allEmails || [];
+    const isDuplicate = allEmails.some((e) => e.email.toLowerCase() === trimmedEmail);
+    if (isDuplicate) {
+      setEmailError('This email is already in your list');
+      return;
+    }
+
+    setEmailOperationLoading(trimmedEmail);
+    setEmailError(null);
+
+    try {
+      // Use reverification-wrapped function - this will show password modal if needed
+      await createEmailWithReverification(trimmedEmail);
+
+      // Reload user to get updated state
+      await user.reload();
+
+      setNewEmailInput('');
+      setShowEmailInput(false);
+      setEmailError('Verification email sent! Check your inbox and enter the code.');
+    } catch (err) {
+      console.error('Failed to add email:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to add email';
+      // Handle cancellation (user closed the reverification modal)
+      if (errorMessage.includes('cancelled') || errorMessage.includes('canceled')) {
+        setEmailError(null); // User cancelled, no error
+      } else if (errorMessage.includes('already exists') || errorMessage.includes('taken')) {
+        setEmailError('This email is already associated with another account.');
+      } else {
+        setEmailError(errorMessage);
+      }
+    } finally {
+      setEmailOperationLoading(null);
+    }
+  };
+
+  // Verify email with code
+  const verifyEmailCode = async (clerkEmailId: string, code: string) => {
+    if (!user) return;
+
+    setEmailOperationLoading(clerkEmailId);
+    setEmailError(null);
+
+    try {
+      const emailAddr = user.emailAddresses.find((e) => e.id === clerkEmailId);
+      if (!emailAddr) throw new Error('Email not found');
+
+      await emailAddr.attemptVerification({ code });
+
+      // Reload user to get updated state
+      await user.reload();
+
+      setEmailError(null);
+    } catch (err) {
+      console.error('Failed to verify email:', err);
+      setEmailError(err instanceof Error ? err.message : 'Invalid verification code');
+    } finally {
+      setEmailOperationLoading(null);
+    }
+  };
+
+  // Resend verification code
+  const resendVerificationCode = async (clerkEmailId: string) => {
+    if (!user) return;
+
+    setEmailOperationLoading(clerkEmailId);
+    setEmailError(null);
+
+    try {
+      const emailAddr = user.emailAddresses.find((e) => e.id === clerkEmailId);
+      if (!emailAddr) throw new Error('Email not found');
+
+      await emailAddr.prepareVerification({ strategy: 'email_code' });
+
+      setEmailError('Verification code sent! Check your inbox.');
+    } catch (err) {
+      console.error('Failed to resend verification:', err);
+      const errorMessage =
+        err instanceof Error ? err.message : 'Failed to resend verification code';
+      if (errorMessage.includes('additional verification')) {
+        setEmailError(
+          'Clerk requires session verification. Please sign out and sign back in, then try again.'
+        );
+      } else {
+        setEmailError(errorMessage);
+      }
+    } finally {
+      setEmailOperationLoading(null);
+    }
+  };
+
+  // Delete email from Clerk
+  const deleteEmailFromClerk = async (index: number) => {
+    const allEmails = data.contactInfo?.allEmails || [];
+    const emailEntry = allEmails[index];
+    if (!emailEntry || !user) return;
+
+    // Don't allow deleting the primary email
+    const currentPrimaryIndex = data.contactInfo?.primaryEmailIndex ?? 0;
+    if (index === currentPrimaryIndex) {
+      setEmailError('Cannot delete primary email. Set another email as primary first.');
+      return;
+    }
+
+    setEmailOperationLoading(emailEntry.email);
+    setEmailError(null);
+
+    try {
+      // If it's a Clerk email, delete from Clerk
+      if (emailEntry.clerkEmailId) {
+        const clerkEmailAddr = user.emailAddresses.find((e) => e.id === emailEntry.clerkEmailId);
+        if (clerkEmailAddr) {
+          await clerkEmailAddr.destroy();
+        }
+        await user.reload();
+      }
+
+      // Update local state
+      setData((prev) => {
+        const newEmails = (prev.contactInfo?.allEmails || []).filter((_, i) => i !== index);
+        const currentIdx = prev.contactInfo?.primaryEmailIndex ?? 0;
+        let newPrimaryIndex = currentIdx;
+        if (index < currentIdx) {
+          newPrimaryIndex = currentIdx - 1;
+        }
+
+        return {
+          ...prev,
+          contactInfo: {
+            ...prev.contactInfo,
+            allEmails: newEmails,
+            primaryEmailIndex: newPrimaryIndex,
+            email: newEmails[newPrimaryIndex]?.email,
+          },
+        };
+      });
+    } catch (err) {
+      console.error('Failed to delete email:', err);
+      setEmailError(err instanceof Error ? err.message : 'Failed to delete email');
+    } finally {
+      setEmailOperationLoading(null);
+    }
+  };
+
+  // Set primary phone by index - simply update the primaryPhoneIndex
   const setPrimaryPhone = (index: number) => {
     setData((prev) => {
       const allPhones = prev.contactInfo?.allPhones || [];
       if (index < 0 || index >= allPhones.length) return prev;
 
-      // Move the selected phone to the front
-      const newPhones = [...allPhones];
-      const [selected] = newPhones.splice(index, 1);
-      newPhones.unshift(selected);
-
       return {
         ...prev,
         contactInfo: {
           ...prev.contactInfo,
-          allPhones: newPhones,
-          phone: selected.phone, // Update the primary phone field
-        },
-      };
-    });
-  };
-
-  // Delete email from list (but not the signup email)
-  const deleteEmail = (index: number) => {
-    setData((prev) => {
-      const allEmails = prev.contactInfo?.allEmails || [];
-      if (index < 0 || index >= allEmails.length) return prev;
-
-      // Don't allow deleting signup email (first item with source SIGNUP)
-      const emailToDelete = allEmails[index];
-      if (emailToDelete.source === 'SIGNUP') return prev;
-
-      const newEmails = allEmails.filter((_, i) => i !== index);
-      return {
-        ...prev,
-        contactInfo: {
-          ...prev.contactInfo,
-          allEmails: newEmails,
-          // If we deleted the primary (index 0), update email to new first item
-          email: index === 0 ? newEmails[0]?.email : prev.contactInfo?.email,
+          primaryPhoneIndex: index,
+          phone: allPhones[index].phone, // Update the primary phone field for backward compat
         },
       };
     });
@@ -833,90 +1097,114 @@ function ReviewPageContent() {
       const allPhones = prev.contactInfo?.allPhones || [];
       if (index < 0 || index >= allPhones.length) return prev;
 
+      const currentPrimaryIndex = prev.contactInfo?.primaryPhoneIndex ?? 0;
+      // Don't allow deleting primary phone
+      if (index === currentPrimaryIndex && allPhones.length > 1) {
+        return prev;
+      }
+
       const newPhones = allPhones.filter((_, i) => i !== index);
+
+      // Adjust primary index if needed
+      let newPrimaryIndex = currentPrimaryIndex;
+      if (index < currentPrimaryIndex) {
+        newPrimaryIndex = currentPrimaryIndex - 1;
+      } else if (index === currentPrimaryIndex) {
+        newPrimaryIndex = 0;
+      }
+
       return {
         ...prev,
         contactInfo: {
           ...prev.contactInfo,
           allPhones: newPhones,
-          // If we deleted the primary (index 0), update phone to new first item
-          phone: index === 0 ? newPhones[0]?.phone : prev.contactInfo?.phone,
+          primaryPhoneIndex: newPrimaryIndex,
+          phone: newPhones[newPrimaryIndex]?.phone,
         },
       };
     });
-  };
-
-  // Add email manually
-  const addEmail = (email: string) => {
-    const trimmedEmail = email.trim().toLowerCase();
-    if (!trimmedEmail) return;
-
-    // Basic email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(trimmedEmail)) return;
-
-    setData((prev) => {
-      const allEmails = prev.contactInfo?.allEmails || [];
-
-      // Check for duplicates (case-insensitive)
-      const isDuplicate = allEmails.some((e) => e.email.toLowerCase() === trimmedEmail);
-      if (isDuplicate) return prev;
-
-      return {
-        ...prev,
-        contactInfo: {
-          ...prev.contactInfo,
-          allEmails: [...allEmails, { email: trimmedEmail, source: 'MANUAL' }],
-        },
-      };
-    });
-
-    setNewEmailInput('');
-    setShowEmailInput(false);
   };
 
   // Add phone manually
-  const addPhone = (phone: string) => {
-    let trimmedPhone = phone.trim();
-    if (!trimmedPhone) return;
-
-    // Ensure phone starts with + for country code
-    // If user enters digits starting with country code but no +, add it
-    if (!trimmedPhone.startsWith('+')) {
-      // If it starts with a digit, assume they forgot the +
-      if (/^\d/.test(trimmedPhone)) {
-        trimmedPhone = '+' + trimmedPhone;
-      } else {
-        // Invalid format
-        return;
-      }
-    }
-
-    // Basic validation: must have + followed by at least 7 digits (country code + number)
-    const digitsOnly = trimmedPhone.replace(/\D/g, '');
-    if (digitsOnly.length < 7) return;
+  const addPhone = (phoneValue: PhoneValue) => {
+    if (!phoneValue.number.trim()) return;
 
     setData((prev) => {
       const allPhones = prev.contactInfo?.allPhones || [];
 
-      // Check for duplicates (normalize by removing non-digits for comparison)
+      // Check for duplicates
       const normalizePhone = (p: string) => p.replace(/\D/g, '');
-      const isDuplicate = allPhones.some(
-        (p) => normalizePhone(p.phone) === normalizePhone(trimmedPhone)
-      );
+      const newPhoneNormalized = normalizePhone(phoneValue.number);
+      const isDuplicate = allPhones.some((p) => {
+        const existingNumber = p.number || p.phone || '';
+        return normalizePhone(existingNumber) === newPhoneNormalized;
+      });
       if (isDuplicate) return prev;
 
       return {
         ...prev,
         contactInfo: {
           ...prev.contactInfo,
-          allPhones: [...allPhones, { phone: trimmedPhone, source: 'MANUAL' }],
+          allPhones: [
+            ...allPhones,
+            {
+              countryCode: phoneValue.countryCode,
+              number: phoneValue.number,
+              phone: formatPhoneValue(phoneValue), // Legacy field for backward compat
+              source: 'MANUAL',
+            },
+          ],
         },
       };
     });
 
-    setNewPhoneInput('');
+    setNewPhoneInput({ countryCode: null, number: '' });
     setShowPhoneInput(false);
+  };
+
+  // Start editing a phone
+  const startEditPhone = (index: number) => {
+    const phone = data.contactInfo?.allPhones?.[index];
+    if (phone) {
+      setEditingPhoneIndex(index);
+      setEditingPhoneValue({
+        countryCode: phone.countryCode || null,
+        number: phone.number || phone.phone || '',
+      });
+    }
+  };
+
+  // Cancel editing phone
+  const cancelEditPhone = () => {
+    setEditingPhoneIndex(null);
+    setEditingPhoneValue({ countryCode: null, number: '' });
+  };
+
+  // Save edited phone
+  const saveEditPhone = () => {
+    if (editingPhoneIndex === null) return;
+
+    setData((prev) => {
+      const allPhones = [...(prev.contactInfo?.allPhones || [])];
+      if (editingPhoneIndex >= 0 && editingPhoneIndex < allPhones.length) {
+        allPhones[editingPhoneIndex] = {
+          ...allPhones[editingPhoneIndex],
+          countryCode: editingPhoneValue.countryCode,
+          number: editingPhoneValue.number,
+          phone: formatPhoneValue(editingPhoneValue), // Update legacy field
+        };
+      }
+      return {
+        ...prev,
+        contactInfo: {
+          ...prev.contactInfo,
+          allPhones,
+        },
+      };
+    });
+
+    setEditingPhoneIndex(null);
+    setEditingPhoneValue({ countryCode: null, number: '' });
   };
 
   // Experience handlers
@@ -991,7 +1279,21 @@ function ReviewPageContent() {
   };
 
   // Link handlers
+  // Check if a URL already exists in the links (excluding a specific link by id)
+  const isUrlDuplicate = (url: string, excludeId?: string): boolean => {
+    if (!url.trim()) return false;
+    const normalizedUrl = url.toLowerCase().trim();
+    return data.links.some(
+      (link) => link.id !== excludeId && link.url.toLowerCase().trim() === normalizedUrl
+    );
+  };
+
   const updateLink = (id: string, updates: Partial<ParsedLink>) => {
+    // If updating URL, check for duplicates
+    if (updates.url !== undefined && isUrlDuplicate(updates.url, id)) {
+      // Don't update if it's a duplicate - the LinkCard will show the error
+      return;
+    }
     setData((prev) => ({
       ...prev,
       links: prev.links.map((link) => (link.id === id ? { ...link, ...updates } : link)),
@@ -1264,67 +1566,195 @@ function ReviewPageContent() {
                     <Mail className="h-4 w-4" />
                     Email Addresses
                   </label>
+                  <p className="mb-3 text-xs text-muted-foreground">
+                    Manage your email addresses. The primary email is used for login and will be
+                    displayed on your profile. Emails must be verified before they can be set as
+                    primary.
+                  </p>
+
+                  {/* Error message */}
+                  {emailError && (
+                    <div className="mb-3 rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800 dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200">
+                      {emailError}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="ml-2 h-5 px-1"
+                        onClick={() => setEmailError(null)}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  )}
 
                   {data.contactInfo?.allEmails && data.contactInfo.allEmails.length > 0 ? (
                     <div className="space-y-2">
-                      {data.contactInfo.allEmails.map((item, idx) => (
-                        <div
-                          key={idx}
-                          className={`flex items-center justify-between rounded-lg border p-3 transition-colors ${
-                            idx === 0
-                              ? 'border-primary/30 bg-primary/5'
-                              : 'border-border bg-background hover:bg-muted/30'
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            {idx === 0 && <Star className="h-4 w-4 fill-primary text-primary" />}
-                            <div>
-                              <p className={`text-sm ${idx === 0 ? 'font-medium' : ''}`}>
-                                {item.email}
-                              </p>
-                              <div className="mt-0.5 flex items-center gap-2">
-                                <Badge variant="outline" className="text-xs">
-                                  {item.source.toLowerCase()}
-                                </Badge>
-                                {item.source === 'SIGNUP' && (
-                                  <span className="text-xs font-medium text-primary">
-                                    Primary (Signup)
-                                  </span>
+                      {data.contactInfo.allEmails.map((item, idx) => {
+                        const isPrimary = idx === (data.contactInfo?.primaryEmailIndex ?? 0);
+                        const isLoading =
+                          emailOperationLoading === item.email ||
+                          emailOperationLoading === item.clerkEmailId;
+                        const isVerifying = verifyingEmailId === item.clerkEmailId;
+
+                        return (
+                          <div
+                            key={idx}
+                            className={`rounded-lg border p-3 transition-colors ${
+                              isPrimary
+                                ? 'border-primary/30 bg-primary/5'
+                                : 'border-border bg-background'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                {isPrimary && (
+                                  <Star className="h-4 w-4 fill-primary text-primary" />
                                 )}
-                                {idx === 0 && item.source !== 'SIGNUP' && (
-                                  <span className="text-xs font-medium text-primary">Primary</span>
+                                <div>
+                                  <p className={`text-sm ${isPrimary ? 'font-medium' : ''}`}>
+                                    {item.email}
+                                  </p>
+                                  <div className="mt-0.5 flex items-center gap-2">
+                                    <Badge variant="outline" className="text-xs">
+                                      {item.source.toLowerCase()}
+                                    </Badge>
+                                    {item.verified ? (
+                                      <Badge
+                                        variant="outline"
+                                        className="border-green-300 bg-green-50 text-xs text-green-700 dark:border-green-700 dark:bg-green-900/20 dark:text-green-300"
+                                      >
+                                        <Check className="mr-1 h-3 w-3" />
+                                        Verified
+                                      </Badge>
+                                    ) : item.clerkEmailId ? (
+                                      <Badge
+                                        variant="outline"
+                                        className="border-yellow-300 bg-yellow-50 text-xs text-yellow-700 dark:border-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300"
+                                      >
+                                        Pending Verification
+                                      </Badge>
+                                    ) : (
+                                      <Badge
+                                        variant="outline"
+                                        className="border-gray-300 text-xs text-gray-500"
+                                      >
+                                        Not Added
+                                      </Badge>
+                                    )}
+                                    {isPrimary && (
+                                      <span className="text-xs font-medium text-primary">
+                                        Primary
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                {isLoading ? (
+                                  <Spinner className="h-4 w-4" />
+                                ) : (
+                                  <>
+                                    {/* For unverified Clerk emails: show verify button */}
+                                    {item.clerkEmailId && !item.verified && !isVerifying && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => {
+                                          setVerifyingEmailId(item.clerkEmailId!);
+                                          setVerificationCode('');
+                                        }}
+                                        className="h-7 text-xs"
+                                      >
+                                        Enter Code
+                                      </Button>
+                                    )}
+
+                                    {/* For imported emails not in Clerk: show add & verify button */}
+                                    {!item.clerkEmailId && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => addEmailToClerk(item.email)}
+                                        className="h-7 text-xs"
+                                      >
+                                        Add & Verify
+                                      </Button>
+                                    )}
+
+                                    {/* Make primary - only for verified emails */}
+                                    {!isPrimary && item.verified && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => setPrimaryEmailClerk(idx)}
+                                        className="h-7 text-xs"
+                                      >
+                                        <Star className="mr-1 h-3 w-3" />
+                                        Make Primary
+                                      </Button>
+                                    )}
+
+                                    {/* Delete - not for primary */}
+                                    {!isPrimary && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => deleteEmailFromClerk(idx)}
+                                        className="h-7 text-xs text-muted-foreground hover:text-destructive"
+                                      >
+                                        <X className="h-3 w-3" />
+                                      </Button>
+                                    )}
+                                  </>
                                 )}
                               </div>
                             </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {/* Don't show "Make Primary" for signup email or if it's already first */}
-                            {idx !== 0 && item.source !== 'SIGNUP' && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setPrimaryEmail(idx)}
-                                className="h-7 text-xs"
-                              >
-                                <Star className="mr-1 h-3 w-3" />
-                                Make Primary
-                              </Button>
-                            )}
-                            {/* Don't show delete for signup email */}
-                            {item.source !== 'SIGNUP' &&
-                              data.contactInfo!.allEmails!.length > 1 && (
+
+                            {/* Verification code input */}
+                            {isVerifying && (
+                              <div className="mt-3 flex items-center gap-2 border-t pt-3">
+                                <Input
+                                  type="text"
+                                  placeholder="Enter 6-digit code"
+                                  value={verificationCode}
+                                  onChange={(e) => setVerificationCode(e.target.value)}
+                                  className="w-32"
+                                  maxLength={6}
+                                />
+                                <Button
+                                  size="sm"
+                                  onClick={() => {
+                                    verifyEmailCode(item.clerkEmailId!, verificationCode);
+                                    setVerifyingEmailId(null);
+                                    setVerificationCode('');
+                                  }}
+                                  disabled={verificationCode.length < 6}
+                                >
+                                  Verify
+                                </Button>
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  onClick={() => deleteEmail(idx)}
-                                  className="h-7 text-xs text-muted-foreground hover:text-destructive"
+                                  onClick={() => resendVerificationCode(item.clerkEmailId!)}
                                 >
-                                  <X className="h-3 w-3" />
+                                  Resend
                                 </Button>
-                              )}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setVerifyingEmailId(null);
+                                    setVerificationCode('');
+                                  }}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            )}
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
@@ -1342,7 +1772,7 @@ function ReviewPageContent() {
                         onChange={(e) => setNewEmailInput(e.target.value)}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
-                            addEmail(newEmailInput);
+                            addEmailToClerk(newEmailInput);
                           } else if (e.key === 'Escape') {
                             setShowEmailInput(false);
                             setNewEmailInput('');
@@ -1350,13 +1780,14 @@ function ReviewPageContent() {
                         }}
                         className="flex-1"
                         autoFocus
+                        disabled={!!emailOperationLoading}
                       />
                       <Button
                         size="sm"
-                        onClick={() => addEmail(newEmailInput)}
-                        disabled={!newEmailInput.trim()}
+                        onClick={() => addEmailToClerk(newEmailInput)}
+                        disabled={!newEmailInput.trim() || !!emailOperationLoading}
                       >
-                        Add
+                        {emailOperationLoading ? <Spinner className="h-4 w-4" /> : 'Add & Verify'}
                       </Button>
                       <Button
                         size="sm"
@@ -1386,61 +1817,127 @@ function ReviewPageContent() {
                 <div>
                   <label className="mb-3 flex items-center gap-2 text-sm font-medium">
                     <Phone className="h-4 w-4" />
-                    Phone Numbers
+                    Contact Phone
                   </label>
+                  <p className="mb-3 text-xs text-muted-foreground">
+                    Choose which phone number to display on your public profile.
+                  </p>
 
                   {data.contactInfo?.allPhones && data.contactInfo.allPhones.length > 0 ? (
                     <div className="space-y-2">
-                      {data.contactInfo.allPhones.map((item, idx) => (
-                        <div
-                          key={idx}
-                          className={`flex items-center justify-between rounded-lg border p-3 transition-colors ${
-                            idx === 0
-                              ? 'border-primary/30 bg-primary/5'
-                              : 'border-border bg-background hover:bg-muted/30'
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            {idx === 0 && <Star className="h-4 w-4 fill-primary text-primary" />}
-                            <div>
-                              <p className={`text-sm ${idx === 0 ? 'font-medium' : ''}`}>
-                                {item.phone}
-                              </p>
-                              <div className="mt-0.5 flex items-center gap-2">
-                                <Badge variant="outline" className="text-xs">
-                                  {item.source.toLowerCase()}
-                                </Badge>
-                                {idx === 0 && (
-                                  <span className="text-xs font-medium text-primary">Primary</span>
-                                )}
+                      {data.contactInfo.allPhones.map((item, idx) => {
+                        const isPrimary = idx === (data.contactInfo?.primaryPhoneIndex ?? 0);
+                        const isEditing = editingPhoneIndex === idx;
+                        // Support both new and legacy format
+                        const displayPhone =
+                          item.countryCode && item.number
+                            ? `${item.countryCode} ${item.number}`
+                            : item.number || item.phone || '';
+                        const hasCountryCode = !!item.countryCode;
+
+                        // Show inline editor when editing
+                        if (isEditing) {
+                          return (
+                            <div key={idx} className="rounded-lg border border-primary p-3">
+                              <div className="space-y-2">
+                                <PhoneInput
+                                  value={editingPhoneValue}
+                                  onChange={setEditingPhoneValue}
+                                  placeholder="Phone number"
+                                />
+                                <div className="flex items-center justify-end gap-2">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={cancelEditPhone}
+                                    className="h-7 text-xs"
+                                  >
+                                    <X className="mr-1 h-3 w-3" />
+                                    Cancel
+                                  </Button>
+                                  <Button
+                                    variant="default"
+                                    size="sm"
+                                    onClick={saveEditPhone}
+                                    className="h-7 text-xs"
+                                  >
+                                    <Check className="mr-1 h-3 w-3" />
+                                    Save
+                                  </Button>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {idx !== 0 && (
+                          );
+                        }
+
+                        return (
+                          <div
+                            key={idx}
+                            className={`flex items-center justify-between rounded-lg border p-3 transition-colors ${
+                              isPrimary
+                                ? 'border-primary/30 bg-primary/5'
+                                : 'border-border bg-background hover:bg-muted/30'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              {isPrimary && <Star className="h-4 w-4 fill-primary text-primary" />}
+                              <div>
+                                <p className={`text-sm ${isPrimary ? 'font-medium' : ''}`}>
+                                  {displayPhone}
+                                </p>
+                                <div className="mt-0.5 flex items-center gap-2">
+                                  {!hasCountryCode && (
+                                    <Badge variant="outline" className="text-xs text-amber-600">
+                                      No country code
+                                    </Badge>
+                                  )}
+                                  <Badge variant="outline" className="text-xs">
+                                    {item.source.toLowerCase()}
+                                  </Badge>
+                                  {isPrimary && (
+                                    <span className="text-xs font-medium text-primary">
+                                      Display Phone
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => setPrimaryPhone(idx)}
+                                onClick={() => startEditPhone(idx)}
                                 className="h-7 text-xs"
+                                title="Edit phone number and country code"
                               >
-                                <Star className="mr-1 h-3 w-3" />
-                                Make Primary
+                                <Edit2 className="mr-1 h-3 w-3" />
+                                Edit
                               </Button>
-                            )}
-                            {data.contactInfo!.allPhones!.length > 1 && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => deletePhone(idx)}
-                                className="h-7 text-xs text-muted-foreground hover:text-destructive"
-                              >
-                                <X className="h-3 w-3" />
-                              </Button>
-                            )}
+                              {!isPrimary && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setPrimaryPhone(idx)}
+                                  className="h-7 text-xs"
+                                >
+                                  <Star className="mr-1 h-3 w-3" />
+                                  Use as Display
+                                </Button>
+                              )}
+                              {!isPrimary && data.contactInfo!.allPhones!.length > 1 && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => deletePhone(idx)}
+                                  className="h-7 text-xs text-muted-foreground hover:text-destructive"
+                                >
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
@@ -1450,40 +1947,31 @@ function ReviewPageContent() {
 
                   {/* Add Phone Input */}
                   {showPhoneInput ? (
-                    <div className="mt-3 flex items-center gap-2">
-                      <Input
-                        type="tel"
-                        placeholder="+1 234 567 8900"
+                    <div className="mt-3 space-y-2">
+                      <PhoneInput
                         value={newPhoneInput}
-                        onChange={(e) => setNewPhoneInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            addPhone(newPhoneInput);
-                          } else if (e.key === 'Escape') {
-                            setShowPhoneInput(false);
-                            setNewPhoneInput('');
-                          }
-                        }}
-                        className="flex-1"
-                        autoFocus
+                        onChange={setNewPhoneInput}
+                        placeholder="Phone number"
                       />
-                      <Button
-                        size="sm"
-                        onClick={() => addPhone(newPhoneInput)}
-                        disabled={!newPhoneInput.trim()}
-                      >
-                        Add
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          setShowPhoneInput(false);
-                          setNewPhoneInput('');
-                        }}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => addPhone(newPhoneInput)}
+                          disabled={!newPhoneInput.number.trim()}
+                        >
+                          Add
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setShowPhoneInput(false);
+                            setNewPhoneInput({ countryCode: null, number: '' });
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
                     </div>
                   ) : (
                     <Button
@@ -1626,6 +2114,7 @@ function ReviewPageContent() {
                     link={link}
                     onUpdate={(updates) => updateLink(link.id, updates)}
                     onDelete={() => deleteLink(link.id)}
+                    isUrlDuplicate={(url) => isUrlDuplicate(url, link.id)}
                   />
                 ))}
                 <Button variant="outline" size="sm" onClick={addLink} className="w-full gap-2">
@@ -2245,49 +2734,63 @@ function LinkCard({
   link,
   onUpdate,
   onDelete,
+  isUrlDuplicate,
 }: {
   link: ParsedLink;
   onUpdate: (updates: Partial<ParsedLink>) => void;
   onDelete: () => void;
+  isUrlDuplicate: (url: string) => boolean;
 }) {
+  const [inputValue, setInputValue] = useState(link.url);
+  const isDuplicate = inputValue.trim() && isUrlDuplicate(inputValue);
+
   // Auto-detect type when URL changes
   const handleUrlChange = (newUrl: string) => {
-    const detectedType = detectLinkType(newUrl, link.type);
-    onUpdate({ url: newUrl, type: detectedType });
+    setInputValue(newUrl);
+    // Only update if not a duplicate
+    if (!isUrlDuplicate(newUrl)) {
+      const detectedType = detectLinkType(newUrl, link.type);
+      onUpdate({ url: newUrl, type: detectedType });
+    }
   };
 
   return (
-    <Card>
-      <CardContent className="flex items-center gap-3 p-3">
-        <select
-          value={link.type}
-          onChange={(e) => onUpdate({ type: e.target.value })}
-          className="rounded-md border bg-background px-2 py-1.5 text-sm"
-        >
-          <option value="GITHUB">GitHub</option>
-          <option value="LINKEDIN">LinkedIn</option>
-          <option value="TWITTER">Twitter/X</option>
-          <option value="PORTFOLIO">Portfolio</option>
-          <option value="BLOG">Blog</option>
-          <option value="YOUTUBE">YouTube</option>
-          <option value="DRIBBBLE">Dribbble</option>
-          <option value="BEHANCE">Behance</option>
-          <option value="OTHER">Other</option>
-        </select>
-        <Input
-          placeholder="URL"
-          value={link.url}
-          onChange={(e) => handleUrlChange(e.target.value)}
-          className="flex-1"
-        />
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 shrink-0 text-destructive"
-          onClick={onDelete}
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
+    <Card className={isDuplicate ? 'border-destructive' : ''}>
+      <CardContent className="p-3">
+        <div className="flex items-center gap-3">
+          <select
+            value={link.type}
+            onChange={(e) => onUpdate({ type: e.target.value })}
+            className="rounded-md border bg-background px-2 py-1.5 text-sm"
+          >
+            <option value="GITHUB">GitHub</option>
+            <option value="LINKEDIN">LinkedIn</option>
+            <option value="TWITTER">Twitter/X</option>
+            <option value="PORTFOLIO">Portfolio</option>
+            <option value="BLOG">Blog</option>
+            <option value="YOUTUBE">YouTube</option>
+            <option value="DRIBBBLE">Dribbble</option>
+            <option value="BEHANCE">Behance</option>
+            <option value="OTHER">Other</option>
+          </select>
+          <Input
+            placeholder="URL"
+            value={inputValue}
+            onChange={(e) => handleUrlChange(e.target.value)}
+            className={`flex-1 ${isDuplicate ? 'border-destructive' : ''}`}
+          />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 shrink-0 text-destructive"
+            onClick={onDelete}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+        {isDuplicate && (
+          <p className="mt-2 text-xs text-destructive">This URL already exists in your links</p>
+        )}
       </CardContent>
     </Card>
   );

@@ -3,9 +3,8 @@ import { NextResponse } from 'next/server';
 
 // Define protected routes that require authentication
 const isProtectedRoute = createRouteMatcher([
-  '/dashboard(.*)',
-  '/onboarding(.*)',
   '/builder(.*)',
+  '/onboarding(.*)',
   '/settings(.*)',
   '/me(.*)',
 ]);

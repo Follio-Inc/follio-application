@@ -13,8 +13,13 @@ import type { DataSource, Profile, User } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
 
 // Helper to safely cast string to DataSource enum
+const VALID_DATA_SOURCES: DataSource[] = ['MANUAL', 'GITHUB', 'RESUME', 'LINKEDIN', 'GENERATED'];
 const toDataSource = (source: string | undefined): DataSource => {
-  return (source || 'MANUAL') as DataSource;
+  const normalized = source?.toUpperCase();
+  if (normalized && VALID_DATA_SOURCES.includes(normalized as DataSource)) {
+    return normalized as DataSource;
+  }
+  return 'MANUAL';
 };
 
 /**
@@ -197,8 +202,16 @@ interface ReviewedData {
     phoneSource?: string;
     // Support for all collected emails from all import sources
     allEmails?: Array<{ email: string; source: string }>;
-    // Support for all collected phones from all import sources
-    allPhones?: Array<{ phone: string; source: string }>;
+    // Support for all collected phones from all import sources (supports both formats)
+    allPhones?: Array<{
+      phone?: string; // Legacy
+      countryCode?: string | null; // New
+      number?: string; // New
+      source: string;
+    }>;
+    // Index of the primary email/phone in the arrays (user's choice)
+    primaryEmailIndex?: number;
+    primaryPhoneIndex?: number;
   };
 }
 
@@ -781,8 +794,8 @@ async function handleReviewedData(
     ]);
   }
 
-  // Create contact info - signup email is always primary
-  // All imported emails go to additionalEmails
+  // Create contact info
+  // User may have chosen a different primary email during review
   const signupEmail = user.email; // This is always the Clerk signup email
 
   // Fetch existing contact info to merge additional emails (if updating)
@@ -791,84 +804,88 @@ async function handleReviewedData(
     select: { additionalEmails: true },
   });
 
-  // Build additionalEmails array from all collected emails
-  // If we have allEmails from the review data, use that; otherwise fall back to single email
-  let newAdditionalEmails: Array<{ email: string; source: string }> = [];
+  // Determine primary email based on user's choice (primaryEmailIndex)
+  const allEmails = reviewedData.contactInfo?.allEmails || [];
+  const primaryEmailIndex = reviewedData.contactInfo?.primaryEmailIndex ?? 0;
+  const chosenPrimaryEmail = allEmails[primaryEmailIndex]?.email || signupEmail;
+  const chosenPrimarySource = allEmails[primaryEmailIndex]?.source || 'MANUAL';
 
-  if (reviewedData.contactInfo?.allEmails?.length) {
-    // Use the multi-source email resolver to deduplicate and exclude signup
-    newAdditionalEmails = resolveEmails(
-      signupEmail,
-      reviewedData.contactInfo.allEmails
-    ).additionalEmails;
-  } else if (reviewedData.contactInfo?.email) {
-    // Fallback to single email if allEmails not provided
-    const importedEmail = reviewedData.contactInfo.email;
-    if (importedEmail.toLowerCase() !== signupEmail.toLowerCase()) {
-      newAdditionalEmails.push({
-        email: importedEmail,
-        source: reviewedData.contactInfo.emailSource || 'RESUME',
-      });
+  console.log('[handleReviewedData] User chose primary email:', chosenPrimaryEmail);
+  console.log('[handleReviewedData] Primary email source:', chosenPrimarySource);
+
+  // Build additional emails: all emails except the chosen primary
+  const seenEmails = new Set<string>();
+  seenEmails.add(chosenPrimaryEmail.toLowerCase()); // Exclude the primary
+
+  const additionalEmails: Array<{ email: string; source: string }> = [];
+
+  // Add all other emails from the allEmails list
+  for (let i = 0; i < allEmails.length; i++) {
+    if (i === primaryEmailIndex) continue; // Skip primary
+    const normalized = allEmails[i].email.toLowerCase().trim();
+    if (!seenEmails.has(normalized)) {
+      seenEmails.add(normalized);
+      additionalEmails.push(allEmails[i]);
     }
   }
 
-  // Merge with existing additional emails (if any) and deduplicate
+  // Also merge existing additional emails (if any)
   const existingEmails =
     (existingContactInfo?.additionalEmails as Array<{ email: string; source: string }>) || [];
-  const seenEmails = new Set<string>();
-  seenEmails.add(signupEmail.toLowerCase()); // Always exclude signup email
-
-  const mergedAdditionalEmails: Array<{ email: string; source: string }> = [];
-
-  // Add existing emails first (they have priority since user already has them)
   for (const entry of existingEmails) {
     const normalized = entry.email.toLowerCase().trim();
     if (!seenEmails.has(normalized)) {
       seenEmails.add(normalized);
-      mergedAdditionalEmails.push(entry);
+      additionalEmails.push(entry);
     }
   }
 
-  // Add new emails
-  for (const entry of newAdditionalEmails) {
-    const normalized = entry.email.toLowerCase().trim();
-    if (!seenEmails.has(normalized)) {
-      seenEmails.add(normalized);
-      mergedAdditionalEmails.push(entry);
-    }
-  }
+  console.log('[handleReviewedData] Additional emails:', additionalEmails);
 
-  console.log('[handleReviewedData] Signup email:', signupEmail);
-  console.log('[handleReviewedData] Merged additional emails:', mergedAdditionalEmails);
-
-  // Get primary phone - from allPhones[0] or fallback to phone field
+  // Determine primary phone based on user's choice (primaryPhoneIndex)
+  const allPhones = reviewedData.contactInfo?.allPhones || [];
+  const primaryPhoneIndex = reviewedData.contactInfo?.primaryPhoneIndex ?? 0;
+  const selectedPhone = allPhones[primaryPhoneIndex];
+  // Support both new format (countryCode + number) and legacy (phone)
+  const primaryPhoneNumber =
+    selectedPhone?.number || selectedPhone?.phone || reviewedData.contactInfo?.phone;
+  const primaryPhoneCountryCode = selectedPhone?.countryCode || null;
+  // Compose full phone string for backward compat
   const primaryPhone =
-    reviewedData.contactInfo?.allPhones?.[0]?.phone || reviewedData.contactInfo?.phone;
-  const phoneSource =
-    reviewedData.contactInfo?.allPhones?.[0]?.source ||
-    reviewedData.contactInfo?.phoneSource ||
-    'RESUME';
+    primaryPhoneCountryCode && primaryPhoneNumber
+      ? `${primaryPhoneCountryCode} ${primaryPhoneNumber}`.trim()
+      : primaryPhoneNumber;
+  const phoneSource = selectedPhone?.source || reviewedData.contactInfo?.phoneSource || 'RESUME';
 
-  console.log('[handleReviewedData] Primary phone:', primaryPhone);
+  console.log(
+    '[handleReviewedData] Primary phone:',
+    primaryPhone,
+    'Country code:',
+    primaryPhoneCountryCode
+  );
 
   await db.contactInfo.upsert({
     where: { profileId },
     create: {
       profileId,
-      email: signupEmail, // Signup email is always primary
-      emailSource: 'MANUAL', // Signup = MANUAL source
+      email: chosenPrimaryEmail,
+      emailSource: toDataSource(chosenPrimarySource),
       emailPublic: false,
       phone: primaryPhone,
+      phoneCountryCode: primaryPhoneCountryCode,
+      phoneNumber: primaryPhoneNumber,
       phoneSource: primaryPhone ? toDataSource(phoneSource) : undefined,
       phonePublic: false,
-      additionalEmails: mergedAdditionalEmails.length > 0 ? mergedAdditionalEmails : undefined,
+      additionalEmails: additionalEmails.length > 0 ? additionalEmails : undefined,
     },
     update: {
-      // Don't overwrite primary email if it already exists
-      // Only update phone and merge additionalEmails (already deduplicated above)
+      email: chosenPrimaryEmail,
+      emailSource: toDataSource(chosenPrimarySource),
       phone: primaryPhone,
+      phoneCountryCode: primaryPhoneCountryCode,
+      phoneNumber: primaryPhoneNumber,
       phoneSource: primaryPhone ? toDataSource(phoneSource) : undefined,
-      additionalEmails: mergedAdditionalEmails.length > 0 ? mergedAdditionalEmails : undefined,
+      additionalEmails: additionalEmails.length > 0 ? additionalEmails : undefined,
     },
   });
 
@@ -938,11 +955,24 @@ async function handleReviewedData(
     console.log('[handleReviewedData] Created all educations');
   }
 
-  // Create links
+  // Create links (deduplicate by URL to prevent duplicates from multiple sources)
   if (reviewedData.links?.length) {
-    console.log('[handleReviewedData] Creating links:', reviewedData.links.length);
+    const seenUrls = new Set<string>();
+    const uniqueLinks = reviewedData.links.filter((link) => {
+      const url = link.url?.toLowerCase().trim();
+      if (!url || seenUrls.has(url)) return false;
+      seenUrls.add(url);
+      return true;
+    });
+    console.log(
+      '[handleReviewedData] Creating links:',
+      uniqueLinks.length,
+      '(from',
+      reviewedData.links.length,
+      'total)'
+    );
     await db.link.createMany({
-      data: reviewedData.links.map((link, index) => ({
+      data: uniqueLinks.map((link, index) => ({
         profileId,
         type: mapLinkType(link.type),
         url: link.url,
@@ -1085,8 +1115,13 @@ function mergeImportedData(importedData: Record<string, unknown>) {
     avatarUrlSource?: string;
     // Collect ALL emails from all sources
     allEmails: Array<{ email: string; source: string }>;
-    // Collect ALL phones from all sources
-    allPhones: Array<{ phone: string; source: string }>;
+    // Collect ALL phones from all sources (supports both formats)
+    allPhones: Array<{
+      phone?: string;
+      countryCode?: string | null;
+      number?: string;
+      source: string;
+    }>;
     skills: Array<{ name: string; source: string }>;
     projects: Array<{
       title: string;
@@ -1394,8 +1429,9 @@ function mergeImportedData(importedData: Record<string, unknown>) {
   // Deduplicate phones (keep first occurrence with its source)
   const seenPhones = new Set<string>();
   merged.allPhones = merged.allPhones.filter((p) => {
-    // Normalize phone by removing non-digits for comparison
-    const key = p.phone.replace(/\D/g, '');
+    // Normalize phone by removing non-digits for comparison (support both formats)
+    const phoneStr = p.number || p.phone || '';
+    const key = phoneStr.replace(/\D/g, '');
     if (seenPhones.has(key)) return false;
     seenPhones.add(key);
     return true;

@@ -65,10 +65,19 @@ export const UpdateProfileSchema = ProfileBasicInfoSchema.partial();
 // CONTACT INFO SCHEMA
 // ===========================================
 
+// Phone number with separate country code
+export const PhoneValueSchema = z.object({
+  countryCode: z.string().nullable(), // e.g., "+91" or null
+  number: z.string(), // The phone number without country code
+  source: z.string().optional(),
+});
+
 export const ContactInfoSchema = z.object({
   email: z.string().email().optional().or(z.literal('')),
   emailPublic: z.boolean().optional(),
-  phone: z.string().max(20).optional(),
+  phone: z.string().max(30).optional(), // Legacy: full phone string
+  phoneCountryCode: z.string().max(10).nullable().optional(), // New: country code
+  phoneNumber: z.string().max(20).optional(), // New: number without country code
   phonePublic: z.boolean().optional(),
   website: z.string().url().optional().or(z.literal('')),
   additionalEmails: z
@@ -82,7 +91,9 @@ export const ContactInfoSchema = z.object({
   additionalPhones: z
     .array(
       z.object({
-        phone: z.string(),
+        countryCode: z.string().nullable().optional(),
+        number: z.string().optional(),
+        phone: z.string().optional(), // Legacy support
         source: z.string(),
       })
     )

@@ -90,6 +90,18 @@ export function LinksSection({ links, onUpdate }: LinksSectionProps) {
     setError(null);
 
     try {
+      // Check for duplicate URL (excluding the link being edited)
+      const normalizedUrl = formData.url?.toLowerCase().trim();
+      const isDuplicate = links.some(
+        (link) => link.id !== editingLink?.id && link.url.toLowerCase().trim() === normalizedUrl
+      );
+
+      if (isDuplicate) {
+        setError('This URL already exists in your links');
+        setIsLoading(false);
+        return;
+      }
+
       // Auto-generate label if not provided
       const label =
         formData.label?.trim() ||

@@ -4,25 +4,27 @@
  * Tests for utility functions in lib/utils.ts
  */
 
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import {
+  absoluteUrl,
+  calculateDuration,
+  capitalize,
   cn,
+  delay,
   formatDate,
   formatDateRange,
-  calculateDuration,
-  generateHandle,
-  isValidHandle,
-  truncate,
-  capitalize,
   formatNumber,
+  formatParsedPhone,
+  generateHandle,
   generateToken,
-  delay,
-  isServer,
   getBaseUrl,
-  absoluteUrl,
+  isServer,
+  isValidHandle,
   parseDateFlexible,
+  parsePhoneWithCountryCode,
   toMonthInputFormat,
+  truncate,
 } from '@/lib/utils';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 describe('Utils', () => {
   describe('cn (className merge)', () => {
@@ -459,6 +461,85 @@ describe('Utils', () => {
 
     it('should return empty string for invalid dates', () => {
       expect(toMonthInputFormat('invalid')).toBe('');
+    });
+  });
+
+  describe('parsePhoneWithCountryCode', () => {
+    it('should parse phone with explicit + country code', () => {
+      const result = parsePhoneWithCountryCode('+919876543210');
+      expect(result.countryCode).toBe('+91');
+      expect(result.number).toBe('9876543210');
+    });
+
+    it('should parse US phone with +1 prefix', () => {
+      const result = parsePhoneWithCountryCode('+15551234567');
+      expect(result.countryCode).toBe('+1');
+      expect(result.number).toBe('5551234567');
+    });
+
+    it('should parse UK phone with +44 prefix', () => {
+      const result = parsePhoneWithCountryCode('+447911123456');
+      expect(result.countryCode).toBe('+44');
+      expect(result.number).toBe('7911123456');
+    });
+
+    it('should handle formatted phone with spaces and dashes', () => {
+      const result = parsePhoneWithCountryCode('+1 (555) 123-4567');
+      expect(result.countryCode).toBe('+1');
+      expect(result.number).toBe('5551234567');
+    });
+
+    it('should NOT assume country code for 10 digit numbers (could be US, India, etc)', () => {
+      // Don't auto-detect - too risky for incorrect assumptions
+      const result = parsePhoneWithCountryCode('9876543210');
+      expect(result.countryCode).toBeNull();
+      expect(result.number).toBe('9876543210');
+    });
+
+    it('should NOT assume country code for any 10 digit number', () => {
+      // US numbers, Indian numbers, etc - all should require explicit country code
+      const result = parsePhoneWithCountryCode('5551234567');
+      expect(result.countryCode).toBeNull();
+      expect(result.number).toBe('5551234567');
+    });
+
+    it('should detect US number with 1 prefix (11 digits)', () => {
+      const result = parsePhoneWithCountryCode('15551234567');
+      expect(result.countryCode).toBe('+1');
+      expect(result.number).toBe('5551234567');
+    });
+
+    it('should handle empty input', () => {
+      expect(parsePhoneWithCountryCode('')).toEqual({ countryCode: null, number: '', raw: '' });
+      expect(parsePhoneWithCountryCode(null)).toEqual({ countryCode: null, number: '', raw: '' });
+      expect(parsePhoneWithCountryCode(undefined)).toEqual({
+        countryCode: null,
+        number: '',
+        raw: '',
+      });
+    });
+
+    it('should preserve raw value', () => {
+      const result = parsePhoneWithCountryCode('+1 (555) 123-4567');
+      expect(result.raw).toBe('+1 (555) 123-4567');
+    });
+  });
+
+  describe('formatParsedPhone', () => {
+    it('should format phone with country code', () => {
+      expect(
+        formatParsedPhone({ countryCode: '+91', number: '9876543210', raw: '+919876543210' })
+      ).toBe('+91 9876543210');
+    });
+
+    it('should format phone without country code', () => {
+      expect(
+        formatParsedPhone({ countryCode: null, number: '5551234567', raw: '5551234567' })
+      ).toBe('5551234567');
+    });
+
+    it('should return empty string for empty number', () => {
+      expect(formatParsedPhone({ countryCode: '+1', number: '', raw: '' })).toBe('');
     });
   });
 });

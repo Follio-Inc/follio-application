@@ -385,3 +385,157 @@ export function fileToBase64(file: File): Promise<string> {
     reader.readAsDataURL(file);
   });
 }
+
+// ============================================================================
+// PHONE NUMBER PARSING UTILITIES
+// ============================================================================
+
+/**
+ * Common country codes for phone number detection
+ * Sorted by dial code length (longest first) to match properly
+ */
+const COMMON_COUNTRY_CODES: { dialCode: string; countries: string[] }[] = [
+  { dialCode: '+1', countries: ['US', 'CA'] }, // North America
+  { dialCode: '+7', countries: ['RU', 'KZ'] }, // Russia, Kazakhstan
+  { dialCode: '+20', countries: ['EG'] }, // Egypt
+  { dialCode: '+27', countries: ['ZA'] }, // South Africa
+  { dialCode: '+30', countries: ['GR'] }, // Greece
+  { dialCode: '+31', countries: ['NL'] }, // Netherlands
+  { dialCode: '+32', countries: ['BE'] }, // Belgium
+  { dialCode: '+33', countries: ['FR'] }, // France
+  { dialCode: '+34', countries: ['ES'] }, // Spain
+  { dialCode: '+36', countries: ['HU'] }, // Hungary
+  { dialCode: '+39', countries: ['IT'] }, // Italy
+  { dialCode: '+40', countries: ['RO'] }, // Romania
+  { dialCode: '+41', countries: ['CH'] }, // Switzerland
+  { dialCode: '+43', countries: ['AT'] }, // Austria
+  { dialCode: '+44', countries: ['GB'] }, // UK
+  { dialCode: '+45', countries: ['DK'] }, // Denmark
+  { dialCode: '+46', countries: ['SE'] }, // Sweden
+  { dialCode: '+47', countries: ['NO'] }, // Norway
+  { dialCode: '+48', countries: ['PL'] }, // Poland
+  { dialCode: '+49', countries: ['DE'] }, // Germany
+  { dialCode: '+51', countries: ['PE'] }, // Peru
+  { dialCode: '+52', countries: ['MX'] }, // Mexico
+  { dialCode: '+53', countries: ['CU'] }, // Cuba
+  { dialCode: '+54', countries: ['AR'] }, // Argentina
+  { dialCode: '+55', countries: ['BR'] }, // Brazil
+  { dialCode: '+56', countries: ['CL'] }, // Chile
+  { dialCode: '+57', countries: ['CO'] }, // Colombia
+  { dialCode: '+58', countries: ['VE'] }, // Venezuela
+  { dialCode: '+60', countries: ['MY'] }, // Malaysia
+  { dialCode: '+61', countries: ['AU'] }, // Australia
+  { dialCode: '+62', countries: ['ID'] }, // Indonesia
+  { dialCode: '+63', countries: ['PH'] }, // Philippines
+  { dialCode: '+64', countries: ['NZ'] }, // New Zealand
+  { dialCode: '+65', countries: ['SG'] }, // Singapore
+  { dialCode: '+66', countries: ['TH'] }, // Thailand
+  { dialCode: '+81', countries: ['JP'] }, // Japan
+  { dialCode: '+82', countries: ['KR'] }, // South Korea
+  { dialCode: '+84', countries: ['VN'] }, // Vietnam
+  { dialCode: '+86', countries: ['CN'] }, // China
+  { dialCode: '+90', countries: ['TR'] }, // Turkey
+  { dialCode: '+91', countries: ['IN'] }, // India
+  { dialCode: '+92', countries: ['PK'] }, // Pakistan
+  { dialCode: '+93', countries: ['AF'] }, // Afghanistan
+  { dialCode: '+94', countries: ['LK'] }, // Sri Lanka
+  { dialCode: '+95', countries: ['MM'] }, // Myanmar
+  { dialCode: '+98', countries: ['IR'] }, // Iran
+  { dialCode: '+212', countries: ['MA'] }, // Morocco
+  { dialCode: '+213', countries: ['DZ'] }, // Algeria
+  { dialCode: '+216', countries: ['TN'] }, // Tunisia
+  { dialCode: '+234', countries: ['NG'] }, // Nigeria
+  { dialCode: '+254', countries: ['KE'] }, // Kenya
+  { dialCode: '+351', countries: ['PT'] }, // Portugal
+  { dialCode: '+353', countries: ['IE'] }, // Ireland
+  { dialCode: '+354', countries: ['IS'] }, // Iceland
+  { dialCode: '+358', countries: ['FI'] }, // Finland
+  { dialCode: '+420', countries: ['CZ'] }, // Czech Republic
+  { dialCode: '+421', countries: ['SK'] }, // Slovakia
+  { dialCode: '+852', countries: ['HK'] }, // Hong Kong
+  { dialCode: '+853', countries: ['MO'] }, // Macau
+  { dialCode: '+880', countries: ['BD'] }, // Bangladesh
+  { dialCode: '+886', countries: ['TW'] }, // Taiwan
+  { dialCode: '+966', countries: ['SA'] }, // Saudi Arabia
+  { dialCode: '+971', countries: ['AE'] }, // UAE
+  { dialCode: '+972', countries: ['IL'] }, // Israel
+].sort((a, b) => b.dialCode.length - a.dialCode.length); // Sort by length desc
+
+export interface ParsedPhone {
+  countryCode: string | null;
+  number: string;
+  raw: string;
+}
+
+/**
+ * Parse a phone string to extract country code and number
+ * Works for both imported data (may or may not have +) and user input
+ *
+ * @param phone - Raw phone string (e.g., "+919876543210", "9876543210", "+1 555 123 4567")
+ * @returns ParsedPhone with separated countryCode and number
+ */
+export function parsePhoneWithCountryCode(phone: string | null | undefined): ParsedPhone {
+  if (!phone) return { countryCode: null, number: '', raw: '' };
+
+  const raw = phone.trim();
+
+  // Normalize: remove spaces, dashes, parentheses but keep + and digits
+  const normalized = raw.replace(/[\s\-().]/g, '');
+
+  // Check if starts with + (explicit country code)
+  if (normalized.startsWith('+')) {
+    // Try to match known country codes
+    for (const cc of COMMON_COUNTRY_CODES) {
+      if (normalized.startsWith(cc.dialCode)) {
+        const number = normalized.slice(cc.dialCode.length);
+        return { countryCode: cc.dialCode, number, raw };
+      }
+    }
+
+    // Unknown country code - try to extract it (up to 4 digits after +)
+    const match = normalized.match(/^(\+\d{1,4})(\d+)$/);
+    if (match) {
+      return { countryCode: match[1], number: match[2], raw };
+    }
+  }
+
+  // No + prefix - don't assume country code
+  // Only detect if there's explicit evidence (like 11 digits starting with 1 for US)
+  const digits = normalized.replace(/\D/g, '');
+
+  // 11 digits starting with 1 = likely US/Canada with country code prefix
+  if (digits.length === 11 && digits.startsWith('1')) {
+    return { countryCode: '+1', number: digits.slice(1), raw };
+  }
+
+  // For all other cases, don't assume - let user specify country code
+  // This avoids incorrect assumptions (e.g., 10-digit US vs Indian numbers)
+
+  // 12+ digits starting with country code - try to detect
+  if (digits.length >= 12) {
+    for (const cc of COMMON_COUNTRY_CODES) {
+      const codeDigits = cc.dialCode.slice(1); // Remove +
+      if (digits.startsWith(codeDigits)) {
+        const number = digits.slice(codeDigits.length);
+        // Validate reasonable length (most numbers are 8-12 digits)
+        if (number.length >= 8 && number.length <= 12) {
+          return { countryCode: cc.dialCode, number, raw };
+        }
+      }
+    }
+  }
+
+  // Can't determine country code - return as-is
+  return { countryCode: null, number: digits || normalized, raw };
+}
+
+/**
+ * Format a parsed phone for display
+ */
+export function formatParsedPhone(parsed: ParsedPhone): string {
+  if (!parsed.number) return '';
+  if (parsed.countryCode) {
+    return `${parsed.countryCode} ${parsed.number}`;
+  }
+  return parsed.number;
+}

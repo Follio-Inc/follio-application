@@ -775,9 +775,20 @@ function extractPhone(text: string): string | undefined {
   for (const pattern of CONTACT_PATTERNS.phone) {
     const match = text.match(pattern);
     if (match) {
-      // Return the first valid-looking phone number
-      const phone = match[0].replace(/[^0-9+]/g, '');
-      if (phone.length >= 10) return phone;
+      // Preserve the original formatting for country code detection
+      // Only clean up extra whitespace while keeping + and digits
+      const rawPhone = match[0].trim();
+      const phone = rawPhone
+        .replace(/[^0-9+\s()-]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      // Validate: must have at least 10 digits
+      const digits = phone.replace(/\D/g, '');
+      if (digits.length >= 10) {
+        // Return cleaned phone preserving + for country code
+        return phone.replace(/[^0-9+]/g, '');
+      }
     }
   }
   return undefined;
