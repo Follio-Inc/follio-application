@@ -84,16 +84,14 @@ export default async function SectionPage({ params }: PageProps) {
     );
   }
 
-  // Handle GITHUB section separately (not a profile section, manages GitHub repos)
+  // Handle GITHUB section - redirect to unified Data Sources page
   if (sectionSlug === 'github') {
-    return (
-      <SectionEditor
-        profile={serializedProfile}
-        sectionType="GITHUB"
-        section={null}
-        customSectionId={null}
-      />
-    );
+    redirect('/builder/data-sources');
+  }
+
+  // Handle import-sync - redirect to unified Data Sources page
+  if (sectionSlug === 'import-sync') {
+    redirect('/builder/data-sources');
   }
 
   // Handle SETTINGS section separately (not a profile section, account settings)

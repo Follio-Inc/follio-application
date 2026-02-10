@@ -1,4 +1,7 @@
+import { auth } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
+
+import { db } from '@/lib/db';
 import { isHandleAvailable } from '@/services/profile.service';
 
 export async function GET(request: NextRequest) {
@@ -15,7 +18,18 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const available = await isHandleAvailable(handle);
+    // Exclude the current user's own profile so they can reclaim their handle
+    let excludeProfileId: string | undefined;
+    const { userId } = await auth();
+    if (userId) {
+      const user = await db.user.findUnique({
+        where: { clerkId: userId },
+        include: { profile: { select: { id: true } } },
+      });
+      excludeProfileId = user?.profile?.id;
+    }
+
+    const available = await isHandleAvailable(handle, excludeProfileId);
     return NextResponse.json({ available });
   } catch (error) {
     console.error('Error checking handle:', error);

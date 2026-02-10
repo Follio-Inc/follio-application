@@ -3,8 +3,12 @@
  * Converts canonical profile data to various export formats
  */
 
-import type { FullProfile, JSONResume } from '@/types';
 import { formatDate } from '@/lib/utils';
+import type { FullProfile, JSONResume } from '@/types';
+
+// pdfkit uses CJS exports – require works reliably with serverExternalPackages
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const PDFDocument = require('pdfkit');
 
 /**
  * Convert profile to JSON Resume format
@@ -367,4 +371,245 @@ export function toPDFHtml(profile: FullProfile): string {
 </body>
 </html>
   `.trim();
+}
+
+/**
+ * Generate a clean PDF resume from profile data using PDFKit
+ */
+export function generateResumePDF(profile: FullProfile): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({
+      size: 'A4',
+      margins: { top: 50, bottom: 50, left: 50, right: 50 },
+      bufferPages: true,
+    });
+
+    const chunks: Buffer[] = [];
+    doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(' ');
+    const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+
+    // Colors
+    const primaryColor = '#1a1a1a';
+    const secondaryColor = '#555555';
+    const lineColor = '#cccccc';
+
+    // ── Header ──────────────────────────────────────────────
+    doc.fontSize(24).font('Helvetica-Bold').fillColor(primaryColor).text(fullName);
+
+    if (profile.headline) {
+      doc.fontSize(11).font('Helvetica').fillColor(secondaryColor).text(profile.headline);
+    }
+
+    // Contact line
+    const contacts: string[] = [];
+    if (profile.location) contacts.push(profile.location);
+    if (profile.contactInfo?.email && profile.contactInfo.emailPublic) {
+      contacts.push(profile.contactInfo.email);
+    }
+    if (profile.contactInfo?.website) contacts.push(profile.contactInfo.website);
+    profile.links.forEach((link) => contacts.push(link.url));
+
+    if (contacts.length > 0) {
+      doc.fontSize(9).font('Helvetica').fillColor(secondaryColor).text(contacts.join('  |  '));
+    }
+
+    doc.moveDown(0.5);
+
+    // ── Helper: Section header with underline ───────────────
+    const sectionHeader = (title: string) => {
+      doc.moveDown(0.5);
+      doc
+        .fontSize(12)
+        .font('Helvetica-Bold')
+        .fillColor(primaryColor)
+        .text(title.toUpperCase(), { continued: false });
+      const y = doc.y;
+      doc
+        .moveTo(doc.page.margins.left, y)
+        .lineTo(doc.page.margins.left + pageWidth, y)
+        .strokeColor(lineColor)
+        .lineWidth(1)
+        .stroke();
+      doc.moveDown(0.3);
+    };
+
+    // ── Summary ─────────────────────────────────────────────
+    if (profile.summary) {
+      sectionHeader('Summary');
+      doc.fontSize(10).font('Helvetica').fillColor(primaryColor).text(profile.summary);
+    }
+
+    // ── Work Experience ─────────────────────────────────────
+    if (profile.workExperiences.length > 0) {
+      sectionHeader('Experience');
+      profile.workExperiences.forEach((exp, i) => {
+        if (i > 0) doc.moveDown(0.5);
+        const dateRange = exp.isCurrent
+          ? `${formatDate(exp.startDate)} – Present`
+          : `${formatDate(exp.startDate)} – ${formatDate(exp.endDate)}`;
+
+        doc.fontSize(11).font('Helvetica-Bold').fillColor(primaryColor).text(exp.role);
+        doc
+          .fontSize(10)
+          .font('Helvetica')
+          .fillColor(secondaryColor)
+          .text(`${exp.company}${exp.location ? ` | ${exp.location}` : ''}  •  ${dateRange}`);
+
+        if (exp.description) {
+          doc.moveDown(0.2);
+          doc.fontSize(10).font('Helvetica').fillColor(primaryColor).text(exp.description);
+        }
+
+        if (exp.bullets.length > 0) {
+          doc.moveDown(0.2);
+          exp.bullets.forEach((bullet) => {
+            doc
+              .fontSize(10)
+              .font('Helvetica')
+              .fillColor(primaryColor)
+              .text(`•  ${bullet}`, { indent: 10 });
+          });
+        }
+      });
+    }
+
+    // ── Education ───────────────────────────────────────────
+    if (profile.educations.length > 0) {
+      sectionHeader('Education');
+      profile.educations.forEach((edu, i) => {
+        if (i > 0) doc.moveDown(0.3);
+        const degree = [edu.degree, edu.fieldOfStudy].filter(Boolean).join(' in ');
+        doc
+          .fontSize(11)
+          .font('Helvetica-Bold')
+          .fillColor(primaryColor)
+          .text(degree || edu.institution);
+
+        if (degree) {
+          doc.fontSize(10).font('Helvetica').fillColor(secondaryColor).text(edu.institution);
+        }
+
+        if (edu.startDate || edu.endDate) {
+          const dateRange = edu.isCurrent
+            ? `${formatDate(edu.startDate)} – Present`
+            : `${formatDate(edu.startDate)} – ${formatDate(edu.endDate)}`;
+          doc.fontSize(10).font('Helvetica').fillColor(secondaryColor).text(dateRange);
+        }
+
+        if (edu.gpa) {
+          doc.fontSize(10).font('Helvetica').fillColor(primaryColor).text(`GPA: ${edu.gpa}`);
+        }
+      });
+    }
+
+    // ── Skills ──────────────────────────────────────────────
+    if (profile.skills.length > 0 || profile.skillGroups.length > 0) {
+      sectionHeader('Skills');
+      if (profile.skillGroups.length > 0) {
+        profile.skillGroups.forEach((group) => {
+          doc
+            .fontSize(10)
+            .font('Helvetica-Bold')
+            .fillColor(primaryColor)
+            .text(`${group.name}: `, { continued: true });
+          doc
+            .font('Helvetica')
+            .fillColor(secondaryColor)
+            .text(group.skills.map((s) => s.name).join(', '));
+        });
+      } else {
+        doc
+          .fontSize(10)
+          .font('Helvetica')
+          .fillColor(primaryColor)
+          .text(profile.skills.map((s) => s.name).join(', '));
+      }
+    }
+
+    // ── Projects ────────────────────────────────────────────
+    if (profile.projects.length > 0) {
+      sectionHeader('Projects');
+      profile.projects.forEach((project, i) => {
+        if (i > 0) doc.moveDown(0.3);
+
+        const projectDateParts: string[] = [];
+        if (project.startDate) {
+          projectDateParts.push(formatDate(project.startDate));
+          if (project.isCurrent) {
+            projectDateParts.push('Present');
+          } else if (project.endDate) {
+            projectDateParts.push(formatDate(project.endDate));
+          }
+        }
+
+        doc.fontSize(11).font('Helvetica-Bold').fillColor(primaryColor).text(project.title);
+
+        if (projectDateParts.length > 0) {
+          doc
+            .fontSize(10)
+            .font('Helvetica')
+            .fillColor(secondaryColor)
+            .text(projectDateParts.join(' – '));
+        }
+
+        if (project.description) {
+          doc.fontSize(10).font('Helvetica').fillColor(primaryColor).text(project.description);
+        }
+
+        if (project.techStack.length > 0) {
+          doc
+            .fontSize(10)
+            .font('Helvetica-Oblique')
+            .fillColor(secondaryColor)
+            .text(`Technologies: ${project.techStack.join(', ')}`);
+        }
+
+        if (project.highlights.length > 0) {
+          project.highlights.forEach((h) => {
+            doc
+              .fontSize(10)
+              .font('Helvetica')
+              .fillColor(primaryColor)
+              .text(`•  ${h}`, { indent: 10 });
+          });
+        }
+      });
+    }
+
+    // ── Certifications ──────────────────────────────────────
+    if (profile.certifications.length > 0) {
+      sectionHeader('Certifications');
+      profile.certifications.forEach((cert, i) => {
+        if (i > 0) doc.moveDown(0.3);
+        doc.fontSize(10).font('Helvetica-Bold').fillColor(primaryColor).text(cert.name);
+        const details: string[] = [cert.issuer];
+        if (cert.issueDate) details.push(formatDate(cert.issueDate));
+        doc.fontSize(10).font('Helvetica').fillColor(secondaryColor).text(details.join(' | '));
+      });
+    }
+
+    // ── Awards ──────────────────────────────────────────────
+    if (profile.awards.length > 0) {
+      sectionHeader('Awards');
+      profile.awards.forEach((award, i) => {
+        if (i > 0) doc.moveDown(0.3);
+        doc.fontSize(10).font('Helvetica-Bold').fillColor(primaryColor).text(award.title);
+        const details: string[] = [];
+        if (award.issuer) details.push(award.issuer);
+        if (award.date) details.push(formatDate(award.date));
+        if (details.length > 0) {
+          doc.fontSize(10).font('Helvetica').fillColor(secondaryColor).text(details.join(' | '));
+        }
+        if (award.description) {
+          doc.fontSize(10).font('Helvetica').fillColor(primaryColor).text(award.description);
+        }
+      });
+    }
+
+    doc.end();
+  });
 }

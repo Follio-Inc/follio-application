@@ -16,20 +16,10 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import {
-  ChevronLeft,
-  Download,
-  Github,
-  PanelLeft,
-  PanelLeftClose,
-  Settings,
-  Share2,
-} from 'lucide-react';
+import { ChevronLeft, Database, PanelLeft, PanelLeftClose, Settings, Share2 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-
-import { ImportDataDialog } from './components/import-data-dialog';
 
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
@@ -51,7 +41,6 @@ export function BuilderLayoutClient({ profile, children }: BuilderLayoutClientPr
   const [sections, setSections] = useState<ProfileSection[]>(profile.sections || []);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [importDialogOpen, setImportDialogOpen] = useState(false);
 
   // DnD sensors
   const sensors = useSensors(
@@ -240,42 +229,29 @@ export function BuilderLayoutClient({ profile, children }: BuilderLayoutClientPr
 
         {/* Section List with Drag & Drop */}
         <ScrollArea className="flex-1 p-2">
-          {/* Import & Sync Section */}
+          {/* Data Sources - unified import & management */}
           <nav className="space-y-1">
-            <button
-              onClick={() => setImportDialogOpen(true)}
-              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-muted"
-            >
-              <Download className="h-4 w-4 shrink-0" />
-              <div className="flex flex-col">
-                <span className="text-sm font-medium">Import & Sync</span>
-                <span className="text-xs text-muted-foreground">
-                  Pull from LinkedIn, GitHub, Resume
-                </span>
-              </div>
-            </button>
-            {/* GitHub Repositories - dedicated section for managing repos */}
             <Link
-              href="/builder/github"
+              href="/builder/data-sources"
               className={cn(
-                'flex items-center gap-3 rounded-lg px-3 py-2 transition-colors',
-                pathname === '/builder/github'
+                'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors',
+                pathname === '/builder/data-sources'
                   ? 'bg-primary text-primary-foreground'
                   : 'hover:bg-muted'
               )}
             >
-              <Github className="h-4 w-4 shrink-0" />
+              <Database className="h-4 w-4 shrink-0" />
               <div className="flex flex-col">
-                <span className="text-sm font-medium">GitHub Repos</span>
+                <span className="text-sm font-medium">Data Sources</span>
                 <span
                   className={cn(
                     'text-xs',
-                    pathname === '/builder/github'
+                    pathname === '/builder/data-sources'
                       ? 'text-primary-foreground/70'
                       : 'text-muted-foreground'
                   )}
                 >
-                  Manage repository visibility
+                  Import & manage external data
                 </span>
               </div>
             </Link>
@@ -368,17 +344,6 @@ export function BuilderLayoutClient({ profile, children }: BuilderLayoutClientPr
             </Link>
           </nav>
         </ScrollArea>
-
-        {/* Import Data Dialog */}
-        <ImportDataDialog
-          open={importDialogOpen}
-          onOpenChange={setImportDialogOpen}
-          profileId={profile.id}
-          onImportComplete={() => {
-            // Refresh the page to show updated data
-            router.refresh();
-          }}
-        />
       </aside>
 
       {/* Toggle Sidebar Button */}

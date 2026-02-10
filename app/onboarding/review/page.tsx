@@ -780,6 +780,10 @@ function ReviewPageContent() {
         // Continue with save - name sync is not critical
       }
 
+      // Retrieve the resume filename stored during import step
+      const storedParsed = sessionStorage.getItem('onboarding_parsed_resume');
+      const resumeFileName = storedParsed ? JSON.parse(storedParsed)?._resumeFileName : null;
+
       const response = await fetch('/api/onboarding/complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -787,6 +791,7 @@ function ReviewPageContent() {
           firstName,
           lastName,
           handle: storedHandle,
+          resumeFileName: resumeFileName || undefined,
           reviewedData: {
             profile: profileForApi,
             experiences: data.experiences,

@@ -1145,6 +1145,8 @@ export default function OnboardingImportPage() {
         hasLinkedIn: !!linkedinData,
         hasGitHub: !!githubData,
       },
+      // Store resume filename for import history tracking
+      _resumeFileName: resumeFileName || null,
     };
 
     sessionStorage.setItem('onboarding_parsed_resume', JSON.stringify(dataForReview));

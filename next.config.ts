@@ -29,7 +29,7 @@ const nextConfig: NextConfig = {
   },
 
   // Externalize packages that don't work with webpack bundling
-  serverExternalPackages: ['pdf-parse'],
+  serverExternalPackages: ['pdf-parse', 'pdfkit'],
 
   // Headers for security and SEO
   async headers() {

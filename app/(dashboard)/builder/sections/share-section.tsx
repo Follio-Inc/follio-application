@@ -14,9 +14,9 @@ import {
   Link2,
   Loader2,
   Lock,
+  Pencil,
   QrCode,
   RefreshCw,
-  Share2,
   Trash2,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -25,7 +25,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 
 import type { Profile } from '@/types';
 
@@ -75,6 +74,7 @@ const STATUS_OPTIONS: {
 
 export function ShareSection({ profile, onUpdateAction }: ShareSectionProps) {
   const [handle, setHandle] = useState(profile.handle);
+  const [isEditingHandle, setIsEditingHandle] = useState(false);
   const [isCheckingHandle, setIsCheckingHandle] = useState(false);
   const [handleError, setHandleError] = useState<string | null>(null);
   const [handleSuccess, setHandleSuccess] = useState(false);
@@ -182,6 +182,7 @@ export function ShareSection({ profile, onUpdateAction }: ShareSectionProps) {
 
     if (handle === profile.handle) {
       setHandleSuccess(true);
+      setIsEditingHandle(false);
       return;
     }
 
@@ -194,8 +195,21 @@ export function ShareSection({ profile, onUpdateAction }: ShareSectionProps) {
       const data = await res.json();
 
       if (data.available) {
-        setHandleSuccess(true);
-        onUpdateAction({ handle });
+        // Persist the handle change immediately via PATCH
+        const patchRes = await fetch('/api/profile', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ handle }),
+        });
+
+        if (patchRes.ok) {
+          setHandleSuccess(true);
+          onUpdateAction({ handle });
+          setIsEditingHandle(false);
+        } else {
+          const patchData = await patchRes.json();
+          setHandleError(patchData.error || 'Failed to update handle');
+        }
       } else {
         setHandleError('This handle is already taken');
       }
@@ -224,7 +238,15 @@ export function ShareSection({ profile, onUpdateAction }: ShareSectionProps) {
   const handleExportPDF = async () => {
     setIsExporting('pdf');
     try {
-      window.open(`/api/export/${profile.handle}?format=pdf`, '_blank');
+      const response = await fetch(`/api/export/${profile.handle}/pdf`);
+      if (!response.ok) throw new Error('Export failed');
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${profile.handle}-resume.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Export failed:', error);
     } finally {
@@ -235,7 +257,7 @@ export function ShareSection({ profile, onUpdateAction }: ShareSectionProps) {
   const handleExportJSON = async () => {
     setIsExporting('json');
     try {
-      const response = await fetch(`/api/export/${profile.handle}?format=json`);
+      const response = await fetch(`/api/export/${profile.handle}/json`);
       const data = await response.json();
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
@@ -260,131 +282,304 @@ export function ShareSection({ profile, onUpdateAction }: ShareSectionProps) {
 
   const qrCodeUrl = profile.status === 'PRIVATE' && tokenUrl ? tokenUrl : publicUrl;
 
+  const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(' ');
+  const topSkills =
+    'skills' in profile && Array.isArray((profile as Record<string, unknown>).skills)
+      ? (profile as Record<string, unknown[]>).skills
+          .slice(0, 4)
+          .map((s: unknown) => (s as { name: string }).name)
+      : [];
+
   return (
     <div className="space-y-6">
       {/* Quick Share Card */}
-      <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
-        <CardHeader className="pb-3">
-          <div className="flex items-center gap-2">
-            <Share2 className="h-5 w-5 text-primary" />
-            <CardTitle>Share Your Follio</CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Show different content based on status */}
-          {profile.status === 'DRAFT' ? (
-            <div className="rounded-lg border border-dashed bg-muted/50 p-4 text-center">
-              <Lock className="mx-auto h-8 w-8 text-muted-foreground" />
-              <p className="mt-2 text-sm text-muted-foreground">
-                Your profile is in draft mode. Change visibility to share it.
+      <Card className="overflow-hidden border-primary/20">
+        {/* Profile Snapshot Banner */}
+        <div className="relative bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 px-6 py-6">
+          {/* Accent top bar */}
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500" />
+          <div className="flex items-center gap-4">
+            {/* Avatar / Initial */}
+            {profile.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={profile.avatarUrl}
+                alt={fullName}
+                className="h-14 w-14 shrink-0 rounded-full border-2 border-white/20 object-cover shadow-lg"
+              />
+            ) : (
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-600 text-xl font-bold text-white shadow-lg">
+                {(profile.firstName?.[0] || '?').toUpperCase()}
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <h3 className="truncate text-lg font-bold text-white">{fullName || 'Your Name'}</h3>
+              <p className="truncate text-sm text-slate-300">
+                {profile.headline || 'Your headline'}
               </p>
+              {profile.location && (
+                <p className="mt-0.5 truncate text-xs text-slate-400">{profile.location}</p>
+              )}
             </div>
-          ) : profile.status === 'PRIVATE' ? (
-            <>
-              {/* Unlisted mode - show token-based sharing */}
-              {isLoadingToken ? (
-                <div className="flex items-center justify-center py-4">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <Badge
+              variant="secondary"
+              className="shrink-0 gap-1.5 bg-white/10 text-white hover:bg-white/20"
+            >
+              <StatusIcon className={`h-3.5 w-3.5 ${currentStatus.color}`} />
+              {currentStatus.label}
+            </Badge>
+          </div>
+          {/* Skill chips */}
+          {topSkills.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {topSkills.map((skill: string) => (
+                <span
+                  key={skill}
+                  className="rounded-full bg-white/10 px-2.5 py-0.5 text-xs font-medium text-blue-200"
+                >
+                  {skill}
+                </span>
+              ))}
+            </div>
+          )}
+          <p className="mt-3 text-xs text-slate-400">
+            This is your Follio — share it with the world.
+          </p>
+        </div>
+
+        <CardContent className="space-y-4 pt-5">
+          {/* Inline handle editing */}
+          {isEditingHandle ? (
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <div className="flex flex-1 items-center rounded-md border bg-muted/50">
+                  <span className="whitespace-nowrap px-3 text-sm text-muted-foreground">
+                    follio.dev/u/
+                  </span>
+                  <Input
+                    value={handle}
+                    onChange={(e) => {
+                      setHandle(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''));
+                      setHandleError(null);
+                      setHandleSuccess(false);
+                    }}
+                    className="border-0 bg-transparent pl-0"
+                    placeholder="your-handle"
+                    autoFocus
+                  />
                 </div>
-              ) : shareToken?.token ? (
+                <Button
+                  onClick={() => checkHandleAvailability()}
+                  disabled={isCheckingHandle || handle === profile.handle}
+                  variant="secondary"
+                  size="sm"
+                >
+                  {isCheckingHandle ? 'Checking...' : 'Save'}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setHandle(profile.handle);
+                    setHandleError(null);
+                    setHandleSuccess(false);
+                    setIsEditingHandle(false);
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+              {handleError && (
+                <p className="flex items-center gap-1 text-sm text-destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  {handleError}
+                </p>
+              )}
+              {handleSuccess && (
+                <p className="flex items-center gap-1 text-sm text-green-600">
+                  <Check className="h-4 w-4" />
+                  Handle updated!
+                </p>
+              )}
+            </div>
+          ) : (
+            <>
+              {/* Show different content based on status */}
+              {profile.status === 'DRAFT' ? (
                 <div className="space-y-3">
+                  <div className="rounded-lg border border-dashed bg-muted/50 p-4 text-center">
+                    <Lock className="mx-auto h-8 w-8 text-muted-foreground" />
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Your profile is in draft mode. Change visibility to share it.
+                    </p>
+                  </div>
                   <div className="flex items-center gap-3">
                     <div className="flex-1 rounded-lg border bg-background p-3">
                       <div className="flex items-center justify-between gap-2">
-                        <code className="truncate text-sm font-medium">{tokenUrl}</code>
+                        <code className="truncate text-sm text-muted-foreground">{publicUrl}</code>
                         <Button
                           variant="ghost"
-                          size="sm"
-                          onClick={handleCopyTokenUrl}
-                          className="h-8 shrink-0 gap-2"
+                          size="icon"
+                          onClick={() => setIsEditingHandle(true)}
+                          className="h-8 w-8 shrink-0"
+                          title="Edit URL"
                         >
-                          {copiedToken ? (
-                            <Check className="h-4 w-4" />
-                          ) : (
-                            <Copy className="h-4 w-4" />
-                          )}
-                          {copiedToken ? 'Copied!' : 'Copy'}
+                          <Pencil className="h-4 w-4" />
                         </Button>
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-4 text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Eye className="h-4 w-4" />
-                        {shareToken.viewCount} views
-                      </span>
-                      {shareToken.expiresAt && (
-                        <span>Expires: {new Date(shareToken.expiresAt).toLocaleDateString()}</span>
-                      )}
+                </div>
+              ) : profile.status === 'PRIVATE' ? (
+                <>
+                  {/* Unlisted mode - show token-based sharing */}
+                  {isLoadingToken ? (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                     </div>
-                    <div className="flex gap-2">
+                  ) : shareToken?.token ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 rounded-lg border bg-background p-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <code className="truncate text-sm font-medium">{tokenUrl}</code>
+                            <div className="flex shrink-0 gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setIsEditingHandle(true)}
+                                className="h-8 w-8"
+                                title="Edit URL"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={handleCopyTokenUrl}
+                                className="h-8 gap-2"
+                              >
+                                {copiedToken ? (
+                                  <Check className="h-4 w-4" />
+                                ) : (
+                                  <Copy className="h-4 w-4" />
+                                )}
+                                {copiedToken ? 'Copied!' : 'Copy'}
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-4 text-muted-foreground">
+                          <span className="flex items-center gap-1">
+                            <Eye className="h-4 w-4" />
+                            {shareToken.viewCount} views
+                          </span>
+                          {shareToken.expiresAt && (
+                            <span>
+                              Expires: {new Date(shareToken.expiresAt).toLocaleDateString()}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={generateShareToken}
+                            disabled={isGeneratingToken}
+                            className="h-8 gap-1"
+                          >
+                            <RefreshCw
+                              className={`h-3 w-3 ${isGeneratingToken ? 'animate-spin' : ''}`}
+                            />
+                            New Link
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={revokeShareToken}
+                            className="h-8 gap-1 text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                            Revoke
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="rounded-lg border border-dashed bg-muted/50 p-4 text-center">
+                        <Key className="mx-auto h-8 w-8 text-muted-foreground" />
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          Generate a share link to let others view your unlisted profile.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 rounded-lg border bg-background p-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <code className="truncate text-sm text-muted-foreground">
+                              {publicUrl}
+                            </code>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setIsEditingHandle(true)}
+                              className="h-8 w-8 shrink-0"
+                              title="Edit URL"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
                       <Button
-                        variant="ghost"
-                        size="sm"
                         onClick={generateShareToken}
                         disabled={isGeneratingToken}
-                        className="h-8 gap-1"
+                        className="w-full gap-2"
                       >
-                        <RefreshCw
-                          className={`h-3 w-3 ${isGeneratingToken ? 'animate-spin' : ''}`}
-                        />
-                        New Link
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={revokeShareToken}
-                        className="h-8 gap-1 text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                        Revoke
+                        {isGeneratingToken ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Key className="h-4 w-4" />
+                        )}
+                        Generate Share Link
                       </Button>
                     </div>
-                  </div>
-                </div>
+                  )}
+                </>
               ) : (
-                <div className="space-y-3">
-                  <div className="rounded-lg border border-dashed bg-muted/50 p-4 text-center">
-                    <Key className="mx-auto h-8 w-8 text-muted-foreground" />
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      Generate a share link to let others view your unlisted profile.
-                    </p>
+                <>
+                  {/* Public mode - regular sharing */}
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 rounded-lg border bg-background p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <code className="text-sm font-medium">{publicUrl}</code>
+                        <div className="flex shrink-0 gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setIsEditingHandle(true)}
+                            className="h-8 w-8"
+                            title="Edit URL"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleCopy}
+                            className="h-8 gap-2"
+                          >
+                            {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                            {copied ? 'Copied!' : 'Copy'}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <Button
-                    onClick={generateShareToken}
-                    disabled={isGeneratingToken}
-                    className="w-full gap-2"
-                  >
-                    {isGeneratingToken ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Key className="h-4 w-4" />
-                    )}
-                    Generate Share Link
-                  </Button>
-                </div>
+                </>
               )}
-            </>
-          ) : (
-            <>
-              {/* Public mode - regular sharing */}
-              <div className="flex items-center gap-3">
-                <div className="flex-1 rounded-lg border bg-background p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <code className="text-sm font-medium">{publicUrl}</code>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleCopy}
-                      className="h-8 shrink-0 gap-2"
-                    >
-                      {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                      {copied ? 'Copied!' : 'Copy'}
-                    </Button>
-                  </div>
-                </div>
-              </div>
             </>
           )}
 
@@ -446,53 +641,6 @@ export function ShareSection({ profile, onUpdateAction }: ShareSectionProps) {
                 </button>
               );
             })}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Custom URL */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Custom URL</CardTitle>
-          <CardDescription>Choose your unique profile handle</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>Your Handle</Label>
-            <div className="flex gap-2">
-              <div className="flex flex-1 items-center rounded-md border bg-muted/50">
-                <span className="px-3 text-muted-foreground">follio.dev/u/</span>
-                <Input
-                  value={handle}
-                  onChange={(e) => {
-                    setHandle(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''));
-                    setHandleError(null);
-                    setHandleSuccess(false);
-                  }}
-                  className="border-0 bg-transparent pl-0"
-                  placeholder="your-handle"
-                />
-              </div>
-              <Button
-                onClick={checkHandleAvailability}
-                disabled={isCheckingHandle || handle === profile.handle}
-                variant="secondary"
-              >
-                {isCheckingHandle ? 'Checking...' : 'Update'}
-              </Button>
-            </div>
-            {handleError && (
-              <p className="flex items-center gap-1 text-sm text-destructive">
-                <AlertTriangle className="h-4 w-4" />
-                {handleError}
-              </p>
-            )}
-            {handleSuccess && (
-              <p className="flex items-center gap-1 text-sm text-green-600">
-                <Check className="h-4 w-4" />
-                {handle === profile.handle ? 'This is your current handle' : 'Handle updated!'}
-              </p>
-            )}
           </div>
         </CardContent>
       </Card>
@@ -596,42 +744,6 @@ export function ShareSection({ profile, onUpdateAction }: ShareSectionProps) {
               </div>
             </Button>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Social Preview */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Social Preview</CardTitle>
-          <CardDescription>How your profile appears when shared on social media</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-hidden rounded-lg border bg-card">
-            {/* Mock social card preview */}
-            <div className="aspect-[1.91/1] bg-gradient-to-br from-primary/20 to-primary/5 p-6">
-              <div className="flex h-full flex-col justify-end">
-                <div className="text-lg font-bold">
-                  {profile.firstName} {profile.lastName}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  {profile.headline || 'Professional Portfolio'}
-                </div>
-              </div>
-            </div>
-            <div className="border-t p-3">
-              <div className="text-xs text-muted-foreground">follio.dev</div>
-              <div className="truncate text-sm font-medium">
-                {profile.firstName} {profile.lastName} | Follio
-              </div>
-              <div className="truncate text-xs text-muted-foreground">
-                {profile.summary?.slice(0, 100) || 'View my professional portfolio and resume'}
-                {profile.summary && profile.summary.length > 100 ? '...' : ''}
-              </div>
-            </div>
-          </div>
-          <p className="mt-3 text-xs text-muted-foreground">
-            This is a preview. Actual appearance may vary by platform.
-          </p>
         </CardContent>
       </Card>
     </div>

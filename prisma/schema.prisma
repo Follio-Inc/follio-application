@@ -9,16 +9,17 @@ datasource db {
 }
 
 model User {
-  id          String       @id @default(cuid())
-  clerkId     String       @unique
-  email       String       @unique
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  mainPurpose MainPurpose?
-  importJobs  ImportJob[]
-  importLogs  ImportLog[]
-  profile     Profile?
-  shareTokens ShareToken[]
+  id             String          @id @default(cuid())
+  clerkId        String          @unique
+  email          String          @unique
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  mainPurpose    MainPurpose?
+  importJobs     ImportJob[]
+  importLogs     ImportLog[]
+  importSessions ImportSession[]
+  profile        Profile?
+  shareTokens    ShareToken[]
 
   @@index([clerkId])
   @@index([email])
@@ -361,6 +362,41 @@ model ImportJob {
   @@index([source])
 }
 
+/// Persists a resume import session so users can review proposed changes
+/// at their own pace. Nothing mutates Builder data until the user explicitly
+/// clicks "Apply selected changes".
+model ImportSession {
+  id            String              @id @default(cuid())
+  userId        String
+  source        DataSource
+  status        ImportSessionStatus @default(PENDING_REVIEW)
+  /// The full parsed + normalized data from the resume/source
+  parsedData    Json
+  /// The diff/preview computed against the current profile
+  previewData   Json?
+  /// Which items the user toggled on/off (persisted across visits)
+  selections    Json?
+  /// Any inline edits the user made before applying
+  edits         Json?
+  /// Human-readable filename or source label
+  sourceLabel   String?
+  /// Number of proposed items across all sections
+  proposedCount Int                 @default(0)
+  /// Number of items the user actually applied (filled after apply)
+  appliedCount  Int?
+  /// ISO timestamp when user applied (null until applied)
+  appliedAt     DateTime?
+  /// Expiry: auto-discard stale sessions after 30 days
+  expiresAt     DateTime
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([expiresAt])
+}
+
 model DataSourceConnection {
   id             String           @id @default(cuid())
   profileId      String
@@ -512,6 +548,13 @@ enum ImportStatus {
   PROCESSING
   COMPLETED
   FAILED
+}
+
+enum ImportSessionStatus {
+  PENDING_REVIEW
+  APPLIED
+  DISCARDED
+  EXPIRED
 }
 
 enum ConnectionStatus {

@@ -23,9 +23,8 @@ export function ImportDataDialog({ open, onOpenChange }: ImportDataDialogProps) 
   const router = useRouter();
 
   const handleGoToImport = () => {
-    // Store return URL so onboarding can redirect back after completion
-    sessionStorage.setItem('importReturnUrl', '/builder');
-    router.push('/onboarding/import');
+    onOpenChange(false);
+    router.push('/builder/data-sources');
   };
 
   return (
@@ -34,18 +33,18 @@ export function ImportDataDialog({ open, onOpenChange }: ImportDataDialogProps) 
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <RefreshCw className="h-5 w-5" />
-            Import & Sync
+            Data Sources
           </DialogTitle>
           <DialogDescription>
-            Import data from your resume, GitHub, LinkedIn, or other sources. You&apos;ll be able to
-            review and edit before saving.
+            Import and manage data from your resume, GitHub, LinkedIn, and other sources. New items
+            are merged into your profile — your manual edits are never overwritten.
           </DialogDescription>
         </DialogHeader>
 
         <div className="py-4">
           <p className="text-sm text-muted-foreground">
-            You&apos;ll be redirected to the import page where you can connect accounts and upload
-            your resume. After reviewing, your profile will be updated.
+            You&apos;ll see all your connected sources and can re-import or add new data. Duplicates
+            are automatically detected and skipped.
           </p>
         </div>
 
@@ -53,7 +52,7 @@ export function ImportDataDialog({ open, onOpenChange }: ImportDataDialogProps) 
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={handleGoToImport}>Go to Import</Button>
+          <Button onClick={handleGoToImport}>Open Data Sources</Button>
         </div>
       </DialogContent>
     </Dialog>

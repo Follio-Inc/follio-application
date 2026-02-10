@@ -1,20 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { generateResumePDF } from '@/services/export.service';
 import { getProfileByHandle } from '@/services/profile.service';
-import { toPDFHtml } from '@/services/export.service';
 
 /**
  * GET /api/export/[handle]/pdf
- * Export profile as PDF
- *
- * TODO: Implement proper PDF generation using Puppeteer/Playwright
- * For serverless (Vercel), consider:
- * - Using @vercel/functions with extended timeout
- * - External PDF generation service (e.g., Browserless, ApiFlash)
- * - Pre-generating PDFs and storing in blob storage
- *
- * Current implementation returns print-friendly HTML that can be
- * printed to PDF using browser's print function.
+ * Export profile as a downloadable PDF resume
  */
 export async function GET(
   request: NextRequest,
@@ -32,15 +23,14 @@ export async function GET(
       return NextResponse.json({ error: 'Profile is not public' }, { status: 403 });
     }
 
-    const html = toPDFHtml(profile);
+    const pdfBuffer = await generateResumePDF(profile);
+    const uint8 = new Uint8Array(pdfBuffer);
 
-    // Return HTML with instructions to print to PDF
-    // In production, this would be converted to PDF using Puppeteer
-    return new NextResponse(html, {
+    return new NextResponse(uint8, {
       headers: {
-        'Content-Type': 'text/html; charset=utf-8',
-        // TODO: Change to application/pdf when PDF generation is implemented
-        // 'Content-Disposition': `attachment; filename="${handle}-resume.pdf"`,
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="${handle}-resume.pdf"`,
+        'Content-Length': String(pdfBuffer.length),
       },
     });
   } catch (error) {

@@ -211,10 +211,29 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
+    // If handle is being updated, check availability first
+    if (body.handle && body.handle !== user.profile.handle) {
+      const handleTaken = await db.profile.findFirst({
+        where: {
+          handle: body.handle,
+          id: { not: user.profile.id },
+        },
+        select: { id: true },
+      });
+
+      if (handleTaken) {
+        return NextResponse.json(
+          { error: 'Handle is already taken', message: 'Please choose a different handle' },
+          { status: 409 }
+        );
+      }
+    }
+
     // Update profile
     const profile = await db.profile.update({
       where: { id: user.profile.id },
       data: {
+        ...(body.handle && { handle: body.handle }),
         firstName: body.firstName,
         lastName: body.lastName,
         headline: body.headline,

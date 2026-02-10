@@ -238,6 +238,7 @@ export async function POST(request: NextRequest) {
       lastName: providedLastName,
       handle: providedHandle,
       manualLinks,
+      resumeFileName,
     } = body as {
       importedData?: Record<string, NormalizedImportResult | undefined>;
       reviewedData?: ReviewedData;
@@ -245,6 +246,7 @@ export async function POST(request: NextRequest) {
       lastName?: string;
       handle?: string;
       manualLinks?: ManualLinkInput[];
+      resumeFileName?: string;
     };
 
     console.log('[Onboarding Complete] Has reviewedData:', !!reviewedData);
@@ -313,13 +315,43 @@ export async function POST(request: NextRequest) {
 
     // If we have reviewedData from the review flow, use it directly
     if (reviewedData) {
-      return await handleReviewedData(
+      const result = await handleReviewedData(
         user,
         reviewedData,
         providedHandle,
         providedFirstName,
         providedLastName
       );
+
+      // Create ImportLog so this import appears in the builder's Import History timeline
+      const itemsCount =
+        (reviewedData.experiences?.length || 0) +
+        (reviewedData.educations?.length || 0) +
+        (reviewedData.skills?.length || 0) +
+        (reviewedData.links?.length || 0) +
+        (reviewedData.projects?.length || 0);
+
+      if (itemsCount > 0) {
+        await db.importLog
+          .create({
+            data: {
+              userId: user.id,
+              source: 'RESUME',
+              status: 'COMPLETED',
+              itemsFound: itemsCount,
+              itemsMerged: itemsCount,
+              metadata: {
+                origin: 'onboarding',
+                fileName: resumeFileName || null,
+              },
+            },
+          })
+          .catch((err: unknown) => {
+            console.error('[Onboarding Complete] Failed to create ImportLog:', err);
+          });
+      }
+
+      return result;
     }
 
     // Otherwise, merge imported data from the old flow

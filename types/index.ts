@@ -12,6 +12,7 @@ import type {
   DataSourceConnection,
   Education,
   ImportJob,
+  ImportSessionStatus,
   Link,
   Profile,
   ProfileSection,
@@ -193,6 +194,58 @@ export interface MergeConflict {
 }
 
 // ===========================================
+// IMPORT SESSION TYPES
+// ===========================================
+
+/**
+ * Import session — persists proposed changes from a re-import
+ * so users can review at their own pace.
+ *
+ * Philosophy: "Imports are helpers, not authorities. The Builder is sovereign."
+ */
+export interface ImportSessionData {
+  id: string;
+  source: DataSource;
+  status: ImportSessionStatus;
+  sourceLabel: string | null;
+  proposedCount: number;
+  parsedData: Record<string, unknown>;
+  previewData: Record<string, unknown> | null;
+  selections: ImportSelectionState | null;
+  edits: ImportEditsState | null;
+  appliedCount: number | null;
+  appliedAt: string | null;
+  createdAt: string;
+  expiresAt: string;
+}
+
+/**
+ * Tracks which proposed items the user has toggled on/off
+ */
+export interface ImportSelectionState {
+  profileFields: Record<string, boolean>;
+  experiences: Record<number, boolean>;
+  educations: Record<number, boolean>;
+  skills: Record<number, boolean>;
+  projects: Record<number, boolean>;
+  links: Record<number, boolean>;
+}
+
+/**
+ * Tracks inline edits the user made before applying
+ */
+export interface ImportEditsState {
+  experiences: Record<number, Record<string, unknown>>;
+  educations: Record<number, Record<string, unknown>>;
+  projects: Record<number, Record<string, unknown>>;
+}
+
+/**
+ * Proposed change item with action classification
+ */
+export type ImportAction = 'add' | 'update' | 'skip' | 'fill';
+
+// ===========================================
 // EXPORT TYPES
 // ===========================================
 
@@ -312,6 +365,7 @@ export type {
   DataSourceConnection,
   Education,
   ImportJob,
+  ImportSessionStatus,
   Link,
   Profile,
   ProfileSection,

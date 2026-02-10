@@ -4,6 +4,15 @@
 
 This document describes the canonical data model, import service interfaces, and merge rules used by Follio to handle data from multiple sources (resume uploads, GitHub, LinkedIn, etc.).
 
+## Core Philosophy
+
+> **Imports are helpers, not authorities. The Builder is sovereign.**
+
+- Once onboarding is over, the Builder is the single source of truth
+- Re-importing a resume = bringing in new material, not overwriting work
+- Nothing destructive happens silently; the user is always in control
+- Users can preview before committing any changes
+
 ## Canonical Data Model
 
 Follio uses a **canonical data model** where all imported content is normalized into a consistent schema. The UI reads from this canonical schema, not from raw import sources.
@@ -196,6 +205,85 @@ These fields are never auto-overwritten:
 | Education        | `institution` + `degree`  |
 | Projects         | `repoUrl` OR `title`      |
 | Links            | `url` (case-insensitive)  |
+
+## Import Sessions (Re-Import Flow)
+
+When a user re-imports a resume (or any source) after onboarding, the system creates an **Import Session** — a persistent record of proposed changes that the user reviews at their own pace.
+
+### Design Principles
+
+1. **Re-import = "Suggested updates"**, not replacement
+2. **Nothing changes** until the user clicks "Apply selected changes"
+3. **Smart defaults**: new items are pre-selected ON; changes to existing data are OFF by default
+4. **Session persistence**: user can close the dialog and return later; selections are auto-saved
+5. **No scary words**: avoid "sync", "replace", "overwrite" — use "suggested updates", "bring in", "review"
+
+### Import Session Model
+
+```prisma
+model ImportSession {
+  id            String              @id @default(cuid())
+  userId        String
+  source        DataSource
+  status        ImportSessionStatus @default(PENDING_REVIEW)
+  parsedData    Json // Full parsed + normalized data
+  previewData   Json? // Diff computed against current profile
+  selections    Json? // User's toggle state (auto-saved)
+  edits         Json? // User's inline edits (auto-saved)
+  sourceLabel   String? // e.g., "resume-2025.pdf"
+  proposedCount Int // Total proposed items
+  appliedCount  Int? // Items actually applied
+  appliedAt     DateTime?
+  expiresAt     DateTime // Auto-expire after 30 days
+}
+
+enum ImportSessionStatus {
+  PENDING_REVIEW // User has not yet reviewed
+  APPLIED // User applied selected changes
+  DISCARDED // User explicitly discarded
+  EXPIRED // Session expired (30 days)
+}
+```
+
+### Flow
+
+```
+Upload/OAuth → Parse → Normalize → sync-preview (dry run) → Create ImportSession
+     ↓
+User sees "Suggested Updates" dialog:
+  - Safety banner: "Your profile is safe. Nothing changes until you review and confirm."
+  - New items: pre-selected ✅
+  - Changed items: side-by-side comparison, OFF by default ❌
+  - Duplicates: shown as "already exists", non-selectable
+  - User can edit items inline before applying
+     ↓
+User clicks "Apply X selected changes" → sync-apply → Mark session APPLIED
+     or
+User clicks "Review Later" → Session stays PENDING_REVIEW (auto-saved)
+     or
+User clicks "Discard" → Session marked DISCARDED
+```
+
+### API Routes
+
+| Route                                | Method | Description                     |
+| ------------------------------------ | ------ | ------------------------------- |
+| `/api/import/sessions`               | POST   | Create a new import session     |
+| `/api/import/sessions?source=RESUME` | GET    | Get active session for a source |
+| `/api/import/sessions/[id]`          | GET    | Get session by ID               |
+| `/api/import/sessions/[id]`          | PATCH  | Auto-save selections & edits    |
+| `/api/import/sessions/[id]`          | POST   | Apply or discard session        |
+| `/api/import/sessions/[id]`          | DELETE | Discard session                 |
+
+### Smart Defaults
+
+| Item Type        | Default Selection | Rationale                                   |
+| ---------------- | ----------------- | ------------------------------------------- |
+| New fields       | ✅ ON             | Additive — fills empty gaps                 |
+| Changed fields   | ❌ OFF            | User must opt-in to overwrite existing data |
+| New list items   | ✅ ON             | Adding new experiences, skills, etc.        |
+| Duplicate items  | Non-selectable    | Already exist — shown for transparency      |
+| Protected fields | Non-selectable    | handle, userId, id — never touched          |
 
 ## Async Processing
 

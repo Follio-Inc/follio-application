@@ -12,6 +12,7 @@ import {
   Sun,
   Trash2,
 } from 'lucide-react';
+import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
 
 import {
@@ -90,7 +91,8 @@ const THEME_OPTIONS: {
 
 export function SettingsSection({ profile }: SettingsSectionProps) {
   const { signOut } = useClerk();
-  const [theme, setTheme] = useState<ThemeMode>('system');
+  const { theme: currentTheme, setTheme: setNextTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [profileViewAlerts, setProfileViewAlerts] = useState(false);
 
@@ -101,29 +103,16 @@ export function SettingsSection({ profile }: SettingsSectionProps) {
   const [accountData, setAccountData] = useState<AccountDataSummary | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  // Load theme preference from localStorage on mount
+  // Avoid hydration mismatch for theme UI
   useEffect(() => {
-    const savedTheme = localStorage.getItem('theme') as ThemeMode | null;
-    if (savedTheme && ['light', 'dark', 'system'].includes(savedTheme)) {
-      setTheme(savedTheme);
-    }
+    setMounted(true);
   }, []);
 
-  // Apply theme change
+  const theme = (mounted ? currentTheme : 'system') as ThemeMode;
+
+  // Apply theme change via next-themes
   const handleThemeChange = (newTheme: ThemeMode) => {
-    setTheme(newTheme);
-    localStorage.setItem('theme', newTheme);
-
-    // Apply theme to document
-    const root = document.documentElement;
-    root.classList.remove('light', 'dark');
-
-    if (newTheme === 'system') {
-      const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      root.classList.add(systemPrefersDark ? 'dark' : 'light');
-    } else {
-      root.classList.add(newTheme);
-    }
+    setNextTheme(newTheme);
   };
 
   // Fetch account data when delete dialog opens
@@ -302,7 +291,7 @@ export function SettingsSection({ profile }: SettingsSectionProps) {
             </p>
             <div className="mt-3 flex gap-2">
               <Button variant="outline" size="sm" asChild>
-                <a href={`/api/export/${profile.handle}?format=json`} download>
+                <a href={`/api/export/${profile.handle}/json`} download>
                   Export Data
                 </a>
               </Button>

@@ -9,7 +9,6 @@ import { Spinner } from '@/components/ui/spinner';
 import { BasicInfoForm, ContactInfoForm } from '../sections/basic-info-form';
 import { EducationSection } from '../sections/education-section';
 import { ExperienceSection } from '../sections/experience-section';
-import { GitHubProjectsSection } from '../sections/github-projects-section';
 import { LinksSection } from '../sections/links-section';
 import { ProjectsSection } from '../sections/projects-section';
 import { SettingsSection } from '../sections/settings-section';
@@ -200,15 +199,6 @@ export function SectionEditor({ profile, sectionType, section }: SectionEditorPr
             projects={currentProfile.projects}
             profileId={currentProfile.id}
             onUpdate={(projects) => handleProfileUpdate({ projects })}
-          />
-        );
-
-      case 'GITHUB':
-        return (
-          <GitHubProjectsSection
-            projects={currentProfile.projects}
-            profileId={currentProfile.id}
-            onUpdateAction={(projects) => handleProfileUpdate({ projects })}
           />
         );
 
