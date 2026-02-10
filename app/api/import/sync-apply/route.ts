@@ -1,7 +1,7 @@
 import { db } from '@/lib/db';
 import { parseDateFlexible } from '@/lib/utils';
 import { auth } from '@clerk/nextjs/server';
-import type { DataSource } from '@prisma/client';
+import type { DataSource, LinkType } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
 
 /**
@@ -276,7 +276,7 @@ export async function POST(request: NextRequest) {
               company: exp.company,
               role: exp.role,
               location: exp.location || null,
-              startDate: safeParseDate(exp.startDate),
+              startDate: safeParseDate(exp.startDate) || new Date(),
               endDate: exp.isCurrent ? null : safeParseDate(exp.endDate),
               isCurrent: exp.isCurrent || false,
               description: exp.description || null,
@@ -504,7 +504,7 @@ export async function POST(request: NextRequest) {
           await db.link.create({
             data: {
               profileId: existingProfile.id,
-              type: validLinkTypes.includes(linkType) ? linkType : 'OTHER',
+              type: (validLinkTypes.includes(linkType) ? linkType : 'OTHER') as LinkType,
               url: link.url,
               label: link.label || null,
               source,
