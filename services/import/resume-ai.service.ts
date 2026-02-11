@@ -62,7 +62,6 @@ interface WorkExperienceAI {
   startDate?: string;
   endDate?: string;
   isCurrent?: boolean;
-  description?: string;
   bullets?: string[];
 }
 
@@ -117,7 +116,6 @@ export interface NormalizedResumeData {
     startDate?: string;
     endDate?: string;
     isCurrent?: boolean;
-    description?: string;
     bullets?: string[];
   }>;
   educations: Array<{
@@ -231,8 +229,7 @@ Return this EXACT JSON structure:
       "startDate": "string",
       "endDate": "string or 'Present'",
       "isCurrent": boolean,
-      "description": "string (brief role description if not in bullets)",
-      "bullets": ["string (each achievement/responsibility as separate item)"]
+      "bullets": ["string (each responsibility, achievement, or role detail as a separate item)"]
     }
   ],
   "educations": [
@@ -392,8 +389,10 @@ function validateAndCleanResponse(parsed: unknown): ParsedResumeAI {
       endDate: getString(exp, 'endDate'),
       isCurrent:
         getBoolean(exp, 'isCurrent') || getString(exp, 'endDate')?.toLowerCase() === 'present',
-      description: getString(exp, 'description'),
-      bullets: getStringArray(exp, 'bullets'),
+      bullets: [
+        ...(getString(exp, 'description') ? [getString(exp, 'description')!] : []),
+        ...getStringArray(exp, 'bullets'),
+      ].filter((b) => b.length > 0),
     })),
     educations: getArray(data.educations).map((edu) => ({
       institution: getString(edu, 'institution') || 'Unknown Institution',
@@ -553,7 +552,6 @@ function normalizeAIData(parsed: ParsedResumeAI, processingTimeMs: number): Norm
       startDate: sanitize(exp.startDate),
       endDate: sanitize(exp.endDate),
       isCurrent: exp.isCurrent,
-      description: sanitize(exp.description),
       bullets: exp.bullets?.map((b) => sanitize(b)).filter((b): b is string => !!b),
     });
   }
@@ -914,7 +912,6 @@ export async function saveAIResumeToProfile(
               startDate: parseDateSafe(exp.startDate) || existingExp.startDate,
               endDate: parseDateSafe(exp.endDate) || existingExp.endDate,
               isCurrent: exp.isCurrent ?? existingExp.isCurrent,
-              description: exp.description || exp.bullets?.join('\n') || existingExp.description,
               bullets: exp.bullets?.length ? exp.bullets : existingExp.bullets,
             },
           });
@@ -931,7 +928,6 @@ export async function saveAIResumeToProfile(
             startDate: parseDateSafe(exp.startDate) || new Date(),
             endDate: parseDateSafe(exp.endDate),
             isCurrent: exp.isCurrent || false,
-            description: exp.description || exp.bullets?.join('\n'),
             bullets: exp.bullets || [],
             source: DataSource.RESUME,
           },

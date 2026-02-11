@@ -138,7 +138,6 @@ interface ReviewedData {
     startDate?: string;
     endDate?: string;
     isCurrent?: boolean;
-    description?: string;
     bullets?: string[];
   }>;
   educations: Array<{
@@ -548,7 +547,6 @@ export async function POST(request: NextRequest) {
             startDate: exp.startDate ? new Date(exp.startDate) : new Date(),
             endDate: exp.endDate ? new Date(exp.endDate) : null,
             isCurrent: exp.isCurrent || false,
-            description: exp.description,
             bullets: exp.bullets || [],
             tags: exp.tags || [],
             source: toDataSource(exp.source),
@@ -951,7 +949,6 @@ async function handleReviewedData(
           startDate: startDate || new Date(), // Default to now if invalid
           endDate: endDate,
           isCurrent: exp.isCurrent || !endDate,
-          description: exp.description,
           bullets: exp.bullets || [],
           tags: [],
           source: 'RESUME' as const,
@@ -1184,7 +1181,6 @@ function mergeImportedData(importedData: Record<string, unknown>) {
       startDate?: string;
       endDate?: string;
       isCurrent?: boolean;
-      description?: string;
       bullets?: string[];
       tags?: string[];
       source: string;
@@ -1294,7 +1290,6 @@ function mergeImportedData(importedData: Record<string, unknown>) {
             startDate: exp.startDate as string | undefined,
             endDate: exp.endDate as string | undefined,
             isCurrent: exp.isCurrent as boolean | undefined,
-            description: exp.description as string | undefined,
             bullets: exp.bullets as string[] | undefined,
             source: 'RESUME',
           }))

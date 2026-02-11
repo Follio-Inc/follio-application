@@ -43,7 +43,6 @@ const emptyExperience: Partial<WorkExperience> = {
   startDate: new Date(),
   endDate: null,
   isCurrent: false,
-  description: '',
   bullets: [],
   tags: [],
 };
@@ -52,7 +51,6 @@ export function ExperienceSection({ experiences, onUpdate }: ExperienceSectionPr
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingExperience, setEditingExperience] = useState<WorkExperience | null>(null);
   const [formData, setFormData] = useState<Partial<WorkExperience>>(emptyExperience);
-  const [bulletInput, setBulletInput] = useState('');
   const [tagInput, setTagInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -83,7 +81,6 @@ export function ExperienceSection({ experiences, onUpdate }: ExperienceSectionPr
         startDate: formData.startDate,
         endDate: formData.isCurrent ? null : formData.endDate,
         isCurrent: formData.isCurrent || false,
-        description: formData.description || undefined,
         bullets: formData.bullets || [],
         tags: formData.tags || [],
       };
@@ -153,23 +150,6 @@ export function ExperienceSection({ experiences, onUpdate }: ExperienceSectionPr
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const addBullet = () => {
-    if (bulletInput.trim()) {
-      setFormData((prev) => ({
-        ...prev,
-        bullets: [...(prev.bullets || []), bulletInput.trim()],
-      }));
-      setBulletInput('');
-    }
-  };
-
-  const removeBullet = (index: number) => {
-    setFormData((prev) => ({
-      ...prev,
-      bullets: (prev.bullets || []).filter((_, i) => i !== index),
-    }));
   };
 
   const addTag = () => {
@@ -333,46 +313,21 @@ export function ExperienceSection({ experiences, onUpdate }: ExperienceSectionPr
               </div>
 
               <div className="space-y-2">
-                <Label>Description</Label>
+                <Label>Highlights</Label>
                 <Textarea
-                  value={formData.description || ''}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, description: e.target.value }))
-                  }
-                  placeholder="Brief overview of your role..."
-                  rows={3}
+                  value={(formData.bullets || []).join('\n')}
+                  onChange={(e) => {
+                    const lines = e.target.value.split('\n');
+                    // Keep empty lines while typing, but store only non-empty ones
+                    setFormData((prev) => ({
+                      ...prev,
+                      bullets: lines.filter((l) => l.trim().length > 0),
+                    }));
+                  }}
+                  placeholder="One highlight per line, e.g.:\nLed migration from REST to GraphQL\nReduced bundle size by 45%"
+                  rows={5}
                 />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Key Achievements (Bullets)</Label>
-                <div className="flex gap-2">
-                  <Input
-                    value={bulletInput}
-                    onChange={(e) => setBulletInput(e.target.value)}
-                    placeholder="Add an achievement..."
-                    onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addBullet())}
-                  />
-                  <Button type="button" onClick={addBullet} variant="secondary">
-                    Add
-                  </Button>
-                </div>
-                <ul className="mt-2 space-y-2">
-                  {(formData.bullets || []).map((bullet, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm">
-                      <span className="flex-1 rounded bg-muted p-2">• {bullet}</span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeBullet(i)}
-                        className="h-8 w-8"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
+                <p className="text-xs text-muted-foreground">One highlight per line</p>
               </div>
 
               <div className="space-y-2">

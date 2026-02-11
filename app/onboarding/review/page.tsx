@@ -160,7 +160,6 @@ interface ParsedExperience {
   startDate?: string;
   endDate?: string;
   isCurrent?: boolean;
-  description?: string;
   bullets?: string[];
 }
 
@@ -541,8 +540,7 @@ function ReviewPageContent() {
               startDate: toMonthInputFormat(exp.startDate as string),
               endDate: toMonthInputFormat(exp.endDate as string),
               isCurrent: exp.isCurrent,
-              description: exp.description,
-              bullets: exp.bullets,
+              bullets: exp.bullets as string[] | undefined,
             })),
             educations: (parsed.educations || []).map((edu: Record<string, unknown>) => ({
               id: generateId(),
@@ -2470,27 +2468,21 @@ function ExperienceCard({
             </label>
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium">Description / Achievements</label>
+            <label className="mb-1.5 block text-sm font-medium">Highlights</label>
             <Textarea
               placeholder="Describe your responsibilities and achievements (one per line for bullet points)..."
               value={
-                experience.description ||
-                (experience.bullets && experience.bullets.length > 0
+                experience.bullets && experience.bullets.length > 0
                   ? experience.bullets.join('\n')
-                  : '')
+                  : ''
               }
               onChange={(e) => {
                 const text = e.target.value;
-                // If text has newlines, treat as bullets
-                if (text.includes('\n')) {
-                  const bullets = text
-                    .split('\n')
-                    .map((b) => b.trim())
-                    .filter((b) => b.length > 0);
-                  onUpdate({ description: undefined, bullets });
-                } else {
-                  onUpdate({ description: text, bullets: undefined });
-                }
+                const bullets = text
+                  .split('\n')
+                  .map((b) => b.trim())
+                  .filter((b) => b.length > 0);
+                onUpdate({ bullets });
               }}
               rows={4}
             />
@@ -2527,9 +2519,6 @@ function ExperienceCard({
               <p className="text-xs text-muted-foreground">
                 {experience.startDate || '?'} — {experience.endDate || 'Present'}
               </p>
-            )}
-            {experience.description && (
-              <p className="mt-2 text-sm text-muted-foreground">{experience.description}</p>
             )}
             {experience.bullets && experience.bullets.length > 0 && (
               <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground">

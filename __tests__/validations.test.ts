@@ -4,34 +4,34 @@
  * Tests for Zod validation schemas in lib/validations.ts
  */
 
-import { describe, expect, it } from 'vitest';
 import {
-  ProfileStatusSchema,
-  DataSourceSchema,
-  LinkTypeSchema,
-  SkillLevelSchema,
-  LocationTypeSchema,
-  EmploymentTypeSchema,
-  HandleSchema,
-  ProfileBasicInfoSchema,
-  CreateProfileSchema,
-  UpdateProfileSchema,
-  ContactInfoSchema,
-  LinkSchema,
-  LinksArraySchema,
-  WorkExperienceSchema,
-  EducationSchema,
-  SkillSchema,
-  SkillGroupSchema,
-  ProjectSchema,
+  ApiErrorSchema,
   AwardSchema,
   CertificationSchema,
-  ApiErrorSchema,
-  PaginationSchema,
-  ResumeUploadSchema,
+  ContactInfoSchema,
+  CreateProfileSchema,
+  DataSourceSchema,
+  EducationSchema,
+  EmploymentTypeSchema,
   GitHubImportSchema,
+  HandleSchema,
+  LinkSchema,
+  LinkTypeSchema,
   LinkedInImportSchema,
+  LinksArraySchema,
+  LocationTypeSchema,
+  PaginationSchema,
+  ProfileBasicInfoSchema,
+  ProfileStatusSchema,
+  ProjectSchema,
+  ResumeUploadSchema,
+  SkillGroupSchema,
+  SkillLevelSchema,
+  SkillSchema,
+  UpdateProfileSchema,
+  WorkExperienceSchema,
 } from '@/lib/validations';
+import { describe, expect, it } from 'vitest';
 
 describe('Validation Schemas', () => {
   describe('Enum Schemas', () => {
@@ -252,8 +252,7 @@ describe('Validation Schemas', () => {
         startDate: '2020-01-01',
         endDate: '2024-01-01',
         isCurrent: false,
-        description: 'Developed web applications',
-        bullets: ['Built APIs', 'Led team'],
+        bullets: ['Developed web applications', 'Built APIs', 'Led team'],
         tags: ['JavaScript', 'React'],
       };
       expect(() => WorkExperienceSchema.parse(data)).not.toThrow();

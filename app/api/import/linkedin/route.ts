@@ -262,7 +262,7 @@ async function parseLinkedInPDF(buffer: Buffer): Promise<ParsedLinkedInData> {
     experiences: (parsedResume.workExperiences || []).map((exp) => ({
       company: exp.company,
       role: exp.title,
-      description: exp.description || exp.bullets?.join('\n'),
+      bullets: exp.bullets || [],
       location: exp.location,
       startDate: exp.startDate,
       endDate: exp.endDate,

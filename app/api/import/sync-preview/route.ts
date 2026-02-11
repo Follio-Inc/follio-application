@@ -37,7 +37,6 @@ interface SyncExperience {
   startDate?: string;
   endDate?: string;
   isCurrent?: boolean;
-  description?: string;
   bullets?: string[];
 }
 
@@ -305,8 +304,10 @@ export async function POST(request: NextRequest) {
           if (exp.startDate && match.startDate && norm(exp.startDate) !== normDate(match.startDate))
             changedFields.push('startDate');
           else if (exp.startDate && !match.startDate) changedFields.push('startDate');
-          // Compare description
-          if (norm(exp.description) !== norm(match.description)) changedFields.push('description');
+          // Compare bullets
+          const expBullets = (exp.bullets || []).join('|');
+          const matchBullets = (match.bullets || []).join('|');
+          if (expBullets !== matchBullets) changedFields.push('bullets');
 
           if (changedFields.length > 0) {
             preview.experiences.push({

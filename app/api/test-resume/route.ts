@@ -81,7 +81,6 @@ export async function POST(request: NextRequest) {
                 startDate: exp.startDate,
                 endDate: exp.endDate,
                 isCurrent: exp.isCurrent,
-                description: exp.description,
                 bullets: exp.bullets,
               })),
               educations: result.data.educations.map((edu) => ({
@@ -184,7 +183,6 @@ export async function POST(request: NextRequest) {
                 startDate: exp.startDate,
                 endDate: exp.endDate,
                 isCurrent: exp.isCurrent,
-                description: exp.description,
                 bullets: exp.bullets,
               })),
               educations: result.data.educations.map((edu) => ({

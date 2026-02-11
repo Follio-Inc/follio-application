@@ -133,7 +133,6 @@ model WorkExperience {
   startDate      DateTime
   endDate        DateTime?
   isCurrent      Boolean         @default(false)
-  description    String?
   bullets        String[]
   metrics        Json?
   tags           String[]

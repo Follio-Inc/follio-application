@@ -34,7 +34,6 @@ interface ParseResult {
       startDate?: string;
       endDate?: string;
       isCurrent?: boolean;
-      description?: string;
       bullets?: string[];
     }>;
     educations?: Array<{
@@ -562,11 +561,6 @@ export default function TestResumePage() {
                             </p>
                             {exp.location && (
                               <p className="text-sm text-gray-500">📍 {exp.location}</p>
-                            )}
-                            {exp.description && (
-                              <p className="mt-2 whitespace-pre-wrap text-sm text-gray-700">
-                                {exp.description}
-                              </p>
                             )}
                             {exp.bullets && exp.bullets.length > 0 && (
                               <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-700">

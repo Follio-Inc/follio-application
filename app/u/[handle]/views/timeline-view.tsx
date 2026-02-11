@@ -50,7 +50,7 @@ function buildTimeline(profile: PublicProfile): TimelineItem[] {
       isCurrent: exp.isCurrent,
       title: exp.role,
       subtitle: `${exp.company}${exp.location ? ` · ${exp.location}` : ''}`,
-      description: exp.description,
+      description: exp.bullets?.join(' · ') || undefined,
       tags: exp.tags || [],
       icon: Briefcase,
       color: 'bg-blue-500',

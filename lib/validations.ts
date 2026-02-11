@@ -126,8 +126,7 @@ export const WorkExperienceSchema = z.object({
   startDate: z.coerce.date(),
   endDate: z.coerce.date().optional().nullable(),
   isCurrent: z.boolean().optional(),
-  description: z.string().max(2000).optional(),
-  bullets: z.array(z.string().max(500)).max(10).optional(),
+  bullets: z.array(z.string().max(500)).max(20).optional(),
   tags: z.array(z.string().max(50)).max(20).optional(),
 });
 

@@ -125,7 +125,7 @@ function convertToAppFormat(
       location: undefined,
       startDate,
       endDate,
-      description: exp.descriptions.join('\n'),
+      bullets: exp.descriptions.map((d: string) => d.trim()).filter((d: string) => d.length > 0),
       isCurrent,
     };
   });

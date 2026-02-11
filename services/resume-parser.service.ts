@@ -44,7 +44,6 @@ interface WorkExperience {
   startDate?: string;
   endDate?: string;
   isCurrent?: boolean;
-  description?: string;
   bullets?: string[];
 }
 
@@ -1521,7 +1520,7 @@ export interface NormalizedResumeData {
     startDate?: string;
     endDate?: string;
     isCurrent?: boolean;
-    description?: string;
+    bullets?: string[];
     source: 'RESUME_IMPORT';
   }>;
   educations?: Array<{

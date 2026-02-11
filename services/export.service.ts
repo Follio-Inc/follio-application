@@ -44,7 +44,7 @@ export function toJSONResume(profile: FullProfile): JSONResume {
       endDate: exp.isCurrent
         ? undefined
         : formatDate(exp.endDate, { year: 'numeric', month: '2-digit' }) || undefined,
-      summary: exp.description || undefined,
+      summary: exp.bullets.length > 0 ? exp.bullets.join('. ') : undefined,
       highlights: exp.bullets,
     })),
     education: profile.educations.map((edu) => ({
@@ -143,7 +143,6 @@ export function toPlainText(profile: FullProfile): string {
         : `${formatDate(exp.startDate)} - ${formatDate(exp.endDate)}`;
       lines.push(`${exp.role} | ${exp.company}`);
       lines.push(`${dateRange}${exp.location ? ` | ${exp.location}` : ''}`);
-      if (exp.description) lines.push(exp.description);
       exp.bullets.forEach((bullet) => {
         lines.push(`• ${bullet}`);
       });
@@ -458,11 +457,6 @@ export function generateResumePDF(profile: FullProfile): Promise<Buffer> {
           .font('Helvetica')
           .fillColor(secondaryColor)
           .text(`${exp.company}${exp.location ? ` | ${exp.location}` : ''}  •  ${dateRange}`);
-
-        if (exp.description) {
-          doc.moveDown(0.2);
-          doc.fontSize(10).font('Helvetica').fillColor(primaryColor).text(exp.description);
-        }
 
         if (exp.bullets.length > 0) {
           doc.moveDown(0.2);

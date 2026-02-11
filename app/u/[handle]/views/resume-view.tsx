@@ -308,9 +308,6 @@ export function ResumeView({ profile }: ResumeViewProps) {
                         {exp.isCurrent ? 'Present' : formatDate(exp.endDate)}
                       </div>
                     </div>
-                    {exp.description && (
-                      <p className="mt-2 text-sm text-muted-foreground">{exp.description}</p>
-                    )}
                     {exp.bullets && exp.bullets.length > 0 && (
                       <ul className="mt-2 space-y-1 text-sm">
                         {exp.bullets.map((bullet, i) => (

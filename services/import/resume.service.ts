@@ -123,7 +123,7 @@ function toNormalizedResult(
       startDate: exp.startDate,
       endDate: exp.endDate,
       isCurrent: exp.isCurrent,
-      description: exp.description ? sanitizeText(exp.description) : undefined,
+      bullets: exp.bullets?.map((b) => sanitizeText(b)).filter((b): b is string => !!b),
       source: 'RESUME' as const,
     }));
     result.summary!.experiences = result.experiences.length;

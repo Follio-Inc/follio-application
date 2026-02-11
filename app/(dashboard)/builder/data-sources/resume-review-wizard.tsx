@@ -68,7 +68,6 @@ interface SyncExperience {
   startDate?: string;
   endDate?: string;
   isCurrent?: boolean;
-  description?: string;
   bullets?: string[];
 }
 
@@ -153,8 +152,8 @@ const STEP_INFO: Record<ReviewStep, { title: string; description: string; icon: 
     icon: LinkIcon,
   },
   summary: {
-    title: 'Apply Changes',
-    description: 'Review your selections and apply',
+    title: 'Confirm & Save',
+    description: 'Review and confirm your selections',
     icon: Check,
   },
 };
@@ -488,7 +487,10 @@ export function ResumeReviewWizard({
       }
 
       onOpenChangeAction(false);
-      onApplyCompleteAction(data.message || `Applied ${counts.total} changes from your resume.`);
+      onApplyCompleteAction(
+        data.message ||
+          `Saved ${counts.total} change${counts.total === 1 ? '' : 's'} from your resume.`
+      );
     } catch (err) {
       setApplyError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
@@ -761,10 +763,10 @@ export function ResumeReviewWizard({
               <StepContainer key="summary">
                 <StepHeader
                   icon={STEP_INFO.summary.icon}
-                  title={counts.total > 0 ? 'Ready to Apply' : 'No Changes Selected'}
+                  title={counts.total > 0 ? 'Ready to Save' : 'No Changes Selected'}
                   description={
                     counts.total > 0
-                      ? `You've selected ${counts.total} changes to apply.`
+                      ? `${counts.total} change${counts.total === 1 ? '' : 's'} will be saved to your profile.`
                       : 'You can go back and select items to import.'
                   }
                 />
@@ -853,10 +855,10 @@ export function ResumeReviewWizard({
                   <Check className="mr-2 h-4 w-4" />
                 )}
                 {isApplying
-                  ? 'Applying...'
+                  ? 'Saving...'
                   : counts.total === 0
-                    ? 'Nothing to apply'
-                    : `Apply ${counts.total} changes`}
+                    ? 'Nothing to save'
+                    : `Save ${counts.total} change${counts.total === 1 ? '' : 's'}`}
               </Button>
             ) : (
               <>
@@ -1280,7 +1282,7 @@ function ListReviewSection<T>({
       {updatedItems.length > 0 && (
         <div className="space-y-2">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Updated — changes detected
+            Updated from resume
           </p>
           {updatedItems.map(({ item, originalIndex, reason }) => {
             const decision = decisions[originalIndex];
@@ -1292,7 +1294,7 @@ function ListReviewSection<T>({
                 className={`transition-colors ${
                   decision?.include
                     ? 'border-blue-200 bg-blue-50/30 dark:border-blue-900 dark:bg-blue-950/10'
-                    : 'border-border opacity-60'
+                    : 'border-muted bg-muted/20 opacity-60'
                 }`}
               >
                 <CardContent className="p-4">
@@ -1307,25 +1309,38 @@ function ListReviewSection<T>({
                           {reason}
                         </p>
                       )}
-                      <div className="mt-2 flex gap-2">
-                        <Button
-                          size="sm"
-                          variant={decision?.include ? 'default' : 'outline'}
-                          onClick={() => onToggle(originalIndex)}
-                          className="h-7 text-xs"
-                        >
-                          {decision?.include ? (
-                            <>
-                              <Check className="mr-1 h-3 w-3" />
-                              Apply Update
-                            </>
-                          ) : (
-                            <>
-                              <Plus className="mr-1 h-3 w-3" />
-                              Include
-                            </>
-                          )}
-                        </Button>
+                      <div className="mt-2 flex items-center gap-2">
+                        {decision?.include ? (
+                          <>
+                            <span className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 dark:text-blue-400">
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              Updated
+                            </span>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => onToggle(originalIndex)}
+                              className="h-7 text-xs text-destructive/70 hover:text-destructive"
+                            >
+                              Discard
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                              Discarded
+                            </span>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => onToggle(originalIndex)}
+                              className="h-7 text-xs"
+                            >
+                              <RefreshCw className="mr-1 h-3 w-3" />
+                              Undo
+                            </Button>
+                          </>
+                        )}
                         {renderEditForm && (
                           <Button
                             size="sm"
@@ -1547,18 +1562,10 @@ function ExperienceDisplay({ item }: { item: SyncExperience }) {
           </p>
         </div>
       )}
-      {item.description && (
-        <div>
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Description
-          </p>
-          <p className="whitespace-pre-line text-sm text-muted-foreground">{item.description}</p>
-        </div>
-      )}
       {item.bullets && item.bullets.length > 0 && (
         <div>
           <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Key Points
+            Highlights
           </p>
           <ul className="list-inside list-disc space-y-0.5 text-sm text-muted-foreground">
             {item.bullets.map((bullet, i) => (
@@ -1771,11 +1778,15 @@ function ExperienceEditForm({
         </div>
       </div>
       <div>
-        <label className="mb-1 block text-xs font-medium">Description</label>
+        <label className="mb-1 block text-xs font-medium">Highlights (one per line)</label>
         <Textarea
-          value={item.description || ''}
-          onChange={(e) => onUpdate({ description: e.target.value })}
-          rows={2}
+          value={(item.bullets || []).join('\n')}
+          onChange={(e) =>
+            onUpdate({
+              bullets: e.target.value.split('\n').filter((b: string) => b.trim().length > 0),
+            })
+          }
+          rows={3}
           className="text-sm"
         />
       </div>

@@ -33,7 +33,6 @@ export interface NormalizedResumeData {
     startDate?: string;
     endDate?: string;
     isCurrent?: boolean;
-    description?: string;
     bullets?: string[];
   }>;
   educations: Array<{
@@ -205,7 +204,6 @@ export function normalizeResumeData(parsed: ParsedResume): NormalizedResumeData 
       startDate: sanitize(exp.startDate),
       endDate: sanitize(exp.endDate),
       isCurrent: exp.isCurrent,
-      description: sanitize(exp.description),
       bullets: exp.description
         ?.split('\n')
         .map((b) => sanitize(b))
@@ -437,7 +435,6 @@ export async function saveResumeDataToProfile(
           startDate: parseDateSafe(exp.startDate) || new Date(),
           endDate: parseDateSafe(exp.endDate),
           isCurrent: exp.isCurrent || false,
-          description: exp.description || exp.bullets?.join('\n'),
           bullets: exp.bullets || [],
           source: 'RESUME',
         },

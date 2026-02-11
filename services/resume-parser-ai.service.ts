@@ -46,7 +46,6 @@ interface WorkExperienceAI {
   startDate?: string;
   endDate?: string;
   isCurrent?: boolean;
-  description?: string;
   bullets?: string[];
 }
 
@@ -131,8 +130,7 @@ Return a JSON object with this EXACT structure (no markdown, just JSON):
       "startDate": "string",
       "endDate": "string (or 'Present')",
       "isCurrent": boolean,
-      "description": "string (role description if not in bullets)",
-      "bullets": ["string (achievement/responsibility)"]
+      "bullets": ["string (each responsibility, achievement, or role detail as a separate item)"]
     }
   ],
   "educations": [
@@ -238,7 +236,6 @@ async function parseWithAI(text: string): Promise<ParsedResumeAI | null> {
         startDate: exp.startDate,
         endDate: exp.endDate,
         isCurrent: exp.isCurrent || exp.endDate?.toLowerCase() === 'present',
-        description: exp.description,
         bullets: exp.bullets || [],
       })),
       educations: (parsed.educations || []).map((edu: EducationAI) => ({
@@ -415,7 +412,6 @@ export interface NormalizedResumeDataAI {
     startDate?: string;
     endDate?: string;
     isCurrent?: boolean;
-    description?: string;
     bullets?: string[];
     source: 'RESUME_IMPORT';
   }>;

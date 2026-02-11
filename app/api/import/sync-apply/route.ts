@@ -60,7 +60,6 @@ interface SyncExperience {
   startDate?: string;
   endDate?: string;
   isCurrent?: boolean;
-  description?: string;
   bullets?: string[];
   /** When updating an existing record, the ID of the record to update */
   existingId?: string;
@@ -252,7 +251,6 @@ export async function POST(request: NextRequest) {
                   ? null
                   : (safeParseDate(exp.endDate) ?? existingRecord.endDate),
                 isCurrent: exp.isCurrent ?? existingRecord.isCurrent,
-                description: exp.description ?? existingRecord.description,
                 bullets:
                   exp.bullets && exp.bullets.length > 0 ? exp.bullets : existingRecord.bullets,
                 source,
@@ -279,7 +277,6 @@ export async function POST(request: NextRequest) {
               startDate: safeParseDate(exp.startDate) || new Date(),
               endDate: exp.isCurrent ? null : safeParseDate(exp.endDate),
               isCurrent: exp.isCurrent || false,
-              description: exp.description || null,
               bullets: exp.bullets || [],
               source,
               sortOrder: nextSort++,

@@ -4,13 +4,13 @@
  */
 
 import {
+  DataSource,
+  EmploymentType,
+  LinkType,
+  LocationType,
   PrismaClient,
   ProfileStatus,
-  DataSource,
-  LinkType,
   SkillLevel,
-  EmploymentType,
-  LocationType,
 } from '@prisma/client';
 
 const prisma = new PrismaClient();
@@ -126,8 +126,6 @@ I love open source, technical writing, and mentoring junior developers. When I'm
         employmentType: EmploymentType.FULL_TIME,
         startDate: new Date('2022-03-01'),
         isCurrent: true,
-        description:
-          'Leading frontend architecture and driving technical decisions for a B2B SaaS platform.',
         bullets: [
           'Architected and implemented a new design system using React, TypeScript, and Tailwind CSS, reducing UI development time by 40%',
           'Led migration from REST to GraphQL, improving data fetching efficiency and reducing API calls by 60%',
@@ -155,8 +153,6 @@ I love open source, technical writing, and mentoring junior developers. When I'm
         startDate: new Date('2019-06-01'),
         endDate: new Date('2022-02-28'),
         isCurrent: false,
-        description:
-          'Worked on Chrome DevTools, improving developer experience for millions of web developers.',
         bullets: [
           'Developed new Performance panel features used by 2M+ developers monthly',
           'Implemented accessibility improvements in DevTools, earning internal accessibility award',
@@ -179,8 +175,8 @@ I love open source, technical writing, and mentoring junior developers. When I'm
         startDate: new Date('2017-01-15'),
         endDate: new Date('2019-05-31'),
         isCurrent: false,
-        description: 'Early engineer at a YC-backed startup building developer tools.',
         bullets: [
+          'Early engineer at a YC-backed startup building developer tools',
           'Built core product features from scratch using Node.js and React',
           'Designed and implemented RESTful APIs serving 100K+ daily requests',
           'Set up CI/CD pipelines and improved deployment frequency from weekly to daily',

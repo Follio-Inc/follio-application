@@ -66,7 +66,6 @@ interface SyncExperience {
   startDate?: string;
   endDate?: string;
   isCurrent?: boolean;
-  description?: string;
   bullets?: string[];
 }
 
@@ -923,8 +922,8 @@ function ExperienceRow({
           {item.startDate ? ` · ${item.startDate}` : ''}
           {item.endDate ? ` – ${item.endDate}` : item.isCurrent ? ' – Present' : ''}
         </p>
-        {item.description && (
-          <p className="text-xs text-muted-foreground">{truncate(item.description, 150)}</p>
+        {item.bullets && item.bullets.length > 0 && (
+          <p className="text-xs text-muted-foreground">{truncate(item.bullets.join(' · '), 150)}</p>
         )}
       </div>
       <div className="ml-3 flex flex-shrink-0 items-center gap-2 pt-0.5">
@@ -1252,11 +1251,16 @@ function InlineEditExperience({
         </div>
       </div>
       <div>
-        <Label className="text-xs">Description</Label>
+        <Label className="text-xs">Highlights (one per line)</Label>
         <Textarea
-          value={form.description || ''}
-          onChange={(e) => setForm({ ...form, description: e.target.value })}
-          rows={2}
+          value={(form.bullets || []).join('\n')}
+          onChange={(e) =>
+            setForm({
+              ...form,
+              bullets: e.target.value.split('\n').filter((b) => b.trim().length > 0),
+            })
+          }
+          rows={3}
           className="text-sm"
         />
       </div>
