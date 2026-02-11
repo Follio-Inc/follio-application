@@ -1,10 +1,11 @@
 'use client';
 
-import { UserButton } from '@clerk/nextjs';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Edit, ExternalLink, Eye, Settings } from 'lucide-react';
+import { ExternalLink, Eye } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+
+import { UserMenu } from '@/components/auth/user-menu';
 
 import { ViewSwitcher } from '@/app/u/[handle]/view-switcher';
 import { PortfolioView } from '@/app/u/[handle]/views/portfolio-view';
@@ -30,12 +31,6 @@ export function ProfilePreview({
 }: ProfilePreviewProps) {
   const [currentView, setCurrentView] = useState<ProfileView>('resume');
   const [showBanner, setShowBanner] = useState(initialShowBanner);
-  const [isMounted, setIsMounted] = useState(false);
-
-  // Prevent hydration mismatch with Clerk components
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
 
   const handleViewChange = (view: ProfileView) => {
     setCurrentView(view);
@@ -71,26 +66,7 @@ export function ProfilePreview({
                   <ExternalLink className="h-3 w-3" />
                 </Button>
               </Link>
-              <Link href="/builder">
-                <Button variant="outline" size="sm" className="gap-2">
-                  <Edit className="h-4 w-4" />
-                  <span className="hidden sm:inline">Edit</span>
-                </Button>
-              </Link>
-              <Link href="/settings">
-                <Button variant="ghost" size="icon">
-                  <Settings className="h-4 w-4" />
-                </Button>
-              </Link>
-              {isMounted && (
-                <UserButton
-                  appearance={{
-                    elements: {
-                      avatarBox: 'h-8 w-8',
-                    },
-                  }}
-                />
-              )}
+              <UserMenu />
             </div>
           </div>
         </header>

@@ -1,7 +1,7 @@
-import { UserButton } from '@clerk/nextjs';
 import { Eye } from 'lucide-react';
 import Link from 'next/link';
 
+import { UserMenu } from '@/components/auth/user-menu';
 import { Logo } from '@/components/Logo';
 import { Button } from '@/components/ui/button';
 
@@ -19,14 +19,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 Your Follio
               </Button>
             </Link>
-            <UserButton
-              signInUrl="/sign-in"
-              appearance={{
-                elements: {
-                  avatarBox: 'h-8 w-8',
-                },
-              }}
-            />
+            <UserMenu />
           </div>
         </div>
       </header>

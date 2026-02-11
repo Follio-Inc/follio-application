@@ -1,7 +1,6 @@
 'use client';
 
-import { UserButton } from '@clerk/nextjs';
-
+import { UserMenu } from '@/components/auth/user-menu';
 import { Logo } from '@/components/Logo';
 
 export default function OnboardingLayout({ children }: { children: React.ReactNode }) {
@@ -12,14 +11,7 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
         <div className="flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
           <Logo href="/" size="md" />
           <div className="flex items-center gap-3">
-            <UserButton
-              signInUrl="/sign-in"
-              appearance={{
-                elements: {
-                  avatarBox: 'h-8 w-8',
-                },
-              }}
-            />
+            <UserMenu />
           </div>
         </div>
       </header>
