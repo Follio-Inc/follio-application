@@ -1,16 +1,16 @@
 /**
  * Multi-Source Data Merger Service
  *
- * Handles merging of data from multiple sources (Signup, Resume, LinkedIn, GitHub)
+ * Handles merging of data from multiple sources (Signup, Resume, LinkedIn, GitHub, Google)
  * with proper precedence rules and deduplication.
  *
  * Precedence Rules:
- * - For name: Signup > Resume > LinkedIn > GitHub
+ * - For name: Signup > Resume > Google > LinkedIn > GitHub
  *   Note: "Signup" name only exists when user signs up via OAuth (Google, etc.)
  *   For manual email signup, firstName/lastName are empty, so Resume wins.
  * - For email: Signup as primary, all others collected as additionalEmails
  * - For phone: Resume > LinkedIn > GitHub
- * - For other profile fields: Resume > LinkedIn > GitHub (first non-empty wins)
+ * - For other profile fields: Resume > Google > LinkedIn > GitHub (first non-empty wins)
  */
 
 import type { DataSource } from '@prisma/client';
@@ -20,6 +20,7 @@ export const SOURCE_PRIORITY: Record<string, number> = {
   SIGNUP: 100, // Highest: user explicitly entered at signup
   MANUAL: 95, // User manually edited
   RESUME: 80,
+  GOOGLE: 75, // Google provides reliable data
   LINKEDIN: 70,
   GITHUB: 60,
   GENERATED: 50,
@@ -58,7 +59,7 @@ export function shouldOverrideSource(
   return newPriority >= currentPriority;
 }
 
-export type ImportSourceKey = 'signup' | 'resume' | 'linkedin' | 'github';
+export type ImportSourceKey = 'signup' | 'resume' | 'linkedin' | 'github' | 'google';
 
 /**
  * Email entry with source tracking

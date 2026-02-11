@@ -61,6 +61,10 @@ export async function GET() {
         provider === 'oauth_linkedin'
       );
     });
+    const connectedGoogle = externalAccounts.find((a) => {
+      const provider = a.provider as string;
+      return provider === 'google' || provider === 'oauth_google' || provider === 'google_oidc';
+    });
 
     // Count items by source
     const countBySource = (items: Array<{ source: string }>) => {
@@ -86,6 +90,7 @@ export async function GET() {
     // Get data source connection info
     const githubConnection = profile.dataSourceConnections.find((c) => c.source === 'GITHUB');
     const linkedinConnection = profile.dataSourceConnections.find((c) => c.source === 'LINKEDIN');
+    const googleConnection = profile.dataSourceConnections.find((c) => c.source === 'GOOGLE');
     const resumeConnection = profile.dataSourceConnections.find((c) => c.source === 'RESUME');
 
     // Build response
@@ -94,6 +99,8 @@ export async function GET() {
         github: {
           connected: !!connectedGithub,
           oauthUsername: connectedGithub?.username || null,
+          avatarUrl: connectedGithub?.imageUrl || null,
+          emailAddress: connectedGithub?.emailAddress || null,
           profileUsername: profile.githubProfile?.username || null,
           lastImportedAt: githubConnection?.lastImportedAt || null,
           itemsImported: githubConnection?.itemsImported || 0,
@@ -109,9 +116,24 @@ export async function GET() {
               connectedLinkedin.username ||
               null
             : null,
+          avatarUrl: connectedLinkedin?.imageUrl || null,
+          emailAddress: connectedLinkedin?.emailAddress || null,
           lastImportedAt: linkedinConnection?.lastImportedAt || null,
           itemsImported: linkedinConnection?.itemsImported || 0,
           connectionStatus: linkedinConnection?.status || null,
+        },
+        google: {
+          connected: !!connectedGoogle,
+          oauthName: connectedGoogle
+            ? `${connectedGoogle.firstName || ''} ${connectedGoogle.lastName || ''}`.trim() ||
+              connectedGoogle.username ||
+              null
+            : null,
+          avatarUrl: connectedGoogle?.imageUrl || null,
+          emailAddress: connectedGoogle?.emailAddress || null,
+          lastImportedAt: googleConnection?.lastImportedAt || null,
+          itemsImported: googleConnection?.itemsImported || 0,
+          connectionStatus: googleConnection?.status || null,
         },
         resume: {
           hasBeenImported: !!resumeConnection,

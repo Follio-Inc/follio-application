@@ -6,7 +6,7 @@ import type { DataSource } from '@prisma/client';
 
 // ─── Source Registry ─────────────────────────────────────────────
 
-export type SourceKey = 'resume' | 'github' | 'linkedin' | 'links' | string;
+export type SourceKey = 'resume' | 'github' | 'linkedin' | 'google' | 'links' | string;
 
 export interface SourceDefinition {
   key: SourceKey;
@@ -68,6 +68,19 @@ export const BUILT_IN_SOURCES: SourceDefinition[] = [
     requiresOAuth: true,
     oauthStrategy: 'oauth_linkedin_oidc',
     dataSource: 'LINKEDIN',
+    builtIn: true,
+    userAddable: false,
+  },
+  {
+    key: 'google',
+    label: 'Google',
+    description: 'Profile info and email from Google',
+    icon: 'Google',
+    colorClass: 'from-red-500/10 to-yellow-500/10 ring-red-500/20',
+    iconColorClass: 'text-[#4285F4]',
+    requiresOAuth: true,
+    oauthStrategy: 'oauth_google',
+    dataSource: 'GOOGLE',
     builtIn: true,
     userAddable: false,
   },
@@ -180,12 +193,21 @@ export interface SyncStatus {
   sources: {
     github: SourceSyncStatus & {
       oauthUsername: string | null;
+      avatarUrl: string | null;
+      emailAddress: string | null;
       profileUsername: string | null;
       projectCount: number;
       skillCount: number;
     };
     linkedin: SourceSyncStatus & {
       oauthName: string | null;
+      avatarUrl: string | null;
+      emailAddress: string | null;
+    };
+    google: SourceSyncStatus & {
+      oauthName: string | null;
+      avatarUrl: string | null;
+      emailAddress: string | null;
     };
     resume: {
       hasBeenImported: boolean;

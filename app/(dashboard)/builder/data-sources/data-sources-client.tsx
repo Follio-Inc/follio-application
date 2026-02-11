@@ -26,12 +26,30 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AddSourceDialog } from './add-source-dialog';
 import { GenericSourcePanel } from './generic-panel';
 import { GitHubSourcePanel } from './github-panel';
+import { GoogleSourcePanel } from './google-panel';
 import { LinkedInSourcePanel } from './linkedin-panel';
 import { LinksSourcePanel } from './links-panel';
 import { ResumeSourcePanel } from './resume-panel';
 import { BUILT_IN_SOURCES, type SourceDefinition, type SyncStatus } from './source-types';
 
 import type { FullProfile } from '@/types';
+
+// ─── Google "G" Icon (outline style to match Lucide icons) ──────
+function GoogleTabIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M20.283 10.356h-8.327v3.451h4.792c-.446 2.193-2.313 3.453-4.792 3.453a5.27 5.27 0 0 1-5.279-5.28 5.27 5.27 0 0 1 5.279-5.279c1.259 0 2.397.447 3.29 1.178l2.6-2.599c-1.584-1.381-3.615-2.233-5.89-2.233a8.908 8.908 0 0 0-8.934 8.934 8.907 8.907 0 0 0 8.934 8.934c4.467 0 8.529-3.249 8.529-8.934 0-.528-.081-1.097-.202-1.625z" />
+    </svg>
+  );
+}
 
 // Icon map for dynamic icon rendering
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -46,6 +64,7 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   Youtube,
   Globe,
   Database,
+  Google: GoogleTabIcon,
 };
 
 const ACTIVE_SOURCES_STORAGE_KEY = 'follio-active-sources';
@@ -222,6 +241,11 @@ export default function DataSourcesPageClient({ profile }: DataSourcesPageClient
               syncStatus={syncStatus}
               onSyncStatusRefreshAction={handleRefresh}
             />
+          </TabsContent>
+
+          {/* Google Tab */}
+          <TabsContent value="google">
+            <GoogleSourcePanel syncStatus={syncStatus} onSyncStatusRefreshAction={handleRefresh} />
           </TabsContent>
 
           {/* Links Tab */}

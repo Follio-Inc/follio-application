@@ -95,7 +95,31 @@ const _clearPhotosFromIndexedDB = async (): Promise<void> => {
   }
 };
 
-type ImportSource = 'resume' | 'github' | 'linkedin' | 'links';
+// ─── Google SVG Icon ──────────────────────────────────────────────
+function GoogleIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
+        fill="#4285F4"
+      />
+      <path
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+        fill="#34A853"
+      />
+      <path
+        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18A10.96 10.96 0 001 12c0 1.77.42 3.45 1.18 4.93l2.85-2.22.81-.62z"
+        fill="#FBBC05"
+      />
+      <path
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+        fill="#EA4335"
+      />
+    </svg>
+  );
+}
+
+type ImportSource = 'resume' | 'github' | 'linkedin' | 'google' | 'links';
 
 interface ImportStatus {
   source: ImportSource;
@@ -160,11 +184,17 @@ export default function OnboardingImportPage() {
   const [linkedinDisconnecting, setLinkedinDisconnecting] = useState(false);
   const [linkedinError, setLinkedinError] = useState<string | null>(null);
 
+  // Google OAuth states
+  const [googleConnecting, setGoogleConnecting] = useState(false);
+  const [googleDisconnecting, setGoogleDisconnecting] = useState(false);
+  const [googleError, setGoogleError] = useState<string | null>(null);
+
   // Import states
   const [imports, setImports] = useState<Record<ImportSource, ImportStatus>>({
     resume: { source: 'resume', status: 'idle' },
     github: { source: 'github', status: 'idle' },
     linkedin: { source: 'linkedin', status: 'idle' },
+    google: { source: 'google', status: 'idle' },
     links: { source: 'links', status: 'idle' },
   });
 
@@ -236,6 +266,45 @@ export default function OnboardingImportPage() {
       return connectedLinkedin.firstName || connectedLinkedin.lastName;
     }
     // No LinkedIn data available yet
+    return null;
+  })();
+
+  // Get connected Google account from Clerk (check multiple possible provider names)
+  const connectedGoogle = user?.externalAccounts?.find((a) => {
+    const provider = a.provider as string;
+    return provider === 'google' || provider === 'oauth_google' || provider === 'google_oidc';
+  });
+  // Build Google display - use name or email
+  const googleName = (() => {
+    // First check if we have imported data from Google
+    const googleImport = importedData.google as
+      | {
+          profile?: { firstName?: string; lastName?: string };
+          email?: string;
+          fromGoogle?: { firstName?: string; lastName?: string; email?: string };
+        }
+      | undefined;
+
+    // Try name from imported data
+    if (googleImport?.fromGoogle?.firstName || googleImport?.fromGoogle?.lastName) {
+      const firstName = googleImport.fromGoogle.firstName || '';
+      const lastName = googleImport.fromGoogle.lastName || '';
+      return `${firstName} ${lastName}`.trim();
+    }
+    // Try external account name
+    if (connectedGoogle?.firstName || connectedGoogle?.lastName) {
+      const firstName = connectedGoogle.firstName || '';
+      const lastName = connectedGoogle.lastName || '';
+      return `${firstName} ${lastName}`.trim();
+    }
+    // Fall back to email
+    if (googleImport?.fromGoogle?.email) {
+      return googleImport.fromGoogle.email;
+    }
+    if (connectedGoogle?.emailAddress) {
+      return connectedGoogle.emailAddress;
+    }
+    // No Google data available yet
     return null;
   })();
 
@@ -382,6 +451,48 @@ export default function OnboardingImportPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isUserLoaded, hasRestoredPersistedState, connectedLinkedin, imports.linkedin.status]);
+
+  // Auto-import from connected Google if just connected via OAuth
+  useEffect(() => {
+    if (!isUserLoaded || !hasRestoredPersistedState) return;
+
+    // If user has connected Google via OAuth and we haven't imported yet
+    if (connectedGoogle && imports.google.status === 'idle') {
+      // Auto-trigger import with the connected account data
+      updateImportStatus('google', {
+        status: 'importing',
+        message: 'Fetching Google data...',
+      });
+
+      fetch('/api/import/google/oauth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+        .then((response) => response.json())
+        .then((data) => {
+          if (data.error) {
+            updateImportStatus('google', {
+              status: 'error',
+              message: data.error || 'Failed to import from Google',
+            });
+          } else {
+            setImportedData((prev) => ({ ...prev, google: data.data }));
+            updateImportStatus('google', {
+              status: 'success',
+              message: data.message || 'Imported profile data',
+              itemsImported: data.data?.summary?.total || 1,
+            });
+          }
+        })
+        .catch((err) => {
+          updateImportStatus('google', {
+            status: 'error',
+            message: err instanceof Error ? err.message : 'Failed to import from Google',
+          });
+        });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isUserLoaded, hasRestoredPersistedState, connectedGoogle, imports.google.status]);
 
   const updateImportStatus = (source: ImportSource, update: Partial<ImportStatus>) => {
     setImports((prev) => ({
@@ -685,6 +796,108 @@ export default function OnboardingImportPage() {
     }
   };
 
+  // Google OAuth connect handler
+  const handleGoogleConnect = async () => {
+    setGoogleConnecting(true);
+    setGoogleError(null);
+
+    // Check if user has a verified email
+    const primaryEmail = user?.primaryEmailAddress;
+    if (!primaryEmail?.verification?.status || primaryEmail.verification.status !== 'verified') {
+      setGoogleError(
+        'Please verify your email first to connect Google. Check your inbox for a verification email.'
+      );
+      setGoogleConnecting(false);
+      return;
+    }
+
+    try {
+      // Save state before OAuth redirect so we can restore it when we come back
+      saveImportState();
+
+      const externalAccount = await user?.createExternalAccount({
+        strategy: 'oauth_google',
+        redirectUrl: window.location.href,
+      });
+      const url = externalAccount?.verification?.externalVerificationRedirectURL;
+      if (url) {
+        window.location.href = url.toString();
+      }
+    } catch (err: unknown) {
+      console.error('Google connect error:', err);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+
+      if (errorMessage.includes('additional verification')) {
+        setGoogleError('Email verification required. Please verify your email first.');
+      } else if (errorMessage.includes('already connected')) {
+        // Refresh user to get updated external accounts
+        await user?.reload();
+        setGoogleError(null);
+      } else {
+        setGoogleError(`Connection failed: ${errorMessage}`);
+      }
+      setGoogleConnecting(false);
+    }
+  };
+
+  // Google disconnect handler
+  const handleGoogleDisconnect = async () => {
+    if (!connectedGoogle) return;
+
+    setGoogleDisconnecting(true);
+    setGoogleError(null);
+
+    try {
+      await connectedGoogle.destroy();
+      await user?.reload();
+      // Reset import status for Google
+      updateImportStatus('google', {
+        status: 'idle',
+        message: undefined,
+        itemsImported: undefined,
+      });
+    } catch (err: unknown) {
+      console.error('Google disconnect error:', err);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      setGoogleError(`Failed to disconnect: ${errorMessage}`);
+    } finally {
+      setGoogleDisconnecting(false);
+    }
+  };
+
+  // Google import handler (for when already connected)
+  const handleGoogleImport = async () => {
+    updateImportStatus('google', {
+      status: 'importing',
+      message: 'Fetching Google data...',
+    });
+
+    try {
+      const response = await fetch('/api/import/google/oauth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to import from Google');
+      }
+
+      setImportedData((prev) => ({ ...prev, google: data.data }));
+      updateImportStatus('google', {
+        status: 'success',
+        message: data.message || 'Imported profile data',
+        itemsImported: data.data?.summary?.total || 1,
+      });
+    } catch (err) {
+      updateImportStatus('google', {
+        status: 'error',
+        message: err instanceof Error ? err.message : 'Failed to import from Google',
+      });
+    }
+  };
+
   // Manual links handler
   const handleAddLink = () => {
     setManualLinks((prev) => [...prev, { url: '' }]);
@@ -849,6 +1062,18 @@ export default function OnboardingImportPage() {
       }
     };
 
+    // Google photo from import (prioritize imported data over SSO)
+    const googleData = importedData.google as Record<string, unknown> | undefined;
+    const googleProfile = googleData?.profile as Record<string, unknown> | undefined;
+    if (googleProfile?.avatarUrl) {
+      addPhoto({
+        id: 'google',
+        url: googleProfile.avatarUrl as string,
+        source: 'google',
+        label: 'Google',
+      });
+    }
+
     // LinkedIn photo from import (prioritize imported data over SSO)
     const linkedinData = importedData.linkedin as Record<string, unknown> | undefined;
     const linkedinProfile = linkedinData?.profile as Record<string, unknown> | undefined;
@@ -874,8 +1099,16 @@ export default function OnboardingImportPage() {
     }
 
     // SSO/OAuth profile photo (only if not already added from import and user has real image)
+    // Skip if we already have a photo from the same source via import (e.g., linkedin-sso vs linkedin, google vs google)
+    // because Clerk proxies the same photo through a different URL
     const primaryAuthProvider = getPrimaryAuthProvider();
-    if (user?.imageUrl && user?.hasImage && primaryAuthProvider) {
+    const hasMatchingImportPhoto =
+      primaryAuthProvider &&
+      ((primaryAuthProvider.id === 'google' && googleProfile?.avatarUrl) ||
+        (primaryAuthProvider.id === 'linkedin-sso' && linkedinProfile?.avatarUrl) ||
+        (primaryAuthProvider.id === 'github-sso' && githubProfile?.avatarUrl));
+
+    if (user?.imageUrl && user?.hasImage && primaryAuthProvider && !hasMatchingImportPhoto) {
       addPhoto({
         id: primaryAuthProvider.id,
         url: user.imageUrl,
@@ -1422,59 +1655,143 @@ export default function OnboardingImportPage() {
               whileHover={{ y: -4, transition: { duration: 0.2 } }}
               className="group"
             >
-              <Card className="relative h-full overflow-hidden border-2 border-transparent bg-gradient-to-br from-background to-muted/30 transition-all duration-300 hover:border-primary/20 hover:shadow-xl hover:shadow-primary/5">
-                <CardContent className="flex h-full flex-col p-5">
-                  <div className="mb-4 flex items-start justify-between">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-gray-500/10 to-slate-500/10 ring-1 ring-gray-500/20 dark:from-white/10 dark:to-gray-400/10 dark:ring-white/20">
-                      <Github className="h-6 w-6 text-gray-700 dark:text-white" />
-                    </div>
-                    {imports.github.status === 'success' && (
-                      <CheckCircle2 className="h-5 w-5 text-green-500" />
-                    )}
-                    {imports.github.status === 'importing' && (
-                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                    )}
-                    {imports.github.status === 'error' && (
-                      <AlertCircle className="h-5 w-5 text-destructive" />
-                    )}
-                  </div>
+              <div
+                className={cn(
+                  'relative h-full overflow-hidden rounded-2xl border bg-gradient-to-br p-5 transition-all duration-300',
+                  'ring-gray-200 dark:ring-gray-700',
+                  connectedGithub
+                    ? 'from-gray-50 to-slate-50 dark:from-gray-900/40 dark:to-slate-900/40'
+                    : 'from-gray-50 to-slate-50 hover:from-gray-100 hover:to-slate-100 dark:from-gray-900/50 dark:to-slate-900/50 dark:hover:from-gray-800/60 dark:hover:to-slate-800/60',
+                  'hover:shadow-md hover:shadow-black/5 dark:hover:shadow-black/20'
+                )}
+              >
+                {/* Status indicator */}
+                <AnimatePresence>
+                  {connectedGithub && (
+                    <motion.div
+                      initial={{ scale: 0, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0, opacity: 0 }}
+                      className="absolute right-3 top-3 z-10"
+                    >
+                      {imports.github.status === 'success' ? (
+                        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-green-500 shadow-sm">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-white" />
+                        </div>
+                      ) : imports.github.status === 'importing' ? (
+                        <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                      ) : imports.github.status === 'error' ? (
+                        <AlertCircle className="h-5 w-5 text-destructive" />
+                      ) : (
+                        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-green-500 shadow-sm">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-white" />
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
-                  <h3 className="mb-1 font-semibold">GitHub</h3>
-                  <p className="mb-4 flex-1 text-sm text-muted-foreground">
-                    Import projects, skills & contributions
-                  </p>
+                {/* Avatar & Logo Section */}
+                <div className="relative mb-4 flex items-center justify-center">
+                  <AnimatePresence mode="wait">
+                    {connectedGithub && connectedGithub.imageUrl ? (
+                      <motion.div
+                        key="avatar"
+                        initial={{ scale: 0.8, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0.8, opacity: 0 }}
+                        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+                        className="relative"
+                      >
+                        <div className="relative h-20 w-20 overflow-hidden rounded-full ring-2 ring-white/80 dark:ring-gray-800/80">
+                          <Image
+                            src={connectedGithub.imageUrl}
+                            alt={githubUsernameFromAccount || 'GitHub'}
+                            fill
+                            className="object-cover"
+                            unoptimized
+                          />
+                        </div>
+                        <div className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-white shadow-sm dark:border-gray-800 dark:bg-gray-800">
+                          <Github className="h-3.5 w-3.5 text-[#24292e] dark:text-white" />
+                        </div>
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        key="logo"
+                        initial={{ scale: 0.8, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0.8, opacity: 0 }}
+                        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+                        className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/80 shadow-sm dark:bg-gray-800/80"
+                      >
+                        <Github className="h-8 w-8 text-[#24292e] dark:text-white" />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
 
+                {/* Name & Info */}
+                <div className="space-y-1 text-center">
+                  <h3 className="text-sm font-semibold text-foreground">GitHub</h3>
+                  <AnimatePresence mode="wait">
+                    {connectedGithub ? (
+                      <motion.div
+                        key="connected-info"
+                        initial={{ opacity: 0, y: 4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -4 }}
+                        className="space-y-0.5"
+                      >
+                        {githubUsernameFromAccount && (
+                          <p className="truncate text-xs font-medium text-foreground/80">
+                            @{githubUsernameFromAccount}
+                          </p>
+                        )}
+                        {connectedGithub.emailAddress && (
+                          <p className="truncate text-[11px] text-muted-foreground">
+                            {connectedGithub.emailAddress}
+                          </p>
+                        )}
+                      </motion.div>
+                    ) : (
+                      <motion.p
+                        key="not-connected"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="text-xs text-muted-foreground"
+                      >
+                        Import projects, skills & contributions
+                      </motion.p>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="mt-4 space-y-1.5">
                   {connectedGithub ? (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <Badge
-                          variant="secondary"
-                          className={
-                            imports.github.status === 'success'
-                              ? 'bg-green-500/10 text-green-600'
-                              : ''
-                          }
-                        >
-                          @{githubUsernameFromAccount}
-                        </Badge>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            githubUsernameFromAccount &&
-                            handleGitHubImport(githubUsernameFromAccount)
-                          }
-                          disabled={imports.github.status === 'importing'}
-                        >
-                          {imports.github.status === 'importing' ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : imports.github.status === 'success' ? (
-                            'Refresh'
-                          ) : (
-                            'Import'
-                          )}
-                        </Button>
-                      </div>
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                        onClick={() =>
+                          githubUsernameFromAccount && handleGitHubImport(githubUsernameFromAccount)
+                        }
+                        disabled={imports.github.status === 'importing'}
+                      >
+                        {imports.github.status === 'importing' ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Upload className="h-3.5 w-3.5" />
+                        )}
+                        {imports.github.status === 'importing'
+                          ? 'Importing...'
+                          : imports.github.status === 'success'
+                            ? 'Refresh'
+                            : 'Import'}
+                      </Button>
                       <Button
                         variant="ghost"
                         size="sm"
@@ -1489,30 +1806,31 @@ export default function OnboardingImportPage() {
                         )}
                         {githubDisconnecting ? 'Disconnecting...' : 'Disconnect'}
                       </Button>
-                    </div>
+                    </>
                   ) : (
                     <Button
+                      variant="outline"
                       size="sm"
-                      className="w-full bg-[#24292e] text-white hover:bg-[#1b1f23]"
+                      className="w-full gap-1.5 text-xs"
                       onClick={handleGitHubConnect}
                       disabled={githubConnecting}
                     >
                       {githubConnecting ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
                       ) : (
-                        <Github className="mr-2 h-4 w-4" />
+                        <Plus className="h-3.5 w-3.5" />
                       )}
                       {githubConnecting ? 'Connecting...' : 'Connect'}
                     </Button>
                   )}
-                  {(githubError ||
-                    (imports.github.message && imports.github.status === 'error')) && (
-                    <p className="mt-2 text-xs text-destructive">
-                      {githubError || imports.github.message}
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
+                </div>
+
+                {(githubError || (imports.github.message && imports.github.status === 'error')) && (
+                  <p className="mt-2 text-center text-xs text-destructive">
+                    {githubError || imports.github.message}
+                  </p>
+                )}
+              </div>
             </motion.div>
 
             {/* LinkedIn Card */}
@@ -1523,61 +1841,141 @@ export default function OnboardingImportPage() {
               whileHover={{ y: -4, transition: { duration: 0.2 } }}
               className="group"
             >
-              <Card className="relative h-full overflow-hidden border-2 border-transparent bg-gradient-to-br from-background to-muted/30 transition-all duration-300 hover:border-primary/20 hover:shadow-xl hover:shadow-primary/5">
-                <CardContent className="flex h-full flex-col p-5">
-                  <div className="mb-4 flex items-start justify-between">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500/10 to-sky-500/10 ring-1 ring-blue-500/20">
-                      <Linkedin className="h-6 w-6 text-[#0A66C2]" />
-                    </div>
-                    {imports.linkedin.status === 'success' && (
-                      <CheckCircle2 className="h-5 w-5 text-green-500" />
-                    )}
-                    {imports.linkedin.status === 'importing' && (
-                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                    )}
-                    {imports.linkedin.status === 'error' && (
-                      <AlertCircle className="h-5 w-5 text-destructive" />
-                    )}
-                  </div>
+              <div
+                className={cn(
+                  'relative h-full overflow-hidden rounded-2xl border bg-gradient-to-br p-5 transition-all duration-300',
+                  'ring-blue-200 dark:ring-blue-800',
+                  connectedLinkedin
+                    ? 'from-blue-50/80 to-sky-50/80 dark:from-blue-950/20 dark:to-sky-950/20'
+                    : 'from-blue-50 to-sky-50 hover:from-blue-100 hover:to-sky-100 dark:from-blue-950/30 dark:to-sky-950/30 dark:hover:from-blue-900/40 dark:hover:to-sky-900/40',
+                  'hover:shadow-md hover:shadow-black/5 dark:hover:shadow-black/20'
+                )}
+              >
+                {/* Status indicator */}
+                <AnimatePresence>
+                  {connectedLinkedin && (
+                    <motion.div
+                      initial={{ scale: 0, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0, opacity: 0 }}
+                      className="absolute right-3 top-3 z-10"
+                    >
+                      {imports.linkedin.status === 'success' ? (
+                        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-green-500 shadow-sm">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-white" />
+                        </div>
+                      ) : imports.linkedin.status === 'importing' ? (
+                        <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                      ) : imports.linkedin.status === 'error' ? (
+                        <AlertCircle className="h-5 w-5 text-destructive" />
+                      ) : (
+                        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-green-500 shadow-sm">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-white" />
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
-                  <h3 className="mb-1 font-semibold">LinkedIn</h3>
-                  <p className="mb-4 flex-1 text-sm text-muted-foreground">
-                    Import profile info, headline & photo
-                  </p>
+                {/* Avatar & Logo Section */}
+                <div className="relative mb-4 flex items-center justify-center">
+                  <AnimatePresence mode="wait">
+                    {connectedLinkedin && connectedLinkedin.imageUrl ? (
+                      <motion.div
+                        key="avatar"
+                        initial={{ scale: 0.8, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0.8, opacity: 0 }}
+                        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+                        className="relative"
+                      >
+                        <div className="relative h-20 w-20 overflow-hidden rounded-full ring-2 ring-white/80 dark:ring-gray-800/80">
+                          <Image
+                            src={connectedLinkedin.imageUrl}
+                            alt={linkedinName || 'LinkedIn'}
+                            fill
+                            className="object-cover"
+                            unoptimized
+                          />
+                        </div>
+                        <div className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-white shadow-sm dark:border-gray-800 dark:bg-gray-800">
+                          <Linkedin className="h-3.5 w-3.5 text-[#0A66C2]" />
+                        </div>
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        key="logo"
+                        initial={{ scale: 0.8, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0.8, opacity: 0 }}
+                        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+                        className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/80 shadow-sm dark:bg-gray-800/80"
+                      >
+                        <Linkedin className="h-8 w-8 text-[#0A66C2]" />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
 
+                {/* Name & Info */}
+                <div className="space-y-1 text-center">
+                  <h3 className="text-sm font-semibold text-foreground">LinkedIn</h3>
+                  <AnimatePresence mode="wait">
+                    {connectedLinkedin ? (
+                      <motion.div
+                        key="connected-info"
+                        initial={{ opacity: 0, y: 4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -4 }}
+                        className="space-y-0.5"
+                      >
+                        {linkedinName && (
+                          <p className="truncate text-xs font-medium text-foreground/80">
+                            {linkedinName}
+                          </p>
+                        )}
+                        {connectedLinkedin.emailAddress && (
+                          <p className="truncate text-[11px] text-muted-foreground">
+                            {connectedLinkedin.emailAddress}
+                          </p>
+                        )}
+                      </motion.div>
+                    ) : (
+                      <motion.p
+                        key="not-connected"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="text-xs text-muted-foreground"
+                      >
+                        Import profile info, headline & photo
+                      </motion.p>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="mt-4 space-y-1.5">
                   {connectedLinkedin ? (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <Badge
-                          variant="secondary"
-                          className={
-                            imports.linkedin.status === 'success'
-                              ? 'bg-green-500/10 text-green-600'
-                              : ''
-                          }
-                        >
-                          {linkedinName || (
-                            <span className="flex items-center gap-1">
-                              <CheckCircle2 className="h-3 w-3" />
-                              Account Linked
-                            </span>
-                          )}
-                        </Badge>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={handleLinkedInImport}
-                          disabled={imports.linkedin.status === 'importing'}
-                        >
-                          {imports.linkedin.status === 'importing' ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : imports.linkedin.status === 'success' ? (
-                            'Refresh'
-                          ) : (
-                            'Import'
-                          )}
-                        </Button>
-                      </div>
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                        onClick={handleLinkedInImport}
+                        disabled={imports.linkedin.status === 'importing'}
+                      >
+                        {imports.linkedin.status === 'importing' ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Upload className="h-3.5 w-3.5" />
+                        )}
+                        {imports.linkedin.status === 'importing'
+                          ? 'Importing...'
+                          : imports.linkedin.status === 'success'
+                            ? 'Refresh'
+                            : 'Import'}
+                      </Button>
                       <Button
                         variant="ghost"
                         size="sm"
@@ -1592,37 +1990,223 @@ export default function OnboardingImportPage() {
                         )}
                         {linkedinDisconnecting ? 'Disconnecting...' : 'Disconnect'}
                       </Button>
-                    </div>
+                    </>
                   ) : (
                     <Button
+                      variant="outline"
                       size="sm"
-                      className="w-full bg-[#0A66C2] text-white hover:bg-[#004182]"
+                      className="w-full gap-1.5 text-xs"
                       onClick={handleLinkedInConnect}
                       disabled={linkedinConnecting}
                     >
                       {linkedinConnecting ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
                       ) : (
-                        <Linkedin className="mr-2 h-4 w-4" />
+                        <Plus className="h-3.5 w-3.5" />
                       )}
                       {linkedinConnecting ? 'Connecting...' : 'Connect'}
                     </Button>
                   )}
-                  {(linkedinError ||
-                    (imports.linkedin.message && imports.linkedin.status === 'error')) && (
-                    <p className="mt-2 text-xs text-destructive">
-                      {linkedinError || imports.linkedin.message}
-                    </p>
+                </div>
+
+                {(linkedinError ||
+                  (imports.linkedin.message && imports.linkedin.status === 'error')) && (
+                  <p className="mt-2 text-center text-xs text-destructive">
+                    {linkedinError || imports.linkedin.message}
+                  </p>
+                )}
+              </div>
+            </motion.div>
+
+            {/* Google Card */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.3 }}
+              whileHover={{ y: -4, transition: { duration: 0.2 } }}
+              className="group"
+            >
+              <div
+                className={cn(
+                  'relative h-full overflow-hidden rounded-2xl border bg-gradient-to-br p-5 transition-all duration-300',
+                  'ring-gray-200 dark:ring-gray-700',
+                  connectedGoogle
+                    ? 'from-red-50/40 via-yellow-50/40 to-blue-50/40 dark:from-red-950/10 dark:via-yellow-950/10 dark:to-blue-950/10'
+                    : 'from-red-50/50 via-yellow-50/50 to-blue-50/50 hover:from-red-100/50 hover:via-yellow-100/50 hover:to-blue-100/50 dark:from-red-950/20 dark:via-yellow-950/20 dark:to-blue-950/20 dark:hover:from-red-900/20 dark:hover:via-yellow-900/20 dark:hover:to-blue-900/20',
+                  'hover:shadow-md hover:shadow-black/5 dark:hover:shadow-black/20'
+                )}
+              >
+                {/* Status indicator */}
+                <AnimatePresence>
+                  {connectedGoogle && (
+                    <motion.div
+                      initial={{ scale: 0, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0, opacity: 0 }}
+                      className="absolute right-3 top-3 z-10"
+                    >
+                      {imports.google.status === 'success' ? (
+                        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-green-500 shadow-sm">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-white" />
+                        </div>
+                      ) : imports.google.status === 'importing' ? (
+                        <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                      ) : imports.google.status === 'error' ? (
+                        <AlertCircle className="h-5 w-5 text-destructive" />
+                      ) : (
+                        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-green-500 shadow-sm">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-white" />
+                        </div>
+                      )}
+                    </motion.div>
                   )}
-                </CardContent>
-              </Card>
+                </AnimatePresence>
+
+                {/* Avatar & Logo Section */}
+                <div className="relative mb-4 flex items-center justify-center">
+                  <AnimatePresence mode="wait">
+                    {connectedGoogle && connectedGoogle.imageUrl ? (
+                      <motion.div
+                        key="avatar"
+                        initial={{ scale: 0.8, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0.8, opacity: 0 }}
+                        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+                        className="relative"
+                      >
+                        <div className="relative h-20 w-20 overflow-hidden rounded-full ring-2 ring-white/80 dark:ring-gray-800/80">
+                          <Image
+                            src={connectedGoogle.imageUrl}
+                            alt={googleName || 'Google'}
+                            fill
+                            className="object-cover"
+                            unoptimized
+                          />
+                        </div>
+                        <div className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-white shadow-sm dark:border-gray-800 dark:bg-gray-800">
+                          <GoogleIcon className="h-3.5 w-3.5" />
+                        </div>
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        key="logo"
+                        initial={{ scale: 0.8, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0.8, opacity: 0 }}
+                        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+                        className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/80 shadow-sm dark:bg-gray-800/80"
+                      >
+                        <GoogleIcon className="h-8 w-8" />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* Name & Info */}
+                <div className="space-y-1 text-center">
+                  <h3 className="text-sm font-semibold text-foreground">Google</h3>
+                  <AnimatePresence mode="wait">
+                    {connectedGoogle ? (
+                      <motion.div
+                        key="connected-info"
+                        initial={{ opacity: 0, y: 4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -4 }}
+                        className="space-y-0.5"
+                      >
+                        {googleName && (
+                          <p className="truncate text-xs font-medium text-foreground/80">
+                            {googleName}
+                          </p>
+                        )}
+                        {connectedGoogle.emailAddress && (
+                          <p className="truncate text-[11px] text-muted-foreground">
+                            {connectedGoogle.emailAddress}
+                          </p>
+                        )}
+                      </motion.div>
+                    ) : (
+                      <motion.p
+                        key="not-connected"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="text-xs text-muted-foreground"
+                      >
+                        Import name, email & profile photo
+                      </motion.p>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="mt-4 space-y-1.5">
+                  {connectedGoogle ? (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                        onClick={handleGoogleImport}
+                        disabled={imports.google.status === 'importing'}
+                      >
+                        {imports.google.status === 'importing' ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Upload className="h-3.5 w-3.5" />
+                        )}
+                        {imports.google.status === 'importing'
+                          ? 'Importing...'
+                          : imports.google.status === 'success'
+                            ? 'Refresh'
+                            : 'Import'}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-full text-xs text-muted-foreground hover:text-destructive"
+                        onClick={handleGoogleDisconnect}
+                        disabled={googleDisconnecting}
+                      >
+                        {googleDisconnecting ? (
+                          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                        ) : (
+                          <X className="mr-1 h-3 w-3" />
+                        )}
+                        {googleDisconnecting ? 'Disconnecting...' : 'Disconnect'}
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full gap-1.5 text-xs"
+                      onClick={handleGoogleConnect}
+                      disabled={googleConnecting}
+                    >
+                      {googleConnecting ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Plus className="h-3.5 w-3.5" />
+                      )}
+                      {googleConnecting ? 'Connecting...' : 'Connect'}
+                    </Button>
+                  )}
+                </div>
+
+                {(googleError || (imports.google.message && imports.google.status === 'error')) && (
+                  <p className="mt-2 text-center text-xs text-destructive">
+                    {googleError || imports.google.message}
+                  </p>
+                )}
+              </div>
             </motion.div>
 
             {/* Links Card */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.3 }}
+              transition={{ duration: 0.4, delay: 0.35 }}
               whileHover={{ y: -4, transition: { duration: 0.2 } }}
               className="group sm:col-span-2 lg:col-span-1"
             >

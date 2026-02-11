@@ -1,25 +1,49 @@
 'use client';
 
 import { useUser } from '@clerk/nextjs';
-import { AlertCircle, CheckCircle2, Clock, Linkedin, Loader2, RefreshCw } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock, Loader2, RefreshCw } from 'lucide-react';
+import Image from 'next/image';
 import { useCallback, useMemo, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import Image from 'next/image';
 
 import type { SyncStatus } from './source-types';
 
-interface LinkedInSourcePanelProps {
+// ─── Google SVG Icon ──────────────────────────────────────────────
+function GoogleIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
+        fill="#4285F4"
+      />
+      <path
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+        fill="#34A853"
+      />
+      <path
+        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18A10.96 10.96 0 001 12c0 1.77.42 3.45 1.18 4.93l2.85-2.22.81-.62z"
+        fill="#FBBC05"
+      />
+      <path
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+        fill="#EA4335"
+      />
+    </svg>
+  );
+}
+
+interface GoogleSourcePanelProps {
   syncStatus: SyncStatus;
   onSyncStatusRefreshAction: () => void;
 }
 
-export function LinkedInSourcePanel({
+export function GoogleSourcePanel({
   syncStatus,
   onSyncStatusRefreshAction,
-}: LinkedInSourcePanelProps) {
+}: GoogleSourcePanelProps) {
   const { user, isLoaded: isUserLoaded } = useUser();
   const [status, setStatus] = useState<'idle' | 'importing' | 'applying' | 'success' | 'error'>(
     'idle'
@@ -28,30 +52,30 @@ export function LinkedInSourcePanel({
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
 
-  const connectedLinkedin = useMemo(() => {
+  const connectedGoogle = useMemo(() => {
     if (!isUserLoaded || !user) return null;
     return (
       user.externalAccounts?.find((a) => {
         const p = a.provider as string;
-        return (
-          p === 'linkedin_oidc' ||
-          p === 'linkedin' ||
-          p === 'oauth_linkedin_oidc' ||
-          p === 'oauth_linkedin'
-        );
+        return p === 'google' || p === 'oauth_google' || p === 'google_oidc';
       }) || null
     );
   }, [user, isUserLoaded]);
 
-  const linkedinConnected = !!connectedLinkedin;
+  const googleConnected = !!connectedGoogle || syncStatus.sources.google.connected;
 
-  const avatarUrl = syncStatus.sources.linkedin.avatarUrl || connectedLinkedin?.imageUrl || null;
-  const displayName =
-    syncStatus.sources.linkedin.oauthName ||
-    (connectedLinkedin
-      ? `${connectedLinkedin.firstName || ''} ${connectedLinkedin.lastName || ''}`.trim()
-      : null);
-  const email = syncStatus.sources.linkedin.emailAddress || connectedLinkedin?.emailAddress || null;
+  const displayInfo = useMemo(() => {
+    const src = syncStatus.sources.google;
+    return {
+      displayName:
+        src.oauthName ||
+        (connectedGoogle
+          ? `${connectedGoogle.firstName || ''} ${connectedGoogle.lastName || ''}`.trim()
+          : null),
+      avatarUrl: src.avatarUrl || connectedGoogle?.imageUrl || null,
+      email: src.emailAddress || connectedGoogle?.emailAddress || null,
+    };
+  }, [syncStatus, connectedGoogle]);
 
   const handleConnect = async () => {
     if (!user) return;
@@ -59,7 +83,7 @@ export function LinkedInSourcePanel({
     setConnectError(null);
     try {
       const externalAccount = await user.createExternalAccount({
-        strategy: 'oauth_linkedin_oidc',
+        strategy: 'oauth_google',
         redirectUrl: window.location.href,
       });
       const url = externalAccount?.verification?.externalVerificationRedirectURL;
@@ -77,45 +101,45 @@ export function LinkedInSourcePanel({
 
   const handleSync = useCallback(async () => {
     setStatus('importing');
-    setMessage('Fetching LinkedIn data...');
+    setMessage('Fetching Google data...');
 
     try {
-      const importRes = await fetch('/api/import/linkedin/oauth', {
+      const importRes = await fetch('/api/import/google/oauth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ saveToProfile: true }),
       });
       const importData = await importRes.json();
-      if (!importRes.ok) throw new Error(importData.error || 'Failed to fetch LinkedIn data');
+      if (!importRes.ok) throw new Error(importData.error || 'Failed to fetch Google data');
 
-      setStatus('applying');
-      setMessage('Merging profile data...');
+      if (importData.data) {
+        setStatus('applying');
+        setMessage('Merging profile data...');
 
-      const liData = importData.data;
-      const syncBody = {
-        source: 'LINKEDIN' as const,
-        profile: liData.profile || {},
-        experiences: liData.experiences || [],
-        educations: liData.educations || [],
-        skills: (liData.skills || []).map((s: string | { name: string }) =>
-          typeof s === 'string' ? s : s.name
-        ),
-        links: liData.links || [],
-      };
+        const gData = importData.data;
+        const applyRes = await fetch('/api/import/sync-apply', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            source: 'GOOGLE',
+            profile: gData.profile || {},
+            links: gData.links || [],
+          }),
+        });
+        const applyData = await applyRes.json();
+        if (!applyRes.ok) throw new Error(applyData.error || 'Failed to merge Google data');
 
-      const applyRes = await fetch('/api/import/sync-apply', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(syncBody),
-      });
-      const applyData = await applyRes.json();
-      if (!applyRes.ok) throw new Error(applyData.error || 'Failed to merge LinkedIn data');
+        setStatus('success');
+        setMessage(applyData.message || 'Google data synced');
+      } else {
+        setStatus('success');
+        setMessage('Google account synced (no new data to import)');
+      }
 
-      setStatus('success');
-      setMessage(applyData.message || 'LinkedIn data synced');
       onSyncStatusRefreshAction();
     } catch (err) {
       setStatus('error');
-      setMessage(err instanceof Error ? err.message : 'Failed to sync LinkedIn');
+      setMessage(err instanceof Error ? err.message : 'Failed to sync Google');
     }
   }, [onSyncStatusRefreshAction]);
 
@@ -133,33 +157,35 @@ export function LinkedInSourcePanel({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Linkedin className="h-5 w-5 text-[#0A66C2]" />
-            LinkedIn Connection
+            <GoogleIcon className="h-5 w-5" />
+            Google Connection
           </CardTitle>
           <CardDescription>
-            {linkedinConnected
-              ? `Connected as ${connectedLinkedin?.firstName || connectedLinkedin?.username || 'User'}`
-              : syncStatus.sources.linkedin.oauthName
-                ? `Previously connected (${syncStatus.sources.linkedin.oauthName})`
-                : 'Connect your LinkedIn account to import profile data'}
+            {googleConnected
+              ? `Connected as ${displayInfo.displayName || displayInfo.email || 'Google User'}`
+              : 'Connect your Google account to import profile data'}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Connected account preview */}
-          {linkedinConnected && avatarUrl && (
+          {googleConnected && displayInfo.avatarUrl && (
             <div className="flex items-center gap-3 rounded-lg border bg-muted/30 p-3">
               <div className="relative h-10 w-10 overflow-hidden rounded-full">
                 <Image
-                  src={avatarUrl}
-                  alt={displayName || 'LinkedIn'}
+                  src={displayInfo.avatarUrl}
+                  alt={displayInfo.displayName || 'Google'}
                   fill
                   className="object-cover"
                   unoptimized
                 />
               </div>
               <div className="min-w-0 flex-1">
-                {displayName && <p className="truncate text-sm font-medium">{displayName}</p>}
-                {email && <p className="truncate text-xs text-muted-foreground">{email}</p>}
+                {displayInfo.displayName && (
+                  <p className="truncate text-sm font-medium">{displayInfo.displayName}</p>
+                )}
+                {displayInfo.email && (
+                  <p className="truncate text-xs text-muted-foreground">{displayInfo.email}</p>
+                )}
               </div>
             </div>
           )}
@@ -180,18 +206,19 @@ export function LinkedInSourcePanel({
 
           {/* Actions */}
           <div className="flex flex-wrap items-center gap-3">
-            {!linkedinConnected ? (
+            {!googleConnected ? (
               <Button
-                className="gap-2 bg-[#0A66C2] text-white hover:bg-[#004182]"
+                variant="outline"
+                className="gap-2"
                 onClick={handleConnect}
                 disabled={isConnecting}
               >
                 {isConnecting ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  <Linkedin className="h-4 w-4" />
+                  <GoogleIcon className="h-4 w-4" />
                 )}
-                {isConnecting ? 'Connecting...' : 'Connect LinkedIn'}
+                {isConnecting ? 'Connecting...' : 'Connect Google'}
               </Button>
             ) : (
               <div className="flex items-center gap-3">
@@ -216,10 +243,10 @@ export function LinkedInSourcePanel({
                       ? 'Merging...'
                       : 'Sync Now'}
                 </Button>
-                {syncStatus.sources.linkedin.lastImportedAt && (
+                {syncStatus.sources.google.lastImportedAt && (
                   <span className="flex items-center gap-1 text-xs text-muted-foreground">
                     <Clock className="h-3 w-3" />
-                    Last synced {formatDate(syncStatus.sources.linkedin.lastImportedAt)}
+                    Last synced {formatDate(syncStatus.sources.google.lastImportedAt)}
                   </span>
                 )}
               </div>
@@ -229,27 +256,24 @@ export function LinkedInSourcePanel({
       </Card>
 
       {/* Imported Data */}
-      {syncStatus.sources.linkedin.lastImportedAt && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Imported Data</CardTitle>
-            <CardDescription>Information imported from your LinkedIn account</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {displayName && <DataRow label="Name" value={displayName} />}
-              {email && <DataRow label="Email" value={email} />}
-              {avatarUrl && <DataRow label="Profile Photo" value="Imported" />}
-              {syncStatus.sources.linkedin.itemsImported > 0 && (
-                <DataRow label="LinkedIn Profile Link" value="Imported" />
-              )}
-            </div>
-            <p className="mt-4 text-xs text-muted-foreground">
-              For experience, education, and skills, use Resume import.
-            </p>
-          </CardContent>
-        </Card>
-      )}
+      {googleConnected &&
+        (displayInfo.displayName || displayInfo.email || displayInfo.avatarUrl) && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Data from Google</CardTitle>
+              <CardDescription>Information available from your Google account</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {displayInfo.displayName && (
+                  <DataRow label="Name" value={displayInfo.displayName} />
+                )}
+                {displayInfo.email && <DataRow label="Email" value={displayInfo.email} />}
+                {displayInfo.avatarUrl && <DataRow label="Profile Photo" value="Available" />}
+              </div>
+            </CardContent>
+          </Card>
+        )}
     </div>
   );
 }

@@ -5,6 +5,7 @@
 
 import type {
   Award,
+  BlogPost,
   Certification,
   ContactInfo,
   CustomContentType,
@@ -23,6 +24,7 @@ import type {
   SkillGroup,
   User,
   WorkExperience,
+  YouTubeVideo,
 } from '@prisma/client';
 
 // ===========================================
@@ -42,6 +44,8 @@ export interface FullProfile extends Profile {
   projects: Project[];
   awards: Award[];
   certifications: Certification[];
+  blogPosts: BlogPost[];
+  youtubeVideos: YouTubeVideo[];
   sections: ProfileSection[];
 }
 
@@ -58,6 +62,8 @@ export interface PublicProfile extends Omit<Profile, 'userId'> {
   projects: Project[];
   awards: Award[];
   certifications: Certification[];
+  blogPosts: BlogPost[];
+  youtubeVideos: YouTubeVideo[];
   sections: ProfileSection[];
 }
 
@@ -358,6 +364,7 @@ export interface SessionUser {
 // Re-export Prisma types for convenience
 export type {
   Award,
+  BlogPost,
   Certification,
   ContactInfo,
   CustomContentType,
@@ -376,6 +383,7 @@ export type {
   SkillGroup,
   User,
   WorkExperience,
+  YouTubeVideo,
 };
 
 // Note: SectionType, CustomContentType, ProfileSection are defined locally above

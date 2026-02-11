@@ -102,6 +102,40 @@ export interface NormalizedCertification {
   source: DataSource;
 }
 
+export interface NormalizedBlogPost {
+  title: string;
+  url: string;
+  slug?: string;
+  excerpt?: string;
+  content?: string;
+  thumbnail?: string;
+  author?: string;
+  publishedAt?: string;
+  tags?: string[];
+  readTimeMin?: number;
+  claps?: number;
+  platform?: string;
+  platformIcon?: string;
+  source: DataSource;
+}
+
+export interface NormalizedYouTubeVideo {
+  videoId: string;
+  title: string;
+  description?: string;
+  url: string;
+  thumbnail?: string;
+  channelId?: string;
+  channelTitle?: string;
+  publishedAt?: string;
+  duration?: string;
+  viewCount?: number;
+  likeCount?: number;
+  commentCount?: number;
+  tags?: string[];
+  source: DataSource;
+}
+
 // ===========================================
 // IMPORT RESULT TYPES
 // ===========================================
@@ -128,6 +162,8 @@ export interface NormalizedImportResult {
   educations?: NormalizedEducation[];
   skills?: NormalizedSkill[];
   certifications?: NormalizedCertification[];
+  blogPosts?: NormalizedBlogPost[];
+  youtubeVideos?: NormalizedYouTubeVideo[];
 
   // Meta information
   meta: {
@@ -147,6 +183,8 @@ export interface NormalizedImportResult {
     skills?: number;
     links?: number;
     certifications?: number;
+    blogPosts?: number;
+    youtubeVideos?: number;
   };
 }
 
@@ -318,4 +356,52 @@ export interface CreateImportJob {
   source: DataSource;
   inputType: 'file' | 'oauth' | 'text' | 'url';
   inputData?: unknown;
+}
+
+// ===========================================
+// MEDIUM / BLOG IMPORT INTERFACES
+// ===========================================
+
+/**
+ * Medium & blog import service interface
+ * Uses RSS feeds — 100% legal, publicly available data
+ */
+export interface IMediumImportService {
+  /**
+   * Import blog posts from a Medium user's RSS feed
+   * @param username - Medium username (with or without @)
+   */
+  importFromMedium(username: string, userId: string): Promise<ImportServiceResult>;
+
+  /**
+   * Import blog posts from any RSS/Atom feed URL
+   * Works with Substack, Dev.to, Hashnode, WordPress, Ghost, etc.
+   */
+  importFromRSS(feedUrl: string, userId: string, platform?: string): Promise<ImportServiceResult>;
+}
+
+// ===========================================
+// YOUTUBE IMPORT INTERFACE
+// ===========================================
+
+/**
+ * YouTube import service interface
+ * Uses official YouTube Data API v3 — legal, requires API key
+ */
+export interface IYouTubeImportService {
+  /**
+   * Import videos from a YouTube channel
+   * @param channelInput - Channel URL, channel ID, or @handle
+   */
+  importFromYouTube(channelInput: string, userId: string): Promise<ImportServiceResult>;
+
+  /**
+   * Import a single YouTube video by URL
+   */
+  importVideo(videoUrl: string, userId: string): Promise<ImportServiceResult>;
+
+  /**
+   * Refresh/re-import videos from YouTube
+   */
+  refreshYouTube(channelId: string, userId: string): Promise<ImportServiceResult>;
 }

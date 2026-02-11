@@ -19,6 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import Image from 'next/image';
 
 import type { Project } from '@/types';
 import type { SyncStatus } from './source-types';
@@ -57,6 +58,14 @@ export function GitHubSourcePanel({
 
   const githubConnected = !!connectedGithub;
   const effectiveUsername = connectedGithub?.username || githubUsername.trim();
+
+  const avatarUrl = syncStatus.sources.github.avatarUrl || connectedGithub?.imageUrl || null;
+  const displayName = syncStatus.sources.github.oauthUsername
+    ? `@${syncStatus.sources.github.oauthUsername}`
+    : connectedGithub?.username
+      ? `@${connectedGithub.username}`
+      : null;
+  const email = syncStatus.sources.github.emailAddress || connectedGithub?.emailAddress || null;
 
   // GitHub-sourced projects
   const githubProjects = projects.filter((p) => p.source === 'GITHUB');
@@ -176,6 +185,25 @@ export function GitHubSourcePanel({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Connected account preview */}
+          {githubConnected && avatarUrl && (
+            <div className="flex items-center gap-3 rounded-lg border bg-muted/30 p-3">
+              <div className="relative h-10 w-10 overflow-hidden rounded-full">
+                <Image
+                  src={avatarUrl}
+                  alt={displayName || 'GitHub'}
+                  fill
+                  className="object-cover"
+                  unoptimized
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                {displayName && <p className="truncate text-sm font-medium">{displayName}</p>}
+                {email && <p className="truncate text-xs text-muted-foreground">{email}</p>}
+              </div>
+            </div>
+          )}
+
           {/* Status messages */}
           {status === 'success' && message && (
             <div className="rounded-md bg-green-50 p-3 text-sm text-green-700 dark:bg-green-950/30 dark:text-green-400">
