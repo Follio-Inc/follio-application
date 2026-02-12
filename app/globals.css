@@ -229,3 +229,428 @@
     background-color: hsl(var(--muted-foreground) / 0.5);
   }
 }
+
+/* ==========================================================================
+   CLEAN RESUME VIEW STYLES
+   Typography-first, paper-like resume design
+   ========================================================================== */
+
+@layer components {
+  /* Paper container - the document feel */
+  .resume-paper {
+    @apply mx-auto bg-white text-gray-900;
+    max-width: 816px; /* 8.5 inches at 96dpi */
+    padding: 48px 56px;
+    font-family: 'Georgia', 'Times New Roman', Times, serif;
+    font-size: 13px;
+    line-height: 1.5;
+    box-shadow:
+      0 1px 3px rgba(0, 0, 0, 0.08),
+      0 8px 30px rgba(0, 0, 0, 0.06);
+    border-radius: 2px;
+  }
+
+  /* Dark mode - inverted paper look */
+  .dark .resume-paper {
+    @apply bg-gray-900 text-gray-100;
+    box-shadow:
+      0 1px 3px rgba(0, 0, 0, 0.3),
+      0 8px 30px rgba(0, 0, 0, 0.2),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  }
+
+  /* Header Section */
+  .resume-header {
+    text-align: center;
+    margin-bottom: 24px;
+  }
+
+  .resume-name {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    margin: 0;
+    color: inherit;
+  }
+
+  .resume-headline {
+    font-size: 15px;
+    color: #555;
+    margin-top: 4px;
+    font-style: italic;
+  }
+
+  .dark .resume-headline {
+    color: #a0a0a0;
+  }
+
+  .resume-contact-line {
+    font-size: 12px;
+    color: #666;
+    margin-top: 10px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  .dark .resume-contact-line {
+    color: #999;
+  }
+
+  .resume-contact-separator {
+    color: #999;
+  }
+
+  .dark .resume-contact-separator {
+    color: #666;
+  }
+
+  /* Section Headers */
+  .resume-section {
+    margin-top: 20px;
+  }
+
+  .resume-section-header {
+    margin-bottom: 12px;
+  }
+
+  .resume-section-title {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: inherit;
+    margin: 0 0 6px 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  .resume-section-line {
+    height: 1px;
+    background: currentColor;
+    opacity: 0.2;
+  }
+
+  /* Summary */
+  .resume-summary {
+    text-align: justify;
+    margin: 0;
+  }
+
+  /* Entry blocks (experience, education, etc.) */
+  .resume-entries {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .resume-entries-compact {
+    gap: 8px;
+  }
+
+  .resume-entry {
+    break-inside: avoid;
+  }
+
+  .resume-entry-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .resume-entry-title-block {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .resume-entry-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin: 0;
+    color: inherit;
+  }
+
+  .resume-entry-subtitle {
+    font-size: 13px;
+    color: #555;
+    margin: 1px 0 0 0;
+  }
+
+  .dark .resume-entry-subtitle {
+    color: #a0a0a0;
+  }
+
+  .resume-entry-date {
+    font-size: 12px;
+    color: #666;
+    white-space: nowrap;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    flex-shrink: 0;
+  }
+
+  .dark .resume-entry-date {
+    color: #888;
+  }
+
+  .resume-entry-tech {
+    font-size: 11px;
+    color: #777;
+    margin: 2px 0 0 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  .dark .resume-entry-tech {
+    color: #888;
+  }
+
+  .resume-entry-description {
+    font-size: 13px;
+    margin: 6px 0 0 0;
+    text-align: justify;
+  }
+
+  .resume-entry-details {
+    margin-top: 4px;
+    font-size: 12px;
+    color: #666;
+  }
+
+  .dark .resume-entry-details {
+    color: #888;
+  }
+
+  .resume-entry-details p {
+    margin: 2px 0;
+  }
+
+  .resume-entry-tags {
+    font-size: 11px;
+    color: #777;
+    margin-top: 4px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  /* Bullet points */
+  .resume-bullets {
+    margin: 8px 0 0 0;
+    padding-left: 18px;
+    list-style: disc;
+  }
+
+  .resume-bullets li {
+    margin-bottom: 3px;
+    padding-left: 4px;
+  }
+
+  .resume-bullets li::marker {
+    color: #666;
+  }
+
+  .dark .resume-bullets li::marker {
+    color: #888;
+  }
+
+  /* Skills */
+  .resume-skills-grouped {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .resume-skill-group {
+    font-size: 13px;
+  }
+
+  .resume-skill-group-name {
+    font-weight: 600;
+  }
+
+  .resume-skill-group-items {
+    color: #555;
+  }
+
+  .dark .resume-skill-group-items {
+    color: #a0a0a0;
+  }
+
+  .resume-skills-flat {
+    font-size: 13px;
+    margin: 0;
+  }
+
+  /* Inline entries (certifications, awards) */
+  .resume-entry-inline {
+    font-size: 13px;
+    margin-bottom: 4px;
+  }
+
+  .resume-entry-inline-title {
+    font-weight: 600;
+  }
+
+  .resume-entry-inline-issuer {
+    color: #555;
+  }
+
+  .dark .resume-entry-inline-issuer {
+    color: #a0a0a0;
+  }
+
+  .resume-entry-inline-date {
+    color: #777;
+    font-size: 12px;
+  }
+
+  .dark .resume-entry-inline-date {
+    color: #888;
+  }
+
+  .resume-entry-inline-description {
+    font-size: 12px;
+    color: #666;
+    margin: 2px 0 0 0;
+    padding-left: 12px;
+  }
+
+  .dark .resume-entry-inline-description {
+    color: #888;
+  }
+
+  /* Publications */
+  .resume-publication {
+    margin-bottom: 10px;
+  }
+
+  .resume-publication-title {
+    font-weight: 600;
+    margin: 0;
+  }
+
+  .resume-publication-title a {
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px dotted currentColor;
+  }
+
+  .resume-publication-title a:hover {
+    opacity: 0.8;
+  }
+
+  .resume-publication-authors {
+    font-size: 12px;
+    color: #555;
+    margin: 2px 0 0 0;
+  }
+
+  .dark .resume-publication-authors {
+    color: #a0a0a0;
+  }
+
+  .resume-publication-meta {
+    font-size: 12px;
+    color: #777;
+    font-style: italic;
+    margin: 2px 0 0 0;
+  }
+
+  .dark .resume-publication-meta {
+    color: #888;
+  }
+
+  /* Languages and Interests */
+  .resume-languages,
+  .resume-interests {
+    font-size: 13px;
+    margin: 0;
+  }
+
+  /* Freeform content */
+  .resume-freeform {
+    font-size: 13px;
+    white-space: pre-wrap;
+    margin: 0;
+  }
+
+  /* Project links */
+  .resume-project-link {
+    color: inherit;
+    text-decoration: none;
+    font-size: 12px;
+    opacity: 0.6;
+    transition: opacity 0.15s;
+  }
+
+  .resume-project-link:hover {
+    opacity: 1;
+  }
+
+  /* Actions bar */
+  .resume-actions {
+    @apply sticky top-4 z-10 mx-auto mb-4 flex w-fit gap-2 rounded-full bg-background/80 p-2 shadow-lg backdrop-blur-sm;
+    border: 1px solid hsl(var(--border));
+  }
+
+  .resume-action-button {
+    @apply gap-2 rounded-full px-4;
+  }
+}
+
+/* Print styles for clean resume */
+@media print {
+  /* Hide everything except the resume */
+  body > *:not(.resume-paper),
+  .resume-actions,
+  header,
+  footer,
+  nav {
+    display: none !important;
+  }
+
+  /* Reset the paper styling for print */
+  .resume-paper {
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: none !important;
+    border-radius: 0 !important;
+    background: white !important;
+    color: black !important;
+  }
+
+  /* Ensure proper page breaks */
+  .resume-section {
+    break-inside: avoid;
+  }
+
+  .resume-entry {
+    break-inside: avoid;
+  }
+
+  /* Hide interactive elements */
+  .resume-project-link {
+    display: none;
+  }
+
+  /* Adjust colors for print */
+  .resume-headline,
+  .resume-contact-line,
+  .resume-entry-subtitle,
+  .resume-entry-date,
+  .resume-entry-tech,
+  .resume-skill-group-items,
+  .resume-entry-inline-issuer,
+  .resume-entry-inline-date,
+  .resume-publication-authors,
+  .resume-publication-meta,
+  .resume-entry-details {
+    color: #444 !important;
+  }
+
+  .resume-bullets li::marker {
+    color: #444 !important;
+  }
+
+  /* Page setup */
+  @page {
+    margin: 0.5in;
+    size: letter;
+  }
+}

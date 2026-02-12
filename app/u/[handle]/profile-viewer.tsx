@@ -5,8 +5,8 @@ import Link from 'next/link';
 import { useState } from 'react';
 
 import { ViewSwitcher } from './view-switcher';
+import { CleanResumeView } from './views/clean-resume-view';
 import { PortfolioView } from './views/portfolio-view';
-import { ResumeView } from './views/resume-view';
 import { SnapshotView } from './views/snapshot-view';
 import { TimelineView } from './views/timeline-view';
 
@@ -39,7 +39,7 @@ export function ProfileViewer({ profile, initialView }: ProfileViewerProps) {
           transition={{ duration: 0.3 }}
           className="container max-w-5xl py-8 pb-24"
         >
-          {currentView === 'resume' && <ResumeView profile={profile} />}
+          {currentView === 'resume' && <CleanResumeView profile={profile} />}
           {currentView === 'portfolio' && <PortfolioView profile={profile} />}
           {currentView === 'timeline' && <TimelineView profile={profile} />}
           {currentView === 'snapshot' && <SnapshotView profile={profile} />}

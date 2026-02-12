@@ -1,8 +1,9 @@
 'use client';
 
+import { useUser } from '@clerk/nextjs';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Eye, EyeOff, Globe } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { ContactSection } from '@/components/contact-section';
@@ -23,6 +24,8 @@ interface BasicInfoFormProps {
 }
 
 export function BasicInfoForm({ profile, onUpdate }: BasicInfoFormProps) {
+  const { user } = useUser();
+  const [hasAutoSyncedAvatar, setHasAutoSyncedAvatar] = useState(false);
   const form = useForm<ProfileBasicInfo>({
     resolver: zodResolver(ProfileBasicInfoSchema),
     defaultValues: {
@@ -34,6 +37,27 @@ export function BasicInfoForm({ profile, onUpdate }: BasicInfoFormProps) {
       avatarUrl: profile.avatarUrl || '',
     },
   });
+
+  // Auto-sync Clerk avatar to profile if profile has no avatar but Clerk does
+  // This runs once when the component mounts if conditions are met
+  useEffect(() => {
+    if (hasAutoSyncedAvatar) return;
+
+    const currentAvatar = profile.avatarUrl;
+    if (!currentAvatar && user?.imageUrl) {
+      // Only sync if the Clerk avatar is not the default Clerk avatar
+      // Default Clerk avatars are from ui-avatars.com or similar
+      const isDefaultAvatar =
+        user.imageUrl.includes('ui-avatars.com') ||
+        user.imageUrl.includes('gravatar.com/avatar') ||
+        user.imageUrl.includes('clerk.com');
+      if (!isDefaultAvatar) {
+        setHasAutoSyncedAvatar(true);
+        form.setValue('avatarUrl', user.imageUrl);
+        onUpdate({ avatarUrl: user.imageUrl });
+      }
+    }
+  }, [profile.avatarUrl, user?.imageUrl, hasAutoSyncedAvatar, form, onUpdate]);
 
   const handleChange = (field: keyof ProfileBasicInfo, value: string) => {
     form.setValue(field, value);

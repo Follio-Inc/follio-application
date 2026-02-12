@@ -1,7 +1,7 @@
 'use client';
 
 import { useUser } from '@clerk/nextjs';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   AlertCircle,
   ArrowRight,
@@ -14,15 +14,15 @@ import {
   Loader2,
   Plus,
   Upload,
+  User,
   X,
 } from 'lucide-react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { fileToBase64, getBestResolutionImage, parsePhoneWithCountryCode } from '@/lib/utils';
@@ -65,7 +65,7 @@ const savePhotoToIndexedDB = async (key: string, photoBase64: string): Promise<v
   });
 };
 
-const _getPhotoFromIndexedDB = async (key: string): Promise<string | null> => {
+const getPhotoFromIndexedDB = async (key: string): Promise<string | null> => {
   try {
     const db = await openPhotoDatabase();
     return new Promise((resolve, reject) => {
@@ -139,6 +139,8 @@ interface PersistedImportState {
   imports: Record<ImportSource, ImportStatus>;
   importedData: Record<string, unknown>;
   githubUsername: string;
+  resumeFileName?: string | null;
+  uploadedPhotoKey?: string | null;
 }
 
 export default function OnboardingImportPage() {
@@ -149,13 +151,35 @@ export default function OnboardingImportPage() {
   const [hasRestoredPersistedState, setHasRestoredPersistedState] = useState(false);
   const [isCheckingProfile, setIsCheckingProfile] = useState(true);
 
+  // Fallback: if loading takes too long, just show the page anyway
+  useEffect(() => {
+    const fallbackTimeout = setTimeout(() => {
+      setIsCheckingProfile(false);
+    }, 3000);
+    return () => clearTimeout(fallbackTimeout);
+  }, []);
+
   // Check if user already has a profile (for returning users who land here via sign-up flow)
   useEffect(() => {
     if (!isUserLoaded) return;
 
+    // If user is not authenticated after loading, just show the page
+    if (!user) {
+      setIsCheckingProfile(false);
+      return;
+    }
+
+    let timeoutId: NodeJS.Timeout;
+
     const checkExistingProfile = async () => {
       try {
-        const response = await fetch('/api/profile');
+        // Add a timeout to prevent hanging indefinitely
+        const controller = new AbortController();
+        timeoutId = setTimeout(() => controller.abort(), 5000);
+
+        const response = await fetch('/api/profile', { signal: controller.signal });
+        clearTimeout(timeoutId);
+
         if (response.ok) {
           const data = await response.json();
           // If user has a profile with a handle, redirect to their profile page
@@ -165,14 +189,20 @@ export default function OnboardingImportPage() {
           }
         }
       } catch (err) {
-        // If there's an error, just continue with onboarding
-        console.error('Error checking for existing profile:', err);
+        // If there's an error (including timeout), just continue with onboarding
+        if (err instanceof Error && err.name !== 'AbortError') {
+          console.error('Error checking for existing profile:', err);
+        }
       }
       setIsCheckingProfile(false);
     };
 
     checkExistingProfile();
-  }, [isUserLoaded, router]);
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [isUserLoaded, user, router]);
 
   // GitHub OAuth states
   const [githubConnecting, setGithubConnecting] = useState(false);
@@ -203,9 +233,8 @@ export default function OnboardingImportPage() {
   const [manualLinks, setManualLinks] = useState<ManualLink[]>([{ url: '' }]);
   const [showLinksForm, setShowLinksForm] = useState(false);
 
-  // Profile photo state - grid-based picker
-  const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]); // Array of uploaded base64 photos
-  const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null); // 'google', 'linkedin', 'github', 'upload-0', 'upload-1', etc. or null for none
+  // Profile photo state - single upload
+  const [uploadedPhoto, setUploadedPhoto] = useState<string | null>(null); // Uploaded base64 photo
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
   // Resume filename state
@@ -309,21 +338,30 @@ export default function OnboardingImportPage() {
   })();
 
   // Save import state to sessionStorage (used before OAuth redirects)
-  const saveImportState = useCallback(() => {
+  const saveImportState = useCallback(async () => {
     const storageKey = getStorageKey(user?.id);
     if (!storageKey) return;
 
     try {
+      // Save uploaded photo to IndexedDB if present (too large for sessionStorage)
+      let uploadedPhotoKey: string | null = null;
+      if (uploadedPhoto) {
+        uploadedPhotoKey = `onboarding_photo_${user?.id || 'anon'}`;
+        await savePhotoToIndexedDB(uploadedPhotoKey, uploadedPhoto);
+      }
+
       const stateToSave: PersistedImportState = {
         imports,
         importedData,
         githubUsername,
+        resumeFileName,
+        uploadedPhotoKey,
       };
       sessionStorage.setItem(storageKey, JSON.stringify(stateToSave));
     } catch (err) {
       console.error('Failed to save import state:', err);
     }
-  }, [imports, importedData, githubUsername, user?.id]);
+  }, [imports, importedData, githubUsername, uploadedPhoto, resumeFileName, user?.id]);
 
   // Restore state from sessionStorage on mount (for after OAuth redirects)
   useEffect(() => {
@@ -335,37 +373,54 @@ export default function OnboardingImportPage() {
       return;
     }
 
-    try {
-      const savedState = sessionStorage.getItem(storageKey);
-      if (savedState) {
-        const parsed: PersistedImportState = JSON.parse(savedState);
+    const restoreState = async () => {
+      try {
+        const savedState = sessionStorage.getItem(storageKey);
+        if (savedState) {
+          const parsed: PersistedImportState = JSON.parse(savedState);
 
-        // Restore import statuses
-        if (parsed.imports) {
-          setImports(parsed.imports);
+          // Restore import statuses
+          if (parsed.imports) {
+            setImports(parsed.imports);
+          }
+
+          // Restore imported data
+          if (parsed.importedData) {
+            setImportedData(parsed.importedData);
+          }
+
+          // Restore GitHub username
+          if (parsed.githubUsername) {
+            setGithubUsername(parsed.githubUsername);
+          }
+
+          // Restore resume filename
+          if (parsed.resumeFileName) {
+            setResumeFileName(parsed.resumeFileName);
+          }
+
+          // Restore uploaded photo from IndexedDB
+          if (parsed.uploadedPhotoKey) {
+            const photoData = await getPhotoFromIndexedDB(parsed.uploadedPhotoKey);
+            if (photoData) {
+              setUploadedPhoto(photoData);
+            }
+          }
+
+          // Clear the saved state after restoring
+          sessionStorage.removeItem(storageKey);
+
+          // Reload user to get updated external accounts after OAuth redirect
+          user.reload().catch(console.error);
         }
-
-        // Restore imported data
-        if (parsed.importedData) {
-          setImportedData(parsed.importedData);
-        }
-
-        // Restore GitHub username
-        if (parsed.githubUsername) {
-          setGithubUsername(parsed.githubUsername);
-        }
-
-        // Clear the saved state after restoring
-        sessionStorage.removeItem(storageKey);
-
-        // Reload user to get updated external accounts after OAuth redirect
-        user.reload().catch(console.error);
+      } catch (err) {
+        console.error('Failed to restore import state:', err);
       }
-    } catch (err) {
-      console.error('Failed to restore import state:', err);
-    }
 
-    setHasRestoredPersistedState(true);
+      setHasRestoredPersistedState(true);
+    };
+
+    restoreState();
   }, [hasRestoredPersistedState, isUserLoaded, user]);
 
   // Auto-import from connected GitHub if just connected via OAuth
@@ -518,7 +573,7 @@ export default function OnboardingImportPage() {
 
     try {
       // Save state before OAuth redirect so we can restore it when we come back
-      saveImportState();
+      await saveImportState();
 
       const externalAccount = await user?.createExternalAccount({
         strategy: 'oauth_github',
@@ -711,7 +766,7 @@ export default function OnboardingImportPage() {
 
     try {
       // Save state before OAuth redirect so we can restore it when we come back
-      saveImportState();
+      await saveImportState();
 
       const externalAccount = await user?.createExternalAccount({
         strategy: 'oauth_linkedin_oidc',
@@ -813,7 +868,7 @@ export default function OnboardingImportPage() {
 
     try {
       // Save state before OAuth redirect so we can restore it when we come back
-      saveImportState();
+      await saveImportState();
 
       const externalAccount = await user?.createExternalAccount({
         strategy: 'oauth_google',
@@ -971,9 +1026,7 @@ export default function OnboardingImportPage() {
     try {
       // Convert to base64 for storage and preview
       const base64 = await fileToBase64(file);
-      const newIndex = uploadedPhotos.length;
-      setUploadedPhotos((prev) => [...prev, base64]);
-      setSelectedPhotoId(`upload-${newIndex}`); // Auto-select newly uploaded photo
+      setUploadedPhoto(base64);
       setIsUploadingPhoto(false);
     } catch {
       setError('Failed to process image');
@@ -981,20 +1034,9 @@ export default function OnboardingImportPage() {
     }
   };
 
-  // Remove an uploaded photo
-  const handleRemoveUploadedPhoto = (index: number) => {
-    setUploadedPhotos((prev) => prev.filter((_, i) => i !== index));
-    // If the removed photo was selected, clear selection
-    if (selectedPhotoId === `upload-${index}`) {
-      setSelectedPhotoId(null);
-    }
-    // Adjust selectedPhotoId if it's an upload with higher index
-    if (selectedPhotoId?.startsWith('upload-')) {
-      const selectedIndex = parseInt(selectedPhotoId.split('-')[1]);
-      if (selectedIndex > index) {
-        setSelectedPhotoId(`upload-${selectedIndex - 1}`);
-      }
-    }
+  // Remove the uploaded photo
+  const handleRemoveUploadedPhoto = () => {
+    setUploadedPhoto(null);
   };
 
   // Get all available photos as an array with source info
@@ -1117,25 +1159,23 @@ export default function OnboardingImportPage() {
       });
     }
 
-    // Uploaded photos
-    uploadedPhotos.forEach((photo, index) => {
-      addPhoto({
-        id: `upload-${index}`,
-        url: photo,
+    // Uploaded photo (highest priority - always added first if exists)
+    if (uploadedPhoto) {
+      // Insert uploaded photo at the beginning for highest priority
+      photos.unshift({
+        id: 'upload',
+        url: uploadedPhoto,
         source: 'upload',
-        label: `Upload ${index + 1}`,
+        label: 'Upload',
       });
-    });
+    }
 
     return photos;
   };
 
-  // Get the currently selected photo URL
-  const getSelectedPhotoUrl = (): string | null => {
-    if (!selectedPhotoId) return null;
-    const photos = getAvailablePhotos();
-    const selected = photos.find((p) => p.id === selectedPhotoId);
-    return selected?.url || null;
+  // Get the uploaded photo URL (priority over other sources)
+  const getUploadedPhotoUrl = (): string | null => {
+    return uploadedPhoto;
   };
 
   // Create profile and continue - ALWAYS goes to review
@@ -1151,10 +1191,10 @@ export default function OnboardingImportPage() {
       }
     }
 
-    // Use the selected photo from the grid, or pick the best resolution if none selected
-    let bestAvatarUrl: string | null = getSelectedPhotoUrl();
+    // Use the uploaded photo if available, otherwise pick the best from other sources
+    let bestAvatarUrl: string | null = getUploadedPhotoUrl();
 
-    // If no photo selected, compare resolutions of available photos to find the best one
+    // If no photo uploaded, compare resolutions of available photos (Google, LinkedIn, GitHub) to find the best one
     if (!bestAvatarUrl) {
       const photos = getAvailablePhotos();
       if (photos.length > 0) {
@@ -1453,100 +1493,119 @@ export default function OnboardingImportPage() {
               whileHover={{ y: -4, transition: { duration: 0.2 } }}
               className="group"
             >
-              <Card className="relative h-full overflow-hidden border-2 border-transparent bg-gradient-to-br from-background to-muted/30 transition-all duration-300 hover:border-primary/20 hover:shadow-xl hover:shadow-primary/5">
-                <CardContent className="flex h-full flex-col p-5">
-                  <div className="mb-4 flex items-start justify-between">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500/10 to-purple-500/10 ring-1 ring-violet-500/20">
-                      <Camera className="h-6 w-6 text-violet-500" />
-                    </div>
-                    {selectedPhotoId && !isUploadingPhoto ? (
-                      <CheckCircle2 className="h-5 w-5 text-green-500" />
-                    ) : isUploadingPhoto ? (
+              <div className="relative h-full overflow-hidden rounded-2xl border border-border/60 bg-card p-5 transition-all duration-300 hover:border-border hover:shadow-md hover:shadow-black/5 dark:hover:shadow-black/20">
+                {/* Status indicator */}
+                <AnimatePresence>
+                  {uploadedPhoto && !isUploadingPhoto && (
+                    <motion.div
+                      initial={{ scale: 0, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0, opacity: 0 }}
+                      className="absolute right-3 top-3 z-10"
+                    >
+                      <div className="flex h-5 w-5 items-center justify-center rounded-full bg-green-500 shadow-sm">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-white" />
+                      </div>
+                    </motion.div>
+                  )}
+                  {isUploadingPhoto && (
+                    <motion.div
+                      initial={{ scale: 0, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0, opacity: 0 }}
+                      className="absolute right-3 top-3 z-10"
+                    >
                       <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                    ) : null}
-                  </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
-                  <h3 className="mb-1 font-semibold">Profile Photo</h3>
-                  <p className="mb-4 text-sm text-muted-foreground">
-                    {getAvailablePhotos().length > 0
-                      ? 'Select a photo or upload your own'
-                      : 'Upload a photo to personalize your profile'}
-                  </p>
-
-                  {/* Photo Grid */}
-                  <div className="grid grid-cols-4 gap-2">
-                    {getAvailablePhotos().map((photo) => (
-                      <div key={photo.id} className="group/photo relative">
+                {/* Avatar & Logo Section */}
+                <div className="relative mb-4 flex items-center justify-center">
+                  <AnimatePresence mode="wait">
+                    {uploadedPhoto ? (
+                      <motion.div
+                        key="avatar"
+                        initial={{ scale: 0.8, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0.8, opacity: 0 }}
+                        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+                        className="group/photo relative"
+                      >
                         <button
                           type="button"
-                          onClick={() =>
-                            setSelectedPhotoId(selectedPhotoId === photo.id ? null : photo.id)
-                          }
-                          className={`relative aspect-square w-full overflow-hidden rounded-lg border-2 transition-all ${
-                            selectedPhotoId === photo.id
-                              ? 'border-primary ring-2 ring-primary/20'
-                              : 'border-transparent hover:border-muted-foreground/30'
-                          }`}
+                          onClick={() => document.getElementById('photo-upload')?.click()}
+                          disabled={isUploadingPhoto}
+                          className="relative h-20 w-20 overflow-hidden rounded-full ring-2 ring-white/80 transition-all hover:ring-primary/50 dark:ring-gray-800/80"
                         >
-                          <Avatar className="h-full w-full rounded-lg">
-                            <AvatarImage src={photo.url} className="h-full w-full object-cover" />
-                            <AvatarFallback className="rounded-lg">{photo.label[0]}</AvatarFallback>
-                          </Avatar>
-                          {selectedPhotoId === photo.id && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-primary/10">
-                              <CheckCircle2 className="h-5 w-5 text-primary" />
-                            </div>
+                          <Image
+                            src={uploadedPhoto}
+                            alt="Profile"
+                            fill
+                            className="object-cover"
+                            unoptimized
+                          />
+                          {/* Hover overlay */}
+                          <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 opacity-0 transition-opacity group-hover/photo:opacity-100">
+                            <Camera className="h-6 w-6 text-white" />
+                          </div>
+                        </button>
+                        <div className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-white shadow-sm dark:border-gray-800 dark:bg-gray-800">
+                          <Camera className="h-3.5 w-3.5 text-violet-500" />
+                        </div>
+                        {/* Remove button */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveUploadedPhoto();
+                          }}
+                          className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground opacity-0 shadow-sm transition-opacity hover:bg-destructive/90 group-hover/photo:opacity-100"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        key="placeholder"
+                        initial={{ scale: 0.8, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0.8, opacity: 0 }}
+                        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => document.getElementById('photo-upload')?.click()}
+                          disabled={isUploadingPhoto}
+                          className="flex h-20 w-20 items-center justify-center rounded-full border-2 border-dashed border-muted-foreground/30 bg-muted/50 shadow-sm transition-all hover:border-primary hover:bg-primary/5 dark:bg-muted/30 dark:hover:bg-primary/10"
+                        >
+                          {isUploadingPhoto ? (
+                            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                          ) : (
+                            <User className="h-8 w-8 text-muted-foreground/50" />
                           )}
                         </button>
-                        {/* Source label */}
-                        <span className="mt-1 block truncate text-center text-[10px] text-muted-foreground">
-                          {photo.label}
-                        </span>
-                        {/* Remove button for uploaded photos */}
-                        {photo.source === 'upload' && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              const index = parseInt(photo.id.split('-')[1]);
-                              handleRemoveUploadedPhoto(index);
-                            }}
-                            className="absolute -right-1 -top-1 hidden h-5 w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-sm group-hover/photo:flex"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                    {/* Upload button - always shown as last item */}
-                    <div className="relative">
-                      <button
-                        type="button"
-                        onClick={() => document.getElementById('photo-upload')?.click()}
-                        disabled={isUploadingPhoto}
-                        className="flex aspect-square w-full items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/30 transition-all hover:border-primary hover:bg-primary/5"
-                      >
-                        {isUploadingPhoto ? (
-                          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                        ) : (
-                          <Plus className="h-5 w-5 text-muted-foreground" />
-                        )}
-                      </button>
-                      <span className="mt-1 block text-center text-[10px] text-muted-foreground">
-                        Upload
-                      </span>
-                    </div>
-                  </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
 
-                  <input
-                    id="photo-upload"
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handlePhotoUpload}
-                  />
-                </CardContent>
-              </Card>
+                {/* Name & Info */}
+                <div className="space-y-1 text-center">
+                  <h3 className="text-sm font-semibold text-foreground">Profile Photo</h3>
+                  <p className="text-xs text-muted-foreground">
+                    {uploadedPhoto ? 'Click to change photo' : 'Click to upload your photo'}
+                  </p>
+                </div>
+
+                <input
+                  id="photo-upload"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handlePhotoUpload}
+                />
+              </div>
             </motion.div>
 
             {/* Resume Card */}
@@ -1557,8 +1616,8 @@ export default function OnboardingImportPage() {
               whileHover={{ y: -4, transition: { duration: 0.2 } }}
               className="group"
             >
-              <Card className="relative h-full overflow-hidden border-2 border-transparent bg-gradient-to-br from-background to-muted/30 transition-all duration-300 hover:border-primary/20 hover:shadow-xl hover:shadow-primary/5">
-                <CardContent className="flex h-full flex-col p-5">
+              <div className="relative h-full overflow-hidden rounded-2xl border border-border/60 bg-card p-5 transition-all duration-300 hover:border-border hover:shadow-md hover:shadow-black/5 dark:hover:shadow-black/20">
+                <div className="flex h-full flex-col">
                   <div className="mb-4 flex items-start justify-between">
                     <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500/10 to-red-500/10 ring-1 ring-orange-500/20">
                       <FileText className="h-6 w-6 text-orange-500" />
@@ -1643,8 +1702,8 @@ export default function OnboardingImportPage() {
                     className="hidden"
                     onChange={handleResumeUpload}
                   />
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             </motion.div>
 
             {/* GitHub Card */}
@@ -1655,16 +1714,7 @@ export default function OnboardingImportPage() {
               whileHover={{ y: -4, transition: { duration: 0.2 } }}
               className="group"
             >
-              <div
-                className={cn(
-                  'relative h-full overflow-hidden rounded-2xl border bg-gradient-to-br p-5 transition-all duration-300',
-                  'ring-gray-200 dark:ring-gray-700',
-                  connectedGithub
-                    ? 'from-gray-50 to-slate-50 dark:from-gray-900/40 dark:to-slate-900/40'
-                    : 'from-gray-50 to-slate-50 hover:from-gray-100 hover:to-slate-100 dark:from-gray-900/50 dark:to-slate-900/50 dark:hover:from-gray-800/60 dark:hover:to-slate-800/60',
-                  'hover:shadow-md hover:shadow-black/5 dark:hover:shadow-black/20'
-                )}
-              >
+              <div className="relative h-full overflow-hidden rounded-2xl border border-border/60 bg-card p-5 transition-all duration-300 hover:border-border hover:shadow-md hover:shadow-black/5 dark:hover:shadow-black/20">
                 {/* Status indicator */}
                 <AnimatePresence>
                   {connectedGithub && (
@@ -1841,16 +1891,7 @@ export default function OnboardingImportPage() {
               whileHover={{ y: -4, transition: { duration: 0.2 } }}
               className="group"
             >
-              <div
-                className={cn(
-                  'relative h-full overflow-hidden rounded-2xl border bg-gradient-to-br p-5 transition-all duration-300',
-                  'ring-blue-200 dark:ring-blue-800',
-                  connectedLinkedin
-                    ? 'from-blue-50/80 to-sky-50/80 dark:from-blue-950/20 dark:to-sky-950/20'
-                    : 'from-blue-50 to-sky-50 hover:from-blue-100 hover:to-sky-100 dark:from-blue-950/30 dark:to-sky-950/30 dark:hover:from-blue-900/40 dark:hover:to-sky-900/40',
-                  'hover:shadow-md hover:shadow-black/5 dark:hover:shadow-black/20'
-                )}
-              >
+              <div className="relative h-full overflow-hidden rounded-2xl border border-border/60 bg-card p-5 transition-all duration-300 hover:border-border hover:shadow-md hover:shadow-black/5 dark:hover:shadow-black/20">
                 {/* Status indicator */}
                 <AnimatePresence>
                   {connectedLinkedin && (
@@ -2026,16 +2067,7 @@ export default function OnboardingImportPage() {
               whileHover={{ y: -4, transition: { duration: 0.2 } }}
               className="group"
             >
-              <div
-                className={cn(
-                  'relative h-full overflow-hidden rounded-2xl border bg-gradient-to-br p-5 transition-all duration-300',
-                  'ring-gray-200 dark:ring-gray-700',
-                  connectedGoogle
-                    ? 'from-red-50/40 via-yellow-50/40 to-blue-50/40 dark:from-red-950/10 dark:via-yellow-950/10 dark:to-blue-950/10'
-                    : 'from-red-50/50 via-yellow-50/50 to-blue-50/50 hover:from-red-100/50 hover:via-yellow-100/50 hover:to-blue-100/50 dark:from-red-950/20 dark:via-yellow-950/20 dark:to-blue-950/20 dark:hover:from-red-900/20 dark:hover:via-yellow-900/20 dark:hover:to-blue-900/20',
-                  'hover:shadow-md hover:shadow-black/5 dark:hover:shadow-black/20'
-                )}
-              >
+              <div className="relative h-full overflow-hidden rounded-2xl border border-border/60 bg-card p-5 transition-all duration-300 hover:border-border hover:shadow-md hover:shadow-black/5 dark:hover:shadow-black/20">
                 {/* Status indicator */}
                 <AnimatePresence>
                   {connectedGoogle && (
@@ -2210,8 +2242,8 @@ export default function OnboardingImportPage() {
               whileHover={{ y: -4, transition: { duration: 0.2 } }}
               className="group sm:col-span-2 lg:col-span-1"
             >
-              <Card className="relative h-full overflow-hidden border-2 border-transparent bg-gradient-to-br from-background to-muted/30 transition-all duration-300 hover:border-primary/20 hover:shadow-xl hover:shadow-primary/5">
-                <CardContent className="flex h-full flex-col p-5">
+              <div className="relative h-full overflow-hidden rounded-2xl border border-border/60 bg-card p-5 transition-all duration-300 hover:border-border hover:shadow-md hover:shadow-black/5 dark:hover:shadow-black/20">
+                <div className="flex h-full flex-col">
                   <div className="mb-4 flex items-start justify-between">
                     <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500/10 to-teal-500/10 ring-1 ring-emerald-500/20">
                       <LinkIcon className="h-6 w-6 text-emerald-500" />
@@ -2305,8 +2337,8 @@ export default function OnboardingImportPage() {
                       </div>
                     </div>
                   )}
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             </motion.div>
           </motion.div>
         </div>

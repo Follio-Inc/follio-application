@@ -91,7 +91,8 @@ export async function getPublicProfile(handle: string): Promise<PublicProfile | 
     lastName: showBasicInfo ? profile.lastName : null,
     headline: showBasicInfo ? profile.headline : null,
     summary: showBasicInfo ? profile.summary : null,
-    avatarUrl: showBasicInfo ? profile.avatarUrl : null,
+    // Avatar is always visible - it's used in all view headers (resume, portfolio, etc.)
+    avatarUrl: profile.avatarUrl,
     location: showBasicInfo ? profile.location : null,
     contactInfo: showBasicInfo ? publicContactInfo : null,
     sections: visibleSections,

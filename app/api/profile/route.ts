@@ -117,7 +117,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create profile
+    // Get Clerk user to get their avatar (from Google OAuth, etc.)
+    const clerkUser = await currentUser();
+    const clerkAvatarUrl = clerkUser?.imageUrl || null;
+
+    // Create profile - use Clerk avatar as initial value if available
     const profile = await db.profile.create({
       data: {
         userId: user.id,
@@ -127,6 +131,8 @@ export async function POST(request: NextRequest) {
         headline,
         summary,
         location,
+        avatarUrl: clerkAvatarUrl,
+        avatarUrlSource: clerkAvatarUrl ? 'MANUAL' : 'MANUAL',
         status: 'DRAFT',
       },
     });

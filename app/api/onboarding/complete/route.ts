@@ -314,12 +314,15 @@ export async function POST(request: NextRequest) {
 
     // If we have reviewedData from the review flow, use it directly
     if (reviewedData) {
+      // Get Clerk user for avatar fallback
+      const clerkUserForReview = await currentUser();
       const result = await handleReviewedData(
         user,
         reviewedData,
         providedHandle,
         providedFirstName,
-        providedLastName
+        providedLastName,
+        clerkUserForReview?.imageUrl
       );
 
       // Create ImportLog so this import appears in the builder's Import History timeline
@@ -435,6 +438,13 @@ export async function POST(request: NextRequest) {
       ? 'MANUAL'
       : String(resolvedName.source).toUpperCase();
 
+    // Determine avatar URL - use merged profile avatar, or fallback to Clerk avatar
+    const mergedAvatarUrl = filterBase64Avatar(mergedProfile.avatarUrl);
+    const finalAvatarUrl = mergedAvatarUrl || clerkUser?.imageUrl || null;
+    const finalAvatarSource = mergedAvatarUrl
+      ? toDataSource(mergedProfile.avatarUrlSource)
+      : 'MANUAL';
+
     // Create or update profile
     if (!user.profile) {
       // Create new profile
@@ -447,7 +457,7 @@ export async function POST(request: NextRequest) {
           headline: mergedProfile.headline,
           summary: mergedProfile.summary,
           location: mergedProfile.location,
-          avatarUrl: filterBase64Avatar(mergedProfile.avatarUrl),
+          avatarUrl: finalAvatarUrl,
           status: 'PUBLIC', // Make profile public by default
           // Set sources for provenance
           firstNameSource: toDataSource(finalNameSource),
@@ -455,7 +465,7 @@ export async function POST(request: NextRequest) {
           headlineSource: toDataSource(mergedProfile.headlineSource),
           summarySource: toDataSource(mergedProfile.summarySource),
           locationSource: toDataSource(mergedProfile.locationSource),
-          avatarUrlSource: toDataSource(mergedProfile.avatarUrlSource),
+          avatarUrlSource: finalAvatarSource,
         },
       });
 
@@ -736,7 +746,8 @@ async function handleReviewedData(
   reviewedData: ReviewedData,
   providedHandle?: string,
   providedFirstName?: string,
-  providedLastName?: string
+  providedLastName?: string,
+  clerkAvatarUrl?: string | null
 ) {
   console.log('[handleReviewedData] Starting with reviewed data');
   console.log('[handleReviewedData] Experiences count:', reviewedData.experiences?.length || 0);
@@ -776,7 +787,9 @@ async function handleReviewedData(
   let profileId: string;
 
   // Filter out base64 avatars for database storage (they'll still be synced to Clerk)
-  const avatarUrlForDb = filterBase64Avatar(reviewedData.profile.avatarUrl);
+  // Use Clerk avatar as fallback if no avatar provided in reviewed data
+  const avatarUrlForDb =
+    filterBase64Avatar(reviewedData.profile.avatarUrl) || clerkAvatarUrl || null;
 
   if (!user.profile) {
     // Create new profile

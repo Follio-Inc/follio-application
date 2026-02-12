@@ -1990,7 +1990,22 @@ function ReviewPageContent() {
                 </div>
               </div>
 
-              <StepNavigation onBack={goToPreviousStep} onNext={goToNextStep} />
+              <StepNavigation
+                onBack={() => {
+                  // Auto-save any pending phone edit before going back
+                  if (editingPhoneIndex !== null) {
+                    saveEditPhone();
+                  }
+                  goToPreviousStep();
+                }}
+                onNext={() => {
+                  // Auto-save any pending phone edit before moving to next step
+                  if (editingPhoneIndex !== null) {
+                    saveEditPhone();
+                  }
+                  goToNextStep();
+                }}
+              />
             </StepContainer>
           )}
 
