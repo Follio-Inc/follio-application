@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import { getPublicProfile } from '@/services/profile.service';
+import { auth } from '@clerk/nextjs/server';
 import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { ProfileViewer } from './profile-viewer';
@@ -45,6 +46,24 @@ async function validateShareToken(handle: string, token: string): Promise<boolea
   });
 
   return true;
+}
+
+/** Determine auth state: is the viewer the profile owner, another logged-in user, or anonymous? */
+async function getAuthState(handle: string): Promise<'owner' | 'authenticated' | 'anonymous'> {
+  try {
+    const { userId } = await auth();
+    if (!userId) return 'anonymous';
+
+    const user = await db.user.findUnique({
+      where: { clerkId: userId },
+      include: { profile: { select: { handle: true } } },
+    });
+
+    if (user?.profile?.handle === handle) return 'owner';
+    return 'authenticated';
+  } catch {
+    return 'anonymous';
+  }
 }
 
 export async function generateMetadata({ params }: ProfilePageProps): Promise<Metadata> {
@@ -93,14 +112,14 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
   const { handle } = await params;
   const { view = 'resume', token } = await searchParams;
 
-  const profile = await getPublicProfile(handle);
+  const [profile, authState] = await Promise.all([getPublicProfile(handle), getAuthState(handle)]);
 
   if (!profile || profile.status === 'DRAFT') {
     notFound();
   }
 
-  // For PRIVATE (Unlisted) profiles, require a valid share token
-  if (profile.status === 'PRIVATE') {
+  // For PRIVATE (Unlisted) profiles, require a valid share token (unless owner)
+  if (profile.status === 'PRIVATE' && authState !== 'owner') {
     const isValidToken = token ? await validateShareToken(handle, token) : false;
     if (!isValidToken) {
       notFound();
@@ -114,6 +133,8 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
     <ProfileViewer
       profile={serializedProfile}
       initialView={view as 'resume' | 'portfolio' | 'timeline' | 'snapshot'}
+      authState={authState}
+      profileHandle={handle}
     />
   );
 }

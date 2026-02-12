@@ -4,6 +4,8 @@ import { AnimatePresence, motion } from 'framer-motion';
 import Link from 'next/link';
 import { useState } from 'react';
 
+import { ProfileNavbar } from '@/components/profile-navbar';
+
 import { ViewSwitcher } from './view-switcher';
 import { CleanResumeView } from './views/clean-resume-view';
 import { PortfolioView } from './views/portfolio-view';
@@ -15,9 +17,16 @@ import type { ProfileView, PublicProfile } from '@/types';
 interface ProfileViewerProps {
   profile: PublicProfile;
   initialView: ProfileView;
+  authState: 'owner' | 'authenticated' | 'anonymous';
+  profileHandle: string;
 }
 
-export function ProfileViewer({ profile, initialView }: ProfileViewerProps) {
+export function ProfileViewer({
+  profile,
+  initialView,
+  authState,
+  profileHandle,
+}: ProfileViewerProps) {
   const [currentView, setCurrentView] = useState<ProfileView>(initialView);
 
   const handleViewChange = (view: ProfileView) => {
@@ -28,6 +37,8 @@ export function ProfileViewer({ profile, initialView }: ProfileViewerProps) {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-muted/30 to-background">
+      <ProfileNavbar authState={authState} profileHandle={profileHandle} />
+
       <ViewSwitcher currentView={currentView} onViewChange={handleViewChange} />
 
       <AnimatePresence mode="wait">

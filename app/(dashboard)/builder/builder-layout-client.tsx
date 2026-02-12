@@ -218,7 +218,7 @@ export function BuilderLayoutClient({ profile, children }: BuilderLayoutClientPr
         {/* Sidebar Header */}
         <div className="flex items-center justify-between border-b p-4">
           <Link
-            href="/me"
+            href="/"
             className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
           >
             <ChevronLeft className="h-4 w-4" />

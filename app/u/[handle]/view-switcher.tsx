@@ -34,7 +34,7 @@ const VIEWS = [
 
 export function ViewSwitcher({ currentView, onViewChange }: ViewSwitcherProps) {
   return (
-    <div className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <div className="sticky top-14 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container">
         <nav className="flex items-center justify-center gap-1 overflow-x-auto py-3 sm:gap-2">
           {VIEWS.map((view) => {

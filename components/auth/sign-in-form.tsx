@@ -39,7 +39,7 @@ export function SignInForm() {
 
       if (result.status === 'complete') {
         await setActive({ session: result.createdSessionId });
-        router.push('/me');
+        router.push('/');
       } else {
         // Handle other statuses (e.g., needs_factor_two)
         setError('Additional verification required. Please try again.');
@@ -66,7 +66,7 @@ export function SignInForm() {
       await signIn.authenticateWithRedirect({
         strategy: provider,
         redirectUrl: '/sign-in/sso-callback',
-        redirectUrlComplete: '/me',
+        redirectUrlComplete: '/',
       });
     } catch (err: unknown) {
       const clerkError = err as { errors?: Array<{ message: string }> };

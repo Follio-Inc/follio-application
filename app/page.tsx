@@ -14,6 +14,7 @@ import { redirect } from 'next/navigation';
 
 import { Logo } from '@/components/Logo';
 import { Button } from '@/components/ui/button';
+import { db } from '@/lib/db';
 
 // Prevent caching during auth state changes
 export const dynamic = 'force-dynamic';
@@ -29,9 +30,18 @@ export default async function HomePage() {
     userId = null;
   }
 
-  // If user is logged in, redirect to their Follio
+  // If user is logged in, redirect to their Follio profile
   if (userId) {
-    redirect('/me');
+    const user = await db.user.findUnique({
+      where: { clerkId: userId },
+      include: { profile: { select: { handle: true } } },
+    });
+
+    if (user?.profile?.handle) {
+      redirect(`/u/${user.profile.handle}`);
+    } else {
+      redirect('/onboarding');
+    }
   }
 
   return (

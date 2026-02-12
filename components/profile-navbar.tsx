@@ -1,11 +1,13 @@
 'use client';
 
 import { useClerk, useUser } from '@clerk/nextjs';
-import { Check, Copy, Edit, Globe, Lock, LogOut, Settings, User } from 'lucide-react';
+import { Check, Copy, Edit, Globe, Lock, LogOut, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
+import { Logo } from '@/components/Logo';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,12 +17,71 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-export function UserMenu() {
+type AuthState = 'owner' | 'authenticated' | 'anonymous';
+
+interface ProfileNavbarProps {
+  authState: AuthState;
+  profileHandle?: string;
+}
+
+export function ProfileNavbar({ authState, profileHandle }: ProfileNavbarProps) {
+  return (
+    <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="flex h-14 items-center justify-between px-4 sm:px-6 lg:px-8">
+        <Logo href="/" size="md" />
+        <div className="flex items-center gap-3">
+          {authState === 'owner' && <OwnerControls profileHandle={profileHandle} />}
+          {authState === 'authenticated' && <AuthenticatedControls />}
+          {authState === 'anonymous' && <AnonymousControls />}
+        </div>
+      </div>
+    </header>
+  );
+}
+
+// --- Owner: sees edit button + their avatar menu ---
+function OwnerControls({ profileHandle }: { profileHandle?: string }) {
+  return (
+    <>
+      <Link href="/builder">
+        <Button variant="outline" size="sm" className="gap-2">
+          <Edit className="h-4 w-4" />
+          <span className="hidden sm:inline">Edit Profile</span>
+        </Button>
+      </Link>
+      <ProfileMenu profileHandle={profileHandle} />
+    </>
+  );
+}
+
+// --- Authenticated visitor: sees their own avatar menu (no edit controls) ---
+function AuthenticatedControls() {
+  return <ProfileMenu />;
+}
+
+// --- Anonymous: subtle sign in / sign up ---
+function AnonymousControls() {
+  return (
+    <>
+      <Link href="/sign-in">
+        <Button variant="ghost" size="sm">
+          Sign in
+        </Button>
+      </Link>
+      <Link href="/sign-up">
+        <Button size="sm">Sign up</Button>
+      </Link>
+    </>
+  );
+}
+
+// --- Shared avatar dropdown menu ---
+function ProfileMenu({ profileHandle }: { profileHandle?: string } = {}) {
   const { user } = useUser();
   const { signOut } = useClerk();
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [handle, setHandle] = useState<string | null>(null);
+  const [handle, setHandle] = useState<string | null>(profileHandle ?? null);
   const [profileStatus, setProfileStatus] = useState<string | null>(null);
 
   const fetchHandle = useCallback(async () => {
@@ -188,7 +249,7 @@ export function UserMenu() {
                 className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 transition-colors"
               >
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/50">
-                  <User className="h-4 w-4 text-muted-foreground" />
+                  <Globe className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <div className="flex flex-col">
                   <span className="text-sm font-medium">Your Follio</span>

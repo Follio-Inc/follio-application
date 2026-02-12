@@ -184,7 +184,7 @@ export default function OnboardingImportPage() {
           const data = await response.json();
           // If user has a profile with a handle, redirect to their profile page
           if (data?.profile?.handle) {
-            router.replace('/me');
+            router.replace('/');
             return;
           }
         }

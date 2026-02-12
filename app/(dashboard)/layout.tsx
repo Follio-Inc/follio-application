@@ -1,9 +1,5 @@
-import { Eye } from 'lucide-react';
-import Link from 'next/link';
-
 import { UserMenu } from '@/components/auth/user-menu';
 import { Logo } from '@/components/Logo';
-import { Button } from '@/components/ui/button';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -11,14 +7,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Top Navigation */}
       <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
-          <Logo href="/me" size="md" />
+          <Logo href="/" size="md" />
           <div className="flex items-center gap-3">
-            <Link href="/me">
-              <Button variant="outline" size="sm" className="gap-2">
-                <Eye className="h-4 w-4" />
-                Your Follio
-              </Button>
-            </Link>
             <UserMenu />
           </div>
         </div>

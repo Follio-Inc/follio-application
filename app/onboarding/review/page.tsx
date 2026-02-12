@@ -843,7 +843,7 @@ function ReviewPageContent() {
 
       // Redirect to return URL or default to profile
       router.refresh();
-      router.push(returnUrl || '/me');
+      router.push(returnUrl || '/');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
