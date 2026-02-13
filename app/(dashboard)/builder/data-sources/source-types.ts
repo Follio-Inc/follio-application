@@ -27,6 +27,11 @@ export interface SourceDefinition {
   builtIn: boolean;
   /** Can be dynamically added by users */
   userAddable: boolean;
+  /** Stored fetch info for refreshing (endpoint, body) */
+  fetchInfo?: {
+    endpoint: string;
+    body: Record<string, unknown>;
+  };
 }
 
 // ─── Built-in sources ────────────────────────────────────────────
@@ -81,17 +86,6 @@ export const BUILT_IN_SOURCES: SourceDefinition[] = [
     requiresOAuth: true,
     oauthStrategy: 'oauth_google',
     dataSource: 'GOOGLE',
-    builtIn: true,
-    userAddable: false,
-  },
-  {
-    key: 'links',
-    label: 'Links',
-    description: 'External URLs, social profiles, and websites',
-    icon: 'Link',
-    colorClass: 'from-emerald-500/10 to-teal-500/10 ring-emerald-500/20',
-    iconColorClass: 'text-emerald-500',
-    requiresOAuth: false,
     builtIn: true,
     userAddable: false,
   },

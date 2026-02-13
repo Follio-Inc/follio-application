@@ -13,6 +13,7 @@ function serializeForClient<T>(data: T): T {
 const SLUG_TO_SECTION: Record<string, string> = {
   'basic-info': 'BASIC_INFO',
   contact: 'CONTACT',
+  photos: 'PHOTOS',
   experience: 'EXPERIENCE',
   education: 'EDUCATION',
   skills: 'SKILLS',
@@ -59,6 +60,9 @@ export default async function SectionPage({ params }: PageProps) {
           projects: { orderBy: { sortOrder: 'asc' } },
           awards: { orderBy: { sortOrder: 'asc' } },
           certifications: { orderBy: { sortOrder: 'asc' } },
+          blogPosts: { orderBy: { createdAt: 'desc' } },
+          youtubeVideos: { orderBy: { createdAt: 'desc' } },
+          photos: { orderBy: { sortOrder: 'asc' } },
           sections: { orderBy: { sortOrder: 'asc' } },
         },
       },

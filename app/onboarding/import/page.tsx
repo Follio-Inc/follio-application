@@ -4,44 +4,48 @@ import { useUser } from '@clerk/nextjs';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   AlertCircle,
+  ArrowLeft,
   ArrowRight,
   Camera,
   CheckCircle2,
   FileText,
   Github,
+  Link2,
   Linkedin,
-  Link as LinkIcon,
   Loader2,
   Plus,
+  RotateCcw,
+  Trash2,
   Upload,
   User,
   X,
 } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import * as pdfjsLib from 'pdfjs-dist';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { Area, Point } from 'react-easy-crop';
+import Cropper from 'react-easy-crop';
 
-import { Badge } from '@/components/ui/badge';
+pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Slider } from '@/components/ui/slider';
 import { Spinner } from '@/components/ui/spinner';
 import { fileToBase64, getBestResolutionImage, parsePhoneWithCountryCode } from '@/lib/utils';
 
-// Storage key prefix for persisting onboarding state across OAuth redirects
+// ─── Storage Constants ────────────────────────────────────────────
 const ONBOARDING_IMPORT_STATE_KEY_PREFIX = 'follio_onboarding_import_state_';
-
-// IndexedDB key for storing large uploaded photos
 const UPLOADED_PHOTO_DB_NAME = 'follio_onboarding';
 const UPLOADED_PHOTO_STORE_NAME = 'uploaded_photos';
 
-// Helper to get user-specific storage key
-const getStorageKey = (userId: string | undefined) => {
-  return userId ? `${ONBOARDING_IMPORT_STATE_KEY_PREFIX}${userId}` : null;
-};
+const getStorageKey = (userId: string | undefined) =>
+  userId ? `${ONBOARDING_IMPORT_STATE_KEY_PREFIX}${userId}` : null;
 
-// IndexedDB helpers for storing large uploaded photos (sessionStorage has ~5MB limit)
-const openPhotoDatabase = (): Promise<IDBDatabase> => {
-  return new Promise((resolve, reject) => {
+// ─── IndexedDB Helpers ────────────────────────────────────────────
+const openPhotoDatabase = (): Promise<IDBDatabase> =>
+  new Promise((resolve, reject) => {
     const request = indexedDB.open(UPLOADED_PHOTO_DB_NAME, 1);
     request.onerror = () => reject(request.error);
     request.onsuccess = () => resolve(request.result);
@@ -52,16 +56,15 @@ const openPhotoDatabase = (): Promise<IDBDatabase> => {
       }
     };
   });
-};
 
 const savePhotoToIndexedDB = async (key: string, photoBase64: string): Promise<void> => {
   const db = await openPhotoDatabase();
   return new Promise((resolve, reject) => {
-    const transaction = db.transaction(UPLOADED_PHOTO_STORE_NAME, 'readwrite');
-    const store = transaction.objectStore(UPLOADED_PHOTO_STORE_NAME);
-    const request = store.put({ key, data: photoBase64 });
-    request.onerror = () => reject(request.error);
-    request.onsuccess = () => resolve();
+    const tx = db.transaction(UPLOADED_PHOTO_STORE_NAME, 'readwrite');
+    const store = tx.objectStore(UPLOADED_PHOTO_STORE_NAME);
+    const req = store.put({ key, data: photoBase64 });
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => resolve();
   });
 };
 
@@ -69,301 +72,343 @@ const getPhotoFromIndexedDB = async (key: string): Promise<string | null> => {
   try {
     const db = await openPhotoDatabase();
     return new Promise((resolve, reject) => {
-      const transaction = db.transaction(UPLOADED_PHOTO_STORE_NAME, 'readonly');
-      const store = transaction.objectStore(UPLOADED_PHOTO_STORE_NAME);
-      const request = store.get(key);
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => resolve(request.result?.data || null);
+      const tx = db.transaction(UPLOADED_PHOTO_STORE_NAME, 'readonly');
+      const store = tx.objectStore(UPLOADED_PHOTO_STORE_NAME);
+      const req = store.get(key);
+      req.onerror = () => reject(req.error);
+      req.onsuccess = () => resolve(req.result?.data || null);
     });
   } catch {
     return null;
   }
 };
 
-const _clearPhotosFromIndexedDB = async (): Promise<void> => {
-  try {
-    const db = await openPhotoDatabase();
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction(UPLOADED_PHOTO_STORE_NAME, 'readwrite');
-      const store = transaction.objectStore(UPLOADED_PHOTO_STORE_NAME);
-      const request = store.clear();
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => resolve();
-    });
-  } catch {
-    // Ignore errors when clearing
-  }
-};
-
-// ─── Google SVG Icon ──────────────────────────────────────────────
-function GoogleIcon({ className }: { className?: string }) {
+// ─── SVG Brand Icons ──────────────────────────────────────────────
+function FacebookIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor">
       <path
-        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
-        fill="#4285F4"
-      />
-      <path
-        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-        fill="#34A853"
-      />
-      <path
-        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18A10.96 10.96 0 001 12c0 1.77.42 3.45 1.18 4.93l2.85-2.22.81-.62z"
-        fill="#FBBC05"
-      />
-      <path
-        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-        fill="#EA4335"
+        d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"
+        fill="#1877F2"
       />
     </svg>
   );
 }
 
-type ImportSource = 'resume' | 'github' | 'linkedin' | 'google' | 'links';
+function MediumIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M13.54 12a6.8 6.8 0 01-6.77 6.82A6.8 6.8 0 010 12a6.8 6.8 0 016.77-6.82A6.8 6.8 0 0113.54 12zm7.42 0c0 3.54-1.51 6.42-3.38 6.42-1.87 0-3.39-2.88-3.39-6.42s1.52-6.42 3.39-6.42 3.38 2.88 3.38 6.42zm2.94 0c0 3.17-.53 5.75-1.19 5.75-.66 0-1.19-2.58-1.19-5.75s.53-5.75 1.19-5.75c.66 0 1.19 2.58 1.19 5.75z" />
+    </svg>
+  );
+}
+
+function YouTubeIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path
+        d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.016 3.016 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.016 3.016 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"
+        fill="#FF0000"
+      />
+    </svg>
+  );
+}
+
+function SubstackIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path
+        d="M22.539 8.242H1.46V5.406h21.08v2.836zM1.46 10.812V24L12 18.11 22.54 24V10.812H1.46zM22.54 0H1.46v2.836h21.08V0z"
+        fill="#FF6719"
+      />
+    </svg>
+  );
+}
+
+// ─── Types ────────────────────────────────────────────────────────
+type ImportSource =
+  | 'resume'
+  | 'github'
+  | 'linkedin'
+  | 'facebook'
+  | 'medium'
+  | 'youtube'
+  | 'substack'
+  | 'links';
 
 interface ImportStatus {
   source: ImportSource;
-  // 'added' = file uploaded, parsing in background (shows instant success feedback)
   status: 'idle' | 'added' | 'importing' | 'success' | 'error';
   message?: string;
   itemsImported?: number;
 }
 
-interface ManualLink {
-  url: string;
-  label?: string;
+type OnboardingStep = 'resume' | 'photo' | 'accounts' | 'platforms' | 'gallery' | 'review';
+
+const STEPS: OnboardingStep[] = ['resume', 'photo', 'accounts', 'platforms', 'gallery', 'review'];
+
+const STEP_META: Record<OnboardingStep, { title: string; subtitle: string }> = {
+  resume: {
+    title: 'Upload your resume',
+    subtitle: "We'll extract your experience, education, skills and more",
+  },
+  photo: {
+    title: 'Add a profile photo',
+    subtitle: 'Upload a photo to make your profile stand out',
+  },
+  accounts: {
+    title: 'Connect your accounts',
+    subtitle: 'Import data from your professional profiles',
+  },
+  platforms: { title: 'Add more platforms', subtitle: 'Link your content and publications' },
+  gallery: { title: 'Portfolio photos', subtitle: 'Add up to 3 photos to showcase your work' },
+  review: {
+    title: 'Review your profile',
+    subtitle: 'Check everything looks good before creating your profile',
+  },
+};
+
+// ─── Image crop helpers ──────────────────────────────────────────
+const createImage = (url: string): Promise<HTMLImageElement> =>
+  new Promise((resolve, reject) => {
+    const image = new window.Image();
+    image.addEventListener('load', () => resolve(image));
+    image.addEventListener('error', (error) => reject(error));
+    image.crossOrigin = 'anonymous';
+    image.src = url;
+  });
+
+async function getCroppedImg(imageSrc: string, pixelCrop: Area): Promise<string> {
+  const image = await createImage(imageSrc);
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('No 2d context');
+
+  canvas.width = pixelCrop.width;
+  canvas.height = pixelCrop.height;
+
+  ctx.drawImage(
+    image,
+    pixelCrop.x,
+    pixelCrop.y,
+    pixelCrop.width,
+    pixelCrop.height,
+    0,
+    0,
+    pixelCrop.width,
+    pixelCrop.height
+  );
+
+  return canvas.toDataURL('image/jpeg', 0.92);
 }
 
-// Persisted state interface for sessionStorage
-interface PersistedImportState {
-  imports: Record<ImportSource, ImportStatus>;
-  importedData: Record<string, unknown>;
-  githubUsername: string;
-  resumeFileName?: string | null;
-  uploadedPhotoKey?: string | null;
-}
-
+// ─── Component ────────────────────────────────────────────────────
 export default function OnboardingImportPage() {
   const router = useRouter();
   const { user, isLoaded: isUserLoaded } = useUser();
-  const [isCreatingProfile, _setIsCreatingProfile] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasRestoredPersistedState, setHasRestoredPersistedState] = useState(false);
   const [isCheckingProfile, setIsCheckingProfile] = useState(true);
 
-  // Fallback: if loading takes too long, just show the page anyway
+  // ─── Step navigation ────────────────────────────────────────────
+  const [currentStep, setCurrentStep] = useState<OnboardingStep>('resume');
+  const currentStepIndex = STEPS.indexOf(currentStep);
+  const progressPercent = ((currentStepIndex + 1) / STEPS.length) * 100;
+
+  // Fallback: if loading takes too long, just show the page
   useEffect(() => {
-    const fallbackTimeout = setTimeout(() => {
-      setIsCheckingProfile(false);
-    }, 3000);
+    const fallbackTimeout = setTimeout(() => setIsCheckingProfile(false), 3000);
     return () => clearTimeout(fallbackTimeout);
   }, []);
 
-  // Check if user already has a profile (for returning users who land here via sign-up flow)
+  // Check if user already has a profile
   useEffect(() => {
     if (!isUserLoaded) return;
-
-    // If user is not authenticated after loading, just show the page
     if (!user) {
       setIsCheckingProfile(false);
       return;
     }
 
     let timeoutId: NodeJS.Timeout;
-
     const checkExistingProfile = async () => {
       try {
-        // Add a timeout to prevent hanging indefinitely
         const controller = new AbortController();
         timeoutId = setTimeout(() => controller.abort(), 5000);
-
         const response = await fetch('/api/profile', { signal: controller.signal });
         clearTimeout(timeoutId);
-
         if (response.ok) {
           const data = await response.json();
-          // If user has a profile with a handle, redirect to their profile page
           if (data?.profile?.handle) {
             router.replace('/');
             return;
           }
         }
       } catch (err) {
-        // If there's an error (including timeout), just continue with onboarding
         if (err instanceof Error && err.name !== 'AbortError') {
           console.error('Error checking for existing profile:', err);
         }
       }
       setIsCheckingProfile(false);
     };
-
     checkExistingProfile();
-
     return () => {
       if (timeoutId) clearTimeout(timeoutId);
     };
   }, [isUserLoaded, user, router]);
 
-  // GitHub OAuth states
+  // ─── OAuth states ───────────────────────────────────────────────
   const [githubConnecting, setGithubConnecting] = useState(false);
   const [githubDisconnecting, setGithubDisconnecting] = useState(false);
   const [githubError, setGithubError] = useState<string | null>(null);
 
-  // LinkedIn OAuth states
   const [linkedinConnecting, setLinkedinConnecting] = useState(false);
   const [linkedinDisconnecting, setLinkedinDisconnecting] = useState(false);
   const [linkedinError, setLinkedinError] = useState<string | null>(null);
 
-  // Google OAuth states
-  const [googleConnecting, setGoogleConnecting] = useState(false);
-  const [googleDisconnecting, setGoogleDisconnecting] = useState(false);
-  const [googleError, setGoogleError] = useState<string | null>(null);
+  const [facebookConnecting, setFacebookConnecting] = useState(false);
+  const [facebookDisconnecting, setFacebookDisconnecting] = useState(false);
+  const [facebookError, setFacebookError] = useState<string | null>(null);
 
-  // Import states
+  // ─── Import states ──────────────────────────────────────────────
   const [imports, setImports] = useState<Record<ImportSource, ImportStatus>>({
     resume: { source: 'resume', status: 'idle' },
     github: { source: 'github', status: 'idle' },
     linkedin: { source: 'linkedin', status: 'idle' },
-    google: { source: 'google', status: 'idle' },
+    facebook: { source: 'facebook', status: 'idle' },
+    medium: { source: 'medium', status: 'idle' },
+    youtube: { source: 'youtube', status: 'idle' },
+    substack: { source: 'substack', status: 'idle' },
     links: { source: 'links', status: 'idle' },
   });
 
-  // Form states
+  // ─── Form states ───────────────────────────────────────────────
   const [githubUsername, setGithubUsername] = useState('');
-  const [manualLinks, setManualLinks] = useState<ManualLink[]>([{ url: '' }]);
-  const [showLinksForm, setShowLinksForm] = useState(false);
+  const [mediumUsername, setMediumUsername] = useState('');
+  const [youtubeChannel, setYoutubeChannel] = useState('');
+  const [substackUsername, setSubstackUsername] = useState('');
+  const [linkUrls, setLinkUrls] = useState<string[]>([]);
+  const [linkInput, setLinkInput] = useState('');
 
-  // Profile photo state - single upload
-  const [uploadedPhoto, setUploadedPhoto] = useState<string | null>(null); // Uploaded base64 photo
+  // Photo states
+  const [uploadedPhoto, setUploadedPhoto] = useState<string | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [photoCrop, setPhotoCrop] = useState<Point>({ x: 0, y: 0 });
+  const [photoZoom, setPhotoZoom] = useState(1);
+  const [photoRotation, setPhotoRotation] = useState(0);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
+  const [isDraggingPhoto, setIsDraggingPhoto] = useState(false);
 
-  // Resume filename state
+  // Gallery states
+  const [galleryPhotos, setGalleryPhotos] = useState<string[]>([]);
+  const [isUploadingGallery, setIsUploadingGallery] = useState(false);
+
+  // Resume
   const [resumeFileName, setResumeFileName] = useState<string | null>(null);
-
-  // Track resume parsing promise for Continue button to wait on
+  const [, setResumeFileUrl] = useState<string | null>(null);
+  const [resumeThumbnail, setResumeThumbnail] = useState<string | null>(null);
   const [resumeParsingPromise, setResumeParsingPromise] = useState<Promise<void> | null>(null);
   const [isWaitingForParsing, setIsWaitingForParsing] = useState(false);
+  const [isDraggingResume, setIsDraggingResume] = useState(false);
 
-  // Imported data (for display)
+  // Imported data
   const [importedData, setImportedData] = useState<Record<string, unknown>>({});
 
-  // Get connected GitHub account from Clerk
+  // drag ref
+  const resumeDropRef = useRef<HTMLDivElement | null>(null);
+  const photoDropRef = useRef<HTMLDivElement | null>(null);
+
+  // ─── External accounts from Clerk ──────────────────────────────
   const connectedGithub = user?.externalAccounts?.find((a) => a.provider === 'github');
   const githubUsernameFromAccount = connectedGithub?.username ?? null;
 
-  // Get connected LinkedIn account from Clerk (check multiple possible provider names)
   const connectedLinkedin = user?.externalAccounts?.find((a) => {
-    const provider = a.provider as string;
+    const p = a.provider as string;
     return (
-      provider === 'linkedin_oidc' ||
-      provider === 'linkedin' ||
-      provider === 'oauth_linkedin_oidc' ||
-      provider === 'oauth_linkedin'
+      p === 'linkedin_oidc' ||
+      p === 'linkedin' ||
+      p === 'oauth_linkedin_oidc' ||
+      p === 'oauth_linkedin'
     );
   });
-  // Build LinkedIn display - prioritize username, then fall back to name
+
   const linkedinName = (() => {
-    // First check if we have imported data from LinkedIn
-    const linkedinImport = importedData.linkedin as
-      | {
-          profile?: { firstName?: string; lastName?: string };
-          email?: string;
-          fromLinkedIn?: { username?: string };
-        }
-      | undefined;
-
-    // Prioritize username from imported data
-    if (linkedinImport?.fromLinkedIn?.username) {
-      return linkedinImport.fromLinkedIn.username;
-    }
-    // Try external account username
-    if (connectedLinkedin?.username) {
-      return connectedLinkedin.username;
-    }
-    // Fall back to name from imported data
-    if (linkedinImport?.profile?.firstName && linkedinImport?.profile?.lastName) {
-      return `${linkedinImport.profile.firstName} ${linkedinImport.profile.lastName}`;
-    }
-    if (linkedinImport?.profile?.firstName || linkedinImport?.profile?.lastName) {
-      return linkedinImport.profile.firstName || linkedinImport.profile.lastName;
-    }
-    // Try external account name
-    if (connectedLinkedin?.firstName && connectedLinkedin?.lastName) {
+    const li = importedData.linkedin as Record<string, unknown> | undefined;
+    const liProfile = li?.profile as Record<string, unknown> | undefined;
+    const fromLI = li?.fromLinkedIn as Record<string, unknown> | undefined;
+    if (fromLI?.username) return fromLI.username as string;
+    if (connectedLinkedin?.username) return connectedLinkedin.username;
+    if (liProfile?.firstName && liProfile?.lastName)
+      return `${liProfile.firstName} ${liProfile.lastName}`;
+    if (connectedLinkedin?.firstName && connectedLinkedin?.lastName)
       return `${connectedLinkedin.firstName} ${connectedLinkedin.lastName}`;
-    }
-    if (connectedLinkedin?.firstName || connectedLinkedin?.lastName) {
-      return connectedLinkedin.firstName || connectedLinkedin.lastName;
-    }
-    // No LinkedIn data available yet
     return null;
   })();
 
-  // Get connected Google account from Clerk (check multiple possible provider names)
-  const connectedGoogle = user?.externalAccounts?.find((a) => {
-    const provider = a.provider as string;
-    return provider === 'google' || provider === 'oauth_google' || provider === 'google_oidc';
+  const connectedFacebook = user?.externalAccounts?.find((a) => {
+    const p = a.provider as string;
+    return p === 'facebook' || p === 'oauth_facebook';
   });
-  // Build Google display - use name or email
-  const googleName = (() => {
-    // First check if we have imported data from Google
-    const googleImport = importedData.google as
-      | {
-          profile?: { firstName?: string; lastName?: string };
-          email?: string;
-          fromGoogle?: { firstName?: string; lastName?: string; email?: string };
-        }
-      | undefined;
 
-    // Try name from imported data
-    if (googleImport?.fromGoogle?.firstName || googleImport?.fromGoogle?.lastName) {
-      const firstName = googleImport.fromGoogle.firstName || '';
-      const lastName = googleImport.fromGoogle.lastName || '';
-      return `${firstName} ${lastName}`.trim();
-    }
-    // Try external account name
-    if (connectedGoogle?.firstName || connectedGoogle?.lastName) {
-      const firstName = connectedGoogle.firstName || '';
-      const lastName = connectedGoogle.lastName || '';
-      return `${firstName} ${lastName}`.trim();
-    }
-    // Fall back to email
-    if (googleImport?.fromGoogle?.email) {
-      return googleImport.fromGoogle.email;
-    }
-    if (connectedGoogle?.emailAddress) {
-      return connectedGoogle.emailAddress;
-    }
-    // No Google data available yet
+  const facebookName = (() => {
+    if (connectedFacebook?.firstName && connectedFacebook?.lastName)
+      return `${connectedFacebook.firstName} ${connectedFacebook.lastName}`;
+    if (connectedFacebook?.firstName || connectedFacebook?.lastName)
+      return connectedFacebook?.firstName || connectedFacebook?.lastName;
     return null;
   })();
 
-  // Save import state to sessionStorage (used before OAuth redirects)
+  // ─── State persistence ─────────────────────────────────────────
   const saveImportState = useCallback(async () => {
     const storageKey = getStorageKey(user?.id);
     if (!storageKey) return;
 
     try {
-      // Save uploaded photo to IndexedDB if present (too large for sessionStorage)
       let uploadedPhotoKey: string | null = null;
       if (uploadedPhoto) {
         uploadedPhotoKey = `onboarding_photo_${user?.id || 'anon'}`;
         await savePhotoToIndexedDB(uploadedPhotoKey, uploadedPhoto);
       }
 
-      const stateToSave: PersistedImportState = {
+      const galleryPhotoKeys: string[] = [];
+      for (let i = 0; i < galleryPhotos.length; i++) {
+        const key = `onboarding_gallery_${user?.id || 'anon'}_${i}`;
+        await savePhotoToIndexedDB(key, galleryPhotos[i]);
+        galleryPhotoKeys.push(key);
+      }
+
+      const stateToSave = {
         imports,
         importedData,
         githubUsername,
         resumeFileName,
         uploadedPhotoKey,
+        galleryPhotoKeys: galleryPhotoKeys.length > 0 ? galleryPhotoKeys : null,
+        mediumUsername,
+        youtubeChannel,
+        substackUsername,
+        linkUrls: linkUrls.length > 0 ? linkUrls : undefined,
+        currentStep,
       };
       sessionStorage.setItem(storageKey, JSON.stringify(stateToSave));
     } catch (err) {
       console.error('Failed to save import state:', err);
     }
-  }, [imports, importedData, githubUsername, uploadedPhoto, resumeFileName, user?.id]);
+  }, [
+    imports,
+    importedData,
+    githubUsername,
+    uploadedPhoto,
+    galleryPhotos,
+    resumeFileName,
+    user?.id,
+    mediumUsername,
+    youtubeChannel,
+    substackUsername,
+    linkUrls,
+    currentStep,
+  ]);
 
-  // Restore state from sessionStorage on mount (for after OAuth redirects)
+  // Restore state on mount
   useEffect(() => {
     if (hasRestoredPersistedState || !isUserLoaded || !user?.id) return;
 
@@ -377,73 +422,55 @@ export default function OnboardingImportPage() {
       try {
         const savedState = sessionStorage.getItem(storageKey);
         if (savedState) {
-          const parsed: PersistedImportState = JSON.parse(savedState);
+          const parsed = JSON.parse(savedState);
+          if (parsed.imports) setImports(parsed.imports);
+          if (parsed.importedData) setImportedData(parsed.importedData);
+          if (parsed.githubUsername) setGithubUsername(parsed.githubUsername);
+          if (parsed.resumeFileName) setResumeFileName(parsed.resumeFileName);
+          if (parsed.mediumUsername) setMediumUsername(parsed.mediumUsername);
+          if (parsed.youtubeChannel) setYoutubeChannel(parsed.youtubeChannel);
+          if (parsed.substackUsername) setSubstackUsername(parsed.substackUsername);
+          if (parsed.linkUrls?.length) setLinkUrls(parsed.linkUrls);
+          if (parsed.currentStep && STEPS.includes(parsed.currentStep))
+            setCurrentStep(parsed.currentStep);
 
-          // Restore import statuses
-          if (parsed.imports) {
-            setImports(parsed.imports);
-          }
-
-          // Restore imported data
-          if (parsed.importedData) {
-            setImportedData(parsed.importedData);
-          }
-
-          // Restore GitHub username
-          if (parsed.githubUsername) {
-            setGithubUsername(parsed.githubUsername);
-          }
-
-          // Restore resume filename
-          if (parsed.resumeFileName) {
-            setResumeFileName(parsed.resumeFileName);
-          }
-
-          // Restore uploaded photo from IndexedDB
           if (parsed.uploadedPhotoKey) {
             const photoData = await getPhotoFromIndexedDB(parsed.uploadedPhotoKey);
-            if (photoData) {
-              setUploadedPhoto(photoData);
-            }
+            if (photoData) setUploadedPhoto(photoData);
           }
-
-          // Clear the saved state after restoring
+          if (parsed.galleryPhotoKeys?.length) {
+            const restoredGallery: string[] = [];
+            for (const key of parsed.galleryPhotoKeys) {
+              const photoData = await getPhotoFromIndexedDB(key);
+              if (photoData) restoredGallery.push(photoData);
+            }
+            if (restoredGallery.length > 0) setGalleryPhotos(restoredGallery);
+          }
           sessionStorage.removeItem(storageKey);
-
-          // Reload user to get updated external accounts after OAuth redirect
           user.reload().catch(console.error);
         }
       } catch (err) {
         console.error('Failed to restore import state:', err);
       }
-
       setHasRestoredPersistedState(true);
     };
-
     restoreState();
   }, [hasRestoredPersistedState, isUserLoaded, user]);
 
-  // Auto-import from connected GitHub if just connected via OAuth
+  // ─── Auto-import after OAuth ────────────────────────────────────
   useEffect(() => {
     if (!isUserLoaded || !hasRestoredPersistedState) return;
-
-    // If user has connected GitHub via OAuth and we haven't imported yet
     if (githubUsernameFromAccount && imports.github.status === 'idle') {
-      // Auto-trigger import with the connected username
       updateImportStatus('github', { status: 'importing', message: 'Fetching GitHub data...' });
-
       fetch('/api/import/github', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: githubUsernameFromAccount }),
       })
-        .then((response) => response.json())
+        .then((r) => r.json())
         .then((data) => {
           if (data.error) {
-            updateImportStatus('github', {
-              status: 'error',
-              message: data.error || 'Failed to import from GitHub',
-            });
+            updateImportStatus('github', { status: 'error', message: data.error });
           } else {
             setImportedData((prev) => ({ ...prev, github: data.data }));
             updateImportStatus('github', {
@@ -458,243 +485,49 @@ export default function OnboardingImportPage() {
         .catch((err) => {
           updateImportStatus('github', {
             status: 'error',
-            message: err instanceof Error ? err.message : 'Failed to import from GitHub',
+            message: err instanceof Error ? err.message : 'Failed',
           });
         });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isUserLoaded, hasRestoredPersistedState, githubUsernameFromAccount, imports.github.status]);
 
-  // Auto-import from connected LinkedIn if just connected via OAuth
   useEffect(() => {
     if (!isUserLoaded || !hasRestoredPersistedState) return;
-
-    // If user has connected LinkedIn via OAuth and we haven't imported yet
     if (connectedLinkedin && imports.linkedin.status === 'idle') {
-      // Auto-trigger import with the connected account data
-      updateImportStatus('linkedin', {
-        status: 'importing',
-        message: 'Fetching LinkedIn data...',
-      });
-
+      updateImportStatus('linkedin', { status: 'importing', message: 'Fetching LinkedIn data...' });
       fetch('/api/import/linkedin/oauth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       })
-        .then((response) => response.json())
+        .then((r) => r.json())
         .then((data) => {
           if (data.error) {
-            updateImportStatus('linkedin', {
-              status: 'error',
-              message: data.error || 'Failed to import from LinkedIn',
-            });
+            updateImportStatus('linkedin', { status: 'error', message: data.error });
           } else {
             setImportedData((prev) => ({ ...prev, linkedin: data.data }));
             updateImportStatus('linkedin', {
               status: 'success',
-              message: data.message || 'Imported profile data',
+              message: data.message || 'Imported profile',
               itemsImported: data.data?.summary?.total || 1,
             });
           }
         })
-        .catch((err) => {
+        .catch((err) =>
           updateImportStatus('linkedin', {
             status: 'error',
-            message: err instanceof Error ? err.message : 'Failed to import from LinkedIn',
-          });
-        });
+            message: err instanceof Error ? err.message : 'Failed',
+          })
+        );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isUserLoaded, hasRestoredPersistedState, connectedLinkedin, imports.linkedin.status]);
 
-  // Auto-import from connected Google if just connected via OAuth
-  useEffect(() => {
-    if (!isUserLoaded || !hasRestoredPersistedState) return;
-
-    // If user has connected Google via OAuth and we haven't imported yet
-    if (connectedGoogle && imports.google.status === 'idle') {
-      // Auto-trigger import with the connected account data
-      updateImportStatus('google', {
-        status: 'importing',
-        message: 'Fetching Google data...',
-      });
-
-      fetch('/api/import/google/oauth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      })
-        .then((response) => response.json())
-        .then((data) => {
-          if (data.error) {
-            updateImportStatus('google', {
-              status: 'error',
-              message: data.error || 'Failed to import from Google',
-            });
-          } else {
-            setImportedData((prev) => ({ ...prev, google: data.data }));
-            updateImportStatus('google', {
-              status: 'success',
-              message: data.message || 'Imported profile data',
-              itemsImported: data.data?.summary?.total || 1,
-            });
-          }
-        })
-        .catch((err) => {
-          updateImportStatus('google', {
-            status: 'error',
-            message: err instanceof Error ? err.message : 'Failed to import from Google',
-          });
-        });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isUserLoaded, hasRestoredPersistedState, connectedGoogle, imports.google.status]);
-
+  // ─── Helpers ────────────────────────────────────────────────────
   const updateImportStatus = (source: ImportSource, update: Partial<ImportStatus>) => {
-    setImports((prev) => ({
-      ...prev,
-      [source]: { ...prev[source], ...update },
-    }));
+    setImports((prev) => ({ ...prev, [source]: { ...prev[source], ...update } }));
   };
 
-  // GitHub OAuth connect handler
-  const handleGitHubConnect = async () => {
-    setGithubConnecting(true);
-    setGithubError(null);
-
-    // Check if user has a verified email
-    const primaryEmail = user?.primaryEmailAddress;
-    if (!primaryEmail?.verification?.status || primaryEmail.verification.status !== 'verified') {
-      setGithubError(
-        'Please verify your email first to connect GitHub. Check your inbox for a verification email, or use manual entry below.'
-      );
-      setGithubConnecting(false);
-      return;
-    }
-
-    try {
-      // Save state before OAuth redirect so we can restore it when we come back
-      await saveImportState();
-
-      const externalAccount = await user?.createExternalAccount({
-        strategy: 'oauth_github',
-        redirectUrl: window.location.href,
-      });
-      const url = externalAccount?.verification?.externalVerificationRedirectURL;
-      if (url) {
-        window.location.href = url.toString();
-      }
-    } catch (err: unknown) {
-      console.error('GitHub connect error:', err);
-      const errorMessage = err instanceof Error ? err.message : String(err);
-
-      if (errorMessage.includes('additional verification')) {
-        setGithubError(
-          'Email verification required. Please verify your email first, or enter your GitHub username manually below.'
-        );
-      } else if (errorMessage.includes('already connected')) {
-        // Refresh user to get updated external accounts
-        await user?.reload();
-        setGithubError(null);
-      } else {
-        setGithubError(`Connection failed: ${errorMessage}. Try entering your username manually.`);
-      }
-      setGithubConnecting(false);
-    }
-  };
-
-  // GitHub disconnect handler
-  const handleGitHubDisconnect = async () => {
-    if (!connectedGithub) return;
-
-    setGithubDisconnecting(true);
-    setGithubError(null);
-
-    try {
-      await connectedGithub.destroy();
-      await user?.reload();
-      // Reset import status for GitHub
-      updateImportStatus('github', {
-        status: 'idle',
-        message: undefined,
-        itemsImported: undefined,
-      });
-      setGithubUsername('');
-    } catch (err: unknown) {
-      console.error('GitHub disconnect error:', err);
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      setGithubError(`Failed to disconnect: ${errorMessage}`);
-    } finally {
-      setGithubDisconnecting(false);
-    }
-  };
-
-  // Resume upload handler - provides instant feedback, parses in background
-  const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Validate file type - only PDFs supported
-    if (file.type !== 'application/pdf') {
-      updateImportStatus('resume', {
-        status: 'error',
-        message: 'Only PDF files are supported. Please upload a PDF resume.',
-      });
-      return;
-    }
-
-    // Save the filename for display
-    setResumeFileName(file.name);
-
-    // INSTANT FEEDBACK: Show "added" status immediately so user feels the upload worked
-    updateImportStatus('resume', {
-      status: 'added',
-      message: 'Resume added! Parsing in background...',
-    });
-
-    // Create parsing promise that can be awaited by Continue button
-    const parsingPromise = (async () => {
-      try {
-        const formData = new FormData();
-        formData.append('file', file);
-        // Don't auto-save - we'll review first
-        formData.append('saveToProfile', 'false');
-
-        const response = await fetch('/api/import/resume', {
-          method: 'POST',
-          body: formData,
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.error || 'Failed to parse resume');
-        }
-
-        setImportedData((prev) => ({ ...prev, resume: data.data }));
-
-        // Count imported items
-        const itemCount = countResumeItems(data.data);
-
-        updateImportStatus('resume', {
-          status: 'success',
-          message: `Found ${itemCount} items (${Math.round((data.confidence || 0.5) * 100)}% confidence)`,
-          itemsImported: itemCount,
-        });
-      } catch (err) {
-        updateImportStatus('resume', {
-          status: 'error',
-          message: err instanceof Error ? err.message : 'Failed to import resume',
-        });
-      } finally {
-        setResumeParsingPromise(null);
-      }
-    })();
-
-    // Store the promise so Continue can wait for it if needed
-    setResumeParsingPromise(parsingPromise);
-  };
-
-  // Count items from resume import
   const countResumeItems = (data: Record<string, unknown> | undefined): number => {
     if (!data) return 0;
     let count = 0;
@@ -707,481 +540,517 @@ export default function OnboardingImportPage() {
     return count;
   };
 
-  // GitHub import handler
-  const handleGitHubImport = async (overrideUsername?: string) => {
-    const resolvedUsername = (overrideUsername ?? githubUsername).trim();
-    if (!resolvedUsername) {
-      // No username provided - show error
-      updateImportStatus('github', {
-        status: 'error',
-        message: 'Please enter a GitHub username or connect with GitHub',
-      });
+  // ─── Resume Handlers ───────────────────────────────────────────
+  const processResumeFile = async (file: File) => {
+    if (file.type !== 'application/pdf') {
+      updateImportStatus('resume', { status: 'error', message: 'Only PDF files are supported.' });
       return;
     }
+    setResumeFileName(file.name);
+    setResumeFileUrl(URL.createObjectURL(file));
 
+    // Generate PDF thumbnail
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const page = await pdf.getPage(1);
+      const viewport = page.getViewport({ scale: 1 });
+      const scale = 300 / viewport.width;
+      const scaledViewport = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = scaledViewport.width;
+      canvas.height = scaledViewport.height;
+      const ctx = canvas.getContext('2d')!;
+      await page.render({ canvasContext: ctx, viewport: scaledViewport }).promise;
+      setResumeThumbnail(canvas.toDataURL('image/png'));
+    } catch (err) {
+      console.warn('Could not generate PDF thumbnail:', err);
+    }
+
+    updateImportStatus('resume', {
+      status: 'added',
+      message: 'Resume added! Parsing in background...',
+    });
+
+    // Start parsing in background
+    const parsingPromise = (async () => {
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('saveToProfile', 'false');
+        const response = await fetch('/api/import/resume', { method: 'POST', body: formData });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to parse resume');
+        setImportedData((prev) => ({ ...prev, resume: data.data }));
+        const itemCount = countResumeItems(data.data);
+        updateImportStatus('resume', {
+          status: 'success',
+          message: `Found ${itemCount} items (${Math.round((data.confidence || 0.5) * 100)}% confidence)`,
+          itemsImported: itemCount,
+        });
+      } catch (err) {
+        updateImportStatus('resume', {
+          status: 'error',
+          message: err instanceof Error ? err.message : 'Failed',
+        });
+      } finally {
+        setResumeParsingPromise(null);
+      }
+    })();
+
+    setResumeParsingPromise(parsingPromise);
+  };
+
+  const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await processResumeFile(file);
+  };
+
+  const handleResumeDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingResume(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    await processResumeFile(file);
+  };
+
+  // ─── GitHub ─────────────────────────────────────────────────────
+  const handleGitHubConnect = async () => {
+    setGithubConnecting(true);
+    setGithubError(null);
+    const primaryEmail = user?.primaryEmailAddress;
+    if (!primaryEmail?.verification?.status || primaryEmail.verification.status !== 'verified') {
+      setGithubError('Please verify your email first to connect GitHub.');
+      setGithubConnecting(false);
+      return;
+    }
+    try {
+      await saveImportState();
+      const externalAccount = await user?.createExternalAccount({
+        strategy: 'oauth_github',
+        redirectUrl: window.location.href,
+      });
+      const url = externalAccount?.verification?.externalVerificationRedirectURL;
+      if (url) window.location.href = url.toString();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('already connected')) {
+        await user?.reload();
+        setGithubError(null);
+      } else setGithubError(`Connection failed: ${msg}`);
+      setGithubConnecting(false);
+    }
+  };
+
+  const handleGitHubDisconnect = async () => {
+    if (!connectedGithub) return;
+    setGithubDisconnecting(true);
+    setGithubError(null);
+    try {
+      await connectedGithub.destroy();
+      await user?.reload();
+      updateImportStatus('github', {
+        status: 'idle',
+        message: undefined,
+        itemsImported: undefined,
+      });
+      setGithubUsername('');
+    } catch (err: unknown) {
+      setGithubError(`Failed to disconnect: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setGithubDisconnecting(false);
+    }
+  };
+
+  const handleGitHubImport = async (overrideUsername?: string) => {
+    const resolved = (overrideUsername ?? githubUsername).trim();
+    if (!resolved) {
+      updateImportStatus('github', { status: 'error', message: 'Please enter a GitHub username' });
+      return;
+    }
     updateImportStatus('github', { status: 'importing', message: 'Fetching GitHub data...' });
-
     try {
       const response = await fetch('/api/import/github', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: resolvedUsername }),
+        body: JSON.stringify({ username: resolved }),
       });
-
       const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to import from GitHub');
-      }
-
+      if (!response.ok) throw new Error(data.error || 'Failed');
       setImportedData((prev) => ({ ...prev, github: data.data }));
       updateImportStatus('github', {
         status: 'success',
         message: data.message || `Imported ${data.data?.summary?.projects || 0} projects`,
         itemsImported: (data.data?.summary?.projects || 0) + (data.data?.summary?.skills || 0),
       });
-      setGithubUsername(resolvedUsername);
+      setGithubUsername(resolved);
     } catch (err) {
       updateImportStatus('github', {
         status: 'error',
-        message: err instanceof Error ? err.message : 'Failed to import from GitHub',
+        message: err instanceof Error ? err.message : 'Failed',
       });
     }
   };
 
-  // LinkedIn OAuth connect handler
+  // ─── LinkedIn ───────────────────────────────────────────────────
   const handleLinkedInConnect = async () => {
     setLinkedinConnecting(true);
     setLinkedinError(null);
-
-    // Check if user has a verified email
     const primaryEmail = user?.primaryEmailAddress;
     if (!primaryEmail?.verification?.status || primaryEmail.verification.status !== 'verified') {
-      setLinkedinError(
-        'Please verify your email first to connect LinkedIn. Check your inbox for a verification email.'
-      );
+      setLinkedinError('Please verify your email first.');
       setLinkedinConnecting(false);
       return;
     }
-
     try {
-      // Save state before OAuth redirect so we can restore it when we come back
       await saveImportState();
-
       const externalAccount = await user?.createExternalAccount({
         strategy: 'oauth_linkedin_oidc',
         redirectUrl: window.location.href,
       });
       const url = externalAccount?.verification?.externalVerificationRedirectURL;
-      if (url) {
-        window.location.href = url.toString();
-      }
+      if (url) window.location.href = url.toString();
     } catch (err: unknown) {
-      console.error('LinkedIn connect error:', err);
-      const errorMessage = err instanceof Error ? err.message : String(err);
-
-      if (errorMessage.includes('additional verification')) {
-        setLinkedinError('Email verification required. Please verify your email first.');
-      } else if (errorMessage.includes('already connected')) {
-        // Refresh user to get updated external accounts
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('already connected')) {
         await user?.reload();
         setLinkedinError(null);
-      } else {
-        setLinkedinError(`Connection failed: ${errorMessage}`);
-      }
+      } else setLinkedinError(`Connection failed: ${msg}`);
       setLinkedinConnecting(false);
     }
   };
 
-  // LinkedIn disconnect handler
   const handleLinkedInDisconnect = async () => {
     if (!connectedLinkedin) return;
-
     setLinkedinDisconnecting(true);
     setLinkedinError(null);
-
     try {
       await connectedLinkedin.destroy();
       await user?.reload();
-      // Reset import status for LinkedIn
       updateImportStatus('linkedin', {
         status: 'idle',
         message: undefined,
         itemsImported: undefined,
       });
     } catch (err: unknown) {
-      console.error('LinkedIn disconnect error:', err);
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      setLinkedinError(`Failed to disconnect: ${errorMessage}`);
+      setLinkedinError(`Failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setLinkedinDisconnecting(false);
     }
   };
 
-  // LinkedIn import handler (for when already connected)
   const handleLinkedInImport = async () => {
-    updateImportStatus('linkedin', {
-      status: 'importing',
-      message: 'Fetching LinkedIn data...',
-    });
-
+    updateImportStatus('linkedin', { status: 'importing', message: 'Fetching LinkedIn data...' });
     try {
       const response = await fetch('/api/import/linkedin/oauth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
-
       const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to import from LinkedIn');
-      }
-
+      if (!response.ok) throw new Error(data.error || 'Failed');
       setImportedData((prev) => ({ ...prev, linkedin: data.data }));
       updateImportStatus('linkedin', {
         status: 'success',
-        message: data.message || 'Imported profile data',
+        message: data.message || 'Imported profile',
         itemsImported: data.data?.summary?.total || 1,
       });
     } catch (err) {
       updateImportStatus('linkedin', {
         status: 'error',
-        message: err instanceof Error ? err.message : 'Failed to import from LinkedIn',
+        message: err instanceof Error ? err.message : 'Failed',
       });
     }
   };
 
-  // Google OAuth connect handler
-  const handleGoogleConnect = async () => {
-    setGoogleConnecting(true);
-    setGoogleError(null);
-
-    // Check if user has a verified email
+  // ─── Facebook ───────────────────────────────────────────────────
+  const handleFacebookConnect = async () => {
+    setFacebookConnecting(true);
+    setFacebookError(null);
     const primaryEmail = user?.primaryEmailAddress;
     if (!primaryEmail?.verification?.status || primaryEmail.verification.status !== 'verified') {
-      setGoogleError(
-        'Please verify your email first to connect Google. Check your inbox for a verification email.'
-      );
-      setGoogleConnecting(false);
+      setFacebookError('Please verify your email first.');
+      setFacebookConnecting(false);
       return;
     }
-
     try {
-      // Save state before OAuth redirect so we can restore it when we come back
       await saveImportState();
-
       const externalAccount = await user?.createExternalAccount({
-        strategy: 'oauth_google',
+        strategy: 'oauth_facebook',
         redirectUrl: window.location.href,
       });
       const url = externalAccount?.verification?.externalVerificationRedirectURL;
-      if (url) {
-        window.location.href = url.toString();
-      }
+      if (url) window.location.href = url.toString();
     } catch (err: unknown) {
-      console.error('Google connect error:', err);
-      const errorMessage = err instanceof Error ? err.message : String(err);
-
-      if (errorMessage.includes('additional verification')) {
-        setGoogleError('Email verification required. Please verify your email first.');
-      } else if (errorMessage.includes('already connected')) {
-        // Refresh user to get updated external accounts
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('already connected')) {
         await user?.reload();
-        setGoogleError(null);
-      } else {
-        setGoogleError(`Connection failed: ${errorMessage}`);
-      }
-      setGoogleConnecting(false);
+        setFacebookError(null);
+      } else setFacebookError(`Connection failed: ${msg}`);
+      setFacebookConnecting(false);
     }
   };
 
-  // Google disconnect handler
-  const handleGoogleDisconnect = async () => {
-    if (!connectedGoogle) return;
-
-    setGoogleDisconnecting(true);
-    setGoogleError(null);
-
+  const handleFacebookDisconnect = async () => {
+    if (!connectedFacebook) return;
+    setFacebookDisconnecting(true);
+    setFacebookError(null);
     try {
-      await connectedGoogle.destroy();
+      await connectedFacebook.destroy();
       await user?.reload();
-      // Reset import status for Google
-      updateImportStatus('google', {
+      updateImportStatus('facebook', {
         status: 'idle',
         message: undefined,
         itemsImported: undefined,
       });
     } catch (err: unknown) {
-      console.error('Google disconnect error:', err);
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      setGoogleError(`Failed to disconnect: ${errorMessage}`);
+      setFacebookError(`Failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
-      setGoogleDisconnecting(false);
+      setFacebookDisconnecting(false);
     }
   };
 
-  // Google import handler (for when already connected)
-  const handleGoogleImport = async () => {
-    updateImportStatus('google', {
-      status: 'importing',
-      message: 'Fetching Google data...',
-    });
-
-    try {
-      const response = await fetch('/api/import/google/oauth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to import from Google');
-      }
-
-      setImportedData((prev) => ({ ...prev, google: data.data }));
-      updateImportStatus('google', {
-        status: 'success',
-        message: data.message || 'Imported profile data',
-        itemsImported: data.data?.summary?.total || 1,
-      });
-    } catch (err) {
-      updateImportStatus('google', {
+  // ─── Medium ─────────────────────────────────────────────────────
+  const handleMediumImport = async () => {
+    const username = mediumUsername.trim();
+    if (!username) {
+      updateImportStatus('medium', {
         status: 'error',
-        message: err instanceof Error ? err.message : 'Failed to import from Google',
+        message: 'Please enter your Medium username',
       });
-    }
-  };
-
-  // Manual links handler
-  const handleAddLink = () => {
-    setManualLinks((prev) => [...prev, { url: '' }]);
-  };
-
-  const handleRemoveLink = (index: number) => {
-    setManualLinks((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const handleLinkChange = (index: number, value: string) => {
-    setManualLinks((prev) => prev.map((link, i) => (i === index ? { ...link, url: value } : link)));
-  };
-
-  const handleSaveLinks = async () => {
-    const validLinks = manualLinks.filter((l) => l.url.trim());
-    if (validLinks.length === 0) {
-      setShowLinksForm(false);
       return;
     }
+    updateImportStatus('medium', { status: 'importing', message: 'Fetching Medium posts...' });
+    try {
+      const response = await fetch('/api/import/medium', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed');
+      setImportedData((prev) => ({ ...prev, medium: data.data }));
+      const postCount = data.data?.posts?.length || data.data?.summary?.posts || 0;
+      updateImportStatus('medium', {
+        status: 'success',
+        message: `Imported ${postCount} posts`,
+        itemsImported: postCount,
+      });
+    } catch (err) {
+      updateImportStatus('medium', {
+        status: 'error',
+        message: err instanceof Error ? err.message : 'Failed',
+      });
+    }
+  };
 
-    updateImportStatus('links', { status: 'importing', message: 'Processing links...' });
+  // ─── YouTube ────────────────────────────────────────────────────
+  const handleYouTubeImport = async () => {
+    const channel = youtubeChannel.trim();
+    if (!channel) {
+      updateImportStatus('youtube', {
+        status: 'error',
+        message: 'Please enter your YouTube channel',
+      });
+      return;
+    }
+    updateImportStatus('youtube', { status: 'importing', message: 'Fetching YouTube videos...' });
+    try {
+      const response = await fetch('/api/import/youtube', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed');
+      setImportedData((prev) => ({ ...prev, youtube: data.data }));
+      const videoCount = data.data?.videos?.length || data.data?.summary?.videos || 0;
+      updateImportStatus('youtube', {
+        status: 'success',
+        message: `Imported ${videoCount} videos`,
+        itemsImported: videoCount,
+      });
+    } catch (err) {
+      updateImportStatus('youtube', {
+        status: 'error',
+        message: err instanceof Error ? err.message : 'Failed',
+      });
+    }
+  };
 
+  // ─── Substack ───────────────────────────────────────────────────
+  const handleSubstackImport = async () => {
+    const identifier = substackUsername.trim();
+    if (!identifier) {
+      updateImportStatus('substack', {
+        status: 'error',
+        message: 'Please enter your Substack name',
+      });
+      return;
+    }
+    updateImportStatus('substack', { status: 'importing', message: 'Fetching Substack posts...' });
+    try {
+      const response = await fetch('/api/import/medium', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platform: 'substack', identifier }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed');
+      setImportedData((prev) => ({ ...prev, substack: data.data }));
+      const postCount = data.data?.posts?.length || data.data?.summary?.posts || 0;
+      updateImportStatus('substack', {
+        status: 'success',
+        message: `Imported ${postCount} posts`,
+        itemsImported: postCount,
+      });
+    } catch (err) {
+      updateImportStatus('substack', {
+        status: 'error',
+        message: err instanceof Error ? err.message : 'Failed',
+      });
+    }
+  };
+
+  // ─── Links ──────────────────────────────────────────────────────
+  const handleAddLink = () => {
+    const url = linkInput.trim();
+    if (!url) return;
+    try {
+      new URL(url);
+    } catch {
+      updateImportStatus('links', { status: 'error', message: 'Please enter a valid URL' });
+      return;
+    }
+    if (linkUrls.includes(url)) {
+      updateImportStatus('links', { status: 'error', message: 'Link already added' });
+      return;
+    }
+    setLinkUrls((prev) => [...prev, url]);
+    setLinkInput('');
+    updateImportStatus('links', { status: 'idle', message: undefined });
+  };
+
+  const handleRemoveLink = (url: string) => setLinkUrls((prev) => prev.filter((l) => l !== url));
+
+  const handleLinksImport = async () => {
+    if (linkUrls.length === 0) {
+      updateImportStatus('links', { status: 'error', message: 'Add at least one link' });
+      return;
+    }
+    updateImportStatus('links', { status: 'importing', message: 'Importing links...' });
     try {
       const response = await fetch('/api/import/links', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ links: validLinks }),
+        body: JSON.stringify({ links: linkUrls, saveToProfile: true }),
       });
-
       const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to process links');
-      }
-
+      if (!response.ok) throw new Error(data.error || 'Failed');
       setImportedData((prev) => ({ ...prev, links: data.data }));
+      const linkCount = data.data?.links?.length || linkUrls.length;
       updateImportStatus('links', {
         status: 'success',
-        message: `Added ${data.data?.summary?.links || validLinks.length} links`,
-        itemsImported: data.data?.summary?.links || validLinks.length,
+        message: `Imported ${linkCount} links`,
+        itemsImported: linkCount,
       });
-      setShowLinksForm(false);
     } catch (err) {
       updateImportStatus('links', {
         status: 'error',
-        message: err instanceof Error ? err.message : 'Failed to process links',
+        message: err instanceof Error ? err.message : 'Failed',
       });
     }
   };
 
-  // Profile photo upload handler
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Validate file type
+  // ─── Photo handling ─────────────────────────────────────────────
+  const processPhotoFile = async (file: File) => {
     if (!file.type.startsWith('image/')) {
-      setError('Please upload an image file (JPEG, PNG, etc.)');
+      setError('Please upload an image file');
       return;
     }
-
-    // Validate file size (max 40MB - modern smartphone photos can be large)
     if (file.size > 40 * 1024 * 1024) {
       setError('Image must be less than 40MB');
       return;
     }
-
     setIsUploadingPhoto(true);
     setError(null);
-
     try {
-      // Convert to base64 for storage and preview
       const base64 = await fileToBase64(file);
       setUploadedPhoto(base64);
-      setIsUploadingPhoto(false);
+      setPhotoCrop({ x: 0, y: 0 });
+      setPhotoZoom(1);
+      setPhotoRotation(0);
     } catch {
       setError('Failed to process image');
+    } finally {
       setIsUploadingPhoto(false);
     }
   };
 
-  // Remove the uploaded photo
-  const handleRemoveUploadedPhoto = () => {
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await processPhotoFile(file);
+  };
+
+  const handlePhotoDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingPhoto(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    await processPhotoFile(file);
+  };
+
+  const handleRemovePhoto = () => {
     setUploadedPhoto(null);
+    setPhotoCrop({ x: 0, y: 0 });
+    setPhotoZoom(1);
+    setPhotoRotation(0);
+    setCroppedAreaPixels(null);
   };
 
-  // Get all available photos as an array with source info
-  interface PhotoOption {
-    id: string;
-    url: string;
-    source: string;
-    label: string;
-  }
+  const onCropComplete = useCallback((_croppedArea: Area, croppedAreaPx: Area) => {
+    setCroppedAreaPixels(croppedAreaPx);
+  }, []);
 
-  // Detect the primary OAuth provider that provided the user's profile image
-  const getPrimaryAuthProvider = (): { id: string; label: string } | null => {
-    if (!user) return null;
-
-    // Check verified external accounts in order of priority
-    const verifiedAccounts =
-      user.externalAccounts?.filter((a) => a.verification?.status === 'verified') || [];
-
-    // Find the first OAuth provider that likely provided the profile image
-    // Priority: Google > LinkedIn > GitHub > others
-    // Cast to string to handle various provider naming conventions
-    const googleAccount = verifiedAccounts.find(
-      (a) => (a.provider as string) === 'oauth_google' || a.provider === 'google'
-    );
-    if (googleAccount) return { id: 'google', label: 'Google' };
-
-    const linkedinAccount = verifiedAccounts.find(
-      (a) =>
-        a.provider === 'linkedin_oidc' ||
-        a.provider === 'linkedin' ||
-        (a.provider as string) === 'oauth_linkedin_oidc' ||
-        (a.provider as string) === 'oauth_linkedin'
-    );
-    if (linkedinAccount) return { id: 'linkedin-sso', label: 'LinkedIn' };
-
-    const githubAccount = verifiedAccounts.find(
-      (a) => a.provider === 'github' || (a.provider as string) === 'oauth_github'
-    );
-    if (githubAccount) return { id: 'github-sso', label: 'GitHub' };
-
-    // If there's any other OAuth provider
-    if (verifiedAccounts.length > 0) {
-      const provider = verifiedAccounts[0].provider || 'sso';
-      // Clean up provider name for display (e.g., 'oauth_facebook' -> 'Facebook')
-      const label = provider.replace('oauth_', '').replace('_oidc', '').replace(/_/g, ' ');
-      const capitalizedLabel = label.charAt(0).toUpperCase() + label.slice(1);
-      return { id: 'sso', label: capitalizedLabel };
+  // Gallery upload
+  const handleGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const remaining = 3 - galleryPhotos.length;
+    if (remaining <= 0) {
+      setError('Maximum 3 portfolio photos');
+      return;
     }
-
-    // User signed up with email/password - no OAuth provider
-    return null;
-  };
-
-  const getAvailablePhotos = (): PhotoOption[] => {
-    const photos: PhotoOption[] = [];
-    const seenUrls = new Set<string>(); // Track URLs to avoid duplicates
-
-    // Helper to add photo only if URL is unique
-    const addPhoto = (photo: PhotoOption) => {
-      // Normalize URL for comparison (ignore query params, protocol differences)
-      const normalizedUrl = photo.url.split('?')[0].toLowerCase();
-      if (!seenUrls.has(normalizedUrl)) {
-        seenUrls.add(normalizedUrl);
-        photos.push(photo);
+    setIsUploadingGallery(true);
+    setError(null);
+    try {
+      const newPhotos: string[] = [];
+      for (let i = 0; i < Math.min(files.length, remaining); i++) {
+        const file = files[i];
+        if (!file.type.startsWith('image/') || file.size > 40 * 1024 * 1024) continue;
+        const base64 = await fileToBase64(file);
+        newPhotos.push(base64);
       }
-    };
-
-    // Google photo from import (prioritize imported data over SSO)
-    const googleData = importedData.google as Record<string, unknown> | undefined;
-    const googleProfile = googleData?.profile as Record<string, unknown> | undefined;
-    if (googleProfile?.avatarUrl) {
-      addPhoto({
-        id: 'google',
-        url: googleProfile.avatarUrl as string,
-        source: 'google',
-        label: 'Google',
-      });
+      if (newPhotos.length === 0) setError('No valid image files selected');
+      else setGalleryPhotos((prev) => [...prev, ...newPhotos].slice(0, 3));
+    } catch {
+      setError('Failed to process gallery images');
+    } finally {
+      setIsUploadingGallery(false);
+      e.target.value = '';
     }
-
-    // LinkedIn photo from import (prioritize imported data over SSO)
-    const linkedinData = importedData.linkedin as Record<string, unknown> | undefined;
-    const linkedinProfile = linkedinData?.profile as Record<string, unknown> | undefined;
-    if (linkedinProfile?.avatarUrl) {
-      addPhoto({
-        id: 'linkedin',
-        url: linkedinProfile.avatarUrl as string,
-        source: 'linkedin',
-        label: 'LinkedIn',
-      });
-    }
-
-    // GitHub photo from import (prioritize imported data over SSO)
-    const githubData = importedData.github as Record<string, unknown> | undefined;
-    const githubProfile = githubData?.profile as Record<string, unknown> | undefined;
-    if (githubProfile?.avatarUrl) {
-      addPhoto({
-        id: 'github',
-        url: githubProfile.avatarUrl as string,
-        source: 'github',
-        label: 'GitHub',
-      });
-    }
-
-    // SSO/OAuth profile photo (only if not already added from import and user has real image)
-    // Skip if we already have a photo from the same source via import (e.g., linkedin-sso vs linkedin, google vs google)
-    // because Clerk proxies the same photo through a different URL
-    const primaryAuthProvider = getPrimaryAuthProvider();
-    const hasMatchingImportPhoto =
-      primaryAuthProvider &&
-      ((primaryAuthProvider.id === 'google' && googleProfile?.avatarUrl) ||
-        (primaryAuthProvider.id === 'linkedin-sso' && linkedinProfile?.avatarUrl) ||
-        (primaryAuthProvider.id === 'github-sso' && githubProfile?.avatarUrl));
-
-    if (user?.imageUrl && user?.hasImage && primaryAuthProvider && !hasMatchingImportPhoto) {
-      addPhoto({
-        id: primaryAuthProvider.id,
-        url: user.imageUrl,
-        source: primaryAuthProvider.id,
-        label: primaryAuthProvider.label,
-      });
-    }
-
-    // Uploaded photo (highest priority - always added first if exists)
-    if (uploadedPhoto) {
-      // Insert uploaded photo at the beginning for highest priority
-      photos.unshift({
-        id: 'upload',
-        url: uploadedPhoto,
-        source: 'upload',
-        label: 'Upload',
-      });
-    }
-
-    return photos;
   };
 
-  // Get the uploaded photo URL (priority over other sources)
-  const getUploadedPhotoUrl = (): string | null => {
-    return uploadedPhoto;
+  const handleRemoveGalleryPhoto = (index: number) => {
+    setGalleryPhotos((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Create profile and continue - ALWAYS goes to review
-  const handleContinue = async () => {
-    // If resume is still being parsed, wait for it to complete
-    // This ensures the user gets their resume data even if they click Continue quickly
+  // ─── Photo resolution helper ───────────────────────────────────
+
+  // ─── Continue to Review handler ────────────────────────────────
+  const handleGoToReview = async () => {
+    // If resume parsing is still running, wait for it
     if (resumeParsingPromise) {
       setIsWaitingForParsing(true);
       try {
@@ -1191,71 +1060,69 @@ export default function OnboardingImportPage() {
       }
     }
 
-    // Use the uploaded photo if available, otherwise pick the best from other sources
-    let bestAvatarUrl: string | null = getUploadedPhotoUrl();
-
-    // If no photo uploaded, compare resolutions of available photos (Google, LinkedIn, GitHub) to find the best one
-    if (!bestAvatarUrl) {
-      const photos = getAvailablePhotos();
-      if (photos.length > 0) {
-        const avatarCandidates = photos.map((p) => p.url);
-        bestAvatarUrl = await getBestResolutionImage(avatarCandidates);
+    // Get best avatar - cropped version for DP
+    let bestAvatarUrl: string | null = null;
+    if (uploadedPhoto && croppedAreaPixels) {
+      try {
+        bestAvatarUrl = await getCroppedImg(uploadedPhoto, croppedAreaPixels);
+      } catch {
+        bestAvatarUrl = uploadedPhoto;
       }
+    } else if (uploadedPhoto) {
+      bestAvatarUrl = uploadedPhoto;
     }
 
-    // Collect data from ALL sources
+    if (!bestAvatarUrl) {
+      // Try to get from imported data
+      const photos: string[] = [];
+      const gd = importedData.google as Record<string, unknown> | undefined;
+      const gp = gd?.profile as Record<string, unknown> | undefined;
+      if (gp?.avatarUrl) photos.push(gp.avatarUrl as string);
+      const ld = importedData.linkedin as Record<string, unknown> | undefined;
+      const lp = ld?.profile as Record<string, unknown> | undefined;
+      if (lp?.avatarUrl) photos.push(lp.avatarUrl as string);
+      const ghd = importedData.github as Record<string, unknown> | undefined;
+      const ghp = ghd?.profile as Record<string, unknown> | undefined;
+      if (ghp?.avatarUrl) photos.push(ghp.avatarUrl as string);
+      if (user?.imageUrl && user?.hasImage) photos.push(user.imageUrl);
+      if (photos.length > 0) bestAvatarUrl = await getBestResolutionImage(photos);
+    }
+
     const resumeData = importedData.resume as Record<string, unknown> | undefined;
     const linkedinData = importedData.linkedin as Record<string, unknown> | undefined;
     const githubData = importedData.github as Record<string, unknown> | undefined;
 
-    // Get profile data from various sources
     const resumeProfile = (resumeData?.profile as Record<string, unknown>) || {};
     const linkedinProfile = (linkedinData?.profile as Record<string, unknown>) || {};
     const githubProfile = (githubData?.profile as Record<string, unknown>) || {};
     const resumeContactInfo = resumeData?.contactInfo as Record<string, unknown> | undefined;
 
-    // Collect ALL names from ALL sources for review
-    // Format: { firstName, lastName, source }
     const allNames: Array<{ firstName?: string; lastName?: string; source: string }> = [];
-
-    // FIRST: Add signup name (from Clerk)
-    if (user?.firstName || user?.lastName) {
+    if (user?.firstName || user?.lastName)
       allNames.push({
         firstName: user.firstName || undefined,
         lastName: user.lastName || undefined,
         source: 'SIGNUP',
       });
-    }
-
-    // Name from resume
-    if (resumeProfile.firstName || resumeProfile.lastName) {
+    if (resumeProfile.firstName || resumeProfile.lastName)
       allNames.push({
         firstName: resumeProfile.firstName as string | undefined,
         lastName: resumeProfile.lastName as string | undefined,
         source: 'RESUME',
       });
-    }
-
-    // Name from LinkedIn
-    if (linkedinProfile.firstName || linkedinProfile.lastName) {
+    if (linkedinProfile.firstName || linkedinProfile.lastName)
       allNames.push({
         firstName: linkedinProfile.firstName as string | undefined,
         lastName: linkedinProfile.lastName as string | undefined,
         source: 'LINKEDIN',
       });
-    }
-
-    // Name from GitHub
-    if (githubProfile.firstName || githubProfile.lastName) {
+    if (githubProfile.firstName || githubProfile.lastName)
       allNames.push({
         firstName: githubProfile.firstName as string | undefined,
         lastName: githubProfile.lastName as string | undefined,
         source: 'GITHUB',
       });
-    }
 
-    // Build merged profile - use resume data as base if available, otherwise build from other sources
-    // Name precedence for display: Resume > LinkedIn > GitHub > Signup (but all shown in review)
     const mergedProfile: Record<string, unknown> = {
       firstName:
         resumeProfile.firstName ||
@@ -1273,100 +1140,71 @@ export default function OnboardingImportPage() {
       avatarUrl: bestAvatarUrl,
     };
 
-    // Collect ALL emails from ALL sources for the review page
     const allEmails: Array<{ email: string; source: string }> = [];
-
-    // FIRST: Add signup email as primary (from Clerk)
     const signupEmail = user?.primaryEmailAddress?.emailAddress;
-    if (signupEmail) {
-      allEmails.push({ email: signupEmail, source: 'SIGNUP' });
-    }
-
-    // Email from resume
-    if (resumeContactInfo?.email) {
+    if (signupEmail) allEmails.push({ email: signupEmail, source: 'SIGNUP' });
+    if (resumeContactInfo?.email)
       allEmails.push({ email: resumeContactInfo.email as string, source: 'RESUME' });
-    }
-
-    // Email from LinkedIn
     if (linkedinData) {
-      const linkedinContactInfo = linkedinData.contactInfo as Record<string, unknown> | undefined;
-      if (linkedinContactInfo?.email) {
-        allEmails.push({ email: linkedinContactInfo.email as string, source: 'LINKEDIN' });
-      }
-      if (linkedinData.email && typeof linkedinData.email === 'string') {
+      const lci = linkedinData.contactInfo as Record<string, unknown> | undefined;
+      if (lci?.email) allEmails.push({ email: lci.email as string, source: 'LINKEDIN' });
+      if (linkedinData.email && typeof linkedinData.email === 'string')
         allEmails.push({ email: linkedinData.email, source: 'LINKEDIN' });
-      }
     }
-
-    // Email from GitHub
     if (githubData) {
-      const githubContactInfo = githubData.contactInfo as Record<string, unknown> | undefined;
-      if (githubContactInfo?.email) {
-        allEmails.push({ email: githubContactInfo.email as string, source: 'GITHUB' });
-      }
+      const gci = githubData.contactInfo as Record<string, unknown> | undefined;
+      if (gci?.email) allEmails.push({ email: gci.email as string, source: 'GITHUB' });
     }
-
-    // Deduplicate emails (signup email stays first since it was added first)
     const seenEmails = new Set<string>();
     const uniqueEmails = allEmails.filter((e) => {
-      const normalized = e.email.toLowerCase().trim();
-      if (seenEmails.has(normalized)) return false;
-      seenEmails.add(normalized);
+      const n = e.email.toLowerCase().trim();
+      if (seenEmails.has(n)) return false;
+      seenEmails.add(n);
       return true;
     });
 
-    // Collect ALL phones from ALL sources (with optional country code)
     const allPhones: Array<{
       phone?: string;
       countryCode?: string | null;
       number?: string;
       source: string;
     }> = [];
-
     if (resumeContactInfo?.phone) {
-      // Resume phone - try to parse country code from the raw string
-      const phoneStr = resumeContactInfo.phone as string;
-      const parsed = parsePhoneWithCountryCode(phoneStr);
+      const parsed = parsePhoneWithCountryCode(resumeContactInfo.phone as string);
       allPhones.push({
-        phone: phoneStr,
+        phone: resumeContactInfo.phone as string,
         countryCode: parsed.countryCode,
-        number: parsed.number || phoneStr,
+        number: parsed.number || (resumeContactInfo.phone as string),
         source: 'RESUME',
       });
     }
-
     if (linkedinData) {
-      const linkedinContactInfo = linkedinData.contactInfo as Record<string, unknown> | undefined;
-      if (linkedinContactInfo?.phone) {
-        const phoneStr = linkedinContactInfo.phone as string;
-        const parsed = parsePhoneWithCountryCode(phoneStr);
+      const lci = linkedinData.contactInfo as Record<string, unknown> | undefined;
+      if (lci?.phone) {
+        const parsed = parsePhoneWithCountryCode(lci.phone as string);
         allPhones.push({
-          phone: phoneStr,
+          phone: lci.phone as string,
           countryCode: parsed.countryCode,
-          number: parsed.number || phoneStr,
+          number: parsed.number || (lci.phone as string),
           source: 'LINKEDIN',
         });
       }
     }
-
-    // Deduplicate phones
     const seenPhones = new Set<string>();
     const uniquePhones = allPhones.filter((p) => {
-      const phoneNum = p.number || p.phone || '';
-      const normalized = phoneNum.replace(/\D/g, '');
-      if (seenPhones.has(normalized)) return false;
-      seenPhones.add(normalized);
+      const n = (p.number || p.phone || '').replace(/\D/g, '');
+      if (seenPhones.has(n)) return false;
+      seenPhones.add(n);
       return true;
     });
 
-    // Build contact info
     const contactInfo = {
       ...(resumeContactInfo || {}),
       allEmails: uniqueEmails,
       allPhones: uniquePhones,
     };
 
-    // Handle large uploaded photos - store in IndexedDB instead of sessionStorage
+    // Store avatar in IndexedDB if it's a data URL
     const avatarUrlForStorage = mergedProfile.avatarUrl as string | undefined;
     if (avatarUrlForStorage?.startsWith('data:')) {
       try {
@@ -1379,7 +1217,17 @@ export default function OnboardingImportPage() {
       }
     }
 
-    // Merge and deduplicate links from all sources by URL
+    // Also store the full uncropped photo if there's one
+    if (uploadedPhoto) {
+      try {
+        const fullPhotoKey = `uploaded_full_photo_${Date.now()}`;
+        await savePhotoToIndexedDB(fullPhotoKey, uploadedPhoto);
+        mergedProfile.fullPhotoUrl = `indexeddb:${fullPhotoKey}`;
+      } catch (err) {
+        console.error('Failed to store full photo:', err);
+      }
+    }
+
     const allLinks = [
       ...((resumeData?.links as Array<Record<string, unknown>>) || []),
       ...((linkedinData?.links as Array<Record<string, unknown>>) || []),
@@ -1393,32 +1241,40 @@ export default function OnboardingImportPage() {
       return true;
     });
 
-    // Merge all data for review - include data from all sources
+    const galleryPhotoRefs: string[] = [];
+    for (let i = 0; i < galleryPhotos.length; i++) {
+      const photo = galleryPhotos[i];
+      if (photo.startsWith('data:')) {
+        try {
+          const galleryKey = `gallery_photo_${Date.now()}_${i}`;
+          await savePhotoToIndexedDB(galleryKey, photo);
+          galleryPhotoRefs.push(`indexeddb:${galleryKey}`);
+        } catch (err) {
+          console.error('Failed to store gallery photo:', err);
+        }
+      } else {
+        galleryPhotoRefs.push(photo);
+      }
+    }
+
     const dataForReview = {
       profile: mergedProfile,
       contactInfo,
-      // Include all name options for review
       allNames,
-      // Include experiences, education, skills, etc. from resume if available
       experiences: resumeData?.experiences || [],
       educations: resumeData?.educations || [],
       skills: [
         ...((resumeData?.skills as string[]) || []),
         ...((githubData?.skills as string[]) || []),
-      ].filter((s, i, arr) => arr.indexOf(s) === i), // Dedupe
+      ].filter((s, i, arr) => arr.indexOf(s) === i),
       links: uniqueLinks,
       certifications: resumeData?.certifications || [],
       projects: [
         ...((resumeData?.projects as Array<Record<string, unknown>>) || []),
         ...((githubData?.projects as Array<Record<string, unknown>>) || []),
       ],
-      // Pass through original imported data for reference
-      _sources: {
-        hasResume: !!resumeData,
-        hasLinkedIn: !!linkedinData,
-        hasGitHub: !!githubData,
-      },
-      // Store resume filename for import history tracking
+      galleryPhotos: galleryPhotoRefs,
+      _sources: { hasResume: !!resumeData, hasLinkedIn: !!linkedinData, hasGitHub: !!githubData },
       _resumeFileName: resumeFileName || null,
     };
 
@@ -1426,17 +1282,63 @@ export default function OnboardingImportPage() {
     router.push('/onboarding/review');
   };
 
-  // Get overall import count
-  const getTotalImported = () => {
-    return Object.values(imports).reduce((acc, imp) => acc + (imp.itemsImported || 0), 0);
+  // ─── Navigation ─────────────────────────────────────────────────
+  const goNext = () => {
+    const idx = STEPS.indexOf(currentStep);
+    if (idx < STEPS.length - 1) {
+      if (STEPS[idx + 1] === 'review') {
+        handleGoToReview();
+      } else {
+        setCurrentStep(STEPS[idx + 1]);
+      }
+    }
   };
 
-  // Consider both 'added' (parsing in background) and 'success' as having an import
-  const hasAnyImport = Object.values(imports).some(
-    (i) => i.status === 'success' || i.status === 'added'
-  );
+  const goBack = () => {
+    const idx = STEPS.indexOf(currentStep);
+    if (idx > 0) setCurrentStep(STEPS[idx - 1]);
+  };
 
-  // Show loading state while checking for existing profile
+  const canGoNext = () => {
+    if (currentStep === 'resume')
+      return imports.resume.status === 'added' || imports.resume.status === 'success';
+    return true; // All other steps are optional
+  };
+
+  // ─── Status badge helper ───────────────────────────────────────
+  const StatusBadge = ({
+    status,
+    message,
+  }: {
+    status: ImportStatus['status'];
+    message?: string;
+  }) => {
+    if (status === 'success' || status === 'added') {
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+          <CheckCircle2 className="h-3 w-3" />
+          {status === 'added' ? 'Added' : message || 'Done'}
+        </span>
+      );
+    }
+    if (status === 'importing') {
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+          <Loader2 className="h-3 w-3 animate-spin" /> Importing...
+        </span>
+      );
+    }
+    if (status === 'error') {
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2.5 py-0.5 text-xs font-medium text-red-500">
+          <AlertCircle className="h-3 w-3" /> {message || 'Error'}
+        </span>
+      );
+    }
+    return null;
+  };
+
+  // ─── Loading state ─────────────────────────────────────────────
   if (isCheckingProfile) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -1448,155 +1350,340 @@ export default function OnboardingImportPage() {
     );
   }
 
+  // ─── Render ─────────────────────────────────────────────────────
   return (
     <>
       {/* Progress bar */}
-      <div className="fixed left-0 right-0 top-16 z-40 h-1 bg-muted">
+      <div className="fixed left-0 right-0 top-16 z-40 h-1 bg-muted/50">
         <motion.div
-          className="h-full bg-primary"
-          initial={{ width: '33%' }}
-          animate={{ width: '66%' }}
-          transition={{ duration: 0.3 }}
+          className="h-full bg-gradient-to-r from-primary to-primary/70"
+          initial={{ width: '0%' }}
+          animate={{ width: `${progressPercent}%` }}
+          transition={{ duration: 0.4, ease: 'easeOut' }}
         />
       </div>
 
-      <div className="mx-auto max-w-4xl px-4 py-16">
-        {/* Header */}
-        <motion.div
-          className="mb-12 text-center"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-        >
-          <h1 className="text-4xl font-bold tracking-tight">Bring your data</h1>
-          <p className="mt-3 text-lg text-muted-foreground">
-            Connect your sources and watch your profile come to life
-          </p>
-        </motion.div>
+      <div className="relative mx-auto max-w-2xl px-4 pb-24 pt-10 sm:px-6">
+        {/* Step indicator pills */}
+        <div className="mb-8 flex items-center justify-center gap-2">
+          {STEPS.map((step, idx) => (
+            <button
+              key={step}
+              onClick={() => {
+                // Allow clicking on previous/current steps
+                if (idx <= currentStepIndex) setCurrentStep(step);
+              }}
+              className={`h-2 rounded-full transition-all duration-300 ${
+                idx === currentStepIndex
+                  ? 'w-8 bg-primary'
+                  : idx < currentStepIndex
+                    ? 'w-2 bg-primary/50 hover:bg-primary/70'
+                    : 'w-2 bg-muted'
+              }`}
+            />
+          ))}
+        </div>
 
-        {/* Floating Cards Grid */}
-        <div className="relative">
-          {/* Decorative gradient blur */}
-          <div className="pointer-events-none absolute -top-20 left-1/2 h-64 w-64 -translate-x-1/2 rounded-full bg-primary/20 blur-3xl" />
-
+        {/* Step header */}
+        <AnimatePresence mode="wait">
           <motion.div
-            className="relative grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
+            key={currentStep}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -16 }}
+            transition={{ duration: 0.3 }}
+            className="mb-8 text-center"
           >
-            {/* Profile Photo Card */}
+            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+              {STEP_META[currentStep].title}
+            </h1>
+            <p className="mt-1.5 text-sm text-muted-foreground">
+              {STEP_META[currentStep].subtitle}
+            </p>
+          </motion.div>
+        </AnimatePresence>
+
+        {/* Step content */}
+        <AnimatePresence mode="wait">
+          {/* ─────────────── STEP 1: RESUME ─────────────── */}
+          {currentStep === 'resume' && (
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.1 }}
-              whileHover={{ y: -4, transition: { duration: 0.2 } }}
-              className="group"
+              key="step-resume"
+              initial={{ opacity: 0, x: 40 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -40 }}
+              transition={{ duration: 0.3 }}
             >
-              <div className="relative h-full overflow-hidden rounded-2xl border border-border/60 bg-card p-5 transition-all duration-300 hover:border-border hover:shadow-md hover:shadow-black/5 dark:hover:shadow-black/20">
-                {/* Status indicator */}
-                <AnimatePresence>
-                  {uploadedPhoto && !isUploadingPhoto && (
+              <div
+                ref={resumeDropRef}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setIsDraggingResume(true);
+                }}
+                onDragLeave={() => setIsDraggingResume(false)}
+                onDrop={handleResumeDrop}
+                className={`relative mx-auto max-w-md rounded-2xl border-2 border-dashed p-8 text-center transition-all duration-200 ${
+                  isDraggingResume
+                    ? 'scale-[1.02] border-primary bg-primary/5'
+                    : resumeFileName
+                      ? 'border-emerald-500/30 bg-emerald-500/5'
+                      : 'border-border/60 bg-card/50 hover:border-primary/30'
+                }`}
+              >
+                <AnimatePresence mode="wait">
+                  {resumeThumbnail &&
+                  (imports.resume.status === 'success' || imports.resume.status === 'added') ? (
                     <motion.div
-                      initial={{ scale: 0, opacity: 0 }}
+                      key="uploaded"
+                      initial={{ scale: 0.9, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0, opacity: 0 }}
-                      className="absolute right-3 top-3 z-10"
+                      exit={{ scale: 0.9, opacity: 0 }}
+                      className="flex flex-col items-center gap-4"
                     >
-                      <div className="flex h-5 w-5 items-center justify-center rounded-full bg-green-500 shadow-sm">
-                        <CheckCircle2 className="h-3.5 w-3.5 text-white" />
+                      <div className="group relative">
+                        <div className="relative h-48 w-36 overflow-hidden rounded-lg border border-border/40 bg-white shadow-md">
+                          <Image
+                            src={resumeThumbnail}
+                            alt="Resume preview"
+                            fill
+                            className="object-cover object-top"
+                            unoptimized
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setResumeFileName(null);
+                            setResumeFileUrl(null);
+                            setResumeThumbnail(null);
+                            updateImportStatus('resume', {
+                              status: 'idle',
+                              message: undefined,
+                              itemsImported: undefined,
+                            });
+                            setImportedData((prev) => {
+                              // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                              const { resume: _r, ...rest } = prev;
+                              return rest;
+                            });
+                          }}
+                          className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-destructive text-white opacity-0 shadow-md transition-opacity group-hover:opacity-100"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
                       </div>
+                      <div>
+                        <p className="text-sm font-medium">{resumeFileName}</p>
+                        {imports.resume.status === 'added' && (
+                          <p className="mt-1 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+                            <Loader2 className="h-3 w-3 animate-spin" /> Parsing in background...
+                          </p>
+                        )}
+                        {imports.resume.status === 'success' && imports.resume.message && (
+                          <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">
+                            <CheckCircle2 className="mr-1 inline h-3 w-3" />
+                            {imports.resume.message}
+                          </p>
+                        )}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => document.getElementById('resume-upload')?.click()}
+                        className="gap-1.5"
+                      >
+                        <Upload className="h-3.5 w-3.5" /> Replace
+                      </Button>
                     </motion.div>
-                  )}
-                  {isUploadingPhoto && (
+                  ) : (
                     <motion.div
-                      initial={{ scale: 0, opacity: 0 }}
+                      key="placeholder"
+                      initial={{ scale: 0.9, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0, opacity: 0 }}
-                      className="absolute right-3 top-3 z-10"
+                      exit={{ scale: 0.9, opacity: 0 }}
+                      className="flex flex-col items-center gap-4"
                     >
-                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                      <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-muted/60">
+                        {imports.resume.status === 'importing' ? (
+                          <Loader2 className="h-10 w-10 animate-spin text-muted-foreground" />
+                        ) : (
+                          <FileText className="h-10 w-10 text-muted-foreground/60" />
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">
+                          {isDraggingResume ? 'Drop your resume here' : 'Drag & drop your resume'}
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">PDF format, up to 10MB</p>
+                      </div>
+                      <Button
+                        onClick={() => document.getElementById('resume-upload')?.click()}
+                        disabled={imports.resume.status === 'importing'}
+                        className="gap-1.5"
+                      >
+                        <Upload className="h-4 w-4" /> Choose file
+                      </Button>
                     </motion.div>
                   )}
                 </AnimatePresence>
 
-                {/* Avatar & Logo Section */}
-                <div className="relative mb-4 flex items-center justify-center">
-                  <AnimatePresence mode="wait">
-                    {uploadedPhoto ? (
-                      <motion.div
-                        key="avatar"
-                        initial={{ scale: 0.8, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0.8, opacity: 0 }}
-                        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-                        className="group/photo relative"
-                      >
-                        <button
-                          type="button"
-                          onClick={() => document.getElementById('photo-upload')?.click()}
-                          disabled={isUploadingPhoto}
-                          className="relative h-20 w-20 overflow-hidden rounded-full ring-2 ring-white/80 transition-all hover:ring-primary/50 dark:ring-gray-800/80"
-                        >
-                          <Image
-                            src={uploadedPhoto}
-                            alt="Profile"
-                            fill
-                            className="object-cover"
-                            unoptimized
-                          />
-                          {/* Hover overlay */}
-                          <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 opacity-0 transition-opacity group-hover/photo:opacity-100">
-                            <Camera className="h-6 w-6 text-white" />
-                          </div>
-                        </button>
-                        <div className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-white shadow-sm dark:border-gray-800 dark:bg-gray-800">
-                          <Camera className="h-3.5 w-3.5 text-violet-500" />
-                        </div>
-                        {/* Remove button */}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRemoveUploadedPhoto();
-                          }}
-                          className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground opacity-0 shadow-sm transition-opacity hover:bg-destructive/90 group-hover/photo:opacity-100"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </motion.div>
-                    ) : (
-                      <motion.div
-                        key="placeholder"
-                        initial={{ scale: 0.8, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0.8, opacity: 0 }}
-                        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => document.getElementById('photo-upload')?.click()}
-                          disabled={isUploadingPhoto}
-                          className="flex h-20 w-20 items-center justify-center rounded-full border-2 border-dashed border-muted-foreground/30 bg-muted/50 shadow-sm transition-all hover:border-primary hover:bg-primary/5 dark:bg-muted/30 dark:hover:bg-primary/10"
-                        >
-                          {isUploadingPhoto ? (
-                            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                          ) : (
-                            <User className="h-8 w-8 text-muted-foreground/50" />
-                          )}
-                        </button>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
+                {imports.resume.status === 'error' && imports.resume.message && (
+                  <p className="mt-4 text-sm text-red-500">{imports.resume.message}</p>
+                )}
 
-                {/* Name & Info */}
-                <div className="space-y-1 text-center">
-                  <h3 className="text-sm font-semibold text-foreground">Profile Photo</h3>
-                  <p className="text-xs text-muted-foreground">
-                    {uploadedPhoto ? 'Click to change photo' : 'Click to upload your photo'}
-                  </p>
-                </div>
+                <input
+                  id="resume-upload"
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  className="hidden"
+                  onChange={handleResumeUpload}
+                />
+              </div>
+            </motion.div>
+          )}
+
+          {/* ─────────────── STEP 2: PROFILE PHOTO ─────────────── */}
+          {currentStep === 'photo' && (
+            <motion.div
+              key="step-photo"
+              initial={{ opacity: 0, x: 40 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -40 }}
+              transition={{ duration: 0.3 }}
+            >
+              <div className="mx-auto max-w-md">
+                {uploadedPhoto ? (
+                  <div className="space-y-6">
+                    {/* Crop area */}
+                    <div className="relative mx-auto h-80 w-80 overflow-hidden rounded-2xl border border-border/40 bg-black/5">
+                      <Cropper
+                        image={uploadedPhoto}
+                        crop={photoCrop}
+                        zoom={photoZoom}
+                        rotation={photoRotation}
+                        aspect={1}
+                        onCropChange={setPhotoCrop}
+                        onCropComplete={onCropComplete}
+                        onZoomChange={setPhotoZoom}
+                        cropShape="rect"
+                        showGrid={true}
+                        style={{
+                          containerStyle: { borderRadius: '1rem' },
+                          cropAreaStyle: { border: '2px solid hsl(var(--primary))' },
+                        }}
+                      />
+                    </div>
+
+                    {/* Controls */}
+                    <div className="space-y-4 rounded-xl border border-border/40 bg-card/80 p-4 backdrop-blur-sm">
+                      {/* Zoom */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-medium text-muted-foreground">Zoom</label>
+                          <span className="text-xs text-muted-foreground">
+                            {Math.round(photoZoom * 100)}%
+                          </span>
+                        </div>
+                        <Slider
+                          value={photoZoom}
+                          min={1}
+                          max={3}
+                          step={0.01}
+                          onChange={setPhotoZoom}
+                        />
+                      </div>
+
+                      {/* Tilt correction */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-medium text-muted-foreground">
+                            Tilt correction
+                          </label>
+                          <span className="text-xs text-muted-foreground">{photoRotation}°</span>
+                        </div>
+                        <Slider
+                          value={photoRotation}
+                          min={-45}
+                          max={45}
+                          step={1}
+                          onChange={setPhotoRotation}
+                        />
+                      </div>
+
+                      {/* Action buttons */}
+                      <div className="flex items-center gap-2 pt-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setPhotoRotation(0);
+                            setPhotoZoom(1);
+                            setPhotoCrop({ x: 0, y: 0 });
+                          }}
+                          className="gap-1.5"
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" /> Reset
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => document.getElementById('photo-upload')?.click()}
+                          className="gap-1.5"
+                        >
+                          <Camera className="h-3.5 w-3.5" /> Reupload
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleRemovePhoto}
+                          className="gap-1.5 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" /> Delete
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    ref={photoDropRef}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setIsDraggingPhoto(true);
+                    }}
+                    onDragLeave={() => setIsDraggingPhoto(false)}
+                    onDrop={handlePhotoDrop}
+                    className={`flex flex-col items-center gap-4 rounded-2xl border-2 border-dashed p-12 text-center transition-all duration-200 ${
+                      isDraggingPhoto
+                        ? 'scale-[1.02] border-primary bg-primary/5'
+                        : 'border-border/60 bg-card/50 hover:border-primary/30'
+                    }`}
+                  >
+                    <div className="flex h-24 w-24 items-center justify-center rounded-full bg-muted/60">
+                      {isUploadingPhoto ? (
+                        <Loader2 className="h-12 w-12 animate-spin text-muted-foreground" />
+                      ) : (
+                        <User className="h-12 w-12 text-muted-foreground/50" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">
+                        {isDraggingPhoto ? 'Drop your photo here' : 'Drag & drop your photo'}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        JPG, PNG or WebP. Drag the square area to select your display picture.
+                      </p>
+                    </div>
+                    <Button
+                      onClick={() => document.getElementById('photo-upload')?.click()}
+                      disabled={isUploadingPhoto}
+                      className="gap-1.5"
+                    >
+                      <Upload className="h-4 w-4" /> Choose photo
+                    </Button>
+                  </div>
+                )}
+
+                {error && <p className="mt-4 text-center text-sm text-red-500">{error}</p>}
 
                 <input
                   id="photo-upload"
@@ -1607,761 +1694,645 @@ export default function OnboardingImportPage() {
                 />
               </div>
             </motion.div>
+          )}
 
-            {/* Resume Card */}
+          {/* ─────────────── STEP 3: CONNECT ACCOUNTS ─────────────── */}
+          {currentStep === 'accounts' && (
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.15 }}
-              whileHover={{ y: -4, transition: { duration: 0.2 } }}
-              className="group"
+              key="step-accounts"
+              initial={{ opacity: 0, x: 40 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -40 }}
+              transition={{ duration: 0.3 }}
+              className="space-y-4"
             >
-              <div className="relative h-full overflow-hidden rounded-2xl border border-border/60 bg-card p-5 transition-all duration-300 hover:border-border hover:shadow-md hover:shadow-black/5 dark:hover:shadow-black/20">
-                <div className="flex h-full flex-col">
-                  <div className="mb-4 flex items-start justify-between">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500/10 to-red-500/10 ring-1 ring-orange-500/20">
-                      <FileText className="h-6 w-6 text-orange-500" />
-                    </div>
-                    {/* Show checkmark for both 'added' and 'success' states for instant feedback */}
-                    {(imports.resume.status === 'success' || imports.resume.status === 'added') && (
-                      <CheckCircle2 className="h-5 w-5 text-green-500" />
-                    )}
-                    {imports.resume.status === 'importing' && (
-                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                    )}
-                    {imports.resume.status === 'error' && (
-                      <AlertCircle className="h-5 w-5 text-destructive" />
-                    )}
+              {/* LinkedIn */}
+              <div className="rounded-xl border border-border/40 bg-card/80 p-5 backdrop-blur-sm">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#0A66C2]/10">
+                    <Linkedin className="h-6 w-6 text-[#0A66C2]" />
                   </div>
-
-                  <h3 className="mb-1 font-semibold">Resume</h3>
-                  <p className="mb-4 flex-1 text-sm text-muted-foreground">
-                    Upload your resume to auto-fill your profile
-                  </p>
-
-                  {/* Show success-like UI for both 'added' (parsing in background) and 'success' states */}
-                  {imports.resume.status === 'success' || imports.resume.status === 'added' ? (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <Badge
-                          variant="secondary"
-                          className="max-w-[140px] truncate bg-green-500/10 text-green-600"
-                          title={resumeFileName || undefined}
-                        >
-                          {resumeFileName || 'Imported'}
-                        </Badge>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => document.getElementById('resume-upload')?.click()}
-                          disabled={imports.resume.status === 'added'}
-                        >
-                          {imports.resume.status === 'added' ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            'Replace'
-                          )}
-                        </Button>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="font-semibold">LinkedIn</h3>
+                        <p className="text-xs text-muted-foreground">
+                          Import your headline, work experience, education, and profile photo
+                        </p>
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        {imports.resume.status === 'added' ? (
-                          <span className="flex items-center gap-1">
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                            Parsing in background...
-                          </span>
-                        ) : imports.resume.itemsImported ? (
-                          `${imports.resume.itemsImported} items found`
-                        ) : (
-                          ''
-                        )}
-                      </p>
+                      {connectedLinkedin && (
+                        <StatusBadge
+                          status={
+                            imports.linkedin.status === 'idle' ? 'success' : imports.linkedin.status
+                          }
+                          message={linkedinName || 'Connected'}
+                        />
+                      )}
                     </div>
-                  ) : (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="w-full"
-                      onClick={() => document.getElementById('resume-upload')?.click()}
-                      disabled={imports.resume.status === 'importing'}
-                    >
-                      {imports.resume.status === 'importing' ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <Upload className="mr-2 h-4 w-4" />
-                      )}
-                      {imports.resume.status === 'importing' ? 'Parsing...' : 'Upload PDF'}
-                    </Button>
-                  )}
-                  {imports.resume.message && imports.resume.status === 'error' && (
-                    <p className="mt-2 text-xs text-destructive">{imports.resume.message}</p>
-                  )}
-                  <input
-                    id="resume-upload"
-                    type="file"
-                    accept=".pdf,application/pdf"
-                    className="hidden"
-                    onChange={handleResumeUpload}
-                  />
-                </div>
-              </div>
-            </motion.div>
-
-            {/* GitHub Card */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.2 }}
-              whileHover={{ y: -4, transition: { duration: 0.2 } }}
-              className="group"
-            >
-              <div className="relative h-full overflow-hidden rounded-2xl border border-border/60 bg-card p-5 transition-all duration-300 hover:border-border hover:shadow-md hover:shadow-black/5 dark:hover:shadow-black/20">
-                {/* Status indicator */}
-                <AnimatePresence>
-                  {connectedGithub && (
-                    <motion.div
-                      initial={{ scale: 0, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0, opacity: 0 }}
-                      className="absolute right-3 top-3 z-10"
-                    >
-                      {imports.github.status === 'success' ? (
-                        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-green-500 shadow-sm">
-                          <CheckCircle2 className="h-3.5 w-3.5 text-white" />
-                        </div>
-                      ) : imports.github.status === 'importing' ? (
-                        <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                      ) : imports.github.status === 'error' ? (
-                        <AlertCircle className="h-5 w-5 text-destructive" />
-                      ) : (
-                        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-green-500 shadow-sm">
-                          <CheckCircle2 className="h-3.5 w-3.5 text-white" />
-                        </div>
-                      )}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-                {/* Avatar & Logo Section */}
-                <div className="relative mb-4 flex items-center justify-center">
-                  <AnimatePresence mode="wait">
-                    {connectedGithub && connectedGithub.imageUrl ? (
-                      <motion.div
-                        key="avatar"
-                        initial={{ scale: 0.8, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0.8, opacity: 0 }}
-                        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-                        className="relative"
-                      >
-                        <div className="relative h-20 w-20 overflow-hidden rounded-full ring-2 ring-white/80 dark:ring-gray-800/80">
-                          <Image
-                            src={connectedGithub.imageUrl}
-                            alt={githubUsernameFromAccount || 'GitHub'}
-                            fill
-                            className="object-cover"
-                            unoptimized
-                          />
-                        </div>
-                        <div className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-white shadow-sm dark:border-gray-800 dark:bg-gray-800">
-                          <Github className="h-3.5 w-3.5 text-[#24292e] dark:text-white" />
-                        </div>
-                      </motion.div>
-                    ) : (
-                      <motion.div
-                        key="logo"
-                        initial={{ scale: 0.8, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0.8, opacity: 0 }}
-                        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-                        className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/80 shadow-sm dark:bg-gray-800/80"
-                      >
-                        <Github className="h-8 w-8 text-[#24292e] dark:text-white" />
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-
-                {/* Name & Info */}
-                <div className="space-y-1 text-center">
-                  <h3 className="text-sm font-semibold text-foreground">GitHub</h3>
-                  <AnimatePresence mode="wait">
-                    {connectedGithub ? (
-                      <motion.div
-                        key="connected-info"
-                        initial={{ opacity: 0, y: 4 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -4 }}
-                        className="space-y-0.5"
-                      >
-                        {githubUsernameFromAccount && (
-                          <p className="truncate text-xs font-medium text-foreground/80">
-                            @{githubUsernameFromAccount}
-                          </p>
-                        )}
-                        {connectedGithub.emailAddress && (
-                          <p className="truncate text-[11px] text-muted-foreground">
-                            {connectedGithub.emailAddress}
-                          </p>
-                        )}
-                      </motion.div>
-                    ) : (
-                      <motion.p
-                        key="not-connected"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="text-xs text-muted-foreground"
-                      >
-                        Import projects, skills & contributions
-                      </motion.p>
-                    )}
-                  </AnimatePresence>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="mt-4 space-y-1.5">
-                  {connectedGithub ? (
-                    <>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="w-full gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-                        onClick={() =>
-                          githubUsernameFromAccount && handleGitHubImport(githubUsernameFromAccount)
-                        }
-                        disabled={imports.github.status === 'importing'}
-                      >
-                        {imports.github.status === 'importing' ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Upload className="h-3.5 w-3.5" />
-                        )}
-                        {imports.github.status === 'importing'
-                          ? 'Importing...'
-                          : imports.github.status === 'success'
-                            ? 'Refresh'
-                            : 'Import'}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-full text-xs text-muted-foreground hover:text-destructive"
-                        onClick={handleGitHubDisconnect}
-                        disabled={githubDisconnecting}
-                      >
-                        {githubDisconnecting ? (
-                          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                        ) : (
-                          <X className="mr-1 h-3 w-3" />
-                        )}
-                        {githubDisconnecting ? 'Disconnecting...' : 'Disconnect'}
-                      </Button>
-                    </>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full gap-1.5 text-xs"
-                      onClick={handleGitHubConnect}
-                      disabled={githubConnecting}
-                    >
-                      {githubConnecting ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Plus className="h-3.5 w-3.5" />
-                      )}
-                      {githubConnecting ? 'Connecting...' : 'Connect'}
-                    </Button>
-                  )}
-                </div>
-
-                {(githubError || (imports.github.message && imports.github.status === 'error')) && (
-                  <p className="mt-2 text-center text-xs text-destructive">
-                    {githubError || imports.github.message}
-                  </p>
-                )}
-              </div>
-            </motion.div>
-
-            {/* LinkedIn Card */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.25 }}
-              whileHover={{ y: -4, transition: { duration: 0.2 } }}
-              className="group"
-            >
-              <div className="relative h-full overflow-hidden rounded-2xl border border-border/60 bg-card p-5 transition-all duration-300 hover:border-border hover:shadow-md hover:shadow-black/5 dark:hover:shadow-black/20">
-                {/* Status indicator */}
-                <AnimatePresence>
-                  {connectedLinkedin && (
-                    <motion.div
-                      initial={{ scale: 0, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0, opacity: 0 }}
-                      className="absolute right-3 top-3 z-10"
-                    >
-                      {imports.linkedin.status === 'success' ? (
-                        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-green-500 shadow-sm">
-                          <CheckCircle2 className="h-3.5 w-3.5 text-white" />
-                        </div>
-                      ) : imports.linkedin.status === 'importing' ? (
-                        <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                      ) : imports.linkedin.status === 'error' ? (
-                        <AlertCircle className="h-5 w-5 text-destructive" />
-                      ) : (
-                        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-green-500 shadow-sm">
-                          <CheckCircle2 className="h-3.5 w-3.5 text-white" />
-                        </div>
-                      )}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-                {/* Avatar & Logo Section */}
-                <div className="relative mb-4 flex items-center justify-center">
-                  <AnimatePresence mode="wait">
-                    {connectedLinkedin && connectedLinkedin.imageUrl ? (
-                      <motion.div
-                        key="avatar"
-                        initial={{ scale: 0.8, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0.8, opacity: 0 }}
-                        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-                        className="relative"
-                      >
-                        <div className="relative h-20 w-20 overflow-hidden rounded-full ring-2 ring-white/80 dark:ring-gray-800/80">
-                          <Image
-                            src={connectedLinkedin.imageUrl}
-                            alt={linkedinName || 'LinkedIn'}
-                            fill
-                            className="object-cover"
-                            unoptimized
-                          />
-                        </div>
-                        <div className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-white shadow-sm dark:border-gray-800 dark:bg-gray-800">
-                          <Linkedin className="h-3.5 w-3.5 text-[#0A66C2]" />
-                        </div>
-                      </motion.div>
-                    ) : (
-                      <motion.div
-                        key="logo"
-                        initial={{ scale: 0.8, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0.8, opacity: 0 }}
-                        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-                        className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/80 shadow-sm dark:bg-gray-800/80"
-                      >
-                        <Linkedin className="h-8 w-8 text-[#0A66C2]" />
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-
-                {/* Name & Info */}
-                <div className="space-y-1 text-center">
-                  <h3 className="text-sm font-semibold text-foreground">LinkedIn</h3>
-                  <AnimatePresence mode="wait">
-                    {connectedLinkedin ? (
-                      <motion.div
-                        key="connected-info"
-                        initial={{ opacity: 0, y: 4 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -4 }}
-                        className="space-y-0.5"
-                      >
-                        {linkedinName && (
-                          <p className="truncate text-xs font-medium text-foreground/80">
-                            {linkedinName}
-                          </p>
-                        )}
-                        {connectedLinkedin.emailAddress && (
-                          <p className="truncate text-[11px] text-muted-foreground">
-                            {connectedLinkedin.emailAddress}
-                          </p>
-                        )}
-                      </motion.div>
-                    ) : (
-                      <motion.p
-                        key="not-connected"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="text-xs text-muted-foreground"
-                      >
-                        Import profile info, headline & photo
-                      </motion.p>
-                    )}
-                  </AnimatePresence>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="mt-4 space-y-1.5">
-                  {connectedLinkedin ? (
-                    <>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="w-full gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-                        onClick={handleLinkedInImport}
-                        disabled={imports.linkedin.status === 'importing'}
-                      >
-                        {imports.linkedin.status === 'importing' ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Upload className="h-3.5 w-3.5" />
-                        )}
-                        {imports.linkedin.status === 'importing'
-                          ? 'Importing...'
-                          : imports.linkedin.status === 'success'
-                            ? 'Refresh'
-                            : 'Import'}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-full text-xs text-muted-foreground hover:text-destructive"
-                        onClick={handleLinkedInDisconnect}
-                        disabled={linkedinDisconnecting}
-                      >
-                        {linkedinDisconnecting ? (
-                          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                        ) : (
-                          <X className="mr-1 h-3 w-3" />
-                        )}
-                        {linkedinDisconnecting ? 'Disconnecting...' : 'Disconnect'}
-                      </Button>
-                    </>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full gap-1.5 text-xs"
-                      onClick={handleLinkedInConnect}
-                      disabled={linkedinConnecting}
-                    >
-                      {linkedinConnecting ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Plus className="h-3.5 w-3.5" />
-                      )}
-                      {linkedinConnecting ? 'Connecting...' : 'Connect'}
-                    </Button>
-                  )}
-                </div>
-
-                {(linkedinError ||
-                  (imports.linkedin.message && imports.linkedin.status === 'error')) && (
-                  <p className="mt-2 text-center text-xs text-destructive">
-                    {linkedinError || imports.linkedin.message}
-                  </p>
-                )}
-              </div>
-            </motion.div>
-
-            {/* Google Card */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.3 }}
-              whileHover={{ y: -4, transition: { duration: 0.2 } }}
-              className="group"
-            >
-              <div className="relative h-full overflow-hidden rounded-2xl border border-border/60 bg-card p-5 transition-all duration-300 hover:border-border hover:shadow-md hover:shadow-black/5 dark:hover:shadow-black/20">
-                {/* Status indicator */}
-                <AnimatePresence>
-                  {connectedGoogle && (
-                    <motion.div
-                      initial={{ scale: 0, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0, opacity: 0 }}
-                      className="absolute right-3 top-3 z-10"
-                    >
-                      {imports.google.status === 'success' ? (
-                        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-green-500 shadow-sm">
-                          <CheckCircle2 className="h-3.5 w-3.5 text-white" />
-                        </div>
-                      ) : imports.google.status === 'importing' ? (
-                        <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                      ) : imports.google.status === 'error' ? (
-                        <AlertCircle className="h-5 w-5 text-destructive" />
-                      ) : (
-                        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-green-500 shadow-sm">
-                          <CheckCircle2 className="h-3.5 w-3.5 text-white" />
-                        </div>
-                      )}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-                {/* Avatar & Logo Section */}
-                <div className="relative mb-4 flex items-center justify-center">
-                  <AnimatePresence mode="wait">
-                    {connectedGoogle && connectedGoogle.imageUrl ? (
-                      <motion.div
-                        key="avatar"
-                        initial={{ scale: 0.8, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0.8, opacity: 0 }}
-                        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-                        className="relative"
-                      >
-                        <div className="relative h-20 w-20 overflow-hidden rounded-full ring-2 ring-white/80 dark:ring-gray-800/80">
-                          <Image
-                            src={connectedGoogle.imageUrl}
-                            alt={googleName || 'Google'}
-                            fill
-                            className="object-cover"
-                            unoptimized
-                          />
-                        </div>
-                        <div className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-white shadow-sm dark:border-gray-800 dark:bg-gray-800">
-                          <GoogleIcon className="h-3.5 w-3.5" />
-                        </div>
-                      </motion.div>
-                    ) : (
-                      <motion.div
-                        key="logo"
-                        initial={{ scale: 0.8, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0.8, opacity: 0 }}
-                        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-                        className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/80 shadow-sm dark:bg-gray-800/80"
-                      >
-                        <GoogleIcon className="h-8 w-8" />
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-
-                {/* Name & Info */}
-                <div className="space-y-1 text-center">
-                  <h3 className="text-sm font-semibold text-foreground">Google</h3>
-                  <AnimatePresence mode="wait">
-                    {connectedGoogle ? (
-                      <motion.div
-                        key="connected-info"
-                        initial={{ opacity: 0, y: 4 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -4 }}
-                        className="space-y-0.5"
-                      >
-                        {googleName && (
-                          <p className="truncate text-xs font-medium text-foreground/80">
-                            {googleName}
-                          </p>
-                        )}
-                        {connectedGoogle.emailAddress && (
-                          <p className="truncate text-[11px] text-muted-foreground">
-                            {connectedGoogle.emailAddress}
-                          </p>
-                        )}
-                      </motion.div>
-                    ) : (
-                      <motion.p
-                        key="not-connected"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="text-xs text-muted-foreground"
-                      >
-                        Import name, email & profile photo
-                      </motion.p>
-                    )}
-                  </AnimatePresence>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="mt-4 space-y-1.5">
-                  {connectedGoogle ? (
-                    <>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="w-full gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-                        onClick={handleGoogleImport}
-                        disabled={imports.google.status === 'importing'}
-                      >
-                        {imports.google.status === 'importing' ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Upload className="h-3.5 w-3.5" />
-                        )}
-                        {imports.google.status === 'importing'
-                          ? 'Importing...'
-                          : imports.google.status === 'success'
-                            ? 'Refresh'
-                            : 'Import'}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-full text-xs text-muted-foreground hover:text-destructive"
-                        onClick={handleGoogleDisconnect}
-                        disabled={googleDisconnecting}
-                      >
-                        {googleDisconnecting ? (
-                          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                        ) : (
-                          <X className="mr-1 h-3 w-3" />
-                        )}
-                        {googleDisconnecting ? 'Disconnecting...' : 'Disconnect'}
-                      </Button>
-                    </>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full gap-1.5 text-xs"
-                      onClick={handleGoogleConnect}
-                      disabled={googleConnecting}
-                    >
-                      {googleConnecting ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Plus className="h-3.5 w-3.5" />
-                      )}
-                      {googleConnecting ? 'Connecting...' : 'Connect'}
-                    </Button>
-                  )}
-                </div>
-
-                {(googleError || (imports.google.message && imports.google.status === 'error')) && (
-                  <p className="mt-2 text-center text-xs text-destructive">
-                    {googleError || imports.google.message}
-                  </p>
-                )}
-              </div>
-            </motion.div>
-
-            {/* Links Card */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.35 }}
-              whileHover={{ y: -4, transition: { duration: 0.2 } }}
-              className="group sm:col-span-2 lg:col-span-1"
-            >
-              <div className="relative h-full overflow-hidden rounded-2xl border border-border/60 bg-card p-5 transition-all duration-300 hover:border-border hover:shadow-md hover:shadow-black/5 dark:hover:shadow-black/20">
-                <div className="flex h-full flex-col">
-                  <div className="mb-4 flex items-start justify-between">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500/10 to-teal-500/10 ring-1 ring-emerald-500/20">
-                      <LinkIcon className="h-6 w-6 text-emerald-500" />
-                    </div>
-                    {imports.links.status === 'success' && (
-                      <CheckCircle2 className="h-5 w-5 text-green-500" />
-                    )}
-                    {imports.links.status === 'importing' && (
-                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                    )}
-                  </div>
-
-                  <h3 className="mb-1 font-semibold">Links</h3>
-                  <p className="mb-4 flex-1 text-sm text-muted-foreground">
-                    Website, portfolio, blog, or any URL
-                  </p>
-
-                  {!showLinksForm ? (
-                    imports.links.status === 'success' ? (
-                      <div className="flex items-center justify-between">
-                        <Badge variant="secondary" className="bg-green-500/10 text-green-600">
-                          {imports.links.itemsImported} links
-                        </Badge>
-                        <Button variant="ghost" size="sm" onClick={() => setShowLinksForm(true)}>
-                          Edit
-                        </Button>
-                      </div>
-                    ) : (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        className="w-full"
-                        onClick={() => setShowLinksForm(true)}
-                      >
-                        <Plus className="mr-2 h-4 w-4" />
-                        Add Links
-                      </Button>
-                    )
-                  ) : (
-                    <div className="space-y-2">
-                      {manualLinks.map((link, index) => (
-                        <div key={index} className="flex gap-2">
-                          <Input
-                            placeholder="https://..."
-                            value={link.url}
-                            onChange={(e) => handleLinkChange(index, e.target.value)}
-                            className="h-8 text-sm"
-                          />
-                          {manualLinks.length > 1 && (
+                    <div className="mt-3 flex items-center gap-2">
+                      {connectedLinkedin ? (
+                        <>
+                          <div className="flex items-center gap-2">
+                            {connectedLinkedin.imageUrl && (
+                              <div className="relative h-7 w-7 overflow-hidden rounded-full ring-1 ring-border/50">
+                                <Image
+                                  src={connectedLinkedin.imageUrl}
+                                  alt=""
+                                  fill
+                                  className="object-cover"
+                                  unoptimized
+                                />
+                              </div>
+                            )}
+                            <span className="text-sm text-muted-foreground">{linkedinName}</span>
+                          </div>
+                          <div className="ml-auto flex items-center gap-1.5">
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-8 w-8 p-0"
-                              onClick={() => handleRemoveLink(index)}
+                              className="h-7 text-xs"
+                              onClick={handleLinkedInImport}
+                              disabled={imports.linkedin.status === 'importing'}
+                            >
+                              {imports.linkedin.status === 'importing' ? (
+                                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                              ) : (
+                                <Upload className="mr-1 h-3 w-3" />
+                              )}
+                              {imports.linkedin.status === 'success' ? 'Refresh' : 'Import'}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs text-muted-foreground hover:text-destructive"
+                              onClick={handleLinkedInDisconnect}
+                              disabled={linkedinDisconnecting}
+                            >
+                              {linkedinDisconnecting ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <X className="h-3 w-3" />
+                              )}
+                            </Button>
+                          </div>
+                        </>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleLinkedInConnect}
+                          disabled={linkedinConnecting}
+                          className="gap-1.5"
+                        >
+                          {linkedinConnecting ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Linkedin className="h-3.5 w-3.5 text-[#0A66C2]" />
+                          )}
+                          {linkedinConnecting ? 'Connecting...' : 'Connect LinkedIn'}
+                        </Button>
+                      )}
+                    </div>
+                    {linkedinError && <p className="mt-2 text-xs text-red-500">{linkedinError}</p>}
+                    {imports.linkedin.status === 'error' && imports.linkedin.message && (
+                      <p className="mt-2 text-xs text-red-500">{imports.linkedin.message}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* GitHub */}
+              <div className="rounded-xl border border-border/40 bg-card/80 p-5 backdrop-blur-sm">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gray-100 dark:bg-gray-800">
+                    <Github className="h-6 w-6 text-[#24292e] dark:text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="font-semibold">GitHub</h3>
+                        <p className="text-xs text-muted-foreground">
+                          Import your repositories, programming languages, and contribution stats
+                        </p>
+                      </div>
+                      {(connectedGithub || imports.github.status === 'success') && (
+                        <StatusBadge
+                          status={
+                            imports.github.status === 'idle' ? 'success' : imports.github.status
+                          }
+                          message={
+                            githubUsernameFromAccount
+                              ? `@${githubUsernameFromAccount}`
+                              : 'Connected'
+                          }
+                        />
+                      )}
+                    </div>
+                    <div className="mt-3 flex items-center gap-2">
+                      {connectedGithub ? (
+                        <>
+                          <div className="flex items-center gap-2">
+                            {connectedGithub.imageUrl && (
+                              <div className="relative h-7 w-7 overflow-hidden rounded-full ring-1 ring-border/50">
+                                <Image
+                                  src={connectedGithub.imageUrl}
+                                  alt=""
+                                  fill
+                                  className="object-cover"
+                                  unoptimized
+                                />
+                              </div>
+                            )}
+                            <span className="text-sm text-muted-foreground">
+                              @{githubUsernameFromAccount}
+                            </span>
+                          </div>
+                          <div className="ml-auto flex items-center gap-1.5">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs"
+                              onClick={() =>
+                                githubUsernameFromAccount &&
+                                handleGitHubImport(githubUsernameFromAccount)
+                              }
+                              disabled={imports.github.status === 'importing'}
+                            >
+                              {imports.github.status === 'importing' ? (
+                                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                              ) : (
+                                <Upload className="mr-1 h-3 w-3" />
+                              )}
+                              {imports.github.status === 'success' ? 'Refresh' : 'Import'}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs text-muted-foreground hover:text-destructive"
+                              onClick={handleGitHubDisconnect}
+                              disabled={githubDisconnecting}
+                            >
+                              {githubDisconnecting ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <X className="h-3 w-3" />
+                              )}
+                            </Button>
+                          </div>
+                        </>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleGitHubConnect}
+                          disabled={githubConnecting}
+                          className="gap-1.5"
+                        >
+                          {githubConnecting ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Github className="h-3.5 w-3.5" />
+                          )}
+                          {githubConnecting ? 'Connecting...' : 'Connect GitHub'}
+                        </Button>
+                      )}
+                    </div>
+                    {githubError && <p className="mt-2 text-xs text-red-500">{githubError}</p>}
+                    {imports.github.status === 'error' && imports.github.message && (
+                      <p className="mt-2 text-xs text-red-500">{imports.github.message}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Facebook */}
+              <div className="rounded-xl border border-border/40 bg-card/80 p-5 backdrop-blur-sm">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#1877F2]/10">
+                    <FacebookIcon className="h-6 w-6" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="font-semibold">Facebook</h3>
+                        <p className="text-xs text-muted-foreground">
+                          Import your name, profile photo, and basic info
+                        </p>
+                      </div>
+                      {connectedFacebook && (
+                        <StatusBadge status="success" message={facebookName || 'Connected'} />
+                      )}
+                    </div>
+                    <div className="mt-3 flex items-center gap-2">
+                      {connectedFacebook ? (
+                        <>
+                          <div className="flex items-center gap-2">
+                            {connectedFacebook.imageUrl && (
+                              <div className="relative h-7 w-7 overflow-hidden rounded-full ring-1 ring-border/50">
+                                <Image
+                                  src={connectedFacebook.imageUrl}
+                                  alt=""
+                                  fill
+                                  className="object-cover"
+                                  unoptimized
+                                />
+                              </div>
+                            )}
+                            <span className="text-sm text-muted-foreground">{facebookName}</span>
+                          </div>
+                          <div className="ml-auto">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs text-muted-foreground hover:text-destructive"
+                              onClick={handleFacebookDisconnect}
+                              disabled={facebookDisconnecting}
+                            >
+                              {facebookDisconnecting ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <X className="h-3 w-3" />
+                              )}
+                              <span className="ml-1">Disconnect</span>
+                            </Button>
+                          </div>
+                        </>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleFacebookConnect}
+                          disabled={facebookConnecting}
+                          className="gap-1.5"
+                        >
+                          {facebookConnecting ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <FacebookIcon className="h-3.5 w-3.5" />
+                          )}
+                          {facebookConnecting ? 'Connecting...' : 'Connect Facebook'}
+                        </Button>
+                      )}
+                    </div>
+                    {facebookError && <p className="mt-2 text-xs text-red-500">{facebookError}</p>}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ─────────────── STEP 4: ADDITIONAL PLATFORMS ─────────────── */}
+          {currentStep === 'platforms' && (
+            <motion.div
+              key="step-platforms"
+              initial={{ opacity: 0, x: 40 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -40 }}
+              transition={{ duration: 0.3 }}
+              className="space-y-4"
+            >
+              {/* YouTube */}
+              <div className="rounded-xl border border-border/40 bg-card/80 p-5 backdrop-blur-sm">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-500/10">
+                    <YouTubeIcon className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold">YouTube</h3>
+                      <StatusBadge
+                        status={imports.youtube.status}
+                        message={imports.youtube.message}
+                      />
+                    </div>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Import your latest videos and channel info
+                    </p>
+                    <div className="mt-3 flex items-center gap-2">
+                      <Input
+                        placeholder="@channel or channel URL"
+                        value={youtubeChannel}
+                        onChange={(e) => setYoutubeChannel(e.target.value)}
+                        className="h-9 text-sm"
+                        onKeyDown={(e) => e.key === 'Enter' && handleYouTubeImport()}
+                      />
+                      <Button
+                        size="sm"
+                        onClick={handleYouTubeImport}
+                        disabled={imports.youtube.status === 'importing' || !youtubeChannel.trim()}
+                        className="shrink-0"
+                      >
+                        {imports.youtube.status === 'importing' ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          'Import'
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Medium */}
+              <div className="rounded-xl border border-border/40 bg-card/80 p-5 backdrop-blur-sm">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-foreground/[0.06]">
+                    <MediumIcon className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold">Medium</h3>
+                      <StatusBadge
+                        status={imports.medium.status}
+                        message={imports.medium.message}
+                      />
+                    </div>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Import your published articles and blog posts
+                    </p>
+                    <div className="mt-3 flex items-center gap-2">
+                      <Input
+                        placeholder="@username"
+                        value={mediumUsername}
+                        onChange={(e) => setMediumUsername(e.target.value)}
+                        className="h-9 text-sm"
+                        onKeyDown={(e) => e.key === 'Enter' && handleMediumImport()}
+                      />
+                      <Button
+                        size="sm"
+                        onClick={handleMediumImport}
+                        disabled={imports.medium.status === 'importing' || !mediumUsername.trim()}
+                        className="shrink-0"
+                      >
+                        {imports.medium.status === 'importing' ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          'Import'
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Substack */}
+              <div className="rounded-xl border border-border/40 bg-card/80 p-5 backdrop-blur-sm">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#FF6719]/10">
+                    <SubstackIcon className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold">Substack</h3>
+                      <StatusBadge
+                        status={imports.substack.status}
+                        message={imports.substack.message}
+                      />
+                    </div>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Import your newsletter posts and publications
+                    </p>
+                    <div className="mt-3 flex items-center gap-2">
+                      <Input
+                        placeholder="your-blog (e.g. yourname.substack.com)"
+                        value={substackUsername}
+                        onChange={(e) => setSubstackUsername(e.target.value)}
+                        className="h-9 text-sm"
+                        onKeyDown={(e) => e.key === 'Enter' && handleSubstackImport()}
+                      />
+                      <Button
+                        size="sm"
+                        onClick={handleSubstackImport}
+                        disabled={
+                          imports.substack.status === 'importing' || !substackUsername.trim()
+                        }
+                        className="shrink-0"
+                      >
+                        {imports.substack.status === 'importing' ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          'Import'
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Links */}
+              <div className="rounded-xl border border-border/40 bg-card/80 p-5 backdrop-blur-sm">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-500/10">
+                    <Link2 className="h-5 w-5 text-blue-500" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold">Custom Links</h3>
+                      <StatusBadge status={imports.links.status} message={imports.links.message} />
+                    </div>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Add any other website, portfolio, or social link
+                    </p>
+                    <div className="mt-3 flex items-center gap-2">
+                      <Input
+                        placeholder="https://..."
+                        value={linkInput}
+                        onChange={(e) => setLinkInput(e.target.value)}
+                        className="h-9 text-sm"
+                        onKeyDown={(e) => e.key === 'Enter' && handleAddLink()}
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleAddLink}
+                        className="shrink-0"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    {linkUrls.length > 0 && (
+                      <div className="mt-2.5 space-y-1.5">
+                        {linkUrls.map((url) => (
+                          <div
+                            key={url}
+                            className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-1.5 text-xs"
+                          >
+                            <Link2 className="h-3 w-3 shrink-0 text-muted-foreground" />
+                            <span className="flex-1 truncate text-muted-foreground">{url}</span>
+                            <button
+                              onClick={() => handleRemoveLink(url)}
+                              className="shrink-0 text-muted-foreground/40 hover:text-destructive"
                             >
                               <X className="h-3 w-3" />
-                            </Button>
-                          )}
-                        </div>
-                      ))}
-                      <div className="flex gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={handleAddLink}
-                          className="h-7 text-xs"
-                        >
-                          <Plus className="mr-1 h-3 w-3" />
-                          Add
-                        </Button>
+                            </button>
+                          </div>
+                        ))}
                         <Button
                           size="sm"
-                          onClick={handleSaveLinks}
+                          onClick={handleLinksImport}
                           disabled={imports.links.status === 'importing'}
-                          className="h-7 text-xs"
+                          className="mt-2 w-full"
                         >
                           {imports.links.status === 'importing' ? (
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                          ) : (
-                            'Save'
-                          )}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setShowLinksForm(false)}
-                          className="h-7 text-xs"
-                        >
-                          Cancel
+                            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                          ) : null}
+                          Import {linkUrls.length} link{linkUrls.length !== 1 ? 's' : ''}
                         </Button>
                       </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ─────────────── STEP 5: PORTFOLIO PHOTOS ─────────────── */}
+          {currentStep === 'gallery' && (
+            <motion.div
+              key="step-gallery"
+              initial={{ opacity: 0, x: 40 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -40 }}
+              transition={{ duration: 0.3 }}
+            >
+              <div className="mx-auto max-w-lg">
+                <div className="grid grid-cols-3 gap-4">
+                  {[0, 1, 2].map((idx) => (
+                    <div key={idx} className="aspect-square">
+                      {galleryPhotos[idx] ? (
+                        <div className="group relative h-full w-full overflow-hidden rounded-xl border border-border/40 shadow-sm">
+                          <Image
+                            src={galleryPhotos[idx]}
+                            alt={`Portfolio ${idx + 1}`}
+                            fill
+                            className="object-cover"
+                            unoptimized
+                          />
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+                            <button
+                              onClick={() => handleRemoveGalleryPhoto(idx)}
+                              className="flex h-8 w-8 items-center justify-center rounded-full bg-destructive text-white shadow-md"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                          <div className="absolute bottom-2 right-2 rounded-full bg-emerald-500 p-1 opacity-0 shadow-sm group-hover:opacity-0">
+                            <CheckCircle2 className="h-3 w-3 text-white" />
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => document.getElementById('gallery-upload')?.click()}
+                          disabled={isUploadingGallery}
+                          className="flex h-full w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border/60 bg-card/50 transition-all hover:border-primary/30 hover:bg-primary/5"
+                        >
+                          {isUploadingGallery ? (
+                            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                          ) : (
+                            <>
+                              <Plus className="h-8 w-8 text-muted-foreground/40" />
+                              <span className="text-xs text-muted-foreground">Add photo</span>
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <p className="mt-4 text-center text-xs text-muted-foreground">
+                  {galleryPhotos.length}/3 photos added. These will be displayed in your portfolio
+                  showcase.
+                </p>
+
+                {error && <p className="mt-2 text-center text-sm text-red-500">{error}</p>}
+
+                <input
+                  id="gallery-upload"
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={handleGalleryUpload}
+                />
+              </div>
+            </motion.div>
+          )}
+
+          {/* ─────────────── STEP 6: REVIEW (transition) ─────────────── */}
+          {currentStep === 'review' && (
+            <motion.div
+              key="step-review"
+              initial={{ opacity: 0, x: 40 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -40 }}
+              transition={{ duration: 0.3 }}
+              className="text-center"
+            >
+              <div className="mx-auto max-w-md space-y-6">
+                <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-2xl bg-primary/10">
+                  <CheckCircle2 className="h-10 w-10 text-primary" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold">Ready to review</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    We&apos;ve gathered your data. Let&apos;s review everything before creating your
+                    profile.
+                  </p>
+                </div>
+
+                {/* Summary of what was collected */}
+                <div className="space-y-2 text-left">
+                  {(imports.resume.status === 'success' || imports.resume.status === 'added') && (
+                    <div className="flex items-center gap-2 rounded-lg bg-emerald-500/5 p-3 text-sm">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                      <span>Resume: {resumeFileName}</span>
+                      {imports.resume.status === 'added' && (
+                        <Loader2 className="ml-auto h-3 w-3 animate-spin text-muted-foreground" />
+                      )}
+                    </div>
+                  )}
+                  {uploadedPhoto && (
+                    <div className="flex items-center gap-2 rounded-lg bg-emerald-500/5 p-3 text-sm">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                      <span>Profile photo uploaded</span>
+                    </div>
+                  )}
+                  {(connectedLinkedin || imports.linkedin.status === 'success') && (
+                    <div className="flex items-center gap-2 rounded-lg bg-emerald-500/5 p-3 text-sm">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                      <span>LinkedIn: {linkedinName || 'Connected'}</span>
+                    </div>
+                  )}
+                  {(connectedGithub || imports.github.status === 'success') && (
+                    <div className="flex items-center gap-2 rounded-lg bg-emerald-500/5 p-3 text-sm">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                      <span>GitHub: @{githubUsernameFromAccount || githubUsername}</span>
+                    </div>
+                  )}
+                  {connectedFacebook && (
+                    <div className="flex items-center gap-2 rounded-lg bg-emerald-500/5 p-3 text-sm">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                      <span>Facebook: {facebookName || 'Connected'}</span>
+                    </div>
+                  )}
+                  {galleryPhotos.length > 0 && (
+                    <div className="flex items-center gap-2 rounded-lg bg-emerald-500/5 p-3 text-sm">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                      <span>
+                        {galleryPhotos.length} portfolio photo
+                        {galleryPhotos.length !== 1 ? 's' : ''}
+                      </span>
                     </div>
                   )}
                 </div>
               </div>
             </motion.div>
-          </motion.div>
-        </div>
+          )}
+        </AnimatePresence>
 
-        {/* Summary */}
-        {hasAnyImport && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="mt-8 rounded-2xl bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5 p-6 text-center"
-          >
-            <div className="flex items-center justify-center gap-2">
-              <CheckCircle2 className="h-5 w-5 text-primary" />
-              <p className="text-sm">
-                <span className="font-semibold text-foreground">{getTotalImported()}</span>{' '}
-                <span className="text-muted-foreground">items ready to import</span>
-              </p>
-            </div>
-          </motion.div>
-        )}
-
-        {/* Error message */}
-        {error && (
+        {/* Error */}
+        {error && currentStep !== 'photo' && currentStep !== 'gallery' && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -2371,64 +2342,72 @@ export default function OnboardingImportPage() {
           </motion.div>
         )}
 
-        {/* Actions */}
+        {/* Navigation */}
         <motion.div
-          className="mt-10 flex flex-col items-center gap-4"
+          className="mt-10 flex items-center justify-between"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 0.4 }}
+          transition={{ delay: 0.3 }}
         >
-          <Button
-            onClick={handleContinue}
-            disabled={isCreatingProfile || isWaitingForParsing}
-            className="gap-2 px-8"
-            size="lg"
-          >
-            {isCreatingProfile ? (
-              <>
-                <Spinner size="sm" />
-                Creating your profile...
-              </>
-            ) : isWaitingForParsing ? (
-              <>
-                <Spinner size="sm" />
-                Finishing resume parsing...
-              </>
-            ) : importedData.resume ? (
-              <>
-                Review & Edit Parsed Data
-                <ArrowRight className="h-4 w-4" />
-              </>
-            ) : imports.resume.status === 'added' ? (
-              <>
-                Continue
-                <ArrowRight className="h-4 w-4" />
-              </>
-            ) : (
-              <>
-                Continue
-                <ArrowRight className="h-4 w-4" />
-              </>
+          <div>
+            {currentStepIndex > 0 && (
+              <Button variant="ghost" onClick={goBack} className="gap-1.5">
+                <ArrowLeft className="h-4 w-4" /> Back
+              </Button>
             )}
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={handleContinue}
-            disabled={isCreatingProfile}
-            className="text-muted-foreground"
-          >
-            Skip for now
-          </Button>
-          <p className="text-center text-xs text-muted-foreground">
-            You can always import more data later from your dashboard
-          </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {/* Skip on optional steps */}
+            {currentStep !== 'resume' && currentStep !== 'review' && (
+              <button
+                type="button"
+                onClick={goNext}
+                className="text-xs text-muted-foreground/60 transition-colors hover:text-foreground"
+              >
+                Skip
+              </button>
+            )}
+
+            {currentStep === 'review' ? (
+              <Button
+                onClick={handleGoToReview}
+                disabled={isWaitingForParsing}
+                className="gap-2 px-8"
+                size="lg"
+              >
+                {isWaitingForParsing ? (
+                  <>
+                    <Spinner size="sm" />
+                    Waiting for resume parsing...
+                  </>
+                ) : (
+                  <>
+                    Review Profile
+                    <ArrowRight className="h-4 w-4" />
+                  </>
+                )}
+              </Button>
+            ) : (
+              <Button
+                onClick={goNext}
+                disabled={currentStep === 'resume' && !canGoNext()}
+                className="gap-1.5"
+                size="lg"
+              >
+                {currentStep === 'resume' && !canGoNext() ? 'Upload to continue' : 'Next'}
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
         </motion.div>
 
-        {/* Progress indicator */}
-        <div className="mt-8 flex justify-center gap-2">
-          <div className="h-2 w-8 rounded-full bg-primary" />
-          <div className="h-2 w-8 rounded-full bg-primary" />
-        </div>
+        {/* Resume is the only required step message */}
+        {currentStep === 'resume' && !canGoNext() && (
+          <p className="mt-4 text-center text-xs text-muted-foreground">
+            Upload your resume to get started. All other steps are optional.
+          </p>
+        )}
       </div>
     </>
   );

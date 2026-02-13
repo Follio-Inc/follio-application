@@ -33,6 +33,8 @@ export default async function DataSourcesPage() {
           projects: { orderBy: { sortOrder: 'asc' } },
           awards: { orderBy: { sortOrder: 'asc' } },
           certifications: { orderBy: { sortOrder: 'asc' } },
+          blogPosts: { orderBy: { createdAt: 'desc' } },
+          youtubeVideos: { orderBy: { createdAt: 'desc' } },
           sections: { orderBy: { sortOrder: 'asc' } },
         },
       },

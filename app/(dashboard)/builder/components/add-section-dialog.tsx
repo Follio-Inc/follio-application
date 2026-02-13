@@ -6,6 +6,7 @@ import {
   BookOpen,
   Globe,
   Heart,
+  Image as ImageIcon,
   LayoutGrid,
   Plus,
   Sparkles,
@@ -34,6 +35,12 @@ const AVAILABLE_SECTIONS: {
   description: string;
   icon: React.ComponentType<{ className?: string }>;
 }[] = [
+  {
+    type: 'PHOTOS',
+    title: 'Photos',
+    description: 'Profile photo and gallery images for your portfolio',
+    icon: ImageIcon,
+  },
   {
     type: 'AWARDS',
     title: 'Awards',

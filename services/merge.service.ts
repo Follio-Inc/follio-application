@@ -15,6 +15,10 @@ const SOURCE_PRIORITY: Record<DataSource, number> = {
   LINKEDIN: 70,
   GITHUB: 60,
   GENERATED: 50,
+  GOOGLE: 40,
+  MEDIUM: 45,
+  YOUTUBE: 45,
+  BLOG: 45,
 };
 
 // Fields that should never be auto-overwritten

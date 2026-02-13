@@ -125,7 +125,10 @@ function convertToAppFormat(
       location: undefined,
       startDate,
       endDate,
-      bullets: exp.descriptions.map((d: string) => d.trim()).filter((d: string) => d.length > 0),
+      description: exp.descriptions
+        .map((d: string) => d.trim())
+        .filter((d: string) => d.length > 0)
+        .join('\n'),
       isCurrent,
     };
   });

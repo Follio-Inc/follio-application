@@ -16,6 +16,7 @@ import type {
   ImportSessionStatus,
   Link,
   Profile,
+  ProfilePhoto,
   ProfileSection,
   ProfileStatus,
   Project,
@@ -46,6 +47,7 @@ export interface FullProfile extends Profile {
   certifications: Certification[];
   blogPosts: BlogPost[];
   youtubeVideos: YouTubeVideo[];
+  photos: ProfilePhoto[];
   sections: ProfileSection[];
 }
 
@@ -64,6 +66,7 @@ export interface PublicProfile extends Omit<Profile, 'userId'> {
   certifications: Certification[];
   blogPosts: BlogPost[];
   youtubeVideos: YouTubeVideo[];
+  photos: ProfilePhoto[];
   sections: ProfileSection[];
 }
 

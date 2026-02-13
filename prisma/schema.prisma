@@ -55,6 +55,7 @@ model Profile {
   educations             Education[]
   githubProfile          GitHubProfile?
   links                  Link[]
+  photos                 ProfilePhoto[]
   user                   User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   sections               ProfileSection[]
   projects               Project[]
@@ -485,6 +486,28 @@ model YouTubeVideo {
   @@index([isVisible])
 }
 
+model ProfilePhoto {
+  id        String        @id @default(cuid())
+  profileId String
+  url       String
+  caption   String?
+  category  PhotoCategory @default(GALLERY)
+  source    DataSource    @default(MANUAL)
+  sortOrder Int           @default(0)
+  isVisible Boolean       @default(true)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  profile   Profile       @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId])
+  @@index([category])
+}
+
+enum PhotoCategory {
+  PROFILE // Profile photos (from uploads or OAuth sources)
+  GALLERY // Additional photos for portfolio use
+}
+
 model GitHubProfile {
   id                  String    @id @default(cuid())
   profileId           String    @unique
@@ -559,6 +582,7 @@ enum DataSource {
 enum SectionType {
   BASIC_INFO
   CONTACT
+  PHOTOS
   EXPERIENCE
   EDUCATION
   SKILLS

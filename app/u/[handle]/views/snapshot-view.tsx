@@ -195,8 +195,8 @@ export function SnapshotView({ profile }: SnapshotViewProps) {
                 <p className="mt-1 text-sm text-muted-foreground">
                   Since {formatDate(currentRole.startDate)}
                 </p>
-                {currentRole.description && (
-                  <p className="mt-3 text-sm text-muted-foreground">{currentRole.description}</p>
+                {currentRole.bullets && currentRole.bullets.length > 0 && (
+                  <p className="mt-3 text-sm text-muted-foreground">{currentRole.bullets[0]}</p>
                 )}
               </CardContent>
             </Card>

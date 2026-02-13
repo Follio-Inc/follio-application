@@ -11,7 +11,6 @@ import {
   HelpCircle,
   Instagram,
   Linkedin,
-  Link as LinkIcon,
   Palette,
   Twitter,
   Youtube,
@@ -28,7 +27,7 @@ import { GenericSourcePanel } from './generic-panel';
 import { GitHubSourcePanel } from './github-panel';
 import { GoogleSourcePanel } from './google-panel';
 import { LinkedInSourcePanel } from './linkedin-panel';
-import { LinksSourcePanel } from './links-panel';
+import { MediumSourcePanel } from './medium-panel';
 import { ResumeSourcePanel } from './resume-panel';
 import { BUILT_IN_SOURCES, type SourceDefinition, type SyncStatus } from './source-types';
 
@@ -56,7 +55,6 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   FileText,
   Github,
   Linkedin,
-  Link: LinkIcon,
   Twitter,
   Instagram,
   BookOpen,
@@ -66,6 +64,9 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   Database,
   Google: GoogleTabIcon,
 };
+
+/** Blog-type source keys that should render the Medium panel */
+const BLOG_SOURCE_KEYS = new Set(['medium', 'devto', 'substack', 'hashnode']);
 
 const ACTIVE_SOURCES_STORAGE_KEY = 'follio-active-sources';
 
@@ -124,14 +125,21 @@ export default function DataSourcesPageClient({ profile }: DataSourcesPageClient
     fetchSyncStatus();
   }, [fetchSyncStatus]);
 
-  // Handle adding a new source
+  // Handle adding a new source (called from AddSourceDialog after successful fetch)
   const handleAddSource = useCallback(
     (source: SourceDefinition) => {
+      // Don't add if already present
+      if (additionalSources.some((s) => s.key === source.key)) {
+        setActiveTab(source.key);
+        return;
+      }
       const updated = [...additionalSources, source];
       setAdditionalSources(updated);
       persistSources(updated);
       // Switch to the newly added tab
       setActiveTab(source.key);
+      // Reload the page so server-rendered profile.blogPosts picks up the new data
+      window.location.reload();
     },
     [additionalSources, persistSources]
   );
@@ -179,6 +187,29 @@ export default function DataSourcesPageClient({ profile }: DataSourcesPageClient
       </div>
     );
   }
+
+  // ─── Render panel for a dynamic source ─────────────────────
+
+  const renderDynamicPanel = (source: SourceDefinition) => {
+    // Blog-type sources get the Medium/blog panel
+    if (BLOG_SOURCE_KEYS.has(source.key)) {
+      // Filter blog posts by platform (medium, devto, substack, hashnode)
+      const postsForSource = (profile.blogPosts ?? []).filter(
+        (p) => p.platform?.toLowerCase() === source.key
+      );
+      return (
+        <MediumSourcePanel
+          source={source}
+          blogPosts={postsForSource}
+          onRemoveSourceAction={handleRemoveSource}
+          onRefreshAction={handleRefresh}
+        />
+      );
+    }
+
+    // Fallback generic panel
+    return <GenericSourcePanel source={source} onRemoveSourceAction={handleRemoveSource} />;
+  };
 
   // ─── Main Render ───────────────────────────────────────────
 
@@ -248,15 +279,10 @@ export default function DataSourcesPageClient({ profile }: DataSourcesPageClient
             <GoogleSourcePanel syncStatus={syncStatus} onSyncStatusRefreshAction={handleRefresh} />
           </TabsContent>
 
-          {/* Links Tab */}
-          <TabsContent value="links">
-            <LinksSourcePanel links={profile.links} onSyncStatusRefreshAction={handleRefresh} />
-          </TabsContent>
-
           {/* Dynamic / User-Added Sources */}
           {additionalSources.map((source) => (
             <TabsContent key={source.key} value={source.key}>
-              <GenericSourcePanel source={source} onRemoveSourceAction={handleRemoveSource} />
+              {renderDynamicPanel(source)}
             </TabsContent>
           ))}
         </Tabs>

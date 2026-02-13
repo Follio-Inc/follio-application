@@ -88,12 +88,8 @@ export async function POST(request: NextRequest) {
  */
 async function saveBlogPostsToProfile(
   clerkId: string,
-  blogPosts: NonNullable<
-    typeof import('@/services/import/types').NormalizedImportResult.prototype.blogPosts
-  >,
-  links?: NonNullable<
-    typeof import('@/services/import/types').NormalizedImportResult.prototype.links
-  >
+  blogPosts: import('@/services/import/types').NormalizedBlogPost[],
+  links?: import('@/services/import/types').NormalizedLink[]
 ) {
   const user = await db.user.findUnique({
     where: { clerkId },

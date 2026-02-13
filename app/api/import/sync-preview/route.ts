@@ -288,7 +288,7 @@ export async function POST(request: NextRequest) {
             startDate: match.startDate ? match.startDate.toISOString().slice(0, 10) : null,
             endDate: match.endDate ? match.endDate.toISOString().slice(0, 10) : null,
             isCurrent: match.isCurrent,
-            description: match.description || null,
+            bullets: (match.bullets || []).join('\n') || null,
           };
 
           // Compare location

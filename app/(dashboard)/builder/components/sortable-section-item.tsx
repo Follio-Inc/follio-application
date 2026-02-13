@@ -29,6 +29,7 @@ import {
   GraduationCap,
   GripVertical,
   Heart,
+  Image as ImageIcon,
   LayoutGrid,
   Link as LinkIcon,
   Sparkles,
@@ -44,6 +45,7 @@ import type { ProfileSection, SectionType } from '@/types';
 const SECTION_ICONS: Record<SectionType, React.ComponentType<{ className?: string }>> = {
   BASIC_INFO: User,
   CONTACT: Contact,
+  PHOTOS: ImageIcon,
   EXPERIENCE: Briefcase,
   EDUCATION: GraduationCap,
   SKILLS: Code,

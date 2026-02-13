@@ -10,6 +10,7 @@ import { BasicInfoForm, ContactInfoForm } from '../sections/basic-info-form';
 import { EducationSection } from '../sections/education-section';
 import { ExperienceSection } from '../sections/experience-section';
 import { LinksSection } from '../sections/links-section';
+import { PhotosSection } from '../sections/photos-section';
 import { ProjectsSection } from '../sections/projects-section';
 import { SettingsSection } from '../sections/settings-section';
 import { ShareSection } from '../sections/share-section';
@@ -34,6 +35,7 @@ interface SectionEditorProps {
 const SECTION_TITLES: Record<string, string> = {
   BASIC_INFO: 'Basic Info',
   CONTACT: 'Contact',
+  PHOTOS: 'Photos',
   EXPERIENCE: 'Work Experience',
   EDUCATION: 'Education',
   SKILLS: 'Skills',
@@ -107,15 +109,15 @@ export function SectionEditor({ profile, sectionType, section }: SectionEditorPr
   };
 
   const handleSave = async () => {
-    if (sectionType !== 'BASIC_INFO' && sectionType !== 'CONTACT') {
+    if (sectionType !== 'BASIC_INFO' && sectionType !== 'CONTACT' && sectionType !== 'PHOTOS') {
       // For other sections, changes are saved inline
       return;
     }
 
     setIsSaving(true);
     try {
-      // Save profile info (for BASIC_INFO)
-      if (sectionType === 'BASIC_INFO' && hasChanges) {
+      // Save profile info (for BASIC_INFO or PHOTOS — avatarUrl changes)
+      if ((sectionType === 'BASIC_INFO' || sectionType === 'PHOTOS') && hasChanges) {
         const response = await fetch('/api/profile', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -164,6 +166,9 @@ export function SectionEditor({ profile, sectionType, section }: SectionEditorPr
 
       case 'CONTACT':
         return <ContactInfoForm profile={currentProfile} onContactUpdate={handleContactUpdate} />;
+
+      case 'PHOTOS':
+        return <PhotosSection profile={currentProfile} onUpdateAction={handleProfileUpdate} />;
 
       case 'EXPERIENCE':
         return (
@@ -275,15 +280,19 @@ export function SectionEditor({ profile, sectionType, section }: SectionEditorPr
               ? 'Update your basic profile information'
               : sectionType === 'CONTACT'
                 ? 'Manage your contact information and visibility'
-                : sectionType === 'SHARE'
-                  ? 'Control visibility and share your profile'
-                  : 'Add, edit, or remove items'}
+                : sectionType === 'PHOTOS'
+                  ? 'Manage your profile photo and gallery images'
+                  : sectionType === 'SHARE'
+                    ? 'Control visibility and share your profile'
+                    : 'Add, edit, or remove items'}
           </p>
         </div>
-        {(sectionType === 'BASIC_INFO' || sectionType === 'CONTACT') && (
+        {(sectionType === 'BASIC_INFO' ||
+          sectionType === 'CONTACT' ||
+          sectionType === 'PHOTOS') && (
           <Button
             onClick={handleSave}
-            disabled={isSaving || (sectionType === 'BASIC_INFO' ? !hasChanges : !hasContactChanges)}
+            disabled={isSaving || (sectionType === 'CONTACT' ? !hasContactChanges : !hasChanges)}
             className="gap-2"
           >
             {isSaving ? <Spinner size="sm" /> : <Save className="h-4 w-4" />}

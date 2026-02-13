@@ -25,6 +25,10 @@ export async function getProfileByHandle(handle: string): Promise<FullProfile | 
       projects: { orderBy: { sortOrder: 'asc' } },
       awards: { orderBy: { sortOrder: 'asc' } },
       certifications: { orderBy: { sortOrder: 'asc' } },
+      blogPosts: { orderBy: { createdAt: 'desc' } },
+      youtubeVideos: { orderBy: { createdAt: 'desc' } },
+      photos: { orderBy: { sortOrder: 'asc' } },
+      sections: { orderBy: { sortOrder: 'asc' } },
     },
   });
 
@@ -51,6 +55,9 @@ export async function getPublicProfile(handle: string): Promise<PublicProfile | 
       projects: { orderBy: { sortOrder: 'asc' } },
       awards: { orderBy: { sortOrder: 'asc' } },
       certifications: { orderBy: { sortOrder: 'asc' } },
+      blogPosts: { orderBy: { createdAt: 'desc' } },
+      youtubeVideos: { orderBy: { createdAt: 'desc' } },
+      photos: { orderBy: { sortOrder: 'asc' } },
       sections: { orderBy: { sortOrder: 'asc' } },
     },
   });
@@ -105,6 +112,11 @@ export async function getPublicProfile(handle: string): Promise<PublicProfile | 
     links: isSectionVisible('LINKS') ? profile.links : [],
     awards: isSectionVisible('AWARDS') ? profile.awards : [],
     certifications: isSectionVisible('CERTIFICATIONS') ? profile.certifications : [],
+    photos: isSectionVisible('PHOTOS')
+      ? (profile as unknown as { photos: unknown[] }).photos?.filter(
+          (p: { isVisible?: boolean }) => p.isVisible !== false
+        ) || []
+      : [],
   } as PublicProfile;
 }
 

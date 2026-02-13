@@ -782,6 +782,21 @@ function ReviewPageContent() {
       const storedParsed = sessionStorage.getItem('onboarding_parsed_resume');
       const resumeFileName = storedParsed ? JSON.parse(storedParsed)?._resumeFileName : null;
 
+      // Retrieve gallery photos from IndexedDB
+      const galleryPhotoRefs: string[] = storedParsed
+        ? JSON.parse(storedParsed)?.galleryPhotos || []
+        : [];
+      const resolvedGalleryPhotos: string[] = [];
+      for (const ref of galleryPhotoRefs) {
+        if (ref.startsWith('indexeddb:')) {
+          const key = ref.replace('indexeddb:', '');
+          const photoData = await getPhotoFromIndexedDB(key);
+          if (photoData) resolvedGalleryPhotos.push(photoData);
+        } else {
+          resolvedGalleryPhotos.push(ref);
+        }
+      }
+
       const response = await fetch('/api/onboarding/complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -790,6 +805,7 @@ function ReviewPageContent() {
           lastName,
           handle: storedHandle,
           resumeFileName: resumeFileName || undefined,
+          galleryPhotos: resolvedGalleryPhotos.length > 0 ? resolvedGalleryPhotos : undefined,
           reviewedData: {
             profile: profileForApi,
             experiences: data.experiences,
