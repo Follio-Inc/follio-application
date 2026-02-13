@@ -41,6 +41,10 @@ export async function GET() {
         profile: {
           include: {
             githubProfile: { select: { avatarUrl: true, username: true } },
+            photos: {
+              where: { category: 'PROFILE' },
+              orderBy: { createdAt: 'desc' },
+            },
           },
         },
       },
@@ -130,11 +134,23 @@ export async function GET() {
       });
     }
 
-    // 5. Current profile avatar (if it was uploaded/manually set and differs from source avatars)
+    // 5. Uploaded / manually-set profile photos saved in the DB
+    //    (these persist even after the user switches to an OAuth avatar)
+    const profilePhotos = profile.photos || [];
+    profilePhotos.forEach((photo, idx) => {
+      addAvatar({
+        id: `uploaded-${photo.id}`,
+        label: idx === 0 ? 'Uploaded' : `Uploaded (${idx + 1})`,
+        url: photo.url,
+        source: 'uploaded',
+      });
+    });
+
+    // 6. Current profile avatar (if it was set via URL paste and not yet in the DB)
     if (currentAvatarUrl && !seenUrls.has(currentAvatarUrl)) {
       addAvatar({
         id: 'uploaded',
-        label: 'Uploaded',
+        label: 'Current',
         url: currentAvatarUrl,
         source: 'uploaded',
       });

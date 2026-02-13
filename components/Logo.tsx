@@ -6,45 +6,44 @@ import Link from 'next/link';
 interface LogoProps {
   href?: string;
   size?: 'sm' | 'md' | 'lg' | 'xl';
+  /** When true, shows the full logo with "Follio" text. When false, shows only the "F" icon. */
   showText?: boolean;
   className?: string;
 }
 
-const sizeMap = {
-  sm: { width: 24, height: 24 },
-  md: { width: 32, height: 32 },
-  lg: { width: 40, height: 40 },
-  xl: { width: 48, height: 48 },
+/** Dimensions for the icon-only (short) logo */
+const iconSizeMap = {
+  sm: { width: 20, height: 20 },
+  md: { width: 28, height: 28 },
+  lg: { width: 36, height: 36 },
+  xl: { width: 44, height: 44 },
 };
 
-const textSizeMap = {
-  sm: 'text-lg',
-  md: 'text-xl',
-  lg: 'text-2xl',
-  xl: 'text-3xl',
+/** Height constraint + max-height class for the full logo */
+const fullSizeMap = {
+  sm: { width: 80, height: 20, className: 'max-h-5' },
+  md: { width: 100, height: 26, className: 'max-h-[26px]' },
+  lg: { width: 120, height: 32, className: 'max-h-8' },
+  xl: { width: 148, height: 38, className: 'max-h-[38px]' },
 };
 
 export function Logo({ href, size = 'md', showText = true, className = '' }: LogoProps) {
-  const dimensions = sizeMap[size];
-  const textSize = textSizeMap[size];
+  const isFullLogo = showText;
+  const sizeEntry = isFullLogo ? fullSizeMap[size] : iconSizeMap[size];
+  const src = isFullLogo ? '/logo/follio-logo-full.png' : '/logo/follio-icon.png';
+  const alt = isFullLogo ? 'Follio' : 'Follio Icon';
+  const heightClass = isFullLogo ? (sizeEntry as (typeof fullSizeMap)['md']).className : '';
 
   const content = (
-    <div className={`flex items-center gap-2 ${className}`}>
+    <div className={`flex items-center ${className}`}>
       <Image
-        src="/logo/Follio Logo Transparent.png"
-        alt="Follio Logo"
-        width={dimensions.width}
-        height={dimensions.height}
-        className="object-contain"
+        src={src}
+        alt={alt}
+        width={sizeEntry.width}
+        height={sizeEntry.height}
+        className={`object-contain ${heightClass} w-auto`}
         priority
       />
-      {showText && (
-        <span
-          className={`${textSize} bg-gradient-to-r from-primary to-primary/70 bg-clip-text font-semibold text-transparent`}
-        >
-          Follio
-        </span>
-      )}
     </div>
   );
 

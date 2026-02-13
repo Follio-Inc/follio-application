@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Follio Logo](https://via.placeholder.com/150x50?text=Follio)
+![Follio Logo](public/logo/follio-logo-full.png)
 
 **One profile. Four views. Perfect parsing.**
 

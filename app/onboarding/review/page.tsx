@@ -749,18 +749,26 @@ function ReviewPageContent() {
           if (imageResource?.publicUrl) {
             profileForApi.avatarUrl = imageResource.publicUrl;
             console.log('[Review] Clerk image URL:', imageResource.publicUrl);
-          } else if (user?.imageUrl) {
-            // Fallback: reload user to get updated imageUrl
-            await user.reload();
-            profileForApi.avatarUrl = user.imageUrl;
-            console.log('[Review] Using user.imageUrl:', user.imageUrl);
           } else {
-            delete profileForApi.avatarUrl;
+            // Reload user to get the updated imageUrl from Clerk
+            await user?.reload();
+            if (user?.imageUrl) {
+              profileForApi.avatarUrl = user.imageUrl;
+              console.log('[Review] Using reloaded user.imageUrl:', user.imageUrl);
+            } else {
+              console.warn('[Review] No avatar URL available from Clerk after upload');
+              delete profileForApi.avatarUrl;
+            }
           }
         } catch (uploadErr) {
           console.error('[Review] Failed to upload avatar to Clerk:', uploadErr);
-          // Continue without the avatar rather than failing the whole save
-          delete profileForApi.avatarUrl;
+          // Fallback: try to use current Clerk image URL instead of losing the avatar
+          if (user?.imageUrl) {
+            profileForApi.avatarUrl = user.imageUrl;
+            console.log('[Review] Using existing user.imageUrl as fallback:', user.imageUrl);
+          } else {
+            delete profileForApi.avatarUrl;
+          }
         }
       }
 

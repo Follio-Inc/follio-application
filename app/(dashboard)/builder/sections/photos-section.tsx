@@ -15,6 +15,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { ImageCropper, type CropArea } from '@/components/ui/image-cropper';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -88,6 +89,42 @@ const getSourceIcon = (source: string) => {
   }
 };
 
+/** Load an image element from a URL */
+const createImage = (url: string): Promise<HTMLImageElement> =>
+  new Promise((resolve, reject) => {
+    const img = new window.Image();
+    img.addEventListener('load', () => resolve(img));
+    img.addEventListener('error', reject);
+    img.crossOrigin = 'anonymous';
+    img.src = url;
+  });
+
+/** Crop the image to the given pixel area and resize to 512×512 JPEG */
+async function getCroppedImg(imageSrc: string, pixelCrop: CropArea): Promise<string> {
+  const image = await createImage(imageSrc);
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('No 2d context');
+
+  const outputSize = 512;
+  canvas.width = outputSize;
+  canvas.height = outputSize;
+
+  ctx.drawImage(
+    image,
+    pixelCrop.x,
+    pixelCrop.y,
+    pixelCrop.width,
+    pixelCrop.height,
+    0,
+    0,
+    outputSize,
+    outputSize
+  );
+
+  return canvas.toDataURL('image/jpeg', 0.85);
+}
+
 // ─── Photos Section ──────────────────────────────────────────────────────────
 
 interface PhotosSectionProps {
@@ -106,6 +143,7 @@ export function PhotosSection({ profile, onUpdateAction }: PhotosSectionProps) {
   const [urlInput, setUrlInput] = useState('');
   const [urlError, setUrlError] = useState('');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [cropPixels, setCropPixels] = useState<CropArea | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const profileFileRef = useRef<HTMLInputElement>(null);
@@ -210,16 +248,15 @@ export function PhotosSection({ profile, onUpdateAction }: PhotosSectionProps) {
       setUrlError('Image must be less than 40 MB');
       return;
     }
-    setIsLoading(true);
     setUrlError('');
-    try {
-      const compressed = await compressImage(file);
-      setPreviewUrl(compressed);
-    } catch {
-      setUrlError('Failed to process image');
-    } finally {
-      setIsLoading(false);
-    }
+    // Load the full-resolution image for cropping (don't pre-compress)
+    const reader = new FileReader();
+    reader.onload = () => {
+      setPreviewUrl(reader.result as string);
+      setCropPixels(null);
+    };
+    reader.onerror = () => setUrlError('Failed to read image');
+    reader.readAsDataURL(file);
   }, []);
 
   const handleProfileUrlSubmit = async () => {
@@ -253,6 +290,7 @@ export function PhotosSection({ profile, onUpdateAction }: PhotosSectionProps) {
     setUrlInput('');
     setUrlError('');
     setPreviewUrl(null);
+    setCropPixels(null);
     setIsLoading(false);
   };
 
@@ -335,7 +373,7 @@ export function PhotosSection({ profile, onUpdateAction }: PhotosSectionProps) {
     <div className="space-y-6">
       {/* ── Profile Photo Card ── */}
       <Card>
-        <CardHeader>
+        <CardHeader className="text-center">
           <CardTitle>Profile Photo</CardTitle>
           <CardDescription>
             Your main profile picture, shown across your portfolio and resume views.
@@ -345,13 +383,17 @@ export function PhotosSection({ profile, onUpdateAction }: PhotosSectionProps) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center gap-5">
-            {/* Clickable avatar */}
+          <div className="flex flex-col items-center gap-6">
+            {/* Clickable avatar — large & centered */}
             <div className="group relative shrink-0">
-              <Avatar className="h-24 w-24 border-2 border-border shadow-sm">
-                <AvatarImage src={currentPhotoUrl || undefined} alt="Profile photo" />
-                <AvatarFallback className="bg-muted text-2xl font-medium">
-                  {initials || <Camera className="h-8 w-8 text-muted-foreground" />}
+              <Avatar className="h-40 w-40 border-4 border-border shadow-lg ring-4 ring-background">
+                <AvatarImage
+                  src={currentPhotoUrl || undefined}
+                  alt="Profile photo"
+                  className="object-cover"
+                />
+                <AvatarFallback className="bg-muted text-4xl font-semibold">
+                  {initials || <Camera className="h-12 w-12 text-muted-foreground" />}
                 </AvatarFallback>
               </Avatar>
 
@@ -440,42 +482,58 @@ export function PhotosSection({ profile, onUpdateAction }: PhotosSectionProps) {
                     {/* Upload Tab */}
                     <TabsContent value="upload" className="space-y-4">
                       {previewUrl ? (
-                        <div className="space-y-4">
-                          <div className="flex justify-center">
-                            <div className="relative">
-                              <Avatar className="h-32 w-32 border-2 border-border shadow-sm">
-                                <AvatarImage src={previewUrl} alt="Preview" />
-                                <AvatarFallback>{initials}</AvatarFallback>
-                              </Avatar>
-                              <button
-                                onClick={() => setPreviewUrl(null)}
-                                className="absolute -right-2 -top-2 rounded-full bg-destructive p-1 text-destructive-foreground shadow-sm"
-                                aria-label="Remove preview"
-                              >
-                                <X className="h-4 w-4" />
-                              </button>
-                            </div>
+                        <div className="space-y-3">
+                          {/* Cropper */}
+                          <div className="relative mx-auto aspect-square w-full max-w-[320px] overflow-hidden rounded-xl border border-border/40">
+                            <ImageCropper
+                              image={previewUrl}
+                              aspect={1}
+                              cropShape="round"
+                              onCropChange={(area) => setCropPixels(area)}
+                            />
                           </div>
+                          <p className="text-center text-[11px] text-muted-foreground">
+                            Drag image to reposition · Drag handles to resize · Scroll to zoom
+                          </p>
                           <div className="flex gap-2">
                             <Button
                               variant="outline"
                               className="flex-1"
-                              onClick={() => setPreviewUrl(null)}
+                              onClick={() => {
+                                setPreviewUrl(null);
+                                setCropPixels(null);
+                              }}
                             >
                               Change
                             </Button>
                             <Button
                               className="flex-1"
-                              onClick={() => {
-                                if (previewUrl) {
-                                  handleProfilePhotoChange(previewUrl);
-                                  setProfileDialogOpen(false);
-                                  setPreviewUrl(null);
+                              onClick={async () => {
+                                if (previewUrl && cropPixels) {
+                                  setIsLoading(true);
+                                  try {
+                                    const cropped = await getCroppedImg(previewUrl, cropPixels);
+                                    handleProfilePhotoChange(cropped);
+                                    setProfileDialogOpen(false);
+                                    setPreviewUrl(null);
+                                    setCropPixels(null);
+                                  } catch {
+                                    setUrlError('Failed to crop image');
+                                  } finally {
+                                    setIsLoading(false);
+                                  }
                                 }
                               }}
-                              disabled={isLoading}
+                              disabled={isLoading || !cropPixels}
                             >
-                              Use Photo
+                              {isLoading ? (
+                                <>
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                  Processing…
+                                </>
+                              ) : (
+                                'Use Photo'
+                              )}
                             </Button>
                           </div>
                         </div>
@@ -572,46 +630,51 @@ export function PhotosSection({ profile, onUpdateAction }: PhotosSectionProps) {
               </Dialog>
             </div>
 
-            {/* Right side info + quick-pick thumbnails */}
-            <div className="min-w-0 flex-1 space-y-2">
-              <div>
-                <Label className="text-base font-medium">Profile Photo</Label>
-                <p className="text-xs text-muted-foreground">
-                  {hasPhoto ? 'Hover the photo to change it' : 'Click the avatar to add a photo'}
-                </p>
-              </div>
+            {/* Center info text */}
+            <div className="space-y-1 text-center">
+              <p className="text-sm text-muted-foreground">
+                {hasPhoto ? 'Hover the photo to change it' : 'Click the avatar to add a photo'}
+              </p>
+            </div>
 
-              {isLoadingAvatars ? (
-                <div className="flex items-center gap-1.5">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-                  <span className="text-xs text-muted-foreground">Loading photos…</span>
-                </div>
-              ) : hasSourceAvatars ? (
-                <div className="flex items-center gap-1.5">
+            {/* Source avatars — horizontal row below */}
+            {isLoadingAvatars ? (
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">Loading connected photos…</span>
+              </div>
+            ) : hasSourceAvatars ? (
+              <div className="flex flex-col items-center gap-3">
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  Or pick from your accounts
+                </p>
+                <div className="flex items-center gap-3">
                   {availableAvatars.map((avatar) => (
                     <button
                       key={avatar.id}
                       onClick={() => handleSelectSourceAvatar(avatar)}
                       className={cn(
-                        'relative rounded-full transition-all',
+                        'group/avatar relative rounded-full transition-all duration-200',
                         avatar.isActive
-                          ? 'ring-2 ring-primary ring-offset-2 ring-offset-background'
-                          : 'opacity-70 hover:opacity-100'
+                          ? 'scale-105 ring-[3px] ring-primary ring-offset-[3px] ring-offset-background'
+                          : 'opacity-75 hover:scale-110 hover:opacity-100'
                       )}
                       title={avatar.isActive ? `${avatar.label} (current)` : `Use ${avatar.label}`}
                     >
-                      <Avatar className="h-9 w-9 border border-border">
-                        <AvatarImage src={avatar.url} alt={avatar.label} />
-                        <AvatarFallback className="text-[10px]">
+                      <Avatar className="h-14 w-14 border-2 border-border shadow-sm">
+                        <AvatarImage src={avatar.url} alt={avatar.label} className="object-cover" />
+                        <AvatarFallback className="text-sm">
                           {getSourceIcon(avatar.source)}
                         </AvatarFallback>
                       </Avatar>
+                      <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] font-medium text-muted-foreground">
+                        {avatar.source.charAt(0).toUpperCase() + avatar.source.slice(1)}
+                      </span>
                     </button>
                   ))}
-                  <span className="ml-0.5 text-[10px] text-muted-foreground">← pick one</span>
                 </div>
-              ) : null}
-            </div>
+              </div>
+            ) : null}
           </div>
         </CardContent>
       </Card>
@@ -801,43 +864,62 @@ export function PhotosSection({ profile, onUpdateAction }: PhotosSectionProps) {
         </CardHeader>
         <CardContent>
           {galleryPhotos.length === 0 ? (
-            <div className="rounded-lg border border-dashed p-8 text-center">
-              <ImagePlus className="mx-auto mb-3 h-10 w-10 text-muted-foreground/50" />
-              <p className="text-sm font-medium text-muted-foreground">No gallery photos yet</p>
-              <p className="mt-1 text-xs text-muted-foreground">
+            <div className="rounded-xl border-2 border-dashed p-12 text-center">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+                <ImagePlus className="h-8 w-8 text-muted-foreground/60" />
+              </div>
+              <p className="text-base font-medium text-muted-foreground">No gallery photos yet</p>
+              <p className="mx-auto mt-2 max-w-xs text-sm text-muted-foreground/70">
                 Add photos to showcase your work, events, or anything you&apos;d like visitors to
                 see.
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
-              {galleryPhotos.map((photo) => (
+            <div
+              className={cn(
+                'grid gap-4',
+                galleryPhotos.length === 1 && 'mx-auto max-w-md grid-cols-1',
+                galleryPhotos.length === 2 && 'grid-cols-2',
+                galleryPhotos.length >= 3 && 'grid-cols-2 md:grid-cols-3'
+              )}
+            >
+              {galleryPhotos.map((photo, idx) => (
                 <div
                   key={photo.id}
-                  className="group relative aspect-square overflow-hidden rounded-lg border bg-muted"
+                  className={cn(
+                    'group relative overflow-hidden rounded-xl border bg-muted shadow-sm transition-shadow hover:shadow-md',
+                    // First photo is featured/large when there are 3+ photos
+                    galleryPhotos.length >= 3 && idx === 0 && 'col-span-2 row-span-2',
+                    // Aspect ratio based on layout role
+                    galleryPhotos.length >= 3 && idx === 0 ? 'aspect-[4/3]' : 'aspect-square'
+                  )}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={photo.url}
                     alt={photo.caption || 'Gallery photo'}
-                    className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                   />
-                  {/* Overlay with delete button */}
-                  <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100">
-                    <div className="flex w-full items-center justify-between p-2">
-                      {photo.caption && (
-                        <span className="truncate text-xs text-white">{photo.caption}</span>
+                  {/* Overlay with caption & delete */}
+                  <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/70 via-black/10 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+                    <div className="flex w-full items-end justify-between p-3">
+                      {photo.caption ? (
+                        <span className="truncate text-sm font-medium text-white drop-shadow-sm">
+                          {photo.caption}
+                        </span>
+                      ) : (
+                        <span />
                       )}
                       <button
                         onClick={() => deletePhoto(photo.id)}
                         disabled={deletingId === photo.id}
-                        className="ml-auto rounded-full bg-destructive/80 p-1.5 text-white transition-colors hover:bg-destructive"
+                        className="shrink-0 rounded-full bg-black/40 p-2 text-white backdrop-blur-sm transition-colors hover:bg-destructive"
                         aria-label="Delete photo"
                       >
                         {deletingId === photo.id ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
-                          <Trash2 className="h-3.5 w-3.5" />
+                          <Trash2 className="h-4 w-4" />
                         )}
                       </button>
                     </div>

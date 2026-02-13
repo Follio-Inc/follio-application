@@ -22,10 +22,26 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { username, accessToken, saveToProfile } = body;
+    let { username } = body;
+    const { accessToken, saveToProfile } = body;
 
     if (!username) {
       return NextResponse.json({ error: 'GitHub username is required' }, { status: 400 });
+    }
+
+    // Extract username from full URL (e.g. https://github.com/username or github.com/username/repo)
+    const trimmed = username.trim();
+    try {
+      const url = new URL(trimmed.startsWith('http') ? trimmed : `https://${trimmed}`);
+      if (url.hostname.includes('github.com')) {
+        const pathParts = url.pathname.split('/').filter(Boolean);
+        if (pathParts.length > 0) {
+          username = pathParts[0];
+        }
+      }
+    } catch {
+      // Not a URL — strip @ prefix if present
+      username = trimmed.replace(/^@/, '');
     }
 
     // Validate username format

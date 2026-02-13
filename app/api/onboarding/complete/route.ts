@@ -238,6 +238,7 @@ export async function POST(request: NextRequest) {
       handle: providedHandle,
       manualLinks,
       resumeFileName,
+      galleryPhotos,
     } = body as {
       importedData?: Record<string, NormalizedImportResult | undefined>;
       reviewedData?: ReviewedData;
@@ -246,6 +247,7 @@ export async function POST(request: NextRequest) {
       handle?: string;
       manualLinks?: ManualLinkInput[];
       resumeFileName?: string;
+      galleryPhotos?: string[];
     };
 
     console.log('[Onboarding Complete] Has reviewedData:', !!reviewedData);
@@ -322,7 +324,8 @@ export async function POST(request: NextRequest) {
         providedHandle,
         providedFirstName,
         providedLastName,
-        clerkUserForReview?.imageUrl
+        clerkUserForReview?.imageUrl,
+        galleryPhotos
       );
 
       // Create ImportLog so this import appears in the builder's Import History timeline
@@ -747,7 +750,8 @@ async function handleReviewedData(
   providedHandle?: string,
   providedFirstName?: string,
   providedLastName?: string,
-  clerkAvatarUrl?: string | null
+  clerkAvatarUrl?: string | null,
+  galleryPhotos?: string[]
 ) {
   console.log('[handleReviewedData] Starting with reviewed data');
   console.log('[handleReviewedData] Experiences count:', reviewedData.experiences?.length || 0);
@@ -1090,6 +1094,60 @@ async function handleReviewedData(
       });
     }
     console.log('[handleReviewedData] Created all projects');
+  }
+
+  // ── Save profile photo as ProfilePhoto record ───────────────────────
+  // This ensures the avatar appears in the Builder's Photos section
+  const savedAvatarUrl = avatarUrlForDb;
+  if (savedAvatarUrl) {
+    try {
+      // Check if a PROFILE photo already exists with this URL to avoid duplicates
+      const existingProfilePhoto = await db.profilePhoto.findFirst({
+        where: { profileId, category: 'PROFILE', url: savedAvatarUrl },
+      });
+      if (!existingProfilePhoto) {
+        await db.profilePhoto.create({
+          data: {
+            profileId,
+            url: savedAvatarUrl,
+            category: 'PROFILE',
+            source: 'MANUAL',
+            sortOrder: 0,
+          },
+        });
+        console.log('[handleReviewedData] Created ProfilePhoto record for avatar');
+      }
+    } catch (err) {
+      console.error('[handleReviewedData] Failed to create ProfilePhoto record:', err);
+    }
+  }
+
+  // ── Save gallery photos as ProfilePhoto records ─────────────────────
+  if (galleryPhotos?.length) {
+    console.log('[handleReviewedData] Saving gallery photos:', galleryPhotos.length);
+    try {
+      const lastGalleryPhoto = await db.profilePhoto.findFirst({
+        where: { profileId, category: 'GALLERY' },
+        orderBy: { sortOrder: 'desc' },
+      });
+      let nextSortOrder = (lastGalleryPhoto?.sortOrder ?? -1) + 1;
+
+      for (const photoUrl of galleryPhotos) {
+        if (!photoUrl || photoUrl.startsWith('indexeddb:')) continue; // Skip unresolved refs
+        await db.profilePhoto.create({
+          data: {
+            profileId,
+            url: photoUrl,
+            category: 'GALLERY',
+            source: 'MANUAL',
+            sortOrder: nextSortOrder++,
+          },
+        });
+      }
+      console.log('[handleReviewedData] Created gallery photo records');
+    } catch (err) {
+      console.error('[handleReviewedData] Failed to save gallery photos:', err);
+    }
   }
 
   console.log('[handleReviewedData] Complete! Profile handle:', handle);

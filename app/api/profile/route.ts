@@ -178,6 +178,7 @@ export async function GET() {
             projects: { orderBy: { sortOrder: 'asc' } },
             awards: { orderBy: { sortOrder: 'asc' } },
             certifications: { orderBy: { sortOrder: 'asc' } },
+            photos: { orderBy: { sortOrder: 'asc' } },
           },
         },
       },

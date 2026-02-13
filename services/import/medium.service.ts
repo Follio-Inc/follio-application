@@ -52,8 +52,23 @@ const PLATFORM_REGISTRY: Record<string, PlatformInfo> = {
     name: 'Substack',
     icon: 'substack',
     feedUrl: (input: string) => {
-      // If already a URL, append /feed
+      // If already a full URL with substack.com, extract the base
+      try {
+        const url = new URL(input.startsWith('http') ? input : `https://${input}`);
+        if (url.hostname.includes('substack.com')) {
+          // Get just the origin (e.g. https://example.substack.com)
+          return `${url.origin}/feed`;
+        }
+      } catch {
+        // Not a URL — fall through
+      }
+
       if (input.includes('substack.com')) {
+        // Handle bare "example.substack.com" without protocol
+        const match = input.match(/([\w-]+\.substack\.com)/);
+        if (match) {
+          return `https://${match[1]}/feed`;
+        }
         const base = input.replace(/\/+$/, '');
         return `${base}/feed`;
       }
@@ -181,13 +196,44 @@ export class MediumImportService implements IMediumImportService {
   }
 
   /**
-   * Import from a Medium username via RSS feed
+   * Import from a Medium username via RSS feed.
+   * Handles various input formats:
+   * - @username
+   * - username
+   * - https://medium.com/@username
+   * - https://medium.com/@username/some-article
+   * - medium.com/@username
    */
   async importFromMedium(username: string, userId: string): Promise<ImportServiceResult> {
     try {
-      const clean = username.replace(/^@/, '').trim();
+      let clean = username.trim();
       if (!clean) {
         return { success: false, error: 'Username is required', errorCode: 'INVALID_INPUT' };
+      }
+
+      // Extract username from full Medium URL
+      try {
+        const url = new URL(clean.startsWith('http') ? clean : `https://${clean}`);
+        if (url.hostname.includes('medium.com')) {
+          const pathParts = url.pathname.split('/').filter(Boolean);
+          if (pathParts.length > 0) {
+            clean = pathParts[0].replace(/^@/, '');
+          }
+        } else {
+          // Not a medium URL, treat as username
+          clean = clean.replace(/^@/, '');
+        }
+      } catch {
+        // Not a URL — treat as username
+        clean = clean.replace(/^@/, '');
+      }
+
+      if (!clean) {
+        return {
+          success: false,
+          error: 'Could not extract a valid Medium username from the input',
+          errorCode: 'INVALID_INPUT',
+        };
       }
 
       const feedUrl = PLATFORM_REGISTRY.medium.feedUrl(clean);

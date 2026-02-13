@@ -1,7 +1,7 @@
 'use client';
 
 import { useClerk, useUser } from '@clerk/nextjs';
-import { Check, Copy, Edit, Globe, Lock, LogOut, Settings } from 'lucide-react';
+import { Check, ChevronDown, Copy, Edit, Globe, Lock, LogOut, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -143,15 +143,16 @@ function ProfileMenu({ profileHandle }: { profileHandle?: string } = {}) {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          className="relative h-9 w-9 rounded-full ring-2 ring-transparent transition-all duration-300 hover:scale-105 hover:shadow-lg hover:ring-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="group relative flex items-center gap-1 rounded-full py-1 pl-1 pr-1.5 ring-2 ring-transparent transition-all duration-300 hover:bg-muted/50 hover:ring-primary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label="User menu"
         >
-          <Avatar className="h-9 w-9 shadow-sm">
+          <Avatar className="h-8 w-8 shadow-sm">
             <AvatarImage src={user.imageUrl} alt={displayName} />
             <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/5 text-xs font-semibold text-primary">
               {initials}
             </AvatarFallback>
           </Avatar>
+          <ChevronDown className="h-3 w-3 text-muted-foreground/60 transition-transform duration-200 group-data-[state=open]:rotate-180" />
         </button>
       </DropdownMenuTrigger>
 

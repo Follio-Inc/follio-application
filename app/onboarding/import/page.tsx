@@ -15,6 +15,7 @@ import {
   Loader2,
   Plus,
   RotateCcw,
+  Sparkles,
   Trash2,
   Upload,
   User,
@@ -200,6 +201,80 @@ async function getCroppedImg(imageSrc: string, pixelCrop: Area): Promise<string>
   );
 
   return canvas.toDataURL('image/jpeg', 0.92);
+}
+
+// ─── Input Normalization Helpers ──────────────────────────────────
+/**
+ * Extract a clean Medium username from various input formats:
+ * - @username → username
+ * - username → username
+ * - https://medium.com/@username → username
+ * - https://medium.com/@username/some-article → username
+ * - medium.com/@username → username
+ */
+function extractMediumUsername(input: string): string {
+  const trimmed = input.trim();
+  if (!trimmed) return '';
+
+  // Try parsing as URL
+  try {
+    const url = new URL(trimmed.startsWith('http') ? trimmed : `https://${trimmed}`);
+    if (url.hostname.includes('medium.com')) {
+      const pathParts = url.pathname.split('/').filter(Boolean);
+      if (pathParts.length > 0) {
+        return pathParts[0].replace(/^@/, '');
+      }
+    }
+  } catch {
+    // Not a URL — fall through
+  }
+
+  // @username or plain username
+  return trimmed.replace(/^@/, '');
+}
+
+/**
+ * Extract a clean Substack identifier from various input formats:
+ * - username → username
+ * - @username → username
+ * - https://username.substack.com → username
+ * - https://username.substack.com/p/some-post → username
+ * - username.substack.com → username
+ */
+function extractSubstackIdentifier(input: string): string {
+  const trimmed = input.trim();
+  if (!trimmed) return '';
+
+  // Try parsing as URL
+  try {
+    const url = new URL(trimmed.startsWith('http') ? trimmed : `https://${trimmed}`);
+    if (url.hostname.includes('substack.com')) {
+      const subdomain = url.hostname.split('.')[0];
+      if (subdomain && subdomain !== 'www' && subdomain !== 'substack') {
+        return subdomain;
+      }
+    }
+  } catch {
+    // Not a URL — fall through
+  }
+
+  // Handle bare "username.substack.com" without protocol
+  const substackMatch = trimmed.match(/^([\w-]+)\.substack\.com/i);
+  if (substackMatch) return substackMatch[1];
+
+  // @username or plain username
+  return trimmed.replace(/^@/, '');
+}
+
+/**
+ * Extract a clean YouTube channel identifier from various input formats.
+ * The backend's parseChannelInput already handles most formats, but we
+ * do a light cleanup here for edge cases.
+ */
+function extractYouTubeChannel(input: string): string {
+  const trimmed = input.trim();
+  if (!trimmed) return '';
+  return trimmed;
 }
 
 // ─── Component ────────────────────────────────────────────────────
@@ -812,11 +887,11 @@ export default function OnboardingImportPage() {
 
   // ─── Medium ─────────────────────────────────────────────────────
   const handleMediumImport = async () => {
-    const username = mediumUsername.trim();
+    const username = extractMediumUsername(mediumUsername);
     if (!username) {
       updateImportStatus('medium', {
         status: 'error',
-        message: 'Please enter your Medium username',
+        message: 'Please enter your Medium username or profile URL',
       });
       return;
     }
@@ -828,9 +903,16 @@ export default function OnboardingImportPage() {
         body: JSON.stringify({ username }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Failed');
+      if (!response.ok) throw new Error(data.error || 'Failed to import from Medium');
+      const postCount = data.data?.blogPosts?.length || data.stats?.blogPosts || 0;
+      if (postCount === 0) {
+        updateImportStatus('medium', {
+          status: 'error',
+          message: `No posts found for "${username}". Please check the username and try again.`,
+        });
+        return;
+      }
       setImportedData((prev) => ({ ...prev, medium: data.data }));
-      const postCount = data.data?.posts?.length || data.data?.summary?.posts || 0;
       updateImportStatus('medium', {
         status: 'success',
         message: `Imported ${postCount} posts`,
@@ -839,18 +921,18 @@ export default function OnboardingImportPage() {
     } catch (err) {
       updateImportStatus('medium', {
         status: 'error',
-        message: err instanceof Error ? err.message : 'Failed',
+        message: err instanceof Error ? err.message : 'Failed to import from Medium',
       });
     }
   };
 
   // ─── YouTube ────────────────────────────────────────────────────
   const handleYouTubeImport = async () => {
-    const channel = youtubeChannel.trim();
+    const channel = extractYouTubeChannel(youtubeChannel);
     if (!channel) {
       updateImportStatus('youtube', {
         status: 'error',
-        message: 'Please enter your YouTube channel',
+        message: 'Please enter your YouTube channel URL or handle',
       });
       return;
     }
@@ -862,9 +944,17 @@ export default function OnboardingImportPage() {
         body: JSON.stringify({ channel }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Failed');
+      if (!response.ok) throw new Error(data.error || 'Failed to import from YouTube');
+      const videoCount = data.data?.youtubeVideos?.length || data.stats?.videos || 0;
+      if (videoCount === 0) {
+        updateImportStatus('youtube', {
+          status: 'error',
+          message:
+            'No videos found for this channel. Please check the URL or handle and try again.',
+        });
+        return;
+      }
       setImportedData((prev) => ({ ...prev, youtube: data.data }));
-      const videoCount = data.data?.videos?.length || data.data?.summary?.videos || 0;
       updateImportStatus('youtube', {
         status: 'success',
         message: `Imported ${videoCount} videos`,
@@ -873,18 +963,18 @@ export default function OnboardingImportPage() {
     } catch (err) {
       updateImportStatus('youtube', {
         status: 'error',
-        message: err instanceof Error ? err.message : 'Failed',
+        message: err instanceof Error ? err.message : 'Failed to import from YouTube',
       });
     }
   };
 
   // ─── Substack ───────────────────────────────────────────────────
   const handleSubstackImport = async () => {
-    const identifier = substackUsername.trim();
+    const identifier = extractSubstackIdentifier(substackUsername);
     if (!identifier) {
       updateImportStatus('substack', {
         status: 'error',
-        message: 'Please enter your Substack name',
+        message: 'Please enter your Substack name or URL',
       });
       return;
     }
@@ -896,9 +986,16 @@ export default function OnboardingImportPage() {
         body: JSON.stringify({ platform: 'substack', identifier }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Failed');
+      if (!response.ok) throw new Error(data.error || 'Failed to import from Substack');
+      const postCount = data.data?.blogPosts?.length || data.stats?.blogPosts || 0;
+      if (postCount === 0) {
+        updateImportStatus('substack', {
+          status: 'error',
+          message: `No posts found for "${identifier}". Please check the name and try again.`,
+        });
+        return;
+      }
       setImportedData((prev) => ({ ...prev, substack: data.data }));
-      const postCount = data.data?.posts?.length || data.data?.summary?.posts || 0;
       updateImportStatus('substack', {
         status: 'success',
         message: `Imported ${postCount} posts`,
@@ -907,7 +1004,7 @@ export default function OnboardingImportPage() {
     } catch (err) {
       updateImportStatus('substack', {
         status: 'error',
-        message: err instanceof Error ? err.message : 'Failed',
+        message: err instanceof Error ? err.message : 'Failed to import from Substack',
       });
     }
   };
@@ -1283,14 +1380,13 @@ export default function OnboardingImportPage() {
   };
 
   // ─── Navigation ─────────────────────────────────────────────────
+  const isLastDataStep = STEPS[STEPS.indexOf(currentStep) + 1] === 'review';
+  const isAnyImportRunning = resumeParsingPromise !== null || imports.resume.status === 'added';
+
   const goNext = () => {
     const idx = STEPS.indexOf(currentStep);
     if (idx < STEPS.length - 1) {
-      if (STEPS[idx + 1] === 'review') {
-        handleGoToReview();
-      } else {
-        setCurrentStep(STEPS[idx + 1]);
-      }
+      setCurrentStep(STEPS[idx + 1]);
     }
   };
 
@@ -1431,8 +1527,10 @@ export default function OnboardingImportPage() {
                 }`}
               >
                 <AnimatePresence mode="wait">
-                  {resumeThumbnail &&
-                  (imports.resume.status === 'success' || imports.resume.status === 'added') ? (
+                  {resumeFileName &&
+                  (imports.resume.status === 'success' ||
+                    imports.resume.status === 'added' ||
+                    imports.resume.status === 'importing') ? (
                     <motion.div
                       key="uploaded"
                       initial={{ scale: 0.9, opacity: 0 }}
@@ -1441,17 +1539,78 @@ export default function OnboardingImportPage() {
                       className="flex flex-col items-center gap-4"
                     >
                       <div className="group relative">
-                        <div className="relative h-48 w-36 overflow-hidden rounded-lg border border-border/40 bg-white shadow-md">
-                          <Image
-                            src={resumeThumbnail}
-                            alt="Resume preview"
-                            fill
-                            className="object-cover object-top"
-                            unoptimized
-                          />
-                        </div>
-                        <button
-                          type="button"
+                        {resumeThumbnail ? (
+                          <div className="relative h-48 w-36 overflow-hidden rounded-lg border border-border/40 bg-white shadow-md">
+                            <Image
+                              src={resumeThumbnail}
+                              alt="Resume preview"
+                              fill
+                              className="object-cover object-top"
+                              unoptimized
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex h-48 w-36 flex-col items-center justify-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 shadow-md">
+                            <FileText className="h-12 w-12 text-emerald-500" />
+                            <span className="text-[10px] font-medium uppercase tracking-wide text-emerald-600">
+                              PDF
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">{resumeFileName}</p>
+                        {imports.resume.status === 'added' && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 4 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="mt-2 space-y-1.5"
+                          >
+                            <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+                              <Loader2 className="h-3 w-3 animate-spin text-primary" /> AI parsing
+                              in background...
+                            </p>
+                            <div className="mx-auto h-1 w-32 overflow-hidden rounded-full bg-muted">
+                              <motion.div
+                                className="h-full rounded-full bg-primary/60"
+                                animate={{ x: ['-100%', '100%'] }}
+                                transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+                                style={{ width: '50%' }}
+                              />
+                            </div>
+                            <p className="text-[10px] text-muted-foreground/60">
+                              You can continue to the next step while we parse
+                            </p>
+                          </motion.div>
+                        )}
+                        {imports.resume.status === 'importing' && (
+                          <p className="mt-1 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+                            <Loader2 className="h-3 w-3 animate-spin text-primary" /> Uploading...
+                          </p>
+                        )}
+                        {imports.resume.status === 'success' && imports.resume.message && (
+                          <motion.p
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            className="mt-1 text-xs text-emerald-600 dark:text-emerald-400"
+                          >
+                            <CheckCircle2 className="mr-1 inline h-3 w-3" />
+                            {imports.resume.message}
+                          </motion.p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => document.getElementById('resume-upload')?.click()}
+                          className="gap-1.5"
+                        >
+                          <Upload className="h-3.5 w-3.5" /> Replace
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={() => {
                             setResumeFileName(null);
                             setResumeFileUrl(null);
@@ -1467,33 +1626,11 @@ export default function OnboardingImportPage() {
                               return rest;
                             });
                           }}
-                          className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-destructive text-white opacity-0 shadow-md transition-opacity group-hover:opacity-100"
+                          className="gap-1.5 text-muted-foreground hover:text-foreground"
                         >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
+                          <Trash2 className="h-3.5 w-3.5" /> Remove
+                        </Button>
                       </div>
-                      <div>
-                        <p className="text-sm font-medium">{resumeFileName}</p>
-                        {imports.resume.status === 'added' && (
-                          <p className="mt-1 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-                            <Loader2 className="h-3 w-3 animate-spin" /> Parsing in background...
-                          </p>
-                        )}
-                        {imports.resume.status === 'success' && imports.resume.message && (
-                          <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">
-                            <CheckCircle2 className="mr-1 inline h-3 w-3" />
-                            {imports.resume.message}
-                          </p>
-                        )}
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => document.getElementById('resume-upload')?.click()}
-                        className="gap-1.5"
-                      >
-                        <Upload className="h-3.5 w-3.5" /> Replace
-                      </Button>
                     </motion.div>
                   ) : (
                     <motion.div
@@ -1551,11 +1688,11 @@ export default function OnboardingImportPage() {
               exit={{ opacity: 0, x: -40 }}
               transition={{ duration: 0.3 }}
             >
-              <div className="mx-auto max-w-md">
+              <div className="mx-auto max-w-4xl">
                 {uploadedPhoto ? (
-                  <div className="space-y-6">
-                    {/* Crop area */}
-                    <div className="relative mx-auto h-80 w-80 overflow-hidden rounded-2xl border border-border/40 bg-black/5">
+                  <div className="flex flex-col items-stretch gap-6 md:flex-row">
+                    {/* Crop area — fills available height */}
+                    <div className="relative aspect-square w-full overflow-hidden rounded-2xl border border-border/40 bg-black/5 md:aspect-square md:h-[min(70vh,32rem)] md:w-auto md:flex-shrink-0">
                       <Cropper
                         image={uploadedPhoto}
                         crop={photoCrop}
@@ -1574,44 +1711,48 @@ export default function OnboardingImportPage() {
                       />
                     </div>
 
-                    {/* Controls */}
-                    <div className="space-y-4 rounded-xl border border-border/40 bg-card/80 p-4 backdrop-blur-sm">
-                      {/* Zoom */}
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <label className="text-xs font-medium text-muted-foreground">Zoom</label>
-                          <span className="text-xs text-muted-foreground">
-                            {Math.round(photoZoom * 100)}%
-                          </span>
+                    {/* Controls — sidebar on desktop, below on mobile */}
+                    <div className="flex flex-col justify-between gap-4 rounded-xl border border-border/40 bg-card/80 p-5 backdrop-blur-sm md:w-56">
+                      <div className="space-y-5">
+                        {/* Zoom */}
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <label className="text-xs font-medium text-muted-foreground">
+                              Zoom
+                            </label>
+                            <span className="text-xs text-muted-foreground">
+                              {Math.round(photoZoom * 100)}%
+                            </span>
+                          </div>
+                          <Slider
+                            value={photoZoom}
+                            min={1}
+                            max={3}
+                            step={0.01}
+                            onChange={setPhotoZoom}
+                          />
                         </div>
-                        <Slider
-                          value={photoZoom}
-                          min={1}
-                          max={3}
-                          step={0.01}
-                          onChange={setPhotoZoom}
-                        />
-                      </div>
 
-                      {/* Tilt correction */}
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <label className="text-xs font-medium text-muted-foreground">
-                            Tilt correction
-                          </label>
-                          <span className="text-xs text-muted-foreground">{photoRotation}°</span>
+                        {/* Tilt correction */}
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <label className="text-xs font-medium text-muted-foreground">
+                              Tilt correction
+                            </label>
+                            <span className="text-xs text-muted-foreground">{photoRotation}°</span>
+                          </div>
+                          <Slider
+                            value={photoRotation}
+                            min={-45}
+                            max={45}
+                            step={1}
+                            onChange={setPhotoRotation}
+                          />
                         </div>
-                        <Slider
-                          value={photoRotation}
-                          min={-45}
-                          max={45}
-                          step={1}
-                          onChange={setPhotoRotation}
-                        />
                       </div>
 
                       {/* Action buttons */}
-                      <div className="flex items-center gap-2 pt-1">
+                      <div className="flex flex-col gap-2 pt-2">
                         <Button
                           variant="outline"
                           size="sm"
@@ -1620,7 +1761,7 @@ export default function OnboardingImportPage() {
                             setPhotoZoom(1);
                             setPhotoCrop({ x: 0, y: 0 });
                           }}
-                          className="gap-1.5"
+                          className="w-full gap-1.5"
                         >
                           <RotateCcw className="h-3.5 w-3.5" /> Reset
                         </Button>
@@ -1628,17 +1769,17 @@ export default function OnboardingImportPage() {
                           variant="outline"
                           size="sm"
                           onClick={() => document.getElementById('photo-upload')?.click()}
-                          className="gap-1.5"
+                          className="w-full gap-1.5"
                         >
                           <Camera className="h-3.5 w-3.5" /> Reupload
                         </Button>
                         <Button
-                          variant="outline"
+                          variant="ghost"
                           size="sm"
                           onClick={handleRemovePhoto}
-                          className="gap-1.5 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          className="w-full gap-1.5 text-muted-foreground hover:text-destructive"
                         >
-                          <Trash2 className="h-3.5 w-3.5" /> Delete
+                          <Trash2 className="h-3.5 w-3.5" /> Remove
                         </Button>
                       </div>
                     </div>
@@ -2029,6 +2170,12 @@ export default function OnboardingImportPage() {
                         )}
                       </Button>
                     </div>
+                    {imports.youtube.status === 'error' && imports.youtube.message && (
+                      <p className="mt-2 flex items-center gap-1 text-xs text-red-500">
+                        <AlertCircle className="h-3 w-3 shrink-0" />
+                        {imports.youtube.message}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2052,7 +2199,7 @@ export default function OnboardingImportPage() {
                     </p>
                     <div className="mt-3 flex items-center gap-2">
                       <Input
-                        placeholder="@username"
+                        placeholder="@username or medium.com/@username"
                         value={mediumUsername}
                         onChange={(e) => setMediumUsername(e.target.value)}
                         className="h-9 text-sm"
@@ -2071,6 +2218,12 @@ export default function OnboardingImportPage() {
                         )}
                       </Button>
                     </div>
+                    {imports.medium.status === 'error' && imports.medium.message && (
+                      <p className="mt-2 flex items-center gap-1 text-xs text-red-500">
+                        <AlertCircle className="h-3 w-3 shrink-0" />
+                        {imports.medium.message}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2094,7 +2247,7 @@ export default function OnboardingImportPage() {
                     </p>
                     <div className="mt-3 flex items-center gap-2">
                       <Input
-                        placeholder="your-blog (e.g. yourname.substack.com)"
+                        placeholder="name or yourname.substack.com"
                         value={substackUsername}
                         onChange={(e) => setSubstackUsername(e.target.value)}
                         className="h-9 text-sm"
@@ -2115,6 +2268,12 @@ export default function OnboardingImportPage() {
                         )}
                       </Button>
                     </div>
+                    {imports.substack.status === 'error' && imports.substack.message && (
+                      <p className="mt-2 flex items-center gap-1 text-xs text-red-500">
+                        <AlertCircle className="h-3 w-3 shrink-0" />
+                        {imports.substack.message}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2263,69 +2422,143 @@ export default function OnboardingImportPage() {
           {currentStep === 'review' && (
             <motion.div
               key="step-review"
-              initial={{ opacity: 0, x: 40 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -40 }}
-              transition={{ duration: 0.3 }}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.4, ease: 'easeOut' }}
               className="text-center"
             >
               <div className="mx-auto max-w-md space-y-6">
-                <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-2xl bg-primary/10">
-                  <CheckCircle2 className="h-10 w-10 text-primary" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-semibold">Ready to review</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">
+                {/* Animated checkmark icon */}
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: 'spring', stiffness: 200, damping: 15, delay: 0.2 }}
+                  className="mx-auto flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-emerald-500/20 shadow-lg shadow-primary/5"
+                >
+                  <motion.div
+                    initial={{ scale: 0, rotate: -180 }}
+                    animate={{ scale: 1, rotate: 0 }}
+                    transition={{ type: 'spring', stiffness: 200, damping: 12, delay: 0.4 }}
+                  >
+                    <CheckCircle2 className="h-10 w-10 text-primary" />
+                  </motion.div>
+                </motion.div>
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.5 }}
+                >
+                  <h2 className="text-xl font-bold">All set! Ready to review</h2>
+                  <p className="mt-2 text-sm text-muted-foreground">
                     We&apos;ve gathered your data. Let&apos;s review everything before creating your
                     profile.
                   </p>
-                </div>
+                </motion.div>
 
                 {/* Summary of what was collected */}
-                <div className="space-y-2 text-left">
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.6 }}
+                  className="space-y-2 text-left"
+                >
                   {(imports.resume.status === 'success' || imports.resume.status === 'added') && (
-                    <div className="flex items-center gap-2 rounded-lg bg-emerald-500/5 p-3 text-sm">
-                      <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                      <span>Resume: {resumeFileName}</span>
-                      {imports.resume.status === 'added' && (
-                        <Loader2 className="ml-auto h-3 w-3 animate-spin text-muted-foreground" />
+                    <motion.div
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.7 }}
+                      className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm"
+                    >
+                      {imports.resume.status === 'success' ? (
+                        <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+                      ) : (
+                        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-amber-500" />
                       )}
-                    </div>
+                      <span className="flex-1">Resume: {resumeFileName}</span>
+                      {imports.resume.status === 'added' && (
+                        <span className="text-xs text-amber-500">Processing...</span>
+                      )}
+                    </motion.div>
                   )}
                   {uploadedPhoto && (
-                    <div className="flex items-center gap-2 rounded-lg bg-emerald-500/5 p-3 text-sm">
+                    <motion.div
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.8 }}
+                      className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm"
+                    >
                       <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                       <span>Profile photo uploaded</span>
-                    </div>
+                    </motion.div>
                   )}
                   {(connectedLinkedin || imports.linkedin.status === 'success') && (
-                    <div className="flex items-center gap-2 rounded-lg bg-emerald-500/5 p-3 text-sm">
+                    <motion.div
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.9 }}
+                      className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm"
+                    >
                       <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                       <span>LinkedIn: {linkedinName || 'Connected'}</span>
-                    </div>
+                    </motion.div>
                   )}
                   {(connectedGithub || imports.github.status === 'success') && (
-                    <div className="flex items-center gap-2 rounded-lg bg-emerald-500/5 p-3 text-sm">
+                    <motion.div
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 1.0 }}
+                      className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm"
+                    >
                       <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                       <span>GitHub: @{githubUsernameFromAccount || githubUsername}</span>
-                    </div>
+                    </motion.div>
                   )}
                   {connectedFacebook && (
-                    <div className="flex items-center gap-2 rounded-lg bg-emerald-500/5 p-3 text-sm">
+                    <motion.div
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 1.1 }}
+                      className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm"
+                    >
                       <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                       <span>Facebook: {facebookName || 'Connected'}</span>
-                    </div>
+                    </motion.div>
                   )}
                   {galleryPhotos.length > 0 && (
-                    <div className="flex items-center gap-2 rounded-lg bg-emerald-500/5 p-3 text-sm">
+                    <motion.div
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 1.2 }}
+                      className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm"
+                    >
                       <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                       <span>
                         {galleryPhotos.length} portfolio photo
                         {galleryPhotos.length !== 1 ? 's' : ''}
                       </span>
-                    </div>
+                    </motion.div>
                   )}
-                </div>
+
+                  {/* Show if nothing was collected */}
+                  {imports.resume.status === 'idle' &&
+                    !uploadedPhoto &&
+                    !connectedLinkedin &&
+                    imports.linkedin.status !== 'success' &&
+                    !connectedGithub &&
+                    imports.github.status !== 'success' &&
+                    !connectedFacebook &&
+                    galleryPhotos.length === 0 && (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.7 }}
+                        className="rounded-lg border border-muted bg-muted/30 p-4 text-center text-sm text-muted-foreground"
+                      >
+                        No data imported yet. You can still review and fill in details manually.
+                      </motion.div>
+                    )}
+                </motion.div>
               </div>
             </motion.div>
           )}
@@ -2373,20 +2606,31 @@ export default function OnboardingImportPage() {
               <Button
                 onClick={handleGoToReview}
                 disabled={isWaitingForParsing}
-                className="gap-2 px-8"
+                className="gap-2 bg-gradient-to-r from-primary to-primary/80 px-8 shadow-lg shadow-primary/25 transition-all hover:shadow-xl hover:shadow-primary/30"
                 size="lg"
               >
                 {isWaitingForParsing ? (
                   <>
                     <Spinner size="sm" />
-                    Waiting for resume parsing...
+                    Finalizing...
                   </>
                 ) : (
                   <>
+                    <Sparkles className="h-4 w-4" />
                     Review Profile
                     <ArrowRight className="h-4 w-4" />
                   </>
                 )}
+              </Button>
+            ) : isLastDataStep ? (
+              <Button
+                onClick={goNext}
+                className="gap-2 bg-gradient-to-r from-primary to-primary/80 px-6 shadow-lg shadow-primary/20 transition-all hover:shadow-xl hover:shadow-primary/25"
+                size="lg"
+              >
+                <Sparkles className="h-4 w-4" />
+                Review
+                <ArrowRight className="h-4 w-4" />
               </Button>
             ) : (
               <Button
@@ -2409,6 +2653,70 @@ export default function OnboardingImportPage() {
           </p>
         )}
       </div>
+
+      {/* ─── Full-screen parsing progress overlay ─── */}
+      <AnimatePresence>
+        {isWaitingForParsing && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+              className="mx-4 max-w-sm space-y-6 rounded-2xl border bg-card p-8 text-center shadow-2xl"
+            >
+              {/* Animated circular spinner */}
+              <div className="relative mx-auto h-20 w-20">
+                <div className="absolute inset-0 rounded-full border-4 border-muted" />
+                <motion.div
+                  className="absolute inset-0 rounded-full border-4 border-primary border-t-transparent"
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                />
+                <motion.div
+                  className="absolute inset-2 rounded-full border-4 border-primary/30 border-b-transparent"
+                  animate={{ rotate: -360 }}
+                  transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
+                />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <FileText className="h-7 w-7 text-primary" />
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-lg font-semibold">Analyzing your resume</h3>
+                <p className="mt-1.5 text-sm text-muted-foreground">
+                  Our AI is extracting experience, skills, and education
+                  {resumeFileName && (
+                    <>
+                      {' '}
+                      from <span className="font-medium text-foreground">{resumeFileName}</span>
+                    </>
+                  )}
+                </p>
+              </div>
+
+              {/* Animated progress bar */}
+              <div className="space-y-2">
+                <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                  <motion.div
+                    className="h-full rounded-full bg-gradient-to-r from-primary to-primary/60"
+                    initial={{ width: '5%' }}
+                    animate={{ width: ['5%', '40%', '65%', '85%', '92%'] }}
+                    transition={{ duration: 15, ease: 'easeOut', times: [0, 0.2, 0.5, 0.8, 1] }}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">This usually takes 10–30 seconds…</p>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }
