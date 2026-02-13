@@ -112,11 +112,7 @@ export async function getPublicProfile(handle: string): Promise<PublicProfile | 
     links: isSectionVisible('LINKS') ? profile.links : [],
     awards: isSectionVisible('AWARDS') ? profile.awards : [],
     certifications: isSectionVisible('CERTIFICATIONS') ? profile.certifications : [],
-    photos: isSectionVisible('PHOTOS')
-      ? (profile as unknown as { photos: unknown[] }).photos?.filter(
-          (p: { isVisible?: boolean }) => p.isVisible !== false
-        ) || []
-      : [],
+    photos: isSectionVisible('PHOTOS') ? profile.photos.filter((p) => p.isVisible !== false) : [],
   } as PublicProfile;
 }
 

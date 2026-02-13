@@ -35,6 +35,7 @@ export default async function DataSourcesPage() {
           certifications: { orderBy: { sortOrder: 'asc' } },
           blogPosts: { orderBy: { createdAt: 'desc' } },
           youtubeVideos: { orderBy: { createdAt: 'desc' } },
+          photos: { orderBy: { sortOrder: 'asc' } },
           sections: { orderBy: { sortOrder: 'asc' } },
         },
       },
