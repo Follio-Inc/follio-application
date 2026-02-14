@@ -1,3 +1,4 @@
+import { extractHandleFromHost, isMainDomain } from '@/lib/url';
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 
@@ -22,6 +23,40 @@ export default clerkMiddleware(async (auth, req) => {
   const pathname = req.nextUrl.pathname;
   if (pathname.includes('clerk') || pathname.includes('__clerk')) {
     return NextResponse.next();
+  }
+
+  // --- Subdomain routing ---
+  // Detect user subdomains: username.follio.me → rewrite to /u/username
+  const hostname = req.headers.get('host') || '';
+  if (!isMainDomain(hostname)) {
+    const handle = extractHandleFromHost(hostname);
+    if (handle) {
+      const url = req.nextUrl.clone();
+
+      // username.follio.me/r → /u/username/resume
+      if (pathname === '/r' || pathname === '/r/') {
+        url.pathname = `/u/${handle}/resume`;
+        // Preserve query params (including ?key=...)
+        return NextResponse.rewrite(url);
+      }
+
+      // username.follio.me/l → /u/username/links
+      if (pathname === '/l' || pathname === '/l/') {
+        url.pathname = `/u/${handle}/links`;
+        return NextResponse.rewrite(url);
+      }
+
+      // username.follio.me → /u/username (root and any other paths)
+      if (pathname === '/' || pathname === '') {
+        url.pathname = `/u/${handle}`;
+        return NextResponse.rewrite(url);
+      }
+
+      // username.follio.me/anything-else → pass through to /u/handle/anything
+      // This allows future sub-routes under the subdomain
+      url.pathname = `/u/${handle}${pathname}`;
+      return NextResponse.rewrite(url);
+    }
   }
 
   // Protect dashboard and builder routes

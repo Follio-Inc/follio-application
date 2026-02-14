@@ -4,7 +4,13 @@ import { useClerk } from '@clerk/nextjs';
 import {
   AlertTriangle,
   Bell,
+  Eye,
+  EyeOff,
+  FileText,
+  Globe,
+  Grid3X3,
   Loader2,
+  Lock,
   Monitor,
   Moon,
   Palette,
@@ -96,6 +102,15 @@ export function SettingsSection({ profile }: SettingsSectionProps) {
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [profileViewAlerts, setProfileViewAlerts] = useState(false);
 
+  // Visibility state
+  const [resumeVisibility, setResumeVisibility] = useState<'PUBLIC' | 'UNLISTED' | 'PRIVATE'>(
+    profile.resumeVisibility || 'UNLISTED'
+  );
+  const [portfolioVisibility, setPortfolioVisibility] = useState<'PUBLIC' | 'UNLISTED' | 'PRIVATE'>(
+    profile.portfolioVisibility || 'PUBLIC'
+  );
+  const [savingVisibility, setSavingVisibility] = useState(false);
+
   // Delete account state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteStep, setDeleteStep] = useState<'warning' | 'confirm' | 'deleting'>('warning');
@@ -113,6 +128,33 @@ export function SettingsSection({ profile }: SettingsSectionProps) {
   // Apply theme change via next-themes
   const handleThemeChange = (newTheme: ThemeMode) => {
     setNextTheme(newTheme);
+  };
+
+  // Save visibility settings
+  const handleVisibilityChange = async (
+    type: 'resume' | 'portfolio',
+    value: 'PUBLIC' | 'UNLISTED' | 'PRIVATE'
+  ) => {
+    if (type === 'resume') setResumeVisibility(value);
+    else setPortfolioVisibility(value);
+
+    setSavingVisibility(true);
+    try {
+      await fetch('/api/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          type === 'resume' ? { resumeVisibility: value } : { portfolioVisibility: value }
+        ),
+      });
+    } catch (error) {
+      console.error('Failed to update visibility:', error);
+      // Revert on failure
+      if (type === 'resume') setResumeVisibility(resumeVisibility);
+      else setPortfolioVisibility(portfolioVisibility);
+    } finally {
+      setSavingVisibility(false);
+    }
   };
 
   // Fetch account data when delete dialog opens
@@ -271,6 +313,126 @@ export function SettingsSection({ profile }: SettingsSectionProps) {
             />
           </div>
           <p className="text-xs italic text-muted-foreground">Notification settings coming soon</p>
+        </CardContent>
+      </Card>
+
+      {/* Visibility */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Eye className="h-5 w-5 text-primary" />
+            <CardTitle>Visibility</CardTitle>
+          </div>
+          <CardDescription>Control who can see your portfolio and resume</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Portfolio Visibility */}
+          <div className="rounded-lg border p-4">
+            <div className="mb-3 flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
+                <Grid3X3 className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <h4 className="font-medium">Portfolio</h4>
+                <p className="text-sm text-muted-foreground">
+                  Your portfolio page at /u/{profile.handle}
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant={portfolioVisibility === 'PUBLIC' ? 'default' : 'outline'}
+                size="sm"
+                className="gap-1.5"
+                onClick={() => handleVisibilityChange('portfolio', 'PUBLIC')}
+                disabled={savingVisibility}
+              >
+                <Globe className="h-3.5 w-3.5" />
+                Public
+              </Button>
+              <Button
+                variant={portfolioVisibility === 'UNLISTED' ? 'default' : 'outline'}
+                size="sm"
+                className="gap-1.5"
+                onClick={() => handleVisibilityChange('portfolio', 'UNLISTED')}
+                disabled={savingVisibility}
+              >
+                <Lock className="h-3.5 w-3.5" />
+                Unlisted
+              </Button>
+              <Button
+                variant={portfolioVisibility === 'PRIVATE' ? 'default' : 'outline'}
+                size="sm"
+                className="gap-1.5"
+                onClick={() => handleVisibilityChange('portfolio', 'PRIVATE')}
+                disabled={savingVisibility}
+              >
+                <EyeOff className="h-3.5 w-3.5" />
+                Private
+              </Button>
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              {portfolioVisibility === 'PUBLIC'
+                ? 'Anyone can view your portfolio.'
+                : portfolioVisibility === 'UNLISTED'
+                  ? 'Only people with the link can view your portfolio.'
+                  : 'Only you can view your portfolio. No one else has access.'}
+            </p>
+          </div>
+
+          {/* Resume Visibility */}
+          <div className="rounded-lg border p-4">
+            <div className="mb-3 flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-500/10">
+                <FileText className="h-4 w-4 text-amber-600" />
+              </div>
+              <div>
+                <h4 className="font-medium">Resume</h4>
+                <p className="text-sm text-muted-foreground">
+                  Your resume page at /u/{profile.handle}/resume
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant={resumeVisibility === 'PUBLIC' ? 'default' : 'outline'}
+                size="sm"
+                className="gap-1.5"
+                onClick={() => handleVisibilityChange('resume', 'PUBLIC')}
+                disabled={savingVisibility}
+              >
+                <Globe className="h-3.5 w-3.5" />
+                Public
+              </Button>
+              <Button
+                variant={resumeVisibility === 'UNLISTED' ? 'default' : 'outline'}
+                size="sm"
+                className="gap-1.5"
+                onClick={() => handleVisibilityChange('resume', 'UNLISTED')}
+                disabled={savingVisibility}
+              >
+                <Lock className="h-3.5 w-3.5" />
+                Unlisted
+              </Button>
+              <Button
+                variant={resumeVisibility === 'PRIVATE' ? 'default' : 'outline'}
+                size="sm"
+                className="gap-1.5"
+                onClick={() => handleVisibilityChange('resume', 'PRIVATE')}
+                disabled={savingVisibility}
+              >
+                <EyeOff className="h-3.5 w-3.5" />
+                Private
+              </Button>
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              {resumeVisibility === 'PUBLIC'
+                ? 'Anyone can view your resume. A direct link will appear on your portfolio.'
+                : resumeVisibility === 'UNLISTED'
+                  ? 'Only people with the link or share token can view your resume. Visitors to your portfolio will see a "Request Access" option.'
+                  : 'Only you can view your resume. No one else has access.'}
+            </p>
+          </div>
         </CardContent>
       </Card>
 

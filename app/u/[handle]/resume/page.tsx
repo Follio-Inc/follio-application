@@ -1,22 +1,22 @@
 import { db } from '@/lib/db';
-import { getPortfolioUrl } from '@/lib/url';
+import { getResumeUrl } from '@/lib/url';
 import { getPublicProfile, validateUnlistedKey } from '@/services/profile.service';
 import { auth } from '@clerk/nextjs/server';
 import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { ProfileViewer } from './profile-viewer';
+import { ResumePageViewer } from './resume-page-viewer';
 
 // Helper to serialize data for client components (converts Date objects to ISO strings)
 function serializeForClient<T>(data: T): T {
   return JSON.parse(JSON.stringify(data));
 }
 
-interface ProfilePageProps {
+interface ResumePageProps {
   params: Promise<{ handle: string }>;
-  searchParams: Promise<{ view?: string; token?: string; key?: string }>;
+  searchParams: Promise<{ token?: string; key?: string }>;
 }
 
-// Validate a share token for a private profile
+// Validate a share token for an unlisted resume
 async function validateShareToken(handle: string, token: string): Promise<boolean> {
   if (!token) return false;
 
@@ -30,17 +30,13 @@ async function validateShareToken(handle: string, token: string): Promise<boolea
   });
 
   if (!shareToken) return false;
-
-  // Check if token belongs to this profile
   if (shareToken.user.profile?.handle !== handle) return false;
-
-  // Check expiration
   if (shareToken.expiresAt && shareToken.expiresAt < new Date()) return false;
-
-  // Check max views
   if (shareToken.maxViews && shareToken.viewCount >= shareToken.maxViews) return false;
 
-  // Increment view count
+  // Check allowedView — if set, must allow 'resume'
+  if (shareToken.allowedView && shareToken.allowedView !== 'resume') return false;
+
   await db.shareToken.update({
     where: { id: shareToken.id },
     data: { viewCount: { increment: 1 } },
@@ -49,7 +45,7 @@ async function validateShareToken(handle: string, token: string): Promise<boolea
   return true;
 }
 
-/** Determine auth state: is the viewer the profile owner, another logged-in user, or anonymous? */
+/** Determine auth state */
 async function getAuthState(handle: string): Promise<'owner' | 'authenticated' | 'anonymous'> {
   try {
     const { userId } = await auth();
@@ -67,56 +63,49 @@ async function getAuthState(handle: string): Promise<'owner' | 'authenticated' |
   }
 }
 
-export async function generateMetadata({ params }: ProfilePageProps): Promise<Metadata> {
+export async function generateMetadata({ params }: ResumePageProps): Promise<Metadata> {
   const { handle } = await params;
   const profile = await getPublicProfile(handle);
 
   if (!profile) {
-    return {
-      title: 'Profile Not Found | Follio',
-    };
+    return { title: 'Resume Not Found | Follio' };
   }
 
-  const title = `${profile.firstName} ${profile.lastName} | Follio`;
-  const description =
-    profile.summary ||
-    `${profile.headline || 'Professional'} based in ${profile.location || 'Unknown'}`;
-
-  const portfolioVisibility = profile.portfolioVisibility || 'PUBLIC';
+  const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(' ');
+  const title = `${fullName} — Resume | Follio`;
+  const description = profile.headline || `${fullName}'s professional resume`;
 
   return {
     title,
     description,
-    // Unlisted/private portfolios should not be indexed
+    // Unlisted resumes should not be indexed
     robots:
-      portfolioVisibility === 'UNLISTED' || portfolioVisibility === 'PRIVATE'
+      profile.resumeVisibility === 'UNLISTED' || profile.resumeVisibility === 'PRIVATE'
         ? { index: false, follow: false }
         : undefined,
     openGraph: {
       title,
       description,
       type: 'profile',
-      firstName: profile.firstName,
-      lastName: profile.lastName || undefined,
-      url: getPortfolioUrl(handle),
+      url: getResumeUrl(handle),
       siteName: 'Follio',
     },
     twitter: {
-      card: 'summary_large_image',
+      card: 'summary',
       title,
       description,
     },
     alternates: {
-      canonical: getPortfolioUrl(handle),
+      canonical: getResumeUrl(handle),
     },
   };
 }
 
 export const dynamic = 'force-dynamic';
 
-export default async function ProfilePage({ params, searchParams }: ProfilePageProps) {
+export default async function ResumePage({ params, searchParams }: ResumePageProps) {
   const { handle } = await params;
-  const { view = 'portfolio', token, key } = await searchParams;
+  const { token, key } = await searchParams;
 
   const [profile, authState] = await Promise.all([getPublicProfile(handle), getAuthState(handle)]);
 
@@ -124,7 +113,7 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
     notFound();
   }
 
-  // For PRIVATE (Unlisted) profiles, require a valid share token or unlisted key (unless owner)
+  // For PRIVATE profiles, require a share token or unlisted key (unless owner)
   if (profile.status === 'PRIVATE' && authState !== 'owner') {
     const isValidToken = token ? await validateShareToken(handle, token) : false;
     const isValidKey = key ? await validateUnlistedKey(handle, key) : false;
@@ -133,12 +122,12 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
     }
   }
 
-  // Check portfolio-specific visibility
-  const portfolioVisibility = profile.portfolioVisibility || 'PUBLIC';
-  if (portfolioVisibility === 'PRIVATE' && authState !== 'owner') {
+  // Check resume-specific visibility
+  const resumeVisibility = profile.resumeVisibility || 'UNLISTED';
+  if (resumeVisibility === 'PRIVATE' && authState !== 'owner') {
     notFound();
   }
-  if (portfolioVisibility === 'UNLISTED' && authState !== 'owner') {
+  if (resumeVisibility === 'UNLISTED' && authState !== 'owner') {
     const isValidToken = token ? await validateShareToken(handle, token) : false;
     const isValidKey = key ? await validateUnlistedKey(handle, key) : false;
     if (!isValidToken && !isValidKey) {
@@ -146,19 +135,9 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
     }
   }
 
-  // Determine resume visibility for the cross-link button
-  const resumeVisibility = profile.resumeVisibility || 'UNLISTED';
-
-  // Serialize the profile data to convert Date objects to strings for client component
   const serializedProfile = serializeForClient(profile);
 
   return (
-    <ProfileViewer
-      profile={serializedProfile}
-      initialView={view as 'portfolio' | 'timeline' | 'snapshot'}
-      authState={authState}
-      profileHandle={handle}
-      resumeVisibility={resumeVisibility}
-    />
+    <ResumePageViewer profile={serializedProfile} authState={authState} profileHandle={handle} />
   );
 }

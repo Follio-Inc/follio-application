@@ -15,6 +15,7 @@ import { redirect } from 'next/navigation';
 import { Logo } from '@/components/Logo';
 import { Button } from '@/components/ui/button';
 import { db } from '@/lib/db';
+import { getPortfolioPath } from '@/lib/url';
 
 // Prevent caching during auth state changes
 export const dynamic = 'force-dynamic';
@@ -38,7 +39,7 @@ export default async function HomePage() {
     });
 
     if (user?.profile?.handle) {
-      redirect(`/u/${user.profile.handle}`);
+      redirect(getPortfolioPath(user.profile.handle));
     } else {
       redirect('/onboarding');
     }

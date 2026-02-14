@@ -7,9 +7,11 @@ import {
   Download,
   ExternalLink,
   Eye,
+  EyeOff,
   FileJson,
   FileText,
   Globe,
+  Grid3X3,
   Key,
   Link2,
   Loader2,
@@ -26,6 +28,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 
+import { getPortfolioUrl, getResumeUrl } from '@/lib/url';
 import type { Profile } from '@/types';
 
 type ProfileStatus = 'DRAFT' | 'PUBLIC' | 'PRIVATE';
@@ -80,7 +83,24 @@ export function ShareSection({ profile, onUpdateAction }: ShareSectionProps) {
   const [handleSuccess, setHandleSuccess] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copiedToken, setCopiedToken] = useState(false);
+  const [copiedPortfolio, setCopiedPortfolio] = useState(false);
+  const [copiedResume, setCopiedResume] = useState(false);
   const [isExporting, setIsExporting] = useState<string | null>(null);
+  const [resumeVisibility, setResumeVisibility] = useState<'PUBLIC' | 'UNLISTED' | 'PRIVATE'>(
+    ((profile as Record<string, unknown>).resumeVisibility as 'PUBLIC' | 'UNLISTED' | 'PRIVATE') ||
+      'UNLISTED'
+  );
+  const [portfolioVisibility, setPortfolioVisibility] = useState<'PUBLIC' | 'UNLISTED' | 'PRIVATE'>(
+    ((profile as Record<string, unknown>).portfolioVisibility as
+      | 'PUBLIC'
+      | 'UNLISTED'
+      | 'PRIVATE') || 'PUBLIC'
+  );
+  const [linksVisibility, setLinksVisibility] = useState<'PUBLIC' | 'UNLISTED' | 'PRIVATE'>(
+    ((profile as Record<string, unknown>).linksVisibility as 'PUBLIC' | 'UNLISTED' | 'PRIVATE') ||
+      'PUBLIC'
+  );
+  const [savingVisibility, setSavingVisibility] = useState(false);
   const [shareToken, setShareToken] = useState<ShareTokenData | null>(null);
   const [isLoadingToken, setIsLoadingToken] = useState(false);
   const [isGeneratingToken, setIsGeneratingToken] = useState(false);
@@ -92,7 +112,7 @@ export function ShareSection({ profile, onUpdateAction }: ShareSectionProps) {
     setOrigin(window.location.origin);
   }, []);
 
-  const publicUrl = origin ? `${origin}/u/${profile.handle}` : `/u/${profile.handle}`;
+  const publicUrl = getPortfolioUrl(profile.handle);
 
   // Fetch share token on mount and when status changes to PRIVATE
   useEffect(() => {
@@ -156,7 +176,7 @@ export function ShareSection({ profile, onUpdateAction }: ShareSectionProps) {
 
   const handleCopyTokenUrl = async () => {
     if (!shareToken?.token || !origin) return;
-    const tokenUrl = `${origin}/u/${profile.handle}?token=${shareToken.token}`;
+    const tokenUrl = `${getPortfolioUrl(profile.handle)}?token=${shareToken.token}`;
     await navigator.clipboard.writeText(tokenUrl);
     setCopiedToken(true);
     setTimeout(() => setCopiedToken(false), 2000);
@@ -235,6 +255,43 @@ export function ShareSection({ profile, onUpdateAction }: ShareSectionProps) {
     }
   };
 
+  const handleVisibilityChange = async (
+    type: 'resume' | 'portfolio' | 'links',
+    value: 'PUBLIC' | 'UNLISTED' | 'PRIVATE'
+  ) => {
+    const prev =
+      type === 'resume'
+        ? resumeVisibility
+        : type === 'portfolio'
+          ? portfolioVisibility
+          : linksVisibility;
+    if (type === 'resume') setResumeVisibility(value);
+    else if (type === 'portfolio') setPortfolioVisibility(value);
+    else setLinksVisibility(value);
+
+    setSavingVisibility(true);
+    try {
+      const payload =
+        type === 'resume'
+          ? { resumeVisibility: value }
+          : type === 'portfolio'
+            ? { portfolioVisibility: value }
+            : { linksVisibility: value };
+      await fetch('/api/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+    } catch (error) {
+      console.error('Failed to update visibility:', error);
+      if (type === 'resume') setResumeVisibility(prev);
+      else if (type === 'portfolio') setPortfolioVisibility(prev);
+      else setLinksVisibility(prev);
+    } finally {
+      setSavingVisibility(false);
+    }
+  };
+
   const handleExportPDF = async () => {
     setIsExporting('pdf');
     try {
@@ -278,7 +335,9 @@ export function ShareSection({ profile, onUpdateAction }: ShareSectionProps) {
 
   // Determine which URL to show based on status
   const tokenUrl =
-    shareToken?.token && origin ? `${origin}/u/${profile.handle}?token=${shareToken.token}` : null;
+    shareToken?.token && origin
+      ? `${getPortfolioUrl(profile.handle)}?token=${shareToken.token}`
+      : null;
 
   const qrCodeUrl = profile.status === 'PRIVATE' && tokenUrl ? tokenUrl : publicUrl;
 
@@ -290,358 +349,349 @@ export function ShareSection({ profile, onUpdateAction }: ShareSectionProps) {
           .map((s: unknown) => (s as { name: string }).name)
       : [];
 
+  // Portfolio summary data
+  const profileAny = profile as Record<string, unknown>;
+  const projects = Array.isArray(profileAny.projects)
+    ? (profileAny.projects as { name: string; techStack?: string[] }[])
+    : [];
+  const projectCount = projects.length;
+  const topProjects = projects.slice(0, 3);
+
+  // Resume summary data
+  const workExperiences = Array.isArray(profileAny.workExperiences)
+    ? (profileAny.workExperiences as { company: string; title: string }[])
+    : [];
+  const educations = Array.isArray(profileAny.educations)
+    ? (profileAny.educations as { institution: string; degree?: string | null }[])
+    : [];
+  const certifications = Array.isArray(profileAny.certifications)
+    ? (profileAny.certifications as { name: string }[])
+    : [];
+  const skillCount = Array.isArray(profileAny.skills) ? (profileAny.skills as unknown[]).length : 0;
+
   return (
     <div className="space-y-6">
-      {/* Quick Share Card */}
+      {/* Portfolio Card */}
       <Card className="overflow-hidden border-primary/20">
-        {/* Profile Snapshot Banner */}
-        <div className="relative bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 px-6 py-6">
+        {/* Cropped iframe snapshot of portfolio page */}
+        <div className="relative h-[220px] w-full overflow-hidden bg-muted">
           {/* Accent top bar */}
-          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500" />
-          <div className="flex items-center gap-4">
-            {/* Avatar / Initial */}
-            {profile.avatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={profile.avatarUrl}
-                alt={fullName}
-                className="h-14 w-14 shrink-0 rounded-full border-2 border-white/20 object-cover shadow-lg"
-              />
-            ) : (
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-600 text-xl font-bold text-white shadow-lg">
-                {(profile.firstName?.[0] || '?').toUpperCase()}
-              </div>
-            )}
-            <div className="min-w-0 flex-1">
-              <h3 className="truncate text-lg font-bold text-white">{fullName || 'Your Name'}</h3>
-              <p className="truncate text-sm text-slate-300">
-                {profile.headline || 'Your headline'}
-              </p>
-              {profile.location && (
-                <p className="mt-0.5 truncate text-xs text-slate-400">{profile.location}</p>
-              )}
-            </div>
-            <Badge
-              variant="secondary"
-              className="shrink-0 gap-1.5 bg-white/10 text-white hover:bg-white/20"
-            >
-              <StatusIcon className={`h-3.5 w-3.5 ${currentStatus.color}`} />
-              {currentStatus.label}
+          <div className="absolute inset-x-0 top-0 z-20 h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500" />
+          {/*
+            Zoom into the center content, skip nav/top bars:
+            - Scale the page to 50% so more content is visible
+            - Shift up to skip the navbar (~120px at full scale = ~60px at 50%)
+            - Shift left to center the max-w-5xl content
+          */}
+          <div
+            className="pointer-events-none absolute left-1/2 top-0"
+            style={{
+              width: '1024px',
+              height: '1400px',
+              transform: 'scale(0.65) translate(-50%, -140px)',
+              transformOrigin: 'top left',
+            }}
+          >
+            <iframe
+              src={`/u/${profile.handle}`}
+              title="Portfolio preview"
+              className="h-full w-full border-0"
+              tabIndex={-1}
+              loading="lazy"
+            />
+          </div>
+          {/* Gradient fade at bottom */}
+          <div className="absolute inset-x-0 bottom-0 z-10 h-16 bg-gradient-to-t from-background to-transparent" />
+          {/* Overlay badge */}
+          <div className="absolute left-3 top-3 z-20">
+            <Badge variant="secondary" className="gap-1.5 bg-background/80 backdrop-blur-sm">
+              <Grid3X3 className="h-3 w-3 text-primary" />
+              Portfolio
             </Badge>
           </div>
-          {/* Skill chips */}
-          {topSkills.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {topSkills.map((skill: string) => (
-                <span
-                  key={skill}
-                  className="rounded-full bg-white/10 px-2.5 py-0.5 text-xs font-medium text-blue-200"
-                >
-                  {skill}
-                </span>
-              ))}
-            </div>
-          )}
-          <p className="mt-3 text-xs text-slate-400">
-            This is your Follio — share it with the world.
-          </p>
+          {/* Visibility badge */}
+          <div className="absolute right-3 top-3 z-20">
+            <Badge variant="secondary" className="gap-1.5 bg-background/80 backdrop-blur-sm">
+              {portfolioVisibility === 'PUBLIC' ? (
+                <Globe className="h-3 w-3 text-green-600" />
+              ) : portfolioVisibility === 'UNLISTED' ? (
+                <Lock className="h-3 w-3 text-yellow-600" />
+              ) : (
+                <EyeOff className="h-3 w-3 text-muted-foreground" />
+              )}
+              {portfolioVisibility === 'PUBLIC'
+                ? 'Public'
+                : portfolioVisibility === 'UNLISTED'
+                  ? 'Unlisted'
+                  : 'Private'}
+            </Badge>
+          </div>
         </div>
 
         <CardContent className="space-y-4 pt-5">
-          {/* Inline handle editing */}
-          {isEditingHandle ? (
-            <div className="space-y-2">
-              <div className="flex gap-2">
-                <div className="flex flex-1 items-center rounded-md border bg-muted/50">
-                  <span className="whitespace-nowrap px-3 text-sm text-muted-foreground">
-                    follio.dev/u/
-                  </span>
-                  <Input
-                    value={handle}
-                    onChange={(e) => {
-                      setHandle(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''));
-                      setHandleError(null);
-                      setHandleSuccess(false);
+          {/* URL row */}
+          <div className="flex items-center gap-3">
+            <div className="flex-1 rounded-lg border bg-background p-3">
+              <div className="flex items-center justify-between gap-2">
+                <code className="truncate text-sm font-medium">
+                  {getPortfolioUrl(profile.handle)}
+                </code>
+                <div className="flex shrink-0 gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(getPortfolioUrl(profile.handle));
+                      setCopiedPortfolio(true);
+                      setTimeout(() => setCopiedPortfolio(false), 2000);
                     }}
-                    className="border-0 bg-transparent pl-0"
-                    placeholder="your-handle"
-                    autoFocus
-                  />
+                    className="h-8 gap-2"
+                  >
+                    {copiedPortfolio ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    {copiedPortfolio ? 'Copied!' : 'Copy'}
+                  </Button>
                 </div>
-                <Button
-                  onClick={() => checkHandleAvailability()}
-                  disabled={isCheckingHandle || handle === profile.handle}
-                  variant="secondary"
-                  size="sm"
-                >
-                  {isCheckingHandle ? 'Checking...' : 'Save'}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setHandle(profile.handle);
-                    setHandleError(null);
-                    setHandleSuccess(false);
-                    setIsEditingHandle(false);
-                  }}
-                >
-                  Cancel
-                </Button>
               </div>
-              {handleError && (
-                <p className="flex items-center gap-1 text-sm text-destructive">
-                  <AlertTriangle className="h-4 w-4" />
-                  {handleError}
-                </p>
-              )}
-              {handleSuccess && (
-                <p className="flex items-center gap-1 text-sm text-green-600">
-                  <Check className="h-4 w-4" />
-                  Handle updated!
-                </p>
-              )}
             </div>
-          ) : (
-            <>
-              {/* Show different content based on status */}
-              {profile.status === 'DRAFT' ? (
-                <div className="space-y-3">
-                  <div className="rounded-lg border border-dashed bg-muted/50 p-4 text-center">
-                    <Lock className="mx-auto h-8 w-8 text-muted-foreground" />
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      Your profile is in draft mode. Change visibility to share it.
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1 rounded-lg border bg-background p-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <code className="truncate text-sm text-muted-foreground">{publicUrl}</code>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setIsEditingHandle(true)}
-                          className="h-8 w-8 shrink-0"
-                          title="Edit URL"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ) : profile.status === 'PRIVATE' ? (
-                <>
-                  {/* Unlisted mode - show token-based sharing */}
-                  {isLoadingToken ? (
-                    <div className="flex items-center justify-center py-4">
-                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : shareToken?.token ? (
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-3">
-                        <div className="flex-1 rounded-lg border bg-background p-3">
-                          <div className="flex items-center justify-between gap-2">
-                            <code className="truncate text-sm font-medium">{tokenUrl}</code>
-                            <div className="flex shrink-0 gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => setIsEditingHandle(true)}
-                                className="h-8 w-8"
-                                title="Edit URL"
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={handleCopyTokenUrl}
-                                className="h-8 gap-2"
-                              >
-                                {copiedToken ? (
-                                  <Check className="h-4 w-4" />
-                                ) : (
-                                  <Copy className="h-4 w-4" />
-                                )}
-                                {copiedToken ? 'Copied!' : 'Copy'}
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <div className="flex items-center gap-4 text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <Eye className="h-4 w-4" />
-                            {shareToken.viewCount} views
-                          </span>
-                          {shareToken.expiresAt && (
-                            <span>
-                              Expires: {new Date(shareToken.expiresAt).toLocaleDateString()}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={generateShareToken}
-                            disabled={isGeneratingToken}
-                            className="h-8 gap-1"
-                          >
-                            <RefreshCw
-                              className={`h-3 w-3 ${isGeneratingToken ? 'animate-spin' : ''}`}
-                            />
-                            New Link
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={revokeShareToken}
-                            className="h-8 gap-1 text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                            Revoke
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      <div className="rounded-lg border border-dashed bg-muted/50 p-4 text-center">
-                        <Key className="mx-auto h-8 w-8 text-muted-foreground" />
-                        <p className="mt-2 text-sm text-muted-foreground">
-                          Generate a share link to let others view your unlisted profile.
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="flex-1 rounded-lg border bg-background p-3">
-                          <div className="flex items-center justify-between gap-2">
-                            <code className="truncate text-sm text-muted-foreground">
-                              {publicUrl}
-                            </code>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setIsEditingHandle(true)}
-                              className="h-8 w-8 shrink-0"
-                              title="Edit URL"
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                      <Button
-                        onClick={generateShareToken}
-                        disabled={isGeneratingToken}
-                        className="w-full gap-2"
-                      >
-                        {isGeneratingToken ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Key className="h-4 w-4" />
-                        )}
-                        Generate Share Link
-                      </Button>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <>
-                  {/* Public mode - regular sharing */}
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1 rounded-lg border bg-background p-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <code className="text-sm font-medium">{publicUrl}</code>
-                        <div className="flex shrink-0 gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setIsEditingHandle(true)}
-                            className="h-8 w-8"
-                            title="Edit URL"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={handleCopy}
-                            className="h-8 gap-2"
-                          >
-                            {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                            {copied ? 'Copied!' : 'Copy'}
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )}
-            </>
-          )}
-
-          {/* Status badge and preview button - show for non-draft */}
-          {profile.status !== 'DRAFT' && (
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" asChild className="gap-2">
-                <a
-                  href={profile.status === 'PRIVATE' && tokenUrl ? tokenUrl : publicUrl}
-                  target="_blank"
-                  rel="noopener"
-                >
-                  <Eye className="h-4 w-4" />
-                  Preview
-                  <ExternalLink className="h-3 w-3" />
-                </a>
+          </div>
+          {/* Actions row */}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <Button variant="outline" size="sm" asChild className="gap-2">
+              <a href={getPortfolioUrl(profile.handle)} target="_blank" rel="noopener">
+                <Eye className="h-4 w-4" />
+                Preview
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            </Button>
+            <div className="flex gap-1.5">
+              <Button
+                variant={portfolioVisibility === 'PUBLIC' ? 'default' : 'outline'}
+                size="sm"
+                className="h-8 gap-1.5 text-xs"
+                onClick={() => handleVisibilityChange('portfolio', 'PUBLIC')}
+                disabled={savingVisibility}
+              >
+                <Globe className="h-3 w-3" />
+                Public
               </Button>
-              <Badge variant="secondary" className="gap-1.5 px-3 py-1.5">
-                <StatusIcon className={`h-3.5 w-3.5 ${currentStatus.color}`} />
-                {currentStatus.label}
-              </Badge>
+              <Button
+                variant={portfolioVisibility === 'UNLISTED' ? 'default' : 'outline'}
+                size="sm"
+                className="h-8 gap-1.5 text-xs"
+                onClick={() => handleVisibilityChange('portfolio', 'UNLISTED')}
+                disabled={savingVisibility}
+              >
+                <Lock className="h-3 w-3" />
+                Unlisted
+              </Button>
+              <Button
+                variant={portfolioVisibility === 'PRIVATE' ? 'default' : 'outline'}
+                size="sm"
+                className="h-8 gap-1.5 text-xs"
+                onClick={() => handleVisibilityChange('portfolio', 'PRIVATE')}
+                disabled={savingVisibility}
+              >
+                <EyeOff className="h-3 w-3" />
+                Private
+              </Button>
             </div>
-          )}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {portfolioVisibility === 'PUBLIC'
+              ? 'Anyone can view your portfolio.'
+              : portfolioVisibility === 'UNLISTED'
+                ? 'Only people with a share link can view your portfolio.'
+                : 'Only you can view your portfolio. No one else has access.'}
+          </p>
         </CardContent>
       </Card>
 
-      {/* Visibility Settings */}
+      {/* Resume Card */}
+      <Card className="overflow-hidden border-amber-500/20">
+        {/* Cropped iframe snapshot of resume page */}
+        <div className="relative h-[220px] w-full overflow-hidden bg-muted">
+          {/* Accent top bar */}
+          <div className="absolute inset-x-0 top-0 z-20 h-1 bg-gradient-to-r from-amber-400 via-orange-500 to-red-500" />
+          {/*
+            Zoom into the center content, skip nav/top bars:
+            - Scale the page to 50% so more content is visible
+            - Shift up to skip the navbar (~120px at full scale = ~60px at 50%)
+            - Shift left to center the max-w-5xl content
+          */}
+          <div
+            className="pointer-events-none absolute left-1/2 top-0"
+            style={{
+              width: '1024px',
+              height: '1400px',
+              transform: 'scale(0.65) translate(-50%, -140px)',
+              transformOrigin: 'top left',
+            }}
+          >
+            <iframe
+              src={`/u/${profile.handle}/resume`}
+              title="Resume preview"
+              className="h-full w-full border-0"
+              tabIndex={-1}
+              loading="lazy"
+            />
+          </div>
+          {/* Gradient fade at bottom */}
+          <div className="absolute inset-x-0 bottom-0 z-10 h-16 bg-gradient-to-t from-background to-transparent" />
+          {/* Overlay badge */}
+          <div className="absolute left-3 top-3 z-20">
+            <Badge variant="secondary" className="gap-1.5 bg-background/80 backdrop-blur-sm">
+              <FileText className="h-3 w-3 text-amber-600" />
+              Resume
+            </Badge>
+          </div>
+          {/* Visibility badge */}
+          <div className="absolute right-3 top-3 z-20">
+            <Badge variant="secondary" className="gap-1.5 bg-background/80 backdrop-blur-sm">
+              {resumeVisibility === 'PUBLIC' ? (
+                <Globe className="h-3 w-3 text-green-600" />
+              ) : resumeVisibility === 'UNLISTED' ? (
+                <Lock className="h-3 w-3 text-yellow-600" />
+              ) : (
+                <EyeOff className="h-3 w-3 text-muted-foreground" />
+              )}
+              {resumeVisibility === 'PUBLIC'
+                ? 'Public'
+                : resumeVisibility === 'UNLISTED'
+                  ? 'Unlisted'
+                  : 'Private'}
+            </Badge>
+          </div>
+        </div>
+
+        <CardContent className="space-y-4 pt-5">
+          {/* URL row */}
+          <div className="flex items-center gap-3">
+            <div className="flex-1 rounded-lg border bg-background p-3">
+              <div className="flex items-center justify-between gap-2">
+                <code className="truncate text-sm font-medium">{getResumeUrl(profile.handle)}</code>
+                <div className="flex shrink-0 gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(getResumeUrl(profile.handle));
+                      setCopiedResume(true);
+                      setTimeout(() => setCopiedResume(false), 2000);
+                    }}
+                    className="h-8 gap-2"
+                  >
+                    {copiedResume ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    {copiedResume ? 'Copied!' : 'Copy'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+          {/* Actions row */}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <Button variant="outline" size="sm" asChild className="gap-2">
+              <a href={getResumeUrl(profile.handle)} target="_blank" rel="noopener">
+                <Eye className="h-4 w-4" />
+                Preview
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            </Button>
+            <div className="flex gap-1.5">
+              <Button
+                variant={resumeVisibility === 'PUBLIC' ? 'default' : 'outline'}
+                size="sm"
+                className="h-8 gap-1.5 text-xs"
+                onClick={() => handleVisibilityChange('resume', 'PUBLIC')}
+                disabled={savingVisibility}
+              >
+                <Globe className="h-3 w-3" />
+                Public
+              </Button>
+              <Button
+                variant={resumeVisibility === 'UNLISTED' ? 'default' : 'outline'}
+                size="sm"
+                className="h-8 gap-1.5 text-xs"
+                onClick={() => handleVisibilityChange('resume', 'UNLISTED')}
+                disabled={savingVisibility}
+              >
+                <Lock className="h-3 w-3" />
+                Unlisted
+              </Button>
+              <Button
+                variant={resumeVisibility === 'PRIVATE' ? 'default' : 'outline'}
+                size="sm"
+                className="h-8 gap-1.5 text-xs"
+                onClick={() => handleVisibilityChange('resume', 'PRIVATE')}
+                disabled={savingVisibility}
+              >
+                <EyeOff className="h-3 w-3" />
+                Private
+              </Button>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {resumeVisibility === 'PUBLIC'
+              ? 'Anyone can view your resume. A direct link appears on your portfolio.'
+              : resumeVisibility === 'UNLISTED'
+                ? 'Only people with a share link can view your resume. Visitors see a \"Request Access\" option on your portfolio.'
+                : 'Only you can view your resume. No one else has access.'}
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* Links Card */}
       <Card>
         <CardHeader>
-          <CardTitle>Profile Visibility</CardTitle>
-          <CardDescription>Control who can view your profile</CardDescription>
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-500/10">
+              <Link2 className="h-4 w-4 text-blue-600" />
+            </div>
+            <div className="flex-1">
+              <CardTitle className="text-base">Links</CardTitle>
+              <CardDescription>Your links page at {profile.handle}.follio.me/l</CardDescription>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-3 sm:grid-cols-3">
-            {STATUS_OPTIONS.map((option) => {
-              const Icon = option.icon;
-              const isSelected = profile.status === option.value;
-
-              return (
-                <button
-                  key={option.value}
-                  onClick={() => handleStatusChange(option.value)}
-                  className={`relative flex flex-col items-center gap-2 rounded-lg border-2 p-4 transition-all hover:border-primary/50 ${
-                    isSelected ? 'border-primary bg-primary/5' : 'border-muted'
-                  }`}
-                >
-                  {isSelected && (
-                    <Badge className="absolute -right-2 -top-2 h-5 w-5 rounded-full p-0">
-                      <Check className="h-3 w-3" />
-                    </Badge>
-                  )}
-                  <Icon
-                    className={`h-6 w-6 ${isSelected ? 'text-primary' : 'text-muted-foreground'}`}
-                  />
-                  <div className="text-center">
-                    <div className="font-medium">{option.label}</div>
-                    <div className="text-xs text-muted-foreground">{option.description}</div>
-                  </div>
-                </button>
-              );
-            })}
+          <div className="flex gap-2">
+            <Button
+              variant={linksVisibility === 'PUBLIC' ? 'default' : 'outline'}
+              size="sm"
+              className="gap-1.5"
+              onClick={() => handleVisibilityChange('links', 'PUBLIC')}
+              disabled={savingVisibility}
+            >
+              <Globe className="h-3.5 w-3.5" />
+              Public
+            </Button>
+            <Button
+              variant={linksVisibility === 'UNLISTED' ? 'default' : 'outline'}
+              size="sm"
+              className="gap-1.5"
+              onClick={() => handleVisibilityChange('links', 'UNLISTED')}
+              disabled={savingVisibility}
+            >
+              <Lock className="h-3.5 w-3.5" />
+              Unlisted
+            </Button>
+            <Button
+              variant={linksVisibility === 'PRIVATE' ? 'default' : 'outline'}
+              size="sm"
+              className="gap-1.5"
+              onClick={() => handleVisibilityChange('links', 'PRIVATE')}
+              disabled={savingVisibility}
+            >
+              <EyeOff className="h-3.5 w-3.5" />
+              Private
+            </Button>
           </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            {linksVisibility === 'PUBLIC'
+              ? 'Anyone can view your links page.'
+              : linksVisibility === 'UNLISTED'
+                ? 'Only people with a share link can view your links page.'
+                : 'Only you can view your links page. No one else has access.'}
+          </p>
         </CardContent>
       </Card>
 

@@ -1,22 +1,16 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Clock, FileText, Grid3X3, UserCheck } from 'lucide-react';
+import { Clock, Grid3X3, UserCheck } from 'lucide-react';
 
-import type { ProfileView } from '@/types';
+import type { PortfolioView } from '@/types';
 
 interface ViewSwitcherProps {
-  currentView: ProfileView;
-  onViewChange: (view: ProfileView) => void;
+  currentView: PortfolioView;
+  onViewChange: (view: PortfolioView) => void;
 }
 
 const VIEWS = [
-  {
-    id: 'resume' as const,
-    label: 'Resume',
-    icon: FileText,
-    description: 'Traditional resume format',
-  },
   {
     id: 'portfolio' as const,
     label: 'Portfolio',

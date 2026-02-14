@@ -28,6 +28,8 @@ import type {
   YouTubeVideo,
 } from '@prisma/client';
 
+export type { ContentVisibility } from '@prisma/client';
+
 // ===========================================
 // PROFILE TYPES
 // ===========================================
@@ -84,27 +86,27 @@ export interface PublicContactInfo {
 // ===========================================
 
 /**
- * Available profile view types
+ * Portfolio sub-view types (displayed within /u/[handle])
+ * Resume is now a separate route: /u/[handle]/resume
  */
-export type ProfileView = 'resume' | 'portfolio' | 'timeline' | 'snapshot';
+export type PortfolioView = 'portfolio' | 'timeline' | 'snapshot';
+
+/**
+ * Legacy: kept for backward compat but prefer PortfolioView
+ */
+export type ProfileView = PortfolioView;
 
 /**
  * View configuration
  */
 export interface ViewConfig {
-  id: ProfileView;
+  id: PortfolioView;
   name: string;
   description: string;
   icon: string;
 }
 
-export const PROFILE_VIEWS: ViewConfig[] = [
-  {
-    id: 'resume',
-    name: 'Resume',
-    description: 'Traditional resume format',
-    icon: 'FileText',
-  },
+export const PORTFOLIO_VIEWS: ViewConfig[] = [
   {
     id: 'portfolio',
     name: 'Portfolio',
@@ -124,6 +126,9 @@ export const PROFILE_VIEWS: ViewConfig[] = [
     icon: 'Users',
   },
 ];
+
+/** @deprecated Use PORTFOLIO_VIEWS instead */
+export const PROFILE_VIEWS = PORTFOLIO_VIEWS;
 
 // ===========================================
 // IMPORT TYPES

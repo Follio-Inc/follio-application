@@ -255,7 +255,7 @@ export default async function OGImage({ params }: { params: Promise<{ handle: st
           <span style={{ fontWeight: 700, color: '#94a3b8' }}>Follio</span>
           <span style={{ color: '#64748b', marginLeft: 8 }}>Digital Resume Platform</span>
         </div>
-        <div style={{ fontSize: 14, color: '#475569', display: 'flex' }}>follio.dev/u/{handle}</div>
+        <div style={{ fontSize: 14, color: '#475569', display: 'flex' }}>{handle}.follio.me</div>
       </div>
     </div>,
     { ...size }

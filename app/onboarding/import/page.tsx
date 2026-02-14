@@ -498,7 +498,22 @@ export default function OnboardingImportPage() {
         const savedState = sessionStorage.getItem(storageKey);
         if (savedState) {
           const parsed = JSON.parse(savedState);
-          if (parsed.imports) setImports(parsed.imports);
+          if (parsed.imports) {
+            let restoredImports = parsed.imports;
+            // Fix: If resume status is 'added' but parsing promise can't be restored,
+            // update status based on whether we have imported data
+            if (restoredImports.resume?.status === 'added') {
+              restoredImports = {
+                ...restoredImports,
+                resume: {
+                  ...restoredImports.resume,
+                  status: parsed.importedData?.resume ? 'success' : 'idle',
+                  message: parsed.importedData?.resume ? 'Resume imported' : undefined,
+                },
+              };
+            }
+            setImports(restoredImports);
+          }
           if (parsed.importedData) setImportedData(parsed.importedData);
           if (parsed.githubUsername) setGithubUsername(parsed.githubUsername);
           if (parsed.resumeFileName) setResumeFileName(parsed.resumeFileName);
@@ -2470,13 +2485,13 @@ export default function OnboardingImportPage() {
                       transition={{ delay: 0.7 }}
                       className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm"
                     >
-                      {imports.resume.status === 'success' ? (
-                        <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
-                      ) : (
+                      {imports.resume.status === 'added' && resumeParsingPromise ? (
                         <Loader2 className="h-4 w-4 shrink-0 animate-spin text-amber-500" />
+                      ) : (
+                        <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
                       )}
                       <span className="flex-1">Resume: {resumeFileName}</span>
-                      {imports.resume.status === 'added' && (
+                      {imports.resume.status === 'added' && resumeParsingPromise && (
                         <span className="text-xs text-amber-500">Processing...</span>
                       )}
                     </motion.div>

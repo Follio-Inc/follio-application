@@ -23,6 +23,11 @@ export async function GET(
       return NextResponse.json({ error: 'Profile is not public' }, { status: 403 });
     }
 
+    // Resume exports respect resume-specific visibility
+    if (profile.resumeVisibility === 'UNLISTED') {
+      return NextResponse.json({ error: 'Resume is unlisted' }, { status: 403 });
+    }
+
     const pdfBuffer = await generateResumePDF(profile);
     const uint8 = new Uint8Array(pdfBuffer);
 

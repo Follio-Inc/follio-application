@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getProfileByHandle } from '@/services/profile.service';
 import { toJSONResume } from '@/services/export.service';
+import { getProfileByHandle } from '@/services/profile.service';
 
 /**
  * GET /api/export/[handle]/json
@@ -22,6 +22,11 @@ export async function GET(
     // Only allow export of public profiles (or owner's own profile)
     if (profile.status !== 'PUBLIC') {
       return NextResponse.json({ error: 'Profile is not public' }, { status: 403 });
+    }
+
+    // Resume exports respect resume-specific visibility
+    if (profile.resumeVisibility === 'UNLISTED') {
+      return NextResponse.json({ error: 'Resume is unlisted' }, { status: 403 });
     }
 
     const jsonResume = toJSONResume(profile);

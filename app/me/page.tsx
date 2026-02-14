@@ -1,4 +1,5 @@
 import { db } from '@/lib/db';
+import { getPortfolioPath } from '@/lib/url';
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 
@@ -28,5 +29,5 @@ export default async function MyProfilePage() {
     redirect('/onboarding');
   }
 
-  redirect(`/u/${user.profile.handle}`);
+  redirect(getPortfolioPath(user.profile.handle));
 }

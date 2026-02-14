@@ -30,6 +30,9 @@ model Profile {
   userId                 String                 @unique
   handle                 String                 @unique
   status                 ProfileStatus          @default(DRAFT)
+  resumeVisibility       ContentVisibility      @default(UNLISTED)
+  portfolioVisibility    ContentVisibility      @default(PUBLIC)
+  linksVisibility        ContentVisibility      @default(PUBLIC)
   firstName              String?
   firstNameSource        DataSource             @default(MANUAL)
   lastName               String?
@@ -43,6 +46,7 @@ model Profile {
   avatarUrlSource        DataSource             @default(MANUAL)
   location               String?
   locationSource         DataSource             @default(MANUAL)
+  unlistedKey            String?                @unique @default(cuid())
   createdAt              DateTime               @default(now())
   updatedAt              DateTime               @updatedAt
   publishedAt            DateTime?
@@ -564,6 +568,12 @@ enum MainPurpose {
 enum ProfileStatus {
   DRAFT
   PUBLIC
+  PRIVATE
+}
+
+enum ContentVisibility {
+  PUBLIC
+  UNLISTED
   PRIVATE
 }
 

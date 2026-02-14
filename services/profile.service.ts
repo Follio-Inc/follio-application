@@ -4,7 +4,8 @@
  */
 
 import { db } from '@/lib/db';
-import type { FullProfile, PublicProfile } from '@/types';
+import type { ContentVisibility, FullProfile, PublicProfile } from '@/types';
+import crypto from 'crypto';
 
 /**
  * Get a full profile by handle with all relations
@@ -151,6 +152,78 @@ export async function updateProfileStatus(
 }
 
 /**
+ * Update resume visibility (PUBLIC, UNLISTED, or PRIVATE)
+ */
+export async function updateResumeVisibility(
+  profileId: string,
+  visibility: ContentVisibility
+): Promise<void> {
+  await db.profile.update({
+    where: { id: profileId },
+    data: { resumeVisibility: visibility },
+  });
+}
+
+/**
+ * Update portfolio visibility (PUBLIC, UNLISTED, or PRIVATE)
+ */
+export async function updatePortfolioVisibility(
+  profileId: string,
+  visibility: ContentVisibility
+): Promise<void> {
+  await db.profile.update({
+    where: { id: profileId },
+    data: { portfolioVisibility: visibility },
+  });
+}
+
+/**
+ * Get resume visibility for a profile
+ */
+export async function getResumeVisibility(handle: string): Promise<ContentVisibility | null> {
+  const profile = await db.profile.findUnique({
+    where: { handle },
+    select: { resumeVisibility: true },
+  });
+  return profile?.resumeVisibility ?? null;
+}
+
+/**
+ * Get portfolio visibility for a profile
+ */
+export async function getPortfolioVisibility(handle: string): Promise<ContentVisibility | null> {
+  const profile = await db.profile.findUnique({
+    where: { handle },
+    select: { portfolioVisibility: true },
+  });
+  return profile?.portfolioVisibility ?? null;
+}
+
+/**
+ * Update links visibility (PUBLIC, UNLISTED, or PRIVATE)
+ */
+export async function updateLinksVisibility(
+  profileId: string,
+  visibility: ContentVisibility
+): Promise<void> {
+  await db.profile.update({
+    where: { id: profileId },
+    data: { linksVisibility: visibility },
+  });
+}
+
+/**
+ * Get links visibility for a profile
+ */
+export async function getLinksVisibility(handle: string): Promise<ContentVisibility | null> {
+  const profile = await db.profile.findUnique({
+    where: { handle },
+    select: { linksVisibility: true },
+  });
+  return profile?.linksVisibility ?? null;
+}
+
+/**
  * Get profile statistics
  */
 export async function getProfileStats(profileId: string) {
@@ -167,4 +240,66 @@ export async function getProfileStats(profileId: string) {
     skills: skillCount,
     educations: educationCount,
   };
+}
+
+/**
+ * Validate an unlisted key for a profile
+ * Returns true if the key matches the profile's unlisted key
+ */
+export async function validateUnlistedKey(handle: string, key: string): Promise<boolean> {
+  if (!key) return false;
+
+  const profile = await db.profile.findUnique({
+    where: { handle },
+    select: { unlistedKey: true },
+  });
+
+  if (!profile?.unlistedKey) return false;
+  return profile.unlistedKey === key;
+}
+
+/**
+ * Get or create an unlisted key for a profile
+ */
+export async function getOrCreateUnlistedKey(profileId: string): Promise<string> {
+  const profile = await db.profile.findUnique({
+    where: { id: profileId },
+    select: { unlistedKey: true },
+  });
+
+  if (profile?.unlistedKey) return profile.unlistedKey;
+
+  // Generate a new key using cuid (via Prisma default)
+  const updated = await db.profile.update({
+    where: { id: profileId },
+    data: { unlistedKey: crypto.randomBytes(16).toString('hex') },
+    select: { unlistedKey: true },
+  });
+
+  return updated.unlistedKey!;
+}
+
+/**
+ * Regenerate the unlisted key for a profile (invalidates old links)
+ */
+export async function regenerateUnlistedKey(profileId: string): Promise<string> {
+  const updated = await db.profile.update({
+    where: { id: profileId },
+    data: { unlistedKey: crypto.randomBytes(16).toString('hex') },
+    select: { unlistedKey: true },
+  });
+
+  return updated.unlistedKey!;
+}
+
+/**
+ * Get the unlisted key for a profile (owner only)
+ */
+export async function getUnlistedKey(profileId: string): Promise<string | null> {
+  const profile = await db.profile.findUnique({
+    where: { id: profileId },
+    select: { unlistedKey: true },
+  });
+
+  return profile?.unlistedKey ?? null;
 }

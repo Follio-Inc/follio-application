@@ -6,19 +6,20 @@ import { useState } from 'react';
 
 import { ProfileNavbar } from '@/components/profile-navbar';
 
+import { ResumeAccessBanner } from './resume-access-banner';
 import { ViewSwitcher } from './view-switcher';
-import { CleanResumeView } from './views/clean-resume-view';
 import { PortfolioView } from './views/portfolio-view';
 import { SnapshotView } from './views/snapshot-view';
 import { TimelineView } from './views/timeline-view';
 
-import type { ProfileView, PublicProfile } from '@/types';
+import type { PortfolioView as PortfolioViewType, PublicProfile } from '@/types';
 
 interface ProfileViewerProps {
   profile: PublicProfile;
-  initialView: ProfileView;
+  initialView: PortfolioViewType;
   authState: 'owner' | 'authenticated' | 'anonymous';
   profileHandle: string;
+  resumeVisibility: 'PUBLIC' | 'UNLISTED' | 'PRIVATE';
 }
 
 export function ProfileViewer({
@@ -26,10 +27,11 @@ export function ProfileViewer({
   initialView,
   authState,
   profileHandle,
+  resumeVisibility,
 }: ProfileViewerProps) {
-  const [currentView, setCurrentView] = useState<ProfileView>(initialView);
+  const [currentView, setCurrentView] = useState<PortfolioViewType>(initialView);
 
-  const handleViewChange = (view: ProfileView) => {
+  const handleViewChange = (view: PortfolioViewType) => {
     setCurrentView(view);
     // Update URL without navigation
     window.history.replaceState(null, '', `?view=${view}`);
@@ -41,6 +43,13 @@ export function ProfileViewer({
 
       <ViewSwitcher currentView={currentView} onViewChange={handleViewChange} />
 
+      {/* Resume cross-link banner */}
+      <ResumeAccessBanner
+        profileHandle={profileHandle}
+        resumeVisibility={resumeVisibility}
+        authState={authState}
+      />
+
       <AnimatePresence mode="wait">
         <motion.main
           key={currentView}
@@ -50,7 +59,6 @@ export function ProfileViewer({
           transition={{ duration: 0.3 }}
           className="container max-w-5xl py-8 pb-24"
         >
-          {currentView === 'resume' && <CleanResumeView profile={profile} />}
           {currentView === 'portfolio' && <PortfolioView profile={profile} />}
           {currentView === 'timeline' && <TimelineView profile={profile} />}
           {currentView === 'snapshot' && <SnapshotView profile={profile} />}

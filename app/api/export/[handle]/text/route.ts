@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getProfileByHandle } from '@/services/profile.service';
 import { toPlainText } from '@/services/export.service';
+import { getProfileByHandle } from '@/services/profile.service';
 
 /**
  * GET /api/export/[handle]/text
@@ -21,6 +21,11 @@ export async function GET(
 
     if (profile.status !== 'PUBLIC') {
       return NextResponse.json({ error: 'Profile is not public' }, { status: 403 });
+    }
+
+    // Resume exports respect resume-specific visibility
+    if (profile.resumeVisibility === 'UNLISTED') {
+      return NextResponse.json({ error: 'Resume is unlisted' }, { status: 403 });
     }
 
     const plainText = toPlainText(profile);

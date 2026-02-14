@@ -17,6 +17,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { getPortfolioPath, getPortfolioUrl } from '@/lib/url';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -67,9 +68,7 @@ export function UserMenu() {
 
   const email = user.emailAddresses[0]?.emailAddress || '';
 
-  const follioUrl = handle
-    ? `${typeof window !== 'undefined' ? window.location.origin : ''}/u/${handle}`
-    : null;
+  const follioUrl = handle ? getPortfolioUrl(handle) : null;
 
   const handleCopyLink = async () => {
     if (!follioUrl) return;
@@ -94,7 +93,7 @@ export function UserMenu() {
   return (
     <div className="flex items-center gap-2">
       {handle && (
-        <Link href={`/u/${handle}`}>
+        <Link href={getPortfolioPath(handle)}>
           <Button variant="outline" size="sm" className="gap-2">
             <Eye className="h-4 w-4" />
             <span className="hidden sm:inline">Your Profile</span>
@@ -169,7 +168,7 @@ export function UserMenu() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <span className="block truncate font-mono text-[13px] font-medium tracking-tight text-foreground">
-                        follio.dev/u/{handle}
+                        {handle}.follio.me
                       </span>
                       <span className="text-[11px] text-muted-foreground">
                         {profileStatus === 'PUBLIC' ? 'Public profile' : 'Private link'}
@@ -207,7 +206,7 @@ export function UserMenu() {
             {handle && (
               <DropdownMenuItem asChild>
                 <Link
-                  href={`/u/${handle}`}
+                  href={getPortfolioPath(handle)}
                   className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 transition-colors"
                 >
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/50">

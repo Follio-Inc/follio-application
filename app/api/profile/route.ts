@@ -248,6 +248,9 @@ export async function PATCH(request: NextRequest) {
         location: body.location,
         avatarUrl: body.avatarUrl,
         status: body.status,
+        ...(body.resumeVisibility && { resumeVisibility: body.resumeVisibility }),
+        ...(body.portfolioVisibility && { portfolioVisibility: body.portfolioVisibility }),
+        ...(body.linksVisibility && { linksVisibility: body.linksVisibility }),
         updatedAt: new Date(),
       },
     });

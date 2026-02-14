@@ -27,6 +27,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { getPortfolioPath } from '@/lib/url';
 
 import { ImportDataDialog } from './components/import-data-dialog';
 import { UnsavedChangesDialog } from './components/unsaved-changes-dialog';
@@ -401,7 +402,7 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
           <Badge variant={profile.status === 'PUBLIC' ? 'default' : 'secondary'}>
             {profile.status.toLowerCase()}
           </Badge>
-          <Link href={`/u/${profile.handle}`} target="_blank">
+          <Link href={getPortfolioPath(profile.handle)} target="_blank">
             <Button variant="outline" size="sm" className="gap-2">
               <Eye className="h-4 w-4" />
               Preview
