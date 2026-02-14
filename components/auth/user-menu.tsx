@@ -17,7 +17,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { getPortfolioPath, getPortfolioUrl } from '@/lib/url';
+import { getDisplayHost, getPortfolioPath, getPortfolioUrl } from '@/lib/url';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -168,7 +168,7 @@ export function UserMenu() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <span className="block truncate font-mono text-[13px] font-medium tracking-tight text-foreground">
-                        {handle}.follio.me
+                        {getDisplayHost(handle)}
                       </span>
                       <span className="text-[11px] text-muted-foreground">
                         {profileStatus === 'PUBLIC' ? 'Public profile' : 'Private link'}

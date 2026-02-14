@@ -6,7 +6,6 @@ import { useState } from 'react';
 
 import { ProfileNavbar } from '@/components/profile-navbar';
 
-import { ResumeAccessBanner } from './resume-access-banner';
 import { ViewSwitcher } from './view-switcher';
 import { PortfolioView } from './views/portfolio-view';
 import { SnapshotView } from './views/snapshot-view';
@@ -43,13 +42,6 @@ export function ProfileViewer({
 
       <ViewSwitcher currentView={currentView} onViewChange={handleViewChange} />
 
-      {/* Resume cross-link banner */}
-      <ResumeAccessBanner
-        profileHandle={profileHandle}
-        resumeVisibility={resumeVisibility}
-        authState={authState}
-      />
-
       <AnimatePresence mode="wait">
         <motion.main
           key={currentView}
@@ -59,7 +51,14 @@ export function ProfileViewer({
           transition={{ duration: 0.3 }}
           className="container max-w-5xl py-8 pb-24"
         >
-          {currentView === 'portfolio' && <PortfolioView profile={profile} />}
+          {currentView === 'portfolio' && (
+            <PortfolioView
+              profile={profile}
+              profileHandle={profileHandle}
+              resumeVisibility={resumeVisibility}
+              authState={authState}
+            />
+          )}
           {currentView === 'timeline' && <TimelineView profile={profile} />}
           {currentView === 'snapshot' && <SnapshotView profile={profile} />}
         </motion.main>

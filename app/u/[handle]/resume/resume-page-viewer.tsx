@@ -3,7 +3,6 @@
 import Link from 'next/link';
 
 import { ProfileNavbar } from '@/components/profile-navbar';
-import { PortfolioLinkBanner } from '../portfolio-link-banner';
 import { CleanResumeView } from '../views/clean-resume-view';
 
 import type { PublicProfile } from '@/types';
@@ -19,11 +18,8 @@ export function ResumePageViewer({ profile, authState, profileHandle }: ResumePa
     <div className="min-h-screen bg-gradient-to-b from-muted/30 to-background">
       <ProfileNavbar authState={authState} profileHandle={profileHandle} />
 
-      {/* Portfolio cross-link banner */}
-      <PortfolioLinkBanner profileHandle={profileHandle} />
-
       <main className="container max-w-5xl py-8 pb-24">
-        <CleanResumeView profile={profile} />
+        <CleanResumeView profile={profile} profileHandle={profileHandle} />
       </main>
 
       <footer className="border-t bg-background py-6">

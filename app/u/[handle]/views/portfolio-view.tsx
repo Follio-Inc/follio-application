@@ -8,11 +8,13 @@ import {
   Briefcase,
   Calendar,
   ExternalLink,
+  FileText,
   GitFork,
   Github,
   Globe,
   GraduationCap,
   Layers,
+  Lock,
   Mail,
   MapPin,
   Pin,
@@ -22,16 +24,30 @@ import {
   TrendingUp,
 } from 'lucide-react';
 
+import { useState } from 'react';
+
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 
+import { getResumePath } from '@/lib/url';
 import { formatDate, formatDateRange } from '@/lib/utils';
 import type { PublicProfile } from '@/types';
 
 interface PortfolioViewProps {
   profile: PublicProfile;
+  profileHandle: string;
+  resumeVisibility: 'PUBLIC' | 'UNLISTED' | 'PRIVATE';
+  authState: 'owner' | 'authenticated' | 'anonymous';
 }
 
 // ─── Section wrapper with stagger animation ───
@@ -73,8 +89,17 @@ function SectionHeading({
   );
 }
 
-export function PortfolioView({ profile }: PortfolioViewProps) {
+export function PortfolioView({
+  profile,
+  profileHandle,
+  resumeVisibility,
+  authState,
+}: PortfolioViewProps) {
   const initials = `${profile.firstName?.[0] || ''}${profile.lastName?.[0] || ''}`;
+
+  // Determine whether to show a resume link/button
+  const showResumeLink = authState === 'owner' || resumeVisibility === 'PUBLIC';
+  const showResumeRequest = resumeVisibility === 'UNLISTED' && authState !== 'owner';
 
   // ─── Data preparation ───
   const visibleProjects =
@@ -130,6 +155,20 @@ export function PortfolioView({ profile }: PortfolioViewProps) {
             <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-primary/5 blur-3xl" />
             <div className="absolute -bottom-20 -left-20 h-48 w-48 rounded-full bg-primary/5 blur-3xl" />
           </div>
+
+          {/* View Resume button — top right */}
+          {showResumeLink && (
+            <a
+              href={getResumePath(profileHandle)}
+              className="absolute right-4 top-4 z-10 md:right-6 md:top-6"
+            >
+              <Button variant="outline" size="sm" className="gap-1.5 text-xs shadow-sm">
+                <FileText className="h-3.5 w-3.5" />
+                View Resume
+              </Button>
+            </a>
+          )}
+          {showResumeRequest && <ResumeRequestButton profileHandle={profileHandle} />}
 
           <div className="relative flex flex-col items-center gap-8 md:flex-row md:items-start md:gap-12">
             {/* Avatar */}
@@ -1042,5 +1081,95 @@ export function PortfolioView({ profile }: PortfolioViewProps) {
           </div>
         )}
     </div>
+  );
+}
+
+// ─── Resume Request Button (for UNLISTED resumes) ───
+
+function ResumeRequestButton({ profileHandle }: { profileHandle: string }) {
+  const [requestSent, setRequestSent] = useState(false);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [message, setMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    // TODO: Implement actual request access API
+    console.log('Request access for', profileHandle, { name, email, message });
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    setIsSubmitting(false);
+    setRequestSent(true);
+  };
+
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          className="absolute right-4 top-4 z-10 gap-1.5 text-xs shadow-sm md:right-6 md:top-6"
+          disabled={requestSent}
+        >
+          <Lock className="h-3.5 w-3.5" />
+          {requestSent ? 'Request Sent' : 'Request Resume'}
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Request Resume Access</DialogTitle>
+          <DialogDescription>
+            This resume is unlisted. Send a request to the profile owner to get access.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+          <div className="space-y-2">
+            <label htmlFor="req-name" className="text-sm font-medium">
+              Your Name
+            </label>
+            <input
+              id="req-name"
+              type="text"
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              placeholder="John Doe"
+            />
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="req-email" className="text-sm font-medium">
+              Your Email
+            </label>
+            <input
+              id="req-email"
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              placeholder="john@company.com"
+            />
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="req-message" className="text-sm font-medium">
+              Message (optional)
+            </label>
+            <textarea
+              id="req-message"
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              rows={3}
+              className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              placeholder="I'd like to view your resume for a potential opportunity..."
+            />
+          </div>
+          <Button type="submit" className="w-full" disabled={isSubmitting}>
+            {isSubmitting ? 'Sending...' : 'Send Request'}
+          </Button>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

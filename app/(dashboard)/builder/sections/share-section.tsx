@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  AlertTriangle,
   Check,
   Copy,
   Download,
@@ -12,21 +11,15 @@ import {
   FileText,
   Globe,
   Grid3X3,
-  Key,
   Link2,
-  Loader2,
   Lock,
-  Pencil,
   QrCode,
-  RefreshCw,
-  Trash2,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 
 import { getPortfolioUrl, getResumeUrl } from '@/lib/url';
 import type { Profile } from '@/types';
@@ -96,15 +89,12 @@ export function ShareSection({ profile, onUpdateAction }: ShareSectionProps) {
       | 'UNLISTED'
       | 'PRIVATE') || 'PUBLIC'
   );
-  const [linksVisibility, setLinksVisibility] = useState<'PUBLIC' | 'UNLISTED' | 'PRIVATE'>(
-    ((profile as Record<string, unknown>).linksVisibility as 'PUBLIC' | 'UNLISTED' | 'PRIVATE') ||
-      'PUBLIC'
-  );
   const [savingVisibility, setSavingVisibility] = useState(false);
   const [shareToken, setShareToken] = useState<ShareTokenData | null>(null);
   const [isLoadingToken, setIsLoadingToken] = useState(false);
   const [isGeneratingToken, setIsGeneratingToken] = useState(false);
   const [origin, setOrigin] = useState('');
+  const [unlistedKey, setUnlistedKey] = useState<string | null>(null);
   const qrRef = useRef<HTMLDivElement>(null);
 
   // Set origin on client side to avoid hydration mismatch
@@ -112,6 +102,34 @@ export function ShareSection({ profile, onUpdateAction }: ShareSectionProps) {
     setOrigin(window.location.origin);
   }, []);
 
+  // Fetch unlisted key when any visibility is UNLISTED
+  useEffect(() => {
+    if (portfolioVisibility === 'UNLISTED' || resumeVisibility === 'UNLISTED') {
+      fetchUnlistedKey();
+    }
+  }, [portfolioVisibility, resumeVisibility]);
+
+  const fetchUnlistedKey = async () => {
+    try {
+      const res = await fetch('/api/profile/unlisted-key');
+      if (res.ok) {
+        const data = await res.json();
+        setUnlistedKey(data.unlistedKey);
+      }
+    } catch (error) {
+      console.error('Failed to fetch unlisted key:', error);
+    }
+  };
+
+  // Compute URLs based on visibility
+  const portfolioUrl = getPortfolioUrl(
+    profile.handle,
+    portfolioVisibility === 'UNLISTED' ? unlistedKey : null
+  );
+  const resumeUrl = getResumeUrl(
+    profile.handle,
+    resumeVisibility === 'UNLISTED' ? unlistedKey : null
+  );
   const publicUrl = getPortfolioUrl(profile.handle);
 
   // Fetch share token on mount and when status changes to PRIVATE
@@ -256,27 +274,17 @@ export function ShareSection({ profile, onUpdateAction }: ShareSectionProps) {
   };
 
   const handleVisibilityChange = async (
-    type: 'resume' | 'portfolio' | 'links',
+    type: 'resume' | 'portfolio',
     value: 'PUBLIC' | 'UNLISTED' | 'PRIVATE'
   ) => {
-    const prev =
-      type === 'resume'
-        ? resumeVisibility
-        : type === 'portfolio'
-          ? portfolioVisibility
-          : linksVisibility;
+    const prev = type === 'resume' ? resumeVisibility : portfolioVisibility;
     if (type === 'resume') setResumeVisibility(value);
-    else if (type === 'portfolio') setPortfolioVisibility(value);
-    else setLinksVisibility(value);
+    else setPortfolioVisibility(value);
 
     setSavingVisibility(true);
     try {
       const payload =
-        type === 'resume'
-          ? { resumeVisibility: value }
-          : type === 'portfolio'
-            ? { portfolioVisibility: value }
-            : { linksVisibility: value };
+        type === 'resume' ? { resumeVisibility: value } : { portfolioVisibility: value };
       await fetch('/api/profile', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -285,8 +293,7 @@ export function ShareSection({ profile, onUpdateAction }: ShareSectionProps) {
     } catch (error) {
       console.error('Failed to update visibility:', error);
       if (type === 'resume') setResumeVisibility(prev);
-      else if (type === 'portfolio') setPortfolioVisibility(prev);
-      else setLinksVisibility(prev);
+      else setPortfolioVisibility(prev);
     } finally {
       setSavingVisibility(false);
     }
@@ -339,7 +346,12 @@ export function ShareSection({ profile, onUpdateAction }: ShareSectionProps) {
       ? `${getPortfolioUrl(profile.handle)}?token=${shareToken.token}`
       : null;
 
-  const qrCodeUrl = profile.status === 'PRIVATE' && tokenUrl ? tokenUrl : publicUrl;
+  const qrCodeUrl =
+    profile.status === 'PRIVATE' && tokenUrl
+      ? tokenUrl
+      : portfolioVisibility === 'UNLISTED' && unlistedKey
+        ? portfolioUrl
+        : publicUrl;
 
   const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(' ');
   const topSkills =
@@ -433,15 +445,13 @@ export function ShareSection({ profile, onUpdateAction }: ShareSectionProps) {
           <div className="flex items-center gap-3">
             <div className="flex-1 rounded-lg border bg-background p-3">
               <div className="flex items-center justify-between gap-2">
-                <code className="truncate text-sm font-medium">
-                  {getPortfolioUrl(profile.handle)}
-                </code>
+                <code className="truncate text-sm font-medium">{portfolioUrl}</code>
                 <div className="flex shrink-0 gap-1">
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={async () => {
-                      await navigator.clipboard.writeText(getPortfolioUrl(profile.handle));
+                      await navigator.clipboard.writeText(portfolioUrl);
                       setCopiedPortfolio(true);
                       setTimeout(() => setCopiedPortfolio(false), 2000);
                     }}
@@ -457,7 +467,7 @@ export function ShareSection({ profile, onUpdateAction }: ShareSectionProps) {
           {/* Actions row */}
           <div className="flex flex-wrap items-center justify-between gap-2">
             <Button variant="outline" size="sm" asChild className="gap-2">
-              <a href={getPortfolioUrl(profile.handle)} target="_blank" rel="noopener">
+              <a href={portfolioUrl} target="_blank" rel="noopener">
                 <Eye className="h-4 w-4" />
                 Preview
                 <ExternalLink className="h-3 w-3" />
@@ -568,13 +578,13 @@ export function ShareSection({ profile, onUpdateAction }: ShareSectionProps) {
           <div className="flex items-center gap-3">
             <div className="flex-1 rounded-lg border bg-background p-3">
               <div className="flex items-center justify-between gap-2">
-                <code className="truncate text-sm font-medium">{getResumeUrl(profile.handle)}</code>
+                <code className="truncate text-sm font-medium">{resumeUrl}</code>
                 <div className="flex shrink-0 gap-1">
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={async () => {
-                      await navigator.clipboard.writeText(getResumeUrl(profile.handle));
+                      await navigator.clipboard.writeText(resumeUrl);
                       setCopiedResume(true);
                       setTimeout(() => setCopiedResume(false), 2000);
                     }}
@@ -590,7 +600,7 @@ export function ShareSection({ profile, onUpdateAction }: ShareSectionProps) {
           {/* Actions row */}
           <div className="flex flex-wrap items-center justify-between gap-2">
             <Button variant="outline" size="sm" asChild className="gap-2">
-              <a href={getResumeUrl(profile.handle)} target="_blank" rel="noopener">
+              <a href={resumeUrl} target="_blank" rel="noopener">
                 <Eye className="h-4 w-4" />
                 Preview
                 <ExternalLink className="h-3 w-3" />
@@ -635,62 +645,6 @@ export function ShareSection({ profile, onUpdateAction }: ShareSectionProps) {
               : resumeVisibility === 'UNLISTED'
                 ? 'Only people with a share link can view your resume. Visitors see a \"Request Access\" option on your portfolio.'
                 : 'Only you can view your resume. No one else has access.'}
-          </p>
-        </CardContent>
-      </Card>
-
-      {/* Links Card */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-500/10">
-              <Link2 className="h-4 w-4 text-blue-600" />
-            </div>
-            <div className="flex-1">
-              <CardTitle className="text-base">Links</CardTitle>
-              <CardDescription>Your links page at {profile.handle}.follio.me/l</CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-2">
-            <Button
-              variant={linksVisibility === 'PUBLIC' ? 'default' : 'outline'}
-              size="sm"
-              className="gap-1.5"
-              onClick={() => handleVisibilityChange('links', 'PUBLIC')}
-              disabled={savingVisibility}
-            >
-              <Globe className="h-3.5 w-3.5" />
-              Public
-            </Button>
-            <Button
-              variant={linksVisibility === 'UNLISTED' ? 'default' : 'outline'}
-              size="sm"
-              className="gap-1.5"
-              onClick={() => handleVisibilityChange('links', 'UNLISTED')}
-              disabled={savingVisibility}
-            >
-              <Lock className="h-3.5 w-3.5" />
-              Unlisted
-            </Button>
-            <Button
-              variant={linksVisibility === 'PRIVATE' ? 'default' : 'outline'}
-              size="sm"
-              className="gap-1.5"
-              onClick={() => handleVisibilityChange('links', 'PRIVATE')}
-              disabled={savingVisibility}
-            >
-              <EyeOff className="h-3.5 w-3.5" />
-              Private
-            </Button>
-          </div>
-          <p className="mt-2 text-xs text-muted-foreground">
-            {linksVisibility === 'PUBLIC'
-              ? 'Anyone can view your links page.'
-              : linksVisibility === 'UNLISTED'
-                ? 'Only people with a share link can view your links page.'
-                : 'Only you can view your links page. No one else has access.'}
           </p>
         </CardContent>
       </Card>

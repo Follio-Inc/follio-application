@@ -4,11 +4,9 @@
  * Two types of URLs:
  *
  * 1. CANONICAL / DISPLAY URLs (for sharing, OG tags, copy-to-clipboard):
- *    Always use the subdomain format:
- *      Portfolio:  https://username.follio.me
- *      Resume:     https://username.follio.me/r
- *      Links:      https://username.follio.me/l
- *      Unlisted:   https://username.follio.me?key=UNLISTED_KEY
+ *    Environment-aware — uses subdomain format only when enabled:
+ *      Subdomains ON  (production):   https://username.follio.me
+ *      Subdomains OFF (dev / preview): http://localhost:3000/u/username
  *
  * 2. INTERNAL NAV PATHS (for <Link>, redirect(), Next.js routing):
  *    Always use the path-based format so Next.js routing works:
@@ -23,33 +21,69 @@ export const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'follio.me';
 /** The protocol to use */
 export const PROTOCOL = process.env.NODE_ENV === 'production' ? 'https' : 'http';
 
+/** Whether subdomain routing is active (DNS wildcards configured) */
+export const SUBDOMAIN_ENABLED = process.env.NEXT_PUBLIC_SUBDOMAIN_ENABLED === 'true';
+
+/**
+ * Base URL for the app — respects NEXT_PUBLIC_APP_URL → VERCEL_URL → localhost.
+ * Used as the origin when subdomains are not enabled.
+ */
+function getAppBaseUrl(): string {
+  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL;
+  if (typeof window !== 'undefined') return window.location.origin;
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return 'http://localhost:3000';
+}
+
 // ─── Canonical / Display URLs ────────────────────────────────────────
 
 /**
  * Canonical portfolio URL for display, sharing, OG tags.
- * Always returns: https://username.follio.me
+ * Subdomain ON:  https://username.follio.me
+ * Subdomain OFF: http://localhost:3000/u/username
  */
 export function getPortfolioUrl(handle: string, unlistedKey?: string | null): string {
-  const base = `${PROTOCOL}://${handle}.${ROOT_DOMAIN}`;
+  const base = SUBDOMAIN_ENABLED
+    ? `${PROTOCOL}://${handle}.${ROOT_DOMAIN}`
+    : `${getAppBaseUrl()}/u/${handle}`;
   return unlistedKey ? `${base}?key=${unlistedKey}` : base;
 }
 
 /**
  * Canonical resume URL for display, sharing, OG tags.
- * Always returns: https://username.follio.me/r
+ * Subdomain ON:  https://username.follio.me/r
+ * Subdomain OFF: http://localhost:3000/u/username/resume
  */
 export function getResumeUrl(handle: string, unlistedKey?: string | null): string {
-  const base = `${PROTOCOL}://${handle}.${ROOT_DOMAIN}/r`;
+  const base = SUBDOMAIN_ENABLED
+    ? `${PROTOCOL}://${handle}.${ROOT_DOMAIN}/r`
+    : `${getAppBaseUrl()}/u/${handle}/resume`;
   return unlistedKey ? `${base}?key=${unlistedKey}` : base;
 }
 
 /**
  * Canonical links URL for display, sharing, OG tags.
- * Always returns: https://username.follio.me/l
+ * Subdomain ON:  https://username.follio.me/l
+ * Subdomain OFF: http://localhost:3000/u/username/links
  */
 export function getLinksUrl(handle: string, unlistedKey?: string | null): string {
-  const base = `${PROTOCOL}://${handle}.${ROOT_DOMAIN}/l`;
+  const base = SUBDOMAIN_ENABLED
+    ? `${PROTOCOL}://${handle}.${ROOT_DOMAIN}/l`
+    : `${getAppBaseUrl()}/u/${handle}/links`;
   return unlistedKey ? `${base}?key=${unlistedKey}` : base;
+}
+
+/**
+ * Short display string for URLs (no protocol) — used in UI labels.
+ * Subdomain ON:  username.follio.me
+ * Subdomain OFF: localhost:3000/u/username
+ */
+export function getDisplayHost(handle: string, suffix?: string): string {
+  if (SUBDOMAIN_ENABLED) {
+    return `${handle}.${ROOT_DOMAIN}${suffix || ''}`;
+  }
+  const host = getAppBaseUrl().replace(/^https?:\/\//, '');
+  return `${host}/u/${handle}${suffix || ''}`;
 }
 
 // ─── Internal Navigation Paths ───────────────────────────────────────

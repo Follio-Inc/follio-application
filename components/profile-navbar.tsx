@@ -8,7 +8,6 @@ import {
   Edit,
   FileText,
   Globe,
-  Link2,
   Lock,
   LogOut,
   Settings,
@@ -28,7 +27,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
-  getLinksPath,
+  getDisplayHost,
   getLinksUrl,
   getPortfolioPath,
   getPortfolioUrl,
@@ -232,7 +231,7 @@ function ProfileMenu({ profileHandle }: { profileHandle?: string } = {}) {
                   </div>
                   <div className="min-w-0 flex-1">
                     <span className="block truncate font-mono text-[13px] font-medium tracking-tight text-foreground">
-                      {handle}.follio.me
+                      {getDisplayHost(handle)}
                     </span>
                     <span className="text-[11px] text-muted-foreground">
                       Portfolio &middot; {portfolioVisibility === 'PUBLIC' ? 'Public' : 'Unlisted'}
@@ -281,7 +280,7 @@ function ProfileMenu({ profileHandle }: { profileHandle?: string } = {}) {
                   </div>
                   <div className="min-w-0 flex-1">
                     <span className="block truncate font-mono text-[13px] font-medium tracking-tight text-foreground">
-                      {handle}.follio.me/r
+                      {getDisplayHost(handle, '/r')}
                     </span>
                     <span className="text-[11px] text-muted-foreground">
                       Resume &middot; {resumeVisibility === 'UNLISTED' ? 'Unlisted' : 'Public'}
@@ -295,55 +294,6 @@ function ProfileMenu({ profileHandle }: { profileHandle?: string } = {}) {
                     }`}
                   >
                     {copiedType === 'resume' ? (
-                      <>
-                        <Check className="h-3.5 w-3.5" />
-                        <span>Copied!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="h-3.5 w-3.5" />
-                        <span>Copy</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </button>
-
-              {/* Links Link */}
-              <button
-                onClick={() => linksUrl && handleCopyLink(linksUrl, 'links')}
-                className="group relative w-full overflow-hidden rounded-lg border border-border/60 bg-gradient-to-r from-muted/30 to-muted/10 p-3 text-left transition-all duration-300 hover:border-primary/30 hover:from-primary/5 hover:to-transparent hover:shadow-sm"
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all duration-300 ${
-                      linksVisibility === 'UNLISTED'
-                        ? 'bg-amber-500/10 text-amber-500'
-                        : 'bg-emerald-500/10 text-emerald-500'
-                    }`}
-                  >
-                    {linksVisibility === 'UNLISTED' ? (
-                      <Lock className="h-4 w-4" />
-                    ) : (
-                      <Globe className="h-4 w-4" />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <span className="block truncate font-mono text-[13px] font-medium tracking-tight text-foreground">
-                      {handle}.follio.me/l
-                    </span>
-                    <span className="text-[11px] text-muted-foreground">
-                      Links &middot; {linksVisibility === 'UNLISTED' ? 'Unlisted' : 'Public'}
-                    </span>
-                  </div>
-                  <div
-                    className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-all duration-300 ${
-                      copiedType === 'links'
-                        ? 'bg-emerald-500/10 text-emerald-600'
-                        : 'bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary'
-                    }`}
-                  >
-                    {copiedType === 'links' ? (
                       <>
                         <Check className="h-3.5 w-3.5" />
                         <span>Copied!</span>
@@ -392,20 +342,6 @@ function ProfileMenu({ profileHandle }: { profileHandle?: string } = {}) {
                   <div className="flex flex-col">
                     <span className="text-sm font-medium">Resume</span>
                     <span className="text-[11px] text-muted-foreground">View your resume</span>
-                  </div>
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link
-                  href={getLinksPath(handle)}
-                  className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 transition-colors"
-                >
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/50">
-                    <Link2 className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-sm font-medium">Links</span>
-                    <span className="text-[11px] text-muted-foreground">View your links page</span>
                   </div>
                 </Link>
               </DropdownMenuItem>

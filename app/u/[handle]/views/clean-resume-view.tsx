@@ -1,9 +1,10 @@
 'use client';
 
-import { Check, Copy, Printer } from 'lucide-react';
+import { Check, Copy, Grid3X3, Printer } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { getPortfolioPath } from '@/lib/url';
 import { formatDate } from '@/lib/utils';
 import type {
   CustomSectionContent,
@@ -22,6 +23,7 @@ import type {
 
 interface CleanResumeViewProps {
   profile: PublicProfile;
+  profileHandle?: string;
 }
 
 // ============================================================================
@@ -89,7 +91,7 @@ function ResumeHeader({ profile }: { profile: PublicProfile }) {
   });
 
   return (
-    <header className="resume-header">
+    <header className="resume-header relative">
       <h1 className="resume-name">{fullName}</h1>
       {profile.headline && <p className="resume-headline">{profile.headline}</p>}
       {contactItems.length > 0 && (
@@ -562,7 +564,13 @@ function CustomSection({ section }: { section: ProfileSection }) {
 // ACTIONS BAR
 // ============================================================================
 
-function ResumeActions({ resumeRef }: { resumeRef: React.RefObject<HTMLDivElement | null> }) {
+function ResumeActions({
+  resumeRef,
+  profileHandle,
+}: {
+  resumeRef: React.RefObject<HTMLDivElement | null>;
+  profileHandle?: string;
+}) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = useCallback(async () => {
@@ -594,6 +602,19 @@ function ResumeActions({ resumeRef }: { resumeRef: React.RefObject<HTMLDivElemen
 
   return (
     <div className="resume-actions print:hidden">
+      {profileHandle && (
+        <a href={getPortfolioPath(profileHandle)}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="resume-action-button"
+            title="View Portfolio"
+          >
+            <Grid3X3 className="h-4 w-4" />
+            <span>Portfolio</span>
+          </Button>
+        </a>
+      )}
       <Button
         variant="outline"
         size="sm"
@@ -622,7 +643,7 @@ function ResumeActions({ resumeRef }: { resumeRef: React.RefObject<HTMLDivElemen
 // MAIN COMPONENT
 // ============================================================================
 
-export function CleanResumeView({ profile }: CleanResumeViewProps) {
+export function CleanResumeView({ profile, profileHandle }: CleanResumeViewProps) {
   const resumeRef = useRef<HTMLDivElement>(null);
 
   // Get section data
@@ -654,7 +675,7 @@ export function CleanResumeView({ profile }: CleanResumeViewProps) {
 
   return (
     <>
-      <ResumeActions resumeRef={resumeRef} />
+      <ResumeActions resumeRef={resumeRef} profileHandle={profileHandle} />
 
       <article ref={resumeRef} className="resume-paper">
         <ResumeHeader profile={profile} />

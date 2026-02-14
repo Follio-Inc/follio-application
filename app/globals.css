@@ -582,9 +582,10 @@
     opacity: 1;
   }
 
-  /* Actions bar */
+  /* Actions bar — fixed at bottom center, slightly transparent */
   .resume-actions {
-    @apply sticky top-4 z-10 mx-auto mb-4 flex w-fit gap-2 rounded-full bg-background/80 p-2 shadow-lg backdrop-blur-sm;
+    @apply fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 gap-2 rounded-full p-2 shadow-lg backdrop-blur-sm;
+    background: hsl(var(--background) / 0.85);
     border: 1px solid hsl(var(--border));
   }
 
