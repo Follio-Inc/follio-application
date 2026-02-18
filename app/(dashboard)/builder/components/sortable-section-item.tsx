@@ -155,6 +155,7 @@ export function SortableSectionItem({
         <button
           onClick={(e) => {
             e.preventDefault();
+            e.stopPropagation();
             handleToggleVisibility();
           }}
           disabled={isTogglingVisibility}

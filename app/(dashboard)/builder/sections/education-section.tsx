@@ -1,6 +1,6 @@
 'use client';
 
-import { GripVertical, Loader2, Plus, Trash2 } from 'lucide-react';
+import { Eye, EyeOff, GripVertical, Loader2, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
+import { notifyProfileUpdated } from '@/lib/events';
+import { cn } from '@/lib/utils';
 
 import type { Education } from '@/types';
 
@@ -116,6 +118,7 @@ export function EducationSection({ educations, onUpdate }: EducationSectionProps
       setIsDialogOpen(false);
       setFormData(emptyEducation);
       setEditingEducation(null);
+      notifyProfileUpdated();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -138,10 +141,29 @@ export function EducationSection({ educations, onUpdate }: EducationSectionProps
       }
 
       onUpdate(educations.filter((edu) => edu.id !== educationId));
+      notifyProfileUpdated();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const toggleVisibility = async (education: Education) => {
+    const newValue = !(education.isVisible ?? true);
+    // Optimistic update
+    onUpdate(educations.map((e) => (e.id === education.id ? { ...e, isVisible: newValue } : e)));
+    try {
+      const response = await fetch(`/api/profile/education/${education.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isVisible: newValue }),
+      });
+      if (!response.ok) throw new Error('Failed to update visibility');
+      notifyProfileUpdated();
+    } catch {
+      // Revert on error
+      onUpdate(educations.map((e) => (e.id === education.id ? { ...e, isVisible: !newValue } : e)));
     }
   };
 
@@ -303,7 +325,10 @@ export function EducationSection({ educations, onUpdate }: EducationSectionProps
             {educations.map((edu) => (
               <div
                 key={edu.id}
-                className="flex items-start gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50"
+                className={cn(
+                  'flex items-start gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50',
+                  edu.isVisible === false && 'opacity-50'
+                )}
               >
                 <div className="cursor-move text-muted-foreground">
                   <GripVertical className="h-5 w-5" />
@@ -333,7 +358,20 @@ export function EducationSection({ educations, onUpdate }: EducationSectionProps
                         {edu.gpa && ` • GPA: ${edu.gpa}`}
                       </p>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => toggleVisibility(edu)}
+                        className={edu.isVisible === false ? 'text-muted-foreground' : ''}
+                        title={edu.isVisible === false ? 'Show on resume' : 'Hide from resume'}
+                      >
+                        {edu.isVisible === false ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </Button>
                       <Button
                         variant="ghost"
                         size="sm"

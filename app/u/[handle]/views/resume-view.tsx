@@ -64,8 +64,14 @@ export function ResumeView({ profile }: ResumeViewProps) {
   const initials = `${profile.firstName?.[0] || ''}${profile.lastName?.[0] || ''}`;
 
   // Get visible sections by type
+  // If no sections exist yet (legacy/new profile), default to showing everything
+  const hasNoSections = !profile.sections || profile.sections.length === 0;
+
   const getSectionByType = (type: string) =>
     (profile.sections || []).find((s: ProfileSection) => s.type === type && s.isVisible);
+
+  // Check if a section type should be visible
+  const isSectionVisible = (type: string) => hasNoSections || !!getSectionByType(type);
 
   // Get visible custom sections
   const customSections = (profile.sections || [])
@@ -141,23 +147,25 @@ export function ResumeView({ profile }: ResumeViewProps) {
                 )}
               </div>
               {/* Links */}
-              {profile.links && profile.links.length > 0 && (
+              {profile.links && profile.links.filter((l) => l.isVisible !== false).length > 0 && (
                 <div className="mt-4 flex flex-wrap justify-center gap-2 sm:justify-start">
-                  {profile.links.map((link) => {
-                    const Icon = getLinkIcon(link.type);
-                    return (
-                      <a
-                        key={link.id}
-                        href={link.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1 rounded-md bg-muted px-3 py-1 text-sm hover:bg-muted/80"
-                      >
-                        <Icon className="h-4 w-4" />
-                        {link.label}
-                      </a>
-                    );
-                  })}
+                  {profile.links
+                    .filter((l) => l.isVisible !== false)
+                    .map((link) => {
+                      const Icon = getLinkIcon(link.type);
+                      return (
+                        <a
+                          key={link.id}
+                          href={link.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 rounded-md bg-muted px-3 py-1 text-sm hover:bg-muted/80"
+                        >
+                          <Icon className="h-4 w-4" />
+                          {link.label}
+                        </a>
+                      );
+                    })}
                 </div>
               )}
             </div>
@@ -178,7 +186,7 @@ export function ResumeView({ profile }: ResumeViewProps) {
       )}
 
       {/* Skills */}
-      {profile.skills && profile.skills.length > 0 && (
+      {isSectionVisible('SKILLS') && profile.skills && profile.skills.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Skills</CardTitle>
@@ -199,144 +207,148 @@ export function ResumeView({ profile }: ResumeViewProps) {
       )}
 
       {/* Projects - filtered by visibility */}
-      {(() => {
-        const visibleProjects =
-          profile.projects?.filter((p) => p.isVisible !== false && p.showOnResume !== false) || [];
-        if (visibleProjects.length === 0) return null;
+      {isSectionVisible('PROJECTS') &&
+        (() => {
+          const visibleProjects =
+            profile.projects?.filter((p) => p.isVisible !== false && p.showOnResume !== false) ||
+            [];
+          if (visibleProjects.length === 0) return null;
 
-        return (
+          return (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Github className="h-5 w-5" />
+                  Projects
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {visibleProjects.slice(0, 6).map((project) => (
+                    <div key={project.id} className="rounded-lg border p-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="font-medium">{project.title}</h3>
+                        {project.showStats !== false &&
+                          project.githubStars != null &&
+                          project.githubStars > 0 && (
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Star className="h-3 w-3 text-yellow-500" />
+                              {project.githubStars}
+                            </span>
+                          )}
+                      </div>
+                      <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+                        {project.customDescription || project.shortDesc || project.description}
+                      </p>
+                      {project.techStack && project.techStack.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {project.techStack.slice(0, 3).map((tech) => (
+                            <Badge key={tech} variant="outline" className="text-xs">
+                              {tech}
+                            </Badge>
+                          ))}
+                          {project.techStack.length > 3 && (
+                            <Badge variant="outline" className="text-xs">
+                              +{project.techStack.length - 3}
+                            </Badge>
+                          )}
+                        </div>
+                      )}
+                      <div className="mt-2 flex gap-2">
+                        {project.url && (
+                          <a
+                            href={project.url}
+                            target="_blank"
+                            rel="noopener"
+                            className="text-xs text-primary hover:underline"
+                          >
+                            Demo
+                          </a>
+                        )}
+                        {project.repoUrl && (
+                          <a
+                            href={project.repoUrl}
+                            target="_blank"
+                            rel="noopener"
+                            className="text-xs text-primary hover:underline"
+                          >
+                            Code
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })()}
+
+      {/* Work Experience */}
+      {isSectionVisible('EXPERIENCE') &&
+        profile.workExperiences &&
+        profile.workExperiences.length > 0 && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
-                <Github className="h-5 w-5" />
-                Projects
+                <Building2 className="h-5 w-5" />
+                Experience
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 sm:grid-cols-2">
-                {visibleProjects.slice(0, 6).map((project) => (
-                  <div key={project.id} className="rounded-lg border p-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <h3 className="font-medium">{project.title}</h3>
-                      {project.showStats !== false &&
-                        project.githubStars != null &&
-                        project.githubStars > 0 && (
-                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <Star className="h-3 w-3 text-yellow-500" />
-                            {project.githubStars}
-                          </span>
-                        )}
-                    </div>
-                    <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
-                      {project.customDescription || project.shortDesc || project.description}
-                    </p>
-                    {project.techStack && project.techStack.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-1">
-                        {project.techStack.slice(0, 3).map((tech) => (
-                          <Badge key={tech} variant="outline" className="text-xs">
-                            {tech}
-                          </Badge>
-                        ))}
-                        {project.techStack.length > 3 && (
-                          <Badge variant="outline" className="text-xs">
-                            +{project.techStack.length - 3}
-                          </Badge>
-                        )}
+            <CardContent className="space-y-6">
+              {profile.workExperiences.map((exp, index) => (
+                <div key={exp.id}>
+                  {index > 0 && <Separator className="mb-6" />}
+                  <div className="flex gap-4">
+                    <div className="hidden sm:block">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                        <Building2 className="h-5 w-5 text-muted-foreground" />
                       </div>
-                    )}
-                    <div className="mt-2 flex gap-2">
-                      {project.url && (
-                        <a
-                          href={project.url}
-                          target="_blank"
-                          rel="noopener"
-                          className="text-xs text-primary hover:underline"
-                        >
-                          Demo
-                        </a>
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <h3 className="font-semibold">{exp.role}</h3>
+                          <p className="text-muted-foreground">
+                            {exp.company}
+                            {exp.location && <span> · {exp.location}</span>}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                          <Calendar className="h-4 w-4" />
+                          {formatDate(exp.startDate)} —{' '}
+                          {exp.isCurrent ? 'Present' : formatDate(exp.endDate)}
+                        </div>
+                      </div>
+                      {exp.bullets && exp.bullets.length > 0 && (
+                        <ul className="mt-2 space-y-1 text-sm">
+                          {exp.bullets.map((bullet, i) => (
+                            <li key={i} className="flex gap-2">
+                              <span className="text-primary">•</span>
+                              <span className="text-muted-foreground">{bullet}</span>
+                            </li>
+                          ))}
+                        </ul>
                       )}
-                      {project.repoUrl && (
-                        <a
-                          href={project.repoUrl}
-                          target="_blank"
-                          rel="noopener"
-                          className="text-xs text-primary hover:underline"
-                        >
-                          Code
-                        </a>
+                      {exp.tags && exp.tags.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-1">
+                          {exp.tags.map((tag) => (
+                            <Badge key={tag} variant="outline" className="text-xs">
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
                       )}
                     </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        );
-      })()}
-
-      {/* Work Experience */}
-      {profile.workExperiences && profile.workExperiences.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Building2 className="h-5 w-5" />
-              Experience
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {profile.workExperiences.map((exp, index) => (
-              <div key={exp.id}>
-                {index > 0 && <Separator className="mb-6" />}
-                <div className="flex gap-4">
-                  <div className="hidden sm:block">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-                      <Building2 className="h-5 w-5 text-muted-foreground" />
-                    </div>
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div>
-                        <h3 className="font-semibold">{exp.role}</h3>
-                        <p className="text-muted-foreground">
-                          {exp.company}
-                          {exp.location && <span> · {exp.location}</span>}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                        <Calendar className="h-4 w-4" />
-                        {formatDate(exp.startDate)} —{' '}
-                        {exp.isCurrent ? 'Present' : formatDate(exp.endDate)}
-                      </div>
-                    </div>
-                    {exp.bullets && exp.bullets.length > 0 && (
-                      <ul className="mt-2 space-y-1 text-sm">
-                        {exp.bullets.map((bullet, i) => (
-                          <li key={i} className="flex gap-2">
-                            <span className="text-primary">•</span>
-                            <span className="text-muted-foreground">{bullet}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                    {exp.tags && exp.tags.length > 0 && (
-                      <div className="mt-3 flex flex-wrap gap-1">
-                        {exp.tags.map((tag) => (
-                          <Badge key={tag} variant="outline" className="text-xs">
-                            {tag}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
+              ))}
+            </CardContent>
+          </Card>
+        )}
 
       {/* Education */}
-      {profile.educations && profile.educations.length > 0 && (
+      {isSectionVisible('EDUCATION') && profile.educations && profile.educations.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -383,44 +395,46 @@ export function ResumeView({ profile }: ResumeViewProps) {
       )}
 
       {/* Certifications */}
-      {profile.certifications && profile.certifications.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <FileCheck className="h-5 w-5" />
-              Certifications
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-4 sm:grid-cols-2">
-              {profile.certifications.map((cert) => (
-                <div key={cert.id} className="rounded-lg border p-4">
-                  <h3 className="font-medium">{cert.name}</h3>
-                  <p className="text-sm text-muted-foreground">{cert.issuer}</p>
-                  <div className="mt-2 text-xs text-muted-foreground">
-                    Issued {formatDate(cert.issueDate)}
-                    {cert.expirationDate && ` · Expires ${formatDate(cert.expirationDate)}`}
+      {isSectionVisible('CERTIFICATIONS') &&
+        profile.certifications &&
+        profile.certifications.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <FileCheck className="h-5 w-5" />
+                Certifications
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {profile.certifications.map((cert) => (
+                  <div key={cert.id} className="rounded-lg border p-4">
+                    <h3 className="font-medium">{cert.name}</h3>
+                    <p className="text-sm text-muted-foreground">{cert.issuer}</p>
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      Issued {formatDate(cert.issueDate)}
+                      {cert.expirationDate && ` · Expires ${formatDate(cert.expirationDate)}`}
+                    </div>
+                    {cert.credentialUrl && (
+                      <a
+                        href={cert.credentialUrl}
+                        target="_blank"
+                        rel="noopener"
+                        className="mt-2 flex items-center gap-1 text-sm text-primary hover:underline"
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                        View credential
+                      </a>
+                    )}
                   </div>
-                  {cert.credentialUrl && (
-                    <a
-                      href={cert.credentialUrl}
-                      target="_blank"
-                      rel="noopener"
-                      className="mt-2 flex items-center gap-1 text-sm text-primary hover:underline"
-                    >
-                      <ExternalLink className="h-3 w-3" />
-                      View credential
-                    </a>
-                  )}
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
       {/* Awards */}
-      {profile.awards && profile.awards.length > 0 && (
+      {isSectionVisible('AWARDS') && profile.awards && profile.awards.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">

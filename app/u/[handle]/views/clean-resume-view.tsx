@@ -4,6 +4,7 @@ import { Check, Copy, Grid3X3, Printer } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { cleanPhoneDisplay } from '@/components/ui/phone-input';
 import { getPortfolioPath } from '@/lib/url';
 import { formatDate } from '@/lib/utils';
 import type {
@@ -66,6 +67,8 @@ function formatDateRange(
 
 function ResumeHeader({ profile }: { profile: PublicProfile }) {
   const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(' ');
+  const showPhoto =
+    (profile as Record<string, unknown>).resumeShowPhoto === true && profile.avatarUrl;
 
   // Build contact line items
   const contactItems: string[] = [];
@@ -74,35 +77,75 @@ function ResumeHeader({ profile }: { profile: PublicProfile }) {
     contactItems.push(profile.location);
   }
 
-  if (profile.contactInfo?.email) {
+  // For public profiles, the server already filters email/phone based on
+  // emailPublic/phonePublic. For the builder preview (which sends full
+  // ContactInfo), we check the flags directly.
+  const ci = profile.contactInfo as Record<string, unknown> | null;
+  console.log('[ResumeView] contactInfo:', {
+    email: profile.contactInfo?.email,
+    phone: profile.contactInfo?.phone,
+    emailPublic: ci?.emailPublic,
+    phonePublic: ci?.phonePublic,
+  });
+  if (profile.contactInfo?.email && ci?.emailPublic !== false) {
     contactItems.push(profile.contactInfo.email);
   }
 
-  // Add relevant links (LinkedIn, GitHub, Website)
+  if (profile.contactInfo?.phone && ci?.phonePublic !== false) {
+    contactItems.push(cleanPhoneDisplay(profile.contactInfo.phone));
+  }
+
+  // Add visible links (visibility controlled solely by the eye icon / isVisible flag)
   profile.links?.forEach((link) => {
-    if (['LINKEDIN', 'GITHUB', 'WEBSITE', 'PORTFOLIO'].includes(link.type)) {
-      // Clean URL for display (remove https://, www.)
-      const displayUrl = link.url
-        .replace(/^https?:\/\//, '')
-        .replace(/^www\./, '')
-        .replace(/\/$/, '');
-      contactItems.push(displayUrl);
-    }
+    if ((link as Record<string, unknown>).isVisible === false) return;
+    // Clean URL for display (remove https://, www.)
+    const displayUrl = link.url
+      .replace(/^https?:\/\//, '')
+      .replace(/^www\./, '')
+      .replace(/\/$/, '');
+    contactItems.push(displayUrl);
   });
 
   return (
     <header className="resume-header relative">
-      <h1 className="resume-name">{fullName}</h1>
-      {profile.headline && <p className="resume-headline">{profile.headline}</p>}
-      {contactItems.length > 0 && (
-        <p className="resume-contact-line">
-          {contactItems.map((item, index) => (
-            <span key={index}>
-              {index > 0 && <span className="resume-contact-separator"> | </span>}
-              <span className="resume-contact-item">{item}</span>
-            </span>
-          ))}
-        </p>
+      {showPhoto ? (
+        <div className="flex items-start gap-4">
+          <img
+            src={profile.avatarUrl!}
+            alt={fullName}
+            className="h-20 w-20 rounded-full object-cover print:h-16 print:w-16"
+            style={{ flexShrink: 0 }}
+          />
+          <div className="min-w-0 flex-1">
+            <h1 className="resume-name">{fullName}</h1>
+            {profile.headline && <p className="resume-headline">{profile.headline}</p>}
+            {contactItems.length > 0 && (
+              <p className="resume-contact-line">
+                {contactItems.map((item, index) => (
+                  <span key={index}>
+                    {index > 0 && <span className="resume-contact-separator"> | </span>}
+                    <span className="resume-contact-item">{item}</span>
+                  </span>
+                ))}
+              </p>
+            )}
+          </div>
+        </div>
+      ) : (
+        <>
+          <h1 className="resume-name">{fullName}</h1>
+          {profile.headline && <p className="resume-headline">{profile.headline}</p>}
+          {contactItems.length > 0 && (
+            <p className="resume-contact-line">
+              {contactItems.map((item, index) => (
+                <span key={index}>
+                  {index > 0 && <span className="resume-contact-separator"> | </span>}
+                  <span className="resume-contact-item">{item}</span>
+                </span>
+              ))}
+            </p>
+          )}
+        </>
       )}
     </header>
   );
@@ -169,13 +212,15 @@ function ExperienceEntry({
 }
 
 function ExperienceSection({ experiences }: { experiences: PublicProfile['workExperiences'] }) {
-  if (!experiences || experiences.length === 0) return null;
+  const visibleExperiences =
+    experiences?.filter((exp) => (exp as Record<string, unknown>).isVisible !== false) || [];
+  if (visibleExperiences.length === 0) return null;
 
   return (
     <section className="resume-section">
       <SectionDivider title="EXPERIENCE" />
       <div className="resume-entries">
-        {experiences.map((exp) => (
+        {visibleExperiences.map((exp) => (
           <ExperienceEntry
             key={exp.id}
             role={exp.role}
@@ -198,13 +243,15 @@ function ExperienceSection({ experiences }: { experiences: PublicProfile['workEx
 // ============================================================================
 
 function EducationSection({ educations }: { educations: PublicProfile['educations'] }) {
-  if (!educations || educations.length === 0) return null;
+  const visibleEducations =
+    educations?.filter((edu) => (edu as Record<string, unknown>).isVisible !== false) || [];
+  if (visibleEducations.length === 0) return null;
 
   return (
     <section className="resume-section">
       <SectionDivider title="EDUCATION" />
       <div className="resume-entries">
-        {educations.map((edu) => {
+        {visibleEducations.map((edu) => {
           const degreeLine = [edu.degree, edu.fieldOfStudy].filter(Boolean).join(' in ');
           const dateRange = formatDateRange(edu.startDate, edu.endDate, edu.isCurrent);
 
@@ -238,13 +285,22 @@ function EducationSection({ educations }: { educations: PublicProfile['education
 function SkillsSection({ profile }: { profile: PublicProfile }) {
   const { skills, skillGroups } = profile;
 
-  // If we have skill groups, display grouped
+  // If we have skill groups, display grouped (filtering hidden skills)
   if (skillGroups && skillGroups.length > 0) {
+    const filteredGroups = skillGroups
+      .map((group) => ({
+        ...group,
+        skills: group.skills.filter((s) => (s as Record<string, unknown>).isVisible !== false),
+      }))
+      .filter((group) => group.skills.length > 0);
+
+    if (filteredGroups.length === 0) return null;
+
     return (
       <section className="resume-section">
         <SectionDivider title="SKILLS" />
         <div className="resume-skills-grouped">
-          {skillGroups.map((group) => (
+          {filteredGroups.map((group) => (
             <div key={group.id} className="resume-skill-group">
               <span className="resume-skill-group-name">{group.name}:</span>{' '}
               <span className="resume-skill-group-items">
@@ -257,13 +313,15 @@ function SkillsSection({ profile }: { profile: PublicProfile }) {
     );
   }
 
-  // Otherwise, display flat list
-  if (!skills || skills.length === 0) return null;
+  // Otherwise, display flat list (filtering hidden)
+  const visibleSkills =
+    skills?.filter((s) => (s as Record<string, unknown>).isVisible !== false) || [];
+  if (visibleSkills.length === 0) return null;
 
   return (
     <section className="resume-section">
       <SectionDivider title="SKILLS" />
-      <p className="resume-skills-flat">{skills.map((s) => s.name).join(', ')}</p>
+      <p className="resume-skills-flat">{visibleSkills.map((s) => s.name).join(', ')}</p>
     </section>
   );
 }
@@ -336,13 +394,15 @@ function CertificationsSection({
 }: {
   certifications: PublicProfile['certifications'];
 }) {
-  if (!certifications || certifications.length === 0) return null;
+  const visibleCerts =
+    certifications?.filter((c) => (c as Record<string, unknown>).isVisible !== false) || [];
+  if (visibleCerts.length === 0) return null;
 
   return (
     <section className="resume-section">
       <SectionDivider title="CERTIFICATIONS" />
       <div className="resume-entries resume-entries-compact">
-        {certifications.map((cert) => {
+        {visibleCerts.map((cert) => {
           const issuedDate = formatResumeDate(cert.issueDate);
           const expDate = cert.expirationDate ? formatResumeDate(cert.expirationDate) : null;
 
@@ -370,13 +430,15 @@ function CertificationsSection({
 // ============================================================================
 
 function AwardsSection({ awards }: { awards: PublicProfile['awards'] }) {
-  if (!awards || awards.length === 0) return null;
+  const visibleAwards =
+    awards?.filter((a) => (a as Record<string, unknown>).isVisible !== false) || [];
+  if (visibleAwards.length === 0) return null;
 
   return (
     <section className="resume-section">
       <SectionDivider title="AWARDS & RECOGNITION" />
       <div className="resume-entries resume-entries-compact">
-        {awards.map((award) => {
+        {visibleAwards.map((award) => {
           const awardDate = formatResumeDate(award.date);
 
           return (
@@ -647,8 +709,15 @@ export function CleanResumeView({ profile, profileHandle }: CleanResumeViewProps
   const resumeRef = useRef<HTMLDivElement>(null);
 
   // Get section data
+  // If no sections exist yet (legacy/new profile), default to showing everything
+  const hasNoSections = !profile.sections || profile.sections.length === 0;
+
   const getSectionByType = (type: string) =>
     (profile.sections || []).find((s: ProfileSection) => s.type === type && s.isVisible);
+
+  // Check if a section type should be visible
+  // Shows everything by default when no sections are configured
+  const isSectionVisible = (type: string) => hasNoSections || !!getSectionByType(type);
 
   const customSections = (profile.sections || [])
     .filter((s: ProfileSection) => s.type === 'CUSTOM' && s.isVisible)
@@ -682,17 +751,21 @@ export function CleanResumeView({ profile, profileHandle }: CleanResumeViewProps
 
         {profile.summary && <SummarySection summary={profile.summary} />}
 
-        <ExperienceSection experiences={profile.workExperiences} />
+        {isSectionVisible('EXPERIENCE') && (
+          <ExperienceSection experiences={profile.workExperiences} />
+        )}
 
-        <EducationSection educations={profile.educations} />
+        {isSectionVisible('EDUCATION') && <EducationSection educations={profile.educations} />}
 
-        <SkillsSection profile={profile} />
+        {isSectionVisible('SKILLS') && <SkillsSection profile={profile} />}
 
-        <ProjectsSection projects={profile.projects} />
+        {isSectionVisible('PROJECTS') && <ProjectsSection projects={profile.projects} />}
 
-        <CertificationsSection certifications={profile.certifications} />
+        {isSectionVisible('CERTIFICATIONS') && (
+          <CertificationsSection certifications={profile.certifications} />
+        )}
 
-        <AwardsSection awards={profile.awards} />
+        {isSectionVisible('AWARDS') && <AwardsSection awards={profile.awards} />}
 
         <PublicationsSection items={publicationItems} />
 

@@ -5,6 +5,7 @@ import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
+import { notifyProfileUpdated } from '@/lib/events';
 
 import { BasicInfoForm, ContactInfoForm } from '../sections/basic-info-form';
 import { EducationSection } from '../sections/education-section';
@@ -152,6 +153,9 @@ export function SectionEditor({ profile, sectionType, section }: SectionEditorPr
 
       setHasChanges(false);
       setHasContactChanges(false);
+
+      // Notify the resume preview to refresh
+      notifyProfileUpdated();
     } catch (error) {
       console.error('Save error:', error);
     } finally {

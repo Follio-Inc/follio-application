@@ -11,6 +11,11 @@
  * Uses both REST API v3 and GraphQL API v4.
  */
 
+import { logger } from '@/lib/logger';
+import type { GitHubRepo, GitHubUser } from '@/types';
+
+const githubLogger = logger.child({ source: 'github-enhanced' });
+
 const GITHUB_API_BASE = 'https://api.github.com';
 const GITHUB_GRAPHQL_API = 'https://api.github.com/graphql';
 
@@ -18,53 +23,8 @@ const GITHUB_GRAPHQL_API = 'https://api.github.com/graphql';
 // TYPES
 // ===========================================
 
-export interface GitHubUser {
-  login: string;
-  id: number;
-  name: string | null;
-  email: string | null;
-  bio: string | null;
-  location: string | null;
-  company: string | null;
-  blog: string | null;
-  avatar_url: string;
-  html_url: string;
-  public_repos: number;
-  public_gists: number;
-  followers: number;
-  following: number;
-  created_at: string;
-  hireable: boolean | null;
-}
-
-export interface GitHubRepo {
-  id: number;
-  name: string;
-  full_name: string;
-  owner: {
-    login: string;
-    avatar_url: string;
-  };
-  description: string | null;
-  html_url: string;
-  homepage: string | null;
-  language: string | null;
-  languages_url: string;
-  stargazers_count: number;
-  forks_count: number;
-  watchers_count: number;
-  topics: string[];
-  created_at: string;
-  updated_at: string;
-  pushed_at: string;
-  fork: boolean;
-  archived: boolean;
-  license: {
-    key: string;
-    name: string;
-    spdx_id: string;
-  } | null;
-}
+// Re-export canonical types for backward compatibility
+export type { GitHubRepo, GitHubUser };
 
 export interface GitHubOrganization {
   login: string;
@@ -390,7 +350,7 @@ export async function fetchGitHubOrganizations(
 
   if (!response.ok) {
     // Non-critical, return empty array
-    console.warn(`Failed to fetch organizations for ${username}`);
+    githubLogger.warn('Failed to fetch organizations', { username, status: response.status });
     return [];
   }
 
@@ -447,7 +407,7 @@ export async function fetchPinnedRepos(
 ): Promise<PinnedRepo[]> {
   // GraphQL requires authentication for user queries
   if (!accessToken) {
-    console.warn('GraphQL API requires authentication, skipping pinned repos');
+    githubLogger.debug('GraphQL API requires authentication, skipping pinned repos');
     return [];
   }
 
@@ -504,20 +464,20 @@ export async function fetchPinnedRepos(
     });
 
     if (!response.ok) {
-      console.warn(`GraphQL API error: ${response.status}`);
+      githubLogger.warn('GraphQL API error', { status: response.status });
       return [];
     }
 
     const data = await response.json();
 
     if (data.errors) {
-      console.warn('GraphQL errors:', data.errors);
+      githubLogger.warn('GraphQL response contained errors', { errorCount: data.errors.length });
       return [];
     }
 
     return data.data?.user?.pinnedItems?.nodes || [];
   } catch (error) {
-    console.error('Error fetching pinned repos:', error);
+    githubLogger.error('Error fetching pinned repos', error);
     return [];
   }
 }

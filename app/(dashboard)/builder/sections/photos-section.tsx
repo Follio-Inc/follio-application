@@ -1,10 +1,10 @@
 'use client';
 
-import type { ProfilePhoto } from '@prisma/client';
-import { Camera, ImagePlus, Loader2, Plus, Trash2, Upload, X } from 'lucide-react';
+import { Camera, Eye, EyeOff, Loader2, Trash2, Upload } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -19,6 +19,7 @@ import { ImageCropper, type CropArea } from '@/components/ui/image-cropper';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { notifyProfileUpdated } from '@/lib/events';
 import { cn } from '@/lib/utils';
 
 import type { FullProfile } from '@/types';
@@ -46,30 +47,6 @@ const compressImage = (file: File, maxSize = 512): Promise<string> =>
       const w = img.width * scale;
       const h = img.height * scale;
       ctx?.drawImage(img, (maxSize - w) / 2, (maxSize - h) / 2, w, h);
-      resolve(canvas.toDataURL('image/jpeg', 0.85));
-    };
-    img.onerror = () => reject(new Error('Failed to load image'));
-    img.src = URL.createObjectURL(file);
-  });
-
-/** Compress gallery image — keep larger resolution */
-const compressGalleryImage = (file: File): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    const img = new Image();
-    img.onload = () => {
-      const max = 1920;
-      let w = img.width;
-      let h = img.height;
-      if (w > max || h > max) {
-        const ratio = Math.min(max / w, max / h);
-        w = Math.round(w * ratio);
-        h = Math.round(h * ratio);
-      }
-      canvas.width = w;
-      canvas.height = h;
-      ctx?.drawImage(img, 0, 0, w, h);
       resolve(canvas.toDataURL('image/jpeg', 0.85));
     };
     img.onerror = () => reject(new Error('Failed to load image'));
@@ -133,8 +110,10 @@ interface PhotosSectionProps {
 }
 
 export function PhotosSection({ profile, onUpdateAction }: PhotosSectionProps) {
-  const [photos, setPhotos] = useState<ProfilePhoto[]>(profile.photos || []);
-  const galleryPhotos = photos.filter((p) => p.category === 'GALLERY');
+  // ── Resume photo toggle state ────────────────────────────────────────────
+  const [resumeShowPhoto, setResumeShowPhoto] = useState(
+    (profile as unknown as Record<string, unknown>).resumeShowPhoto === true
+  );
 
   // ── Profile Photo state ──────────────────────────────────────────────────
   const [availableAvatars, setAvailableAvatars] = useState<AvatarOption[]>([]);
@@ -148,16 +127,22 @@ export function PhotosSection({ profile, onUpdateAction }: PhotosSectionProps) {
   const [isLoading, setIsLoading] = useState(false);
   const profileFileRef = useRef<HTMLInputElement>(null);
 
-  // ── Gallery Photo state ──────────────────────────────────────────────────
-  const [galleryDialogOpen, setGalleryDialogOpen] = useState(false);
-  const [galleryUrlInput, setGalleryUrlInput] = useState('');
-  const [galleryUrlError, setGalleryUrlError] = useState('');
-  const [galleryPreviewUrl, setGalleryPreviewUrl] = useState<string | null>(null);
-  const [galleryIsDragging, setGalleryIsDragging] = useState(false);
-  const [galleryIsLoading, setGalleryIsLoading] = useState(false);
-  const [galleryCaption, setGalleryCaption] = useState('');
-  const galleryFileRef = useRef<HTMLInputElement>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  // ── Resume photo toggle handler ──────────────────────────────────────────
+  const handleResumeShowPhotoToggle = async () => {
+    const newValue = !resumeShowPhoto;
+    setResumeShowPhoto(newValue);
+    try {
+      await fetch('/api/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resumeShowPhoto: newValue }),
+      });
+      notifyProfileUpdated();
+    } catch (error) {
+      console.error('Failed to update resume photo visibility:', error);
+      setResumeShowPhoto(!newValue);
+    }
+  };
 
   // Fetch available avatars from connected sources
   useEffect(() => {
@@ -189,36 +174,15 @@ export function PhotosSection({ profile, onUpdateAction }: PhotosSectionProps) {
     url: string,
     category: 'PROFILE' | 'GALLERY',
     caption?: string
-  ): Promise<ProfilePhoto | null> => {
+  ): Promise<void> => {
     try {
-      const res = await fetch('/api/profile/photos', {
+      await fetch('/api/profile/photos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url, category, caption }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        const newPhoto = data.photo as ProfilePhoto;
-        setPhotos((prev) => [...prev, newPhoto]);
-        return newPhoto;
-      }
     } catch (err) {
       console.error('Failed to save photo:', err);
-    }
-    return null;
-  };
-
-  const deletePhoto = async (id: string) => {
-    setDeletingId(id);
-    try {
-      const res = await fetch(`/api/profile/photos/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        setPhotos((prev) => prev.filter((p) => p.id !== id));
-      }
-    } catch (err) {
-      console.error('Failed to delete photo:', err);
-    } finally {
-      setDeletingId(null);
     }
   };
 
@@ -294,76 +258,6 @@ export function PhotosSection({ profile, onUpdateAction }: PhotosSectionProps) {
     setIsLoading(false);
   };
 
-  // ── Gallery Photo handlers ──────────────────────────────────────────────
-
-  const handleGalleryFileSelect = useCallback(async (file: File) => {
-    if (!file.type.startsWith('image/')) {
-      setGalleryUrlError('Please select an image file');
-      return;
-    }
-    if (file.size > 40 * 1024 * 1024) {
-      setGalleryUrlError('Image must be less than 40 MB');
-      return;
-    }
-    setGalleryIsLoading(true);
-    setGalleryUrlError('');
-    try {
-      const compressed = await compressGalleryImage(file);
-      setGalleryPreviewUrl(compressed);
-    } catch {
-      setGalleryUrlError('Failed to process image');
-    } finally {
-      setGalleryIsLoading(false);
-    }
-  }, []);
-
-  const handleGalleryUrlSubmit = async () => {
-    if (!galleryUrlInput.trim()) {
-      setGalleryUrlError('Please enter a URL');
-      return;
-    }
-    try {
-      new URL(galleryUrlInput);
-    } catch {
-      setGalleryUrlError('Please enter a valid URL');
-      return;
-    }
-    setGalleryIsLoading(true);
-    setGalleryUrlError('');
-    const img = new Image();
-    img.onload = async () => {
-      await savePhoto(galleryUrlInput, 'GALLERY', galleryCaption || undefined);
-      setGalleryDialogOpen(false);
-      setGalleryUrlInput('');
-      setGalleryCaption('');
-      setGalleryIsLoading(false);
-    };
-    img.onerror = () => {
-      setGalleryUrlError('Could not load image from this URL');
-      setGalleryIsLoading(false);
-    };
-    img.src = galleryUrlInput;
-  };
-
-  const handleGalleryConfirmUpload = async () => {
-    if (galleryPreviewUrl) {
-      setGalleryIsLoading(true);
-      await savePhoto(galleryPreviewUrl, 'GALLERY', galleryCaption || undefined);
-      setGalleryDialogOpen(false);
-      setGalleryPreviewUrl(null);
-      setGalleryCaption('');
-      setGalleryIsLoading(false);
-    }
-  };
-
-  const resetGalleryDialog = () => {
-    setGalleryUrlInput('');
-    setGalleryUrlError('');
-    setGalleryPreviewUrl(null);
-    setGalleryCaption('');
-    setGalleryIsLoading(false);
-  };
-
   const currentPhotoUrl = profile.avatarUrl;
   const hasPhoto = !!currentPhotoUrl;
   const initials = `${profile.firstName?.[0] || ''}${profile.lastName?.[0] || ''}`;
@@ -372,15 +266,29 @@ export function PhotosSection({ profile, onUpdateAction }: PhotosSectionProps) {
   return (
     <div className="space-y-6">
       {/* ── Profile Photo Card ── */}
-      <Card>
-        <CardHeader className="text-center">
-          <CardTitle>Profile Photo</CardTitle>
-          <CardDescription>
-            Your main profile picture, shown across your portfolio and resume views.
-            {hasSourceAvatars
-              ? ' You can also pick from photos imported from your connected accounts.'
-              : ''}
-          </CardDescription>
+      <Card className={cn(!resumeShowPhoto && 'opacity-50')}>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div className="flex-1 text-center">
+            <CardTitle>Profile Photo</CardTitle>
+            <CardDescription>
+              Your main profile picture, shown across your portfolio and resume views.
+              {hasSourceAvatars
+                ? ' You can also pick from photos imported from your connected accounts.'
+                : ''}
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleResumeShowPhotoToggle}
+              className={!resumeShowPhoto ? 'text-muted-foreground' : ''}
+              title={resumeShowPhoto ? 'Hide photo from resume' : 'Show photo on resume'}
+              disabled={!hasPhoto}
+            >
+              {resumeShowPhoto ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col items-center gap-6">
@@ -676,258 +584,6 @@ export function PhotosSection({ profile, onUpdateAction }: PhotosSectionProps) {
               </div>
             ) : null}
           </div>
-        </CardContent>
-      </Card>
-
-      {/* ── Gallery Photos Card ── */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Gallery</CardTitle>
-              <CardDescription>
-                Upload additional photos to showcase in your portfolio. You&apos;ll be able to
-                choose where each photo appears later.
-              </CardDescription>
-            </div>
-            <Dialog
-              open={galleryDialogOpen}
-              onOpenChange={(open) => {
-                setGalleryDialogOpen(open);
-                if (!open) resetGalleryDialog();
-              }}
-            >
-              <DialogTrigger asChild>
-                <Button size="sm" className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  Add Photo
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Add Gallery Photo</DialogTitle>
-                  <DialogDescription>
-                    Upload a photo or paste an image URL to add to your gallery.
-                  </DialogDescription>
-                </DialogHeader>
-
-                <Tabs defaultValue="upload" className="mt-4">
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="upload" className="gap-2">
-                      <Upload className="h-4 w-4" />
-                      Upload
-                    </TabsTrigger>
-                    <TabsTrigger value="url" className="gap-2">
-                      URL
-                    </TabsTrigger>
-                  </TabsList>
-
-                  {/* Upload Tab */}
-                  <TabsContent value="upload" className="space-y-4">
-                    {galleryPreviewUrl ? (
-                      <div className="space-y-4">
-                        <div className="flex justify-center">
-                          <div className="relative">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={galleryPreviewUrl}
-                              alt="Preview"
-                              className="max-h-48 rounded-lg border object-contain"
-                            />
-                            <button
-                              onClick={() => setGalleryPreviewUrl(null)}
-                              className="absolute -right-2 -top-2 rounded-full bg-destructive p-1 text-destructive-foreground shadow-sm"
-                              aria-label="Remove preview"
-                            >
-                              <X className="h-4 w-4" />
-                            </button>
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="galleryCaption">Caption (optional)</Label>
-                          <Input
-                            id="galleryCaption"
-                            value={galleryCaption}
-                            onChange={(e) => setGalleryCaption(e.target.value)}
-                            placeholder="Describe this photo…"
-                          />
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            className="flex-1"
-                            onClick={() => setGalleryPreviewUrl(null)}
-                          >
-                            Change
-                          </Button>
-                          <Button
-                            className="flex-1"
-                            onClick={handleGalleryConfirmUpload}
-                            disabled={galleryIsLoading}
-                          >
-                            {galleryIsLoading ? (
-                              <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Saving…
-                              </>
-                            ) : (
-                              'Add Photo'
-                            )}
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div
-                        className={cn(
-                          'cursor-pointer rounded-lg border-2 border-dashed p-8 text-center transition-colors',
-                          galleryIsDragging
-                            ? 'border-primary bg-primary/5'
-                            : 'border-muted-foreground/25 hover:border-muted-foreground/50'
-                        )}
-                        onDragOver={(e) => {
-                          e.preventDefault();
-                          setGalleryIsDragging(true);
-                        }}
-                        onDragLeave={(e) => {
-                          e.preventDefault();
-                          setGalleryIsDragging(false);
-                        }}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          setGalleryIsDragging(false);
-                          const file = e.dataTransfer.files[0];
-                          if (file) handleGalleryFileSelect(file);
-                        }}
-                        onClick={() => galleryFileRef.current?.click()}
-                      >
-                        <input
-                          ref={galleryFileRef}
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) handleGalleryFileSelect(file);
-                          }}
-                          className="hidden"
-                        />
-                        <ImagePlus className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
-                        <p className="text-sm font-medium">Drop an image or click to browse</p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          PNG, JPG, GIF up to 40 MB
-                        </p>
-                      </div>
-                    )}
-                    {galleryUrlError && (
-                      <p className="text-center text-sm text-destructive">{galleryUrlError}</p>
-                    )}
-                  </TabsContent>
-
-                  {/* URL Tab */}
-                  <TabsContent value="url" className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="galleryPhotoUrl">Image URL</Label>
-                      <Input
-                        id="galleryPhotoUrl"
-                        type="url"
-                        value={galleryUrlInput}
-                        onChange={(e) => {
-                          setGalleryUrlInput(e.target.value);
-                          setGalleryUrlError('');
-                        }}
-                        placeholder="https://example.com/photo.jpg"
-                      />
-                      {galleryUrlError && (
-                        <p className="text-sm text-destructive">{galleryUrlError}</p>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="galleryCaptionUrl">Caption (optional)</Label>
-                      <Input
-                        id="galleryCaptionUrl"
-                        value={galleryCaption}
-                        onChange={(e) => setGalleryCaption(e.target.value)}
-                        placeholder="Describe this photo…"
-                      />
-                    </div>
-                    <Button
-                      className="w-full"
-                      onClick={handleGalleryUrlSubmit}
-                      disabled={!galleryUrlInput.trim() || galleryIsLoading}
-                    >
-                      {galleryIsLoading ? 'Loading...' : 'Add Photo'}
-                    </Button>
-                  </TabsContent>
-                </Tabs>
-              </DialogContent>
-            </Dialog>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {galleryPhotos.length === 0 ? (
-            <div className="rounded-xl border-2 border-dashed p-12 text-center">
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-                <ImagePlus className="h-8 w-8 text-muted-foreground/60" />
-              </div>
-              <p className="text-base font-medium text-muted-foreground">No gallery photos yet</p>
-              <p className="mx-auto mt-2 max-w-xs text-sm text-muted-foreground/70">
-                Add photos to showcase your work, events, or anything you&apos;d like visitors to
-                see.
-              </p>
-            </div>
-          ) : (
-            <div
-              className={cn(
-                'grid gap-4',
-                galleryPhotos.length === 1 && 'mx-auto max-w-md grid-cols-1',
-                galleryPhotos.length === 2 && 'grid-cols-2',
-                galleryPhotos.length >= 3 && 'grid-cols-2 md:grid-cols-3'
-              )}
-            >
-              {galleryPhotos.map((photo, idx) => (
-                <div
-                  key={photo.id}
-                  className={cn(
-                    'group relative overflow-hidden rounded-xl border bg-muted shadow-sm transition-shadow hover:shadow-md',
-                    // First photo is featured/large when there are 3+ photos
-                    galleryPhotos.length >= 3 && idx === 0 && 'col-span-2 row-span-2',
-                    // Aspect ratio based on layout role
-                    galleryPhotos.length >= 3 && idx === 0 ? 'aspect-[4/3]' : 'aspect-square'
-                  )}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={photo.url}
-                    alt={photo.caption || 'Gallery photo'}
-                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                  />
-                  {/* Overlay with caption & delete */}
-                  <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/70 via-black/10 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-                    <div className="flex w-full items-end justify-between p-3">
-                      {photo.caption ? (
-                        <span className="truncate text-sm font-medium text-white drop-shadow-sm">
-                          {photo.caption}
-                        </span>
-                      ) : (
-                        <span />
-                      )}
-                      <button
-                        onClick={() => deletePhoto(photo.id)}
-                        disabled={deletingId === photo.id}
-                        className="shrink-0 rounded-full bg-black/40 p-2 text-white backdrop-blur-sm transition-colors hover:bg-destructive"
-                        aria-label="Delete photo"
-                      >
-                        {deletingId === photo.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-4 w-4" />
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
         </CardContent>
       </Card>
     </div>

@@ -16,14 +16,18 @@
 import type { DataSource } from '@prisma/client';
 
 // Source priority (higher = more authoritative)
+// NOTE: Must match SOURCE_PRIORITY in merge.service.ts for shared DataSource values
 export const SOURCE_PRIORITY: Record<string, number> = {
   SIGNUP: 100, // Highest: user explicitly entered at signup
-  MANUAL: 95, // User manually edited
+  MANUAL: 95, // User manually edited (slightly lower than SIGNUP to avoid conflict with merge.service)
   RESUME: 80,
   GOOGLE: 75, // Google provides reliable data
   LINKEDIN: 70,
   GITHUB: 60,
   GENERATED: 50,
+  MEDIUM: 45,
+  YOUTUBE: 45,
+  BLOG: 45,
 };
 
 /**

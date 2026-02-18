@@ -24,7 +24,7 @@ export function ImportDataDialog({ open, onOpenChange }: ImportDataDialogProps) 
 
   const handleGoToImport = () => {
     onOpenChange(false);
-    router.push('/builder/data-sources');
+    router.push('/data-sources');
   };
 
   return (

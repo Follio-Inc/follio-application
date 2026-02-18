@@ -36,7 +36,10 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: '2mb',
       // Allow Clerk's sign-out server actions to work properly
-      allowedOrigins: ['localhost:3000'],
+      // Reads from ALLOWED_ORIGINS env var in production; falls back to localhost for dev
+      allowedOrigins: process.env.ALLOWED_ORIGINS
+        ? process.env.ALLOWED_ORIGINS.split(',')
+        : ['localhost:3000'],
     },
   },
 
@@ -60,6 +63,23 @@ const nextConfig: NextConfig = {
           {
             key: 'X-Content-Type-Options',
             value: 'nosniff',
+          },
+          {
+            key: 'Referrer-Policy',
+            value: 'strict-origin-when-cross-origin',
+          },
+          {
+            key: 'X-XSS-Protection',
+            value: '1; mode=block',
+          },
+          {
+            key: 'Permissions-Policy',
+            value: 'camera=(), microphone=(), geolocation=()',
+          },
+          // Strict-Transport-Security: Enforces HTTPS for 1 year, including subdomains
+          {
+            key: 'Strict-Transport-Security',
+            value: 'max-age=31536000; includeSubDomains',
           },
         ],
       },

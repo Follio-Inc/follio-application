@@ -14,6 +14,10 @@
  * 8. Confidence scoring to indicate parse quality
  */
 
+import { logger } from '@/lib/logger';
+
+const parseLogger = logger.child({ source: 'resume-parser' });
+
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -576,14 +580,14 @@ const CONTACT_PATTERNS = {
 
 export async function extractTextFromPDF(buffer: Buffer): Promise<string> {
   try {
-    console.log('[PDF] Starting extraction, buffer size:', buffer.length);
+    parseLogger.debug('Starting PDF extraction', { bufferSize: buffer.length });
     const { extractText } = await import('unpdf');
     const uint8Array = new Uint8Array(buffer);
     const { text } = await extractText(uint8Array, { mergePages: true });
-    console.log('[PDF] Extracted text length:', text?.length);
+    parseLogger.debug('PDF text extracted', { textLength: text?.length });
     return text || '';
   } catch (error) {
-    console.error('[PDF] Extraction error:', error);
+    parseLogger.error('PDF extraction failed', error);
     throw new Error('Failed to extract text from PDF.');
   }
 }
@@ -677,7 +681,7 @@ function preprocessText(rawText: string): string {
   text = text.replace(/\n{3,}/g, '\n\n');
   text = text.replace(/^\n+/, '');
 
-  console.log('[Preprocess] Sample after preprocessing:', text.substring(0, 500));
+  parseLogger.debug('Preprocessing sample', { sampleLength: 500 });
 
   return text.trim();
 }
@@ -715,7 +719,10 @@ function identifySections(text: string): Section[] {
             trimmedLine === headerLower + ' :'
           ) {
             matchedSection = sectionType;
-            console.log(`[Sections] Matched header "${originalLine}" as ${sectionType}`);
+            parseLogger.debug('Matched section header', {
+              header: originalLine,
+              section: sectionType,
+            });
             break;
           }
         }
@@ -749,10 +756,7 @@ function identifySections(text: string): Section[] {
     sections.push(currentSection);
   }
 
-  console.log(
-    '[Sections] Identified:',
-    sections.map((s) => s.name)
-  );
+  parseLogger.debug('Sections identified', { sections: sections.map((s) => s.name) });
   return sections;
 }
 
@@ -880,7 +884,7 @@ function extractNameAndHeadline(text: string): {
       // Found job title start - everything before is name
       nameStr = words.slice(0, i).join(' ');
       headline = words.slice(i).join(' ');
-      console.log(`[Name] Split at job title keyword "${word}" at position ${i}`);
+      parseLogger.debug('Name split at job title keyword', { word, position: i });
       break;
     }
   }
@@ -932,8 +936,11 @@ function extractNameAndHeadline(text: string): {
   const firstName = filtered[0];
   const lastName = filtered.length > 1 ? filtered.slice(1).join(' ') : undefined;
 
-  console.log('[Name] Extracted:', firstName, lastName);
-  console.log('[Headline] Extracted:', headline);
+  parseLogger.debug('Name extraction complete', {
+    hasFirstName: !!firstName,
+    hasLastName: !!lastName,
+  });
+  parseLogger.debug('Headline extraction complete', { hasHeadline: !!headline });
 
   return { firstName, lastName, headline };
 }
@@ -977,11 +984,11 @@ function extractSummary(text: string, sections: Section[]): string | undefined {
 function extractSkills(text: string, sections: Section[]): string[] {
   const skillsContent = getSectionContent(sections, 'skills');
   if (!skillsContent) {
-    console.log('[Skills] No skills section found');
+    parseLogger.debug('No skills section found');
     return [];
   }
 
-  console.log('[Skills] Section content:', skillsContent.substring(0, 200));
+  parseLogger.debug('Skills section found', { contentLength: skillsContent.length });
 
   const skills: string[] = [];
 
@@ -1013,7 +1020,7 @@ function extractSkills(text: string, sections: Section[]): string[] {
 
   // Deduplicate
   const uniqueSkills = [...new Set(skills)];
-  console.log('[Skills] Extracted:', uniqueSkills.length, 'skills');
+  parseLogger.debug('Skills extracted', { count: uniqueSkills.length });
 
   return uniqueSkills;
 }
@@ -1151,7 +1158,7 @@ function extractExperiences(text: string, sections: Section[]): WorkExperience[]
 
   // Fallback: If no experience section, try to find dates in the text
   if (!expContent) {
-    console.log('[Experience] No dedicated section found, trying fallback...');
+    parseLogger.debug('No dedicated experience section found, trying fallback');
 
     // Find date ranges in full text
     const dateRanges = findAllDateRanges(text);
@@ -1172,18 +1179,15 @@ function extractExperiences(text: string, sections: Section[]): WorkExperience[]
   }
 
   if (!expContent) {
-    console.log('[Experience] No experience content found');
+    parseLogger.debug('No experience content found');
     return experiences;
   }
 
-  console.log('[Experience] Section content:', expContent.substring(0, 200));
+  parseLogger.debug('Experience section found', { contentLength: expContent.length });
 
   // Find all date ranges in experience content
   const dateRanges = findAllDateRanges(expContent);
-  console.log(
-    '[Experience] Date ranges found:',
-    dateRanges.map((d) => d.match)
-  );
+  parseLogger.debug('Experience date ranges found', { count: dateRanges.length });
 
   if (dateRanges.length === 0) {
     return experiences;
@@ -1203,7 +1207,7 @@ function extractExperiences(text: string, sections: Section[]): WorkExperience[]
     experiences.push(exp);
   }
 
-  console.log('[Experience] Extracted:', experiences.length, 'experiences');
+  parseLogger.debug('Experiences extracted', { count: experiences.length });
   return experiences;
 }
 
@@ -1247,11 +1251,11 @@ function extractEducation(text: string, sections: Section[]): Education[] {
   const eduContent = getSectionContent(sections, 'education');
 
   if (!eduContent) {
-    console.log('[Education] No education section found');
+    parseLogger.debug('No education section found');
     return educations;
   }
 
-  console.log('[Education] Section content:', eduContent.substring(0, 300));
+  parseLogger.debug('Education section found', { contentLength: eduContent.length });
 
   // Find all degree mentions
   const degreePositions: { label: string; type: string; index: number }[] = [];
@@ -1274,7 +1278,7 @@ function extractEducation(text: string, sections: Section[]): Education[] {
 
       // Avoid duplicates
       if (!degreePositions.some((d) => Math.abs(d.index - match!.index) < 30)) {
-        console.log(`[Education] Found degree "${label}" at index ${match.index}`);
+        parseLogger.debug('Found degree', { label, index: match.index });
         degreePositions.push({ label, type, index: match.index });
       }
     }
@@ -1282,10 +1286,7 @@ function extractEducation(text: string, sections: Section[]): Education[] {
 
   // Sort by position
   degreePositions.sort((a, b) => a.index - b.index);
-  console.log(
-    '[Education] Degrees found:',
-    degreePositions.map((d) => d.label)
-  );
+  parseLogger.debug('Degrees found', { count: degreePositions.length });
 
   if (degreePositions.length === 0) {
     // No degrees found - try to find just institutions
@@ -1332,7 +1333,7 @@ function extractEducation(text: string, sections: Section[]): Education[] {
     educations.push(education);
   }
 
-  console.log('[Education] Extracted:', educations.length, 'entries');
+  parseLogger.debug('Education extracted', { count: educations.length });
   return educations;
 }
 
@@ -1415,11 +1416,11 @@ function calculateConfidence(result: ParsedResume): number {
 // ============================================================================
 
 export function parseResumeText(rawText: string): ParsedResume {
-  console.log('[Parser] Starting, raw text length:', rawText.length);
+  parseLogger.info('Starting resume text parse', { textLength: rawText.length });
 
   // Preprocess
   const text = preprocessText(rawText);
-  console.log('[Parser] Preprocessed text length:', text.length);
+  parseLogger.debug('Text preprocessed', { textLength: text.length });
 
   // Identify sections
   const sections = identifySections(text);
@@ -1466,26 +1467,26 @@ export function parseResumeText(rawText: string): ParsedResume {
   // Calculate confidence
   result.confidence = calculateConfidence(result);
 
-  // Log final result
-  console.log('[Parser] === FINAL RESULT ===');
-  console.log('[Parser] Name:', result.basics?.firstName, result.basics?.lastName);
-  console.log('[Parser] Headline:', result.basics?.headline?.substring(0, 50));
-  console.log('[Parser] Email:', result.basics?.email);
-  console.log('[Parser] Phone:', result.basics?.phone);
-  console.log('[Parser] Location:', result.basics?.location);
-  console.log('[Parser] Summary:', result.basics?.summary?.substring(0, 50));
-  console.log('[Parser] Skills:', result.skills?.length);
-  console.log('[Parser] Experiences:', result.workExperiences?.length);
-  console.log('[Parser] Education:', result.educations?.length);
-  console.log('[Parser] Certifications:', result.certifications?.length);
-  console.log('[Parser] Links:', result.links?.length);
-  console.log('[Parser] Confidence:', result.confidence);
+  // Log final result summary (no PII)
+  parseLogger.info('Resume parse complete', {
+    hasName: !!result.basics?.firstName,
+    hasEmail: !!result.basics?.email,
+    hasPhone: !!result.basics?.phone,
+    hasLocation: !!result.basics?.location,
+    hasSummary: !!result.basics?.summary,
+    skillCount: result.skills?.length ?? 0,
+    experienceCount: result.workExperiences?.length ?? 0,
+    educationCount: result.educations?.length ?? 0,
+    certificationCount: result.certifications?.length ?? 0,
+    linkCount: result.links?.length ?? 0,
+    confidence: result.confidence,
+  });
 
   return result;
 }
 
 export async function parseResume(buffer: Buffer, mimeType: string): Promise<ParsedResume> {
-  console.log('[parseResume] Called with mimeType:', mimeType);
+  parseLogger.info('parseResume called', { mimeType });
 
   let text: string;
 
@@ -1551,6 +1552,13 @@ export interface NormalizedResumeData {
   };
 }
 
+/**
+ * Note: 'RESUME_IMPORT' is an internal source tag used within normalized JSON payloads.
+ * It does NOT correspond to the Prisma DataSource enum value 'RESUME'.
+ * The actual DataSource.RESUME enum is used when creating import sessions.
+ * Do not change this value without migrating existing stored parsedData in the database.
+ */
+
 export function normalizeResumeData(parsed: ParsedResume): NormalizedResumeData {
   const normalized: NormalizedResumeData = {
     firstName: parsed.basics?.firstName,
@@ -1587,13 +1595,13 @@ export function normalizeResumeData(parsed: ParsedResume): NormalizedResumeData 
     },
   };
 
-  console.log('[Normalize] Output:');
-  console.log('  firstName:', normalized.firstName);
-  console.log('  lastName:', normalized.lastName);
-  console.log('  headline:', normalized.headline?.substring(0, 30));
-  console.log('  skills:', normalized.skills?.length);
-  console.log('  experiences:', normalized.workExperiences?.length);
-  console.log('  education:', normalized.educations?.length);
+  parseLogger.debug('Normalize output', {
+    hasFirstName: !!normalized.firstName,
+    hasLastName: !!normalized.lastName,
+    skillCount: normalized.skills?.length ?? 0,
+    experienceCount: normalized.workExperiences?.length ?? 0,
+    educationCount: normalized.educations?.length ?? 0,
+  });
 
   return normalized;
 }

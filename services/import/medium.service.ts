@@ -364,12 +364,22 @@ export class MediumImportService implements IMediumImportService {
         (item.mediaThumbnail as Record<string, string>)?.url ||
         (item.mediaContent as Record<string, string>)?.url;
 
+      // Clean query params from post URLs (e.g. Medium's ?source=rss-...)
+      let postUrl = (item.link as string) || (item.guid as string) || '';
+      try {
+        if (postUrl) {
+          const parsed = new URL(postUrl);
+          parsed.search = '';
+          postUrl = parsed.toString().replace(/\/$/, '');
+        }
+      } catch {
+        // If URL parsing fails, use as-is
+      }
+
       return {
         title: (item.title as string) || 'Untitled',
-        url: (item.link as string) || (item.guid as string) || '',
-        slug: (item.link as string)
-          ? new URL(item.link as string).pathname.split('/').pop() || undefined
-          : undefined,
+        url: postUrl,
+        slug: postUrl ? new URL(postUrl).pathname.split('/').pop() || undefined : undefined,
         excerpt: htmlToExcerpt(contentHtml),
         content: htmlToExcerpt(contentHtml, 500),
         thumbnail,
@@ -385,12 +395,22 @@ export class MediumImportService implements IMediumImportService {
 
     // Create a link for the blog profile
     const links: NormalizedLink[] = [];
-    const feedLink = (feed.link as string) || feedUrl;
-    if (feedLink) {
+    const rawFeedLink = (feed.link as string) || feedUrl;
+    if (rawFeedLink) {
+      // Strip query parameters (e.g. Medium's ?source=rss-...) to get a clean profile URL
+      let cleanFeedLink = rawFeedLink;
+      try {
+        const parsed = new URL(rawFeedLink);
+        parsed.search = '';
+        cleanFeedLink = parsed.toString().replace(/\/$/, '');
+      } catch {
+        // If URL parsing fails, use as-is
+      }
+
       const linkType = platform === 'medium' ? 'MEDIUM' : 'BLOG';
       links.push({
         type: linkType,
-        url: feedLink,
+        url: cleanFeedLink,
         label: `${platformInfo.name} Blog`,
         source: 'BLOG' as const,
       });

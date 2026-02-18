@@ -33,7 +33,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { PhoneInput, formatPhoneValue, type PhoneValue } from '@/components/ui/phone-input';
+import {
+  PhoneInput,
+  formatPhoneValue,
+  formatStandardPhone as formatStandardPhoneFn,
+  type PhoneValue,
+} from '@/components/ui/phone-input';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 import { toMonthInputFormat } from '@/lib/utils';
@@ -1855,11 +1860,19 @@ function ReviewPageContent() {
                       {data.contactInfo.allPhones.map((item, idx) => {
                         const isPrimary = idx === (data.contactInfo?.primaryPhoneIndex ?? 0);
                         const isEditing = editingPhoneIndex === idx;
-                        // Support both new and legacy format
+                        // Support both new and legacy format - show only numeric code + formatted number
+                        const dialCodeVal = item.countryCode
+                          ? item.countryCode.includes('::')
+                            ? item.countryCode.split('::')[0]
+                            : item.countryCode
+                          : null;
+                        const rawNum = item.number || item.phone || '';
                         const displayPhone =
-                          item.countryCode && item.number
-                            ? `${item.countryCode} ${item.number}`
-                            : item.number || item.phone || '';
+                          dialCodeVal && rawNum
+                            ? `${dialCodeVal} ${formatStandardPhoneFn(rawNum, dialCodeVal)}`
+                            : rawNum
+                              ? formatStandardPhoneFn(rawNum, null)
+                              : '';
                         const hasCountryCode = !!item.countryCode;
 
                         // Show inline editor when editing

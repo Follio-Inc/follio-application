@@ -230,12 +230,6 @@ export function GitHubProjectsSection({ projects, onUpdateAction }: GitHubProjec
                   Featured
                 </Badge>
               )}
-              {!project.isVisible && (
-                <Badge variant="outline" className="gap-1 text-xs text-muted-foreground">
-                  <EyeOff className="h-3 w-3" />
-                  Hidden
-                </Badge>
-              )}
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
               {project.customDescription || project.shortDesc || project.description?.slice(0, 100)}

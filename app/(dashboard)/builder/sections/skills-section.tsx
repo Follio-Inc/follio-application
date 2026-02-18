@@ -1,6 +1,6 @@
 'use client';
 
-import { Loader2, Plus, Trash2, X } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Plus, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -15,6 +15,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { notifyProfileUpdated } from '@/lib/events';
+import { cn } from '@/lib/utils';
 
 import type { Skill, SkillGroup } from '@/types';
 
@@ -57,6 +59,7 @@ export function SkillsSection({ skills, skillGroups, onUpdate }: SkillsSectionPr
       onUpdate([...skills, skill], skillGroups);
       setNewSkillName('');
       setNewSkillLevel('');
+      notifyProfileUpdated();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -148,6 +151,38 @@ export function SkillsSection({ skills, skillGroups, onUpdate }: SkillsSectionPr
     }
   };
 
+  const toggleSkillVisibility = async (skill: Skill) => {
+    const newValue = !(skill.isVisible ?? true);
+    // Optimistic update — update both skills array and skillGroups
+    const updatedSkills = skills.map((s) =>
+      s.id === skill.id ? { ...s, isVisible: newValue } : s
+    );
+    const updatedGroups = skillGroups.map((g) => ({
+      ...g,
+      skills: g.skills.map((s) => (s.id === skill.id ? { ...s, isVisible: newValue } : s)),
+    }));
+    onUpdate(updatedSkills, updatedGroups);
+    try {
+      const response = await fetch(`/api/profile/skills/${skill.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isVisible: newValue }),
+      });
+      if (!response.ok) throw new Error('Failed to update visibility');
+      notifyProfileUpdated();
+    } catch {
+      // Revert on error
+      const revertedSkills = skills.map((s) =>
+        s.id === skill.id ? { ...s, isVisible: !newValue } : s
+      );
+      const revertedGroups = skillGroups.map((g) => ({
+        ...g,
+        skills: g.skills.map((s) => (s.id === skill.id ? { ...s, isVisible: !newValue } : s)),
+      }));
+      onUpdate(revertedSkills, revertedGroups);
+    }
+  };
+
   // Get ungrouped skills
   const ungroupedSkills = skills.filter((s) => !s.groupId);
 
@@ -215,14 +250,35 @@ export function SkillsSection({ skills, skillGroups, onUpdate }: SkillsSectionPr
                 <span className="text-sm text-muted-foreground">No skills in this group</span>
               ) : (
                 group.skills.map((skill) => (
-                  <Badge key={skill.id} variant="secondary" className="gap-1 pr-1">
-                    {skill.name}
+                  <Badge
+                    key={skill.id}
+                    variant="secondary"
+                    className={cn('gap-1 pr-1', skill.isVisible === false && 'opacity-50')}
+                  >
+                    {skill.isVisible === false && (
+                      <EyeOff className="h-3 w-3 text-muted-foreground" />
+                    )}
+                    <span className={cn(skill.isVisible === false && 'line-through')}>
+                      {skill.name}
+                    </span>
                     {skill.level && (
                       <span className="ml-1 text-xs opacity-70">({skill.level.toLowerCase()})</span>
                     )}
                     <button
+                      onClick={() => toggleSkillVisibility(skill)}
+                      className="ml-0.5 rounded-full p-0.5 hover:bg-muted"
+                      disabled={isLoading}
+                      title={skill.isVisible === false ? 'Show on resume' : 'Hide from resume'}
+                    >
+                      {skill.isVisible === false ? (
+                        <Eye className="h-3 w-3" />
+                      ) : (
+                        <EyeOff className="h-3 w-3" />
+                      )}
+                    </button>
+                    <button
                       onClick={() => removeSkill(skill.id)}
-                      className="ml-1 rounded-full p-0.5 hover:bg-destructive hover:text-destructive-foreground"
+                      className="ml-0.5 rounded-full p-0.5 hover:bg-destructive hover:text-destructive-foreground"
                       disabled={isLoading}
                     >
                       <X className="h-3 w-3" />
@@ -242,14 +298,35 @@ export function SkillsSection({ skills, skillGroups, onUpdate }: SkillsSectionPr
             </Label>
             <div className="flex flex-wrap gap-2 rounded-lg border bg-muted/30 p-3">
               {ungroupedSkills.map((skill) => (
-                <Badge key={skill.id} variant="secondary" className="gap-1 pr-1">
-                  {skill.name}
+                <Badge
+                  key={skill.id}
+                  variant="secondary"
+                  className={cn('gap-1 pr-1', skill.isVisible === false && 'opacity-50')}
+                >
+                  {skill.isVisible === false && (
+                    <EyeOff className="h-3 w-3 text-muted-foreground" />
+                  )}
+                  <span className={cn(skill.isVisible === false && 'line-through')}>
+                    {skill.name}
+                  </span>
                   {skill.level && (
                     <span className="ml-1 text-xs opacity-70">({skill.level.toLowerCase()})</span>
                   )}
                   <button
+                    onClick={() => toggleSkillVisibility(skill)}
+                    className="ml-0.5 rounded-full p-0.5 hover:bg-muted"
+                    disabled={isLoading}
+                    title={skill.isVisible === false ? 'Show on resume' : 'Hide from resume'}
+                  >
+                    {skill.isVisible === false ? (
+                      <Eye className="h-3 w-3" />
+                    ) : (
+                      <EyeOff className="h-3 w-3" />
+                    )}
+                  </button>
+                  <button
                     onClick={() => removeSkill(skill.id)}
-                    className="ml-1 rounded-full p-0.5 hover:bg-destructive hover:text-destructive-foreground"
+                    className="ml-0.5 rounded-full p-0.5 hover:bg-destructive hover:text-destructive-foreground"
                     disabled={isLoading}
                   >
                     <X className="h-3 w-3" />

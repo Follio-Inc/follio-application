@@ -179,6 +179,9 @@ export async function GET() {
             awards: { orderBy: { sortOrder: 'asc' } },
             certifications: { orderBy: { sortOrder: 'asc' } },
             photos: { orderBy: { sortOrder: 'asc' } },
+            blogPosts: { orderBy: { createdAt: 'desc' } },
+            youtubeVideos: { orderBy: { createdAt: 'desc' } },
+            sections: { orderBy: { sortOrder: 'asc' } },
           },
         },
       },
@@ -251,6 +254,7 @@ export async function PATCH(request: NextRequest) {
         ...(body.resumeVisibility && { resumeVisibility: body.resumeVisibility }),
         ...(body.portfolioVisibility && { portfolioVisibility: body.portfolioVisibility }),
         ...(body.linksVisibility && { linksVisibility: body.linksVisibility }),
+        ...(typeof body.resumeShowPhoto === 'boolean' && { resumeShowPhoto: body.resumeShowPhoto }),
         updatedAt: new Date(),
       },
     });

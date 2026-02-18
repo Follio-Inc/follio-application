@@ -1,6 +1,6 @@
 'use client';
 
-import { GripVertical, Loader2, Plus, Trash2 } from 'lucide-react';
+import { Eye, EyeOff, GripVertical, Loader2, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -25,6 +25,8 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
+import { notifyProfileUpdated } from '@/lib/events';
+import { cn } from '@/lib/utils';
 
 import type { WorkExperience } from '@/types';
 
@@ -123,6 +125,7 @@ export function ExperienceSection({ experiences, onUpdate }: ExperienceSectionPr
       setIsDialogOpen(false);
       setFormData(emptyExperience);
       setEditingExperience(null);
+      notifyProfileUpdated();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -145,10 +148,31 @@ export function ExperienceSection({ experiences, onUpdate }: ExperienceSectionPr
       }
 
       onUpdate(experiences.filter((exp) => exp.id !== experienceId));
+      notifyProfileUpdated();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const toggleVisibility = async (experience: WorkExperience) => {
+    const newValue = !(experience.isVisible ?? true);
+    // Optimistic update
+    onUpdate(experiences.map((e) => (e.id === experience.id ? { ...e, isVisible: newValue } : e)));
+    try {
+      const response = await fetch(`/api/profile/experiences/${experience.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isVisible: newValue }),
+      });
+      if (!response.ok) throw new Error('Failed to update visibility');
+      notifyProfileUpdated();
+    } catch {
+      // Revert on error
+      onUpdate(
+        experiences.map((e) => (e.id === experience.id ? { ...e, isVisible: !newValue } : e))
+      );
     }
   };
 
@@ -383,7 +407,10 @@ export function ExperienceSection({ experiences, onUpdate }: ExperienceSectionPr
             {experiences.map((exp) => (
               <div
                 key={exp.id}
-                className="flex items-start gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50"
+                className={cn(
+                  'flex items-start gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50',
+                  exp.isVisible === false && 'opacity-50'
+                )}
               >
                 <div className="cursor-move text-muted-foreground">
                   <GripVertical className="h-5 w-5" />
@@ -409,7 +436,20 @@ export function ExperienceSection({ experiences, onUpdate }: ExperienceSectionPr
                             : ''}
                       </p>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => toggleVisibility(exp)}
+                        className={exp.isVisible === false ? 'text-muted-foreground' : ''}
+                        title={exp.isVisible === false ? 'Show on resume' : 'Hide from resume'}
+                      >
+                        {exp.isVisible === false ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </Button>
                       <Button
                         variant="ghost"
                         size="sm"

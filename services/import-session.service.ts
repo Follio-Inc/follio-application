@@ -18,7 +18,10 @@
  */
 
 import { db } from '@/lib/db';
+import { logger } from '@/lib/logger';
 import type { DataSource, ImportSessionStatus } from '@prisma/client';
+
+const sessionLogger = logger.child({ source: 'import-session' });
 
 // Sessions expire after 30 days of inactivity
 const SESSION_TTL_DAYS = 30;
@@ -59,6 +62,7 @@ export interface ImportSessionSummary {
  */
 export async function createImportSession(input: CreateSessionInput) {
   const { userId, source, parsedData, previewData, sourceLabel, proposedCount } = input;
+  sessionLogger.info('Creating import session', { userId, source, proposedCount });
 
   // Expire any existing pending sessions for this source
   // (user is re-importing, so old pending session is stale)
@@ -164,6 +168,7 @@ export async function updateSessionSelections(
  * Mark a session as APPLIED after the user commits their selected changes.
  */
 export async function markSessionApplied(sessionId: string, userId: string, appliedCount: number) {
+  sessionLogger.info('Marking session as applied', { sessionId, appliedCount });
   return db.importSession.update({
     where: { id: sessionId },
     data: {
@@ -227,7 +232,8 @@ export async function listSessions(
 /**
  * Cleanup: expire all stale sessions (run periodically or on-demand).
  */
-export async function expireStalesSessions() {
+export async function expireStaleSessions() {
+  sessionLogger.info('Expiring stale sessions');
   const result = await db.importSession.updateMany({
     where: {
       status: 'PENDING_REVIEW',

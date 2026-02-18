@@ -108,6 +108,7 @@ export const LinkSchema = z.object({
   type: LinkTypeSchema,
   url: z.string().url('Must be a valid URL'),
   label: z.string().max(50).optional(),
+  isVisible: z.boolean().optional(),
 });
 
 export const LinksArraySchema = z.array(LinkSchema);
@@ -128,6 +129,7 @@ export const WorkExperienceSchema = z.object({
   isCurrent: z.boolean().optional(),
   bullets: z.array(z.string().max(500)).max(20).optional(),
   tags: z.array(z.string().max(50)).max(20).optional(),
+  isVisible: z.boolean().optional(),
 });
 
 // ===========================================
@@ -147,6 +149,7 @@ export const EducationSchema = z.object({
   description: z.string().max(2000).optional(),
   activities: z.array(z.string().max(100)).max(10).optional(),
   honors: z.array(z.string().max(100)).max(10).optional(),
+  isVisible: z.boolean().optional(),
 });
 
 // ===========================================
@@ -158,6 +161,7 @@ export const SkillSchema = z.object({
   level: SkillLevelSchema.optional(),
   yearsOfExp: z.number().min(0).max(50).optional(),
   groupId: z.string().optional(),
+  isVisible: z.boolean().optional(),
 });
 
 export const SkillGroupSchema = z.object({
@@ -194,6 +198,7 @@ export const AwardSchema = z.object({
   date: z.coerce.date().optional().nullable(),
   description: z.string().max(500).optional(),
   url: z.string().url().optional().or(z.literal('')),
+  isVisible: z.boolean().optional(),
 });
 
 export const CertificationSchema = z.object({
@@ -203,6 +208,7 @@ export const CertificationSchema = z.object({
   credentialUrl: z.string().url().optional().or(z.literal('')),
   issueDate: z.coerce.date().optional().nullable(),
   expirationDate: z.coerce.date().optional().nullable(),
+  isVisible: z.boolean().optional(),
 });
 
 // ===========================================

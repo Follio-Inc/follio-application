@@ -1,13 +1,13 @@
 'use client';
 
-import { Check, Edit2, Mail, Phone, Plus, Star, X } from 'lucide-react';
+import { Check, Edit2, Eye, EyeOff, Mail, Phone, Plus, Star, X } from 'lucide-react';
 import { useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { PhoneInput, type PhoneValue } from '@/components/ui/phone-input';
+import { PhoneInput, formatStandardPhone, type PhoneValue } from '@/components/ui/phone-input';
 import { Spinner } from '@/components/ui/spinner';
 import {
   useContactManager,
@@ -41,6 +41,22 @@ export interface ContactSectionProps {
    * Custom description for the section
    */
   description?: string;
+  /**
+   * Whether primary email is visible on resume (optional eye toggle)
+   */
+  emailPublic?: boolean;
+  /**
+   * Whether primary phone is visible on resume (optional eye toggle)
+   */
+  phonePublic?: boolean;
+  /**
+   * Callback when email visibility is toggled
+   */
+  onEmailPublicChange?: (value: boolean) => void;
+  /**
+   * Callback when phone visibility is toggled
+   */
+  onPhonePublicChange?: (value: boolean) => void;
 }
 
 // ============================================================================
@@ -246,11 +262,19 @@ function PhoneListItem({
   onDelete,
   canDelete,
 }: PhoneListItemProps) {
-  // Support both new and legacy format
+  // Support both new and legacy format - show only numeric country code + formatted number
+  const dialCode = item.countryCode
+    ? item.countryCode.includes('::')
+      ? item.countryCode.split('::')[0]
+      : item.countryCode
+    : null;
+  const rawNumber = item.number || item.phone || '';
   const displayPhone =
-    item.countryCode && item.number
-      ? `${item.countryCode} ${item.number}`
-      : item.number || item.phone || '';
+    dialCode && rawNumber
+      ? `${dialCode} ${formatStandardPhone(rawNumber, dialCode)}`
+      : rawNumber
+        ? formatStandardPhone(rawNumber, null)
+        : '';
   const hasCountryCode = !!item.countryCode;
 
   if (isEditing) {
@@ -344,6 +368,10 @@ export function ContactSection({
   showCard = true,
   title = 'Contact Information',
   description = 'Manage your email addresses and phone numbers. Emails must be verified before they can be set as primary.',
+  emailPublic,
+  phonePublic,
+  onEmailPublicChange,
+  onPhonePublicChange,
 }: ContactSectionProps) {
   // Use the contact manager hook
   const {
@@ -421,10 +449,28 @@ export function ContactSection({
     <div className="space-y-6">
       {/* Emails Section */}
       <div>
-        <label className="mb-3 flex items-center gap-2 text-sm font-medium">
+        <div className="mb-3 flex items-center gap-2 text-sm font-medium">
           <Mail className="h-4 w-4" />
           Email Addresses
-        </label>
+          {onEmailPublicChange && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                onEmailPublicChange(!emailPublic);
+              }}
+              className={`ml-auto rounded-md p-1 transition-colors hover:bg-muted ${
+                emailPublic ? '' : 'text-muted-foreground'
+              }`}
+              title={
+                emailPublic ? 'Hide primary email from resume' : 'Show primary email on resume'
+              }
+            >
+              {emailPublic ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+            </button>
+          )}
+        </div>
         <p className="mb-3 text-xs text-muted-foreground">
           Manage your email addresses. The primary email is used for login and will be displayed on
           your profile. Emails must be verified before they can be set as primary.
@@ -538,10 +584,28 @@ export function ContactSection({
 
       {/* Phones Section */}
       <div>
-        <label className="mb-3 flex items-center gap-2 text-sm font-medium">
+        <div className="mb-3 flex items-center gap-2 text-sm font-medium">
           <Phone className="h-4 w-4" />
           Contact Phone
-        </label>
+          {onPhonePublicChange && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                onPhonePublicChange(!phonePublic);
+              }}
+              className={`ml-auto rounded-md p-1 transition-colors hover:bg-muted ${
+                phonePublic ? '' : 'text-muted-foreground'
+              }`}
+              title={
+                phonePublic ? 'Hide primary phone from resume' : 'Show primary phone on resume'
+              }
+            >
+              {phonePublic ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+            </button>
+          )}
+        </div>
         <p className="mb-3 text-xs text-muted-foreground">
           Choose which phone number to display on your public profile.
         </p>

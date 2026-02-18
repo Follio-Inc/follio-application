@@ -1,16 +1,16 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Eye, EyeOff, Globe } from 'lucide-react';
+import { Globe } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { ContactSection } from '@/components/contact-section';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { notifyProfileUpdated } from '@/lib/events';
 import type { ContactData } from '@/lib/hooks/use-contact-manager';
 import { ProfileBasicInfoSchema, type ProfileBasicInfo } from '@/lib/validations';
 
@@ -272,14 +272,66 @@ export function ContactInfoForm({ profile, onContactUpdate }: ContactInfoFormPro
     [onContactUpdate]
   );
 
-  const handleEmailPublicChange = (checked: boolean) => {
+  const handleEmailPublicChange = async (checked: boolean) => {
+    console.log(
+      '[EmailToggle] handleEmailPublicChange called with:',
+      checked,
+      'prev:',
+      emailPublic
+    );
+    // Optimistic update: update local UI + sync to parent state
+    const prev = emailPublic;
     setEmailPublic(checked);
+    // Keep parent's contactInfo state in sync so that if the user saves
+    // other contact changes (Save button), emailPublic isn't overwritten
     onContactUpdate({ emailPublic: checked });
+
+    try {
+      const res = await fetch('/api/profile/contact', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emailPublic: checked }),
+      });
+      console.log('[EmailToggle] API response status:', res.status);
+      if (!res.ok) throw new Error('Failed to update email visibility');
+      notifyProfileUpdated();
+    } catch (err) {
+      console.error('[EmailToggle] Failed to update email visibility:', err);
+      setEmailPublic(prev);
+      onContactUpdate({ emailPublic: prev });
+    }
   };
 
-  const handlePhonePublicChange = (checked: boolean) => {
+  const handlePhonePublicChange = async (checked: boolean) => {
+    console.log(
+      '[PhoneToggle] handlePhonePublicChange called with:',
+      checked,
+      'prev:',
+      phonePublic
+    );
+    const prev = phonePublic;
     setPhonePublic(checked);
     onContactUpdate({ phonePublic: checked });
+
+    try {
+      const res = await fetch('/api/profile/contact', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phonePublic: checked }),
+      });
+      console.log('[PhoneToggle] API response status:', res.status);
+      if (!res.ok) {
+        const errBody = await res.text();
+        console.error('[PhoneToggle] API error body:', errBody);
+        throw new Error('Failed to update phone visibility');
+      }
+      console.log('[PhoneToggle] Success, dispatching profile-updated event');
+      notifyProfileUpdated();
+    } catch (err) {
+      console.error('[PhoneToggle] Failed to update phone visibility:', err);
+      setPhonePublic(prev);
+      onContactUpdate({ phonePublic: prev });
+    }
   };
 
   const handleWebsiteChange = (value: string) => {
@@ -291,41 +343,9 @@ export function ContactInfoForm({ profile, onContactUpdate }: ContactInfoFormPro
     <Card>
       <CardHeader>
         <CardTitle>Contact Information</CardTitle>
-        <CardDescription>
-          Manage your email addresses and phone numbers. Control visibility with the eye icons.
-        </CardDescription>
+        <CardDescription>Manage your email addresses and phone numbers.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Visibility Controls */}
-        <div className="flex flex-wrap gap-4">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => handleEmailPublicChange(!emailPublic)}
-            className="h-8 gap-2"
-            title={
-              emailPublic ? 'Primary email visible on profile' : 'Primary email hidden from profile'
-            }
-          >
-            {emailPublic ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-            <span className="text-xs">Email: {emailPublic ? 'Visible' : 'Hidden'}</span>
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => handlePhonePublicChange(!phonePublic)}
-            className="h-8 gap-2"
-            title={
-              phonePublic ? 'Primary phone visible on profile' : 'Primary phone hidden from profile'
-            }
-          >
-            {phonePublic ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-            <span className="text-xs">Phone: {phonePublic ? 'Visible' : 'Hidden'}</span>
-          </Button>
-        </div>
-
         {/* Contact Section with full Clerk integration */}
         <ContactSection
           initialData={initialContactData}
@@ -333,6 +353,10 @@ export function ContactInfoForm({ profile, onContactUpdate }: ContactInfoFormPro
           showCard={false}
           title=""
           description=""
+          emailPublic={emailPublic}
+          phonePublic={phonePublic}
+          onEmailPublicChange={handleEmailPublicChange}
+          onPhonePublicChange={handlePhonePublicChange}
         />
 
         {/* Website */}

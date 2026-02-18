@@ -273,14 +273,99 @@ export function parsePhoneString(phone: string): PhoneValue {
 }
 
 /**
- * Format PhoneValue back to string
+ * Extract the numeric dial code from a countryCode value.
+ * Handles both selectKey format "+1::US" and legacy "+1" format.
+ */
+export function extractDialCode(countryCode: string | null): string | null {
+  if (!countryCode) return null;
+  if (countryCode.includes('::')) {
+    return countryCode.split('::')[0];
+  }
+  return countryCode;
+}
+
+/**
+ * Format a phone number string into standard readable format.
+ * - US/Canada (+1, 10 digits): (XXX) XXX-XXXX
+ * - India (+91, 10 digits): XXXXX XXXXX
+ * - UK (+44, 10-11 digits): XXXX XXX XXXX
+ * - Others: groups of 3-4 digits
+ */
+export function formatStandardPhone(number: string, dialCode: string | null): string {
+  // Strip all non-digit characters
+  const digits = number.replace(/\D/g, '');
+  if (!digits) return number;
+
+  // US/Canada: (XXX) XXX-XXXX
+  if (dialCode === '+1' && digits.length === 10) {
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+
+  // India: XXXXX XXXXX
+  if (dialCode === '+91' && digits.length === 10) {
+    return `${digits.slice(0, 5)} ${digits.slice(5)}`;
+  }
+
+  // UK: XXXX XXX XXXX (for 10-11 digit numbers)
+  if (dialCode === '+44' && (digits.length === 10 || digits.length === 11)) {
+    return `${digits.slice(0, 4)} ${digits.slice(4, 7)} ${digits.slice(7)}`;
+  }
+
+  // Generic: group into chunks of 3, last chunk can be 3-4
+  if (digits.length >= 7) {
+    const parts: string[] = [];
+    let i = 0;
+    while (i < digits.length) {
+      const remaining = digits.length - i;
+      if (remaining <= 4) {
+        parts.push(digits.slice(i));
+        break;
+      }
+      parts.push(digits.slice(i, i + 3));
+      i += 3;
+    }
+    return parts.join(' ');
+  }
+
+  return digits;
+}
+
+/**
+ * Format PhoneValue back to string for display.
+ * Uses only numeric country code (no "US"/"IN" suffix) and standard phone formatting.
  */
 export function formatPhoneValue(value: PhoneValue): string {
   if (!value.number) return '';
-  if (value.countryCode) {
-    return `${value.countryCode} ${value.number}`.trim();
+  const dialCode = extractDialCode(value.countryCode);
+  const formattedNumber = formatStandardPhone(value.number, dialCode);
+  if (dialCode) {
+    return `${dialCode} ${formattedNumber}`.trim();
   }
-  return value.number;
+  return formattedNumber;
+}
+
+/**
+ * Clean a stored phone string for display.
+ * Handles legacy format like "+1::US 6287241570" → "+1 (628) 724-1570"
+ */
+export function cleanPhoneDisplay(phone: string): string {
+  if (!phone) return '';
+  // Match "+1::US 6287241570" pattern
+  const match = phone.match(/^(\+\d{1,4})::([A-Z]{2})\s*(.*)$/);
+  if (match) {
+    const dialCode = match[1];
+    const rawNumber = match[3];
+    const formatted = formatStandardPhone(rawNumber, dialCode);
+    return `${dialCode} ${formatted}`;
+  }
+  // Already clean - try to format if it has a country code
+  const parsed = parsePhoneString(phone);
+  if (parsed.countryCode) {
+    const dialCode = extractDialCode(parsed.countryCode);
+    const formatted = formatStandardPhone(parsed.number, dialCode);
+    return dialCode ? `${dialCode} ${formatted}` : formatted;
+  }
+  return phone;
 }
 
 export { countries };

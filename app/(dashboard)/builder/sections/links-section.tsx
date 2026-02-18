@@ -2,6 +2,8 @@
 
 import {
   ExternalLink,
+  Eye,
+  EyeOff,
   Github,
   Globe,
   GripVertical,
@@ -34,6 +36,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { notifyProfileUpdated } from '@/lib/events';
+import { cn } from '@/lib/utils';
 
 import type { Link } from '@/types';
 
@@ -179,6 +183,24 @@ export function LinksSection({ links, onUpdate }: LinksSectionProps) {
     }
   };
 
+  const toggleVisibility = async (link: Link) => {
+    const newValue = !(link.isVisible ?? true);
+    // Optimistic update
+    onUpdate(links.map((l) => (l.id === link.id ? { ...l, isVisible: newValue } : l)));
+    try {
+      const response = await fetch(`/api/profile/links/${link.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isVisible: newValue }),
+      });
+      if (!response.ok) throw new Error('Failed to update visibility');
+      notifyProfileUpdated();
+    } catch {
+      // Revert on error
+      onUpdate(links.map((l) => (l.id === link.id ? { ...l, isVisible: !newValue } : l)));
+    }
+  };
+
   const getPlaceholderForType = (type: string) => {
     switch (type) {
       case 'GITHUB':
@@ -301,7 +323,10 @@ export function LinksSection({ links, onUpdate }: LinksSectionProps) {
               return (
                 <div
                   key={link.id}
-                  className="flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50"
+                  className={cn(
+                    'flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50',
+                    link.isVisible === false && 'opacity-50'
+                  )}
                 >
                   <div className="cursor-move text-muted-foreground">
                     <GripVertical className="h-4 w-4" />
@@ -310,7 +335,7 @@ export function LinksSection({ links, onUpdate }: LinksSectionProps) {
                     <Icon className="h-5 w-5" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="font-medium">{link.label || link.type}</div>
+                    <span className="font-medium">{link.label || link.type}</span>
                     <a
                       href={link.url}
                       target="_blank"
@@ -322,6 +347,19 @@ export function LinksSection({ links, onUpdate }: LinksSectionProps) {
                     </a>
                   </div>
                   <div className="flex gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => toggleVisibility(link)}
+                      className={link.isVisible === false ? 'text-muted-foreground' : ''}
+                      title={link.isVisible === false ? 'Show on resume' : 'Hide from resume'}
+                    >
+                      {link.isVisible === false ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </Button>
                     <Button
                       variant="ghost"
                       size="sm"

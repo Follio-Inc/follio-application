@@ -8,14 +8,19 @@
 
 import type { DataSource } from '@prisma/client';
 
+import { logger } from '@/lib/logger';
+
+const mergeLogger = logger.child({ source: 'merge-service' });
+
 // Priority order for data sources (higher = more authoritative)
+// NOTE: Must match SOURCE_PRIORITY in multi-source-merger.service.ts
 const SOURCE_PRIORITY: Record<DataSource, number> = {
   MANUAL: 100, // User edits always win
   RESUME: 80,
+  GOOGLE: 75, // Google provides reliable data
   LINKEDIN: 70,
   GITHUB: 60,
   GENERATED: 50,
-  GOOGLE: 40,
   MEDIUM: 45,
   YOUTUBE: 45,
   BLOG: 45,
@@ -219,10 +224,7 @@ export function mergeProfileData<T extends Record<string, unknown>>(
           if (key === 'skills') {
             combined = deduplicateArray(combined as Record<string, unknown>[], ['name']);
           } else if (key === 'workExperiences') {
-            combined = deduplicateArray(combined as Record<string, unknown>[], [
-              'company',
-              'title',
-            ]);
+            combined = deduplicateArray(combined as Record<string, unknown>[], ['company', 'role']);
           } else if (key === 'educations') {
             combined = deduplicateArray(combined as Record<string, unknown>[], [
               'institution',
@@ -285,23 +287,24 @@ export function mergeProfileData<T extends Record<string, unknown>>(
 }
 
 /**
- * Merge work experiences with smart deduplication
+ * Merge work experiences with smart deduplication.
+ * Uses 'company' and 'role' fields (matching the Prisma WorkExperience model).
  */
 export function mergeWorkExperiences<
-  T extends { company: string; title: string; startDate?: Date | null },
->(existing: T[], incoming: T[], options: { deduplicateByCompanyTitle?: boolean } = {}): T[] {
-  const { deduplicateByCompanyTitle = true } = options;
+  T extends { company: string; role: string; startDate?: Date | null },
+>(existing: T[], incoming: T[], options: { deduplicateByCompanyRole?: boolean } = {}): T[] {
+  const { deduplicateByCompanyRole = true } = options;
 
-  if (!deduplicateByCompanyTitle) {
+  if (!deduplicateByCompanyRole) {
     return [...existing, ...incoming];
   }
 
   const existingKeys = new Set(
-    existing.map((e) => `${e.company.toLowerCase()}-${e.title.toLowerCase()}`)
+    existing.map((e) => `${e.company.toLowerCase()}-${e.role.toLowerCase()}`)
   );
 
   const newItems = incoming.filter((item) => {
-    const key = `${item.company.toLowerCase()}-${item.title.toLowerCase()}`;
+    const key = `${item.company.toLowerCase()}-${item.role.toLowerCase()}`;
     return !existingKeys.has(key);
   });
 

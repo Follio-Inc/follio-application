@@ -44,6 +44,7 @@ model Profile {
   summarySuggestion      String?
   avatarUrl              String?
   avatarUrlSource        DataSource             @default(MANUAL)
+  resumeShowPhoto        Boolean                @default(false)
   location               String?
   locationSource         DataSource             @default(MANUAL)
   unlistedKey            String?                @unique @default(cuid())
@@ -118,6 +119,7 @@ model Link {
   type      LinkType
   url       String
   label     String?
+  isVisible Boolean    @default(true)
   source    DataSource @default(MANUAL)
   sortOrder Int        @default(0)
   createdAt DateTime   @default(now())
@@ -143,6 +145,7 @@ model WorkExperience {
   bullets        String[]
   metrics        Json?
   tags           String[]
+  isVisible      Boolean         @default(true)
   source         DataSource      @default(MANUAL)
   sortOrder      Int             @default(0)
   createdAt      DateTime        @default(now())
@@ -169,6 +172,7 @@ model Education {
   description     String?
   activities      String[]
   honors          String[]
+  isVisible       Boolean    @default(true)
   source          DataSource @default(MANUAL)
   sortOrder       Int        @default(0)
   createdAt       DateTime   @default(now())
@@ -185,6 +189,7 @@ model Skill {
   level      SkillLevel?
   yearsOfExp Int?
   groupId    String?
+  isVisible  Boolean     @default(true)
   source     DataSource  @default(MANUAL)
   sortOrder  Int         @default(0)
   createdAt  DateTime    @default(now())
@@ -267,6 +272,7 @@ model Award {
   date        DateTime?
   description String?
   url         String?
+  isVisible   Boolean    @default(true)
   source      DataSource @default(MANUAL)
   sortOrder   Int        @default(0)
   createdAt   DateTime   @default(now())
@@ -286,6 +292,7 @@ model Certification {
   credentialUrl  String?
   issueDate      DateTime?
   expirationDate DateTime?
+  isVisible      Boolean    @default(true)
   source         DataSource @default(MANUAL)
   sortOrder      Int        @default(0)
   createdAt      DateTime   @default(now())

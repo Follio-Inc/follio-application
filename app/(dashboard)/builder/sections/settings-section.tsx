@@ -4,6 +4,7 @@ import { useClerk } from '@clerk/nextjs';
 import {
   AlertTriangle,
   Bell,
+  Camera,
   Eye,
   EyeOff,
   FileText,
@@ -109,6 +110,7 @@ export function SettingsSection({ profile }: SettingsSectionProps) {
   const [portfolioVisibility, setPortfolioVisibility] = useState<'PUBLIC' | 'UNLISTED' | 'PRIVATE'>(
     profile.portfolioVisibility || 'PUBLIC'
   );
+  const [resumeShowPhoto, setResumeShowPhoto] = useState(profile.resumeShowPhoto ?? false);
   const [savingVisibility, setSavingVisibility] = useState(false);
 
   // Delete account state
@@ -154,6 +156,21 @@ export function SettingsSection({ profile }: SettingsSectionProps) {
       else setPortfolioVisibility(portfolioVisibility);
     } finally {
       setSavingVisibility(false);
+    }
+  };
+
+  // Toggle resume photo visibility
+  const handleResumeShowPhotoChange = async (checked: boolean) => {
+    setResumeShowPhoto(checked);
+    try {
+      await fetch('/api/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resumeShowPhoto: checked }),
+      });
+    } catch (error) {
+      console.error('Failed to update resume photo visibility:', error);
+      setResumeShowPhoto(!checked);
     }
   };
 
@@ -432,6 +449,24 @@ export function SettingsSection({ profile }: SettingsSectionProps) {
                   ? 'Only people with the link or share token can view your resume. Visitors to your portfolio will see a "Request Access" option.'
                   : 'Only you can view your resume. No one else has access.'}
             </p>
+
+            {/* Resume Photo Toggle */}
+            <div className="mt-4 flex items-center justify-between rounded-md border bg-muted/30 p-3">
+              <div className="flex items-center gap-2.5">
+                <Camera className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium">Show Photo on Resume</p>
+                  <p className="text-xs text-muted-foreground">
+                    Display your profile photo at the top of your resume
+                  </p>
+                </div>
+              </div>
+              <Switch
+                id="resume-show-photo"
+                checked={resumeShowPhoto}
+                onCheckedChange={handleResumeShowPhotoChange}
+              />
+            </div>
           </div>
         </CardContent>
       </Card>

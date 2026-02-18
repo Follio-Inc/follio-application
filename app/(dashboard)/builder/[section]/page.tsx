@@ -76,38 +76,24 @@ export default async function SectionPage({ params }: PageProps) {
   // Serialize the profile data to convert Date objects to strings for client component
   const serializedProfile = serializeForClient(user.profile);
 
-  // Handle SHARE section separately (not a profile section)
+  // Handle SHARE section — redirects to top-level /share page
   if (sectionSlug === 'share') {
-    return (
-      <SectionEditor
-        profile={serializedProfile}
-        sectionType="SHARE"
-        section={null}
-        customSectionId={null}
-      />
-    );
+    redirect('/share');
   }
 
   // Handle GITHUB section - redirect to unified Data Sources page
   if (sectionSlug === 'github') {
-    redirect('/builder/data-sources');
+    redirect('/data-sources');
   }
 
   // Handle import-sync - redirect to unified Data Sources page
   if (sectionSlug === 'import-sync') {
-    redirect('/builder/data-sources');
+    redirect('/data-sources');
   }
 
-  // Handle SETTINGS section separately (not a profile section, account settings)
+  // Handle SETTINGS section — redirects to top-level /settings page
   if (sectionSlug === 'settings') {
-    return (
-      <SectionEditor
-        profile={serializedProfile}
-        sectionType="SETTINGS"
-        section={null}
-        customSectionId={null}
-      />
-    );
+    redirect('/settings');
   }
 
   // Determine section type from slug

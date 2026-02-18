@@ -2,7 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 
 import { db } from '@/lib/db';
-import { SettingsPageClient } from './settings-page-client';
+import { SharePageClient } from './share-page-client';
 
 // Helper to serialize data for client components (converts Date objects to ISO strings)
 function serializeForClient<T>(data: T): T {
@@ -10,11 +10,11 @@ function serializeForClient<T>(data: T): T {
 }
 
 export const metadata = {
-  title: 'Settings - Follio',
-  description: 'Manage your Follio account settings',
+  title: 'Share & Publish - Follio',
+  description: 'Control visibility and share your resume & portfolio',
 };
 
-export default async function SettingsPage() {
+export default async function SharePage() {
   const { userId } = await auth();
 
   if (!userId) {
@@ -53,5 +53,5 @@ export default async function SettingsPage() {
 
   const serializedProfile = serializeForClient(user.profile);
 
-  return <SettingsPageClient profile={serializedProfile} />;
+  return <SharePageClient profile={serializedProfile} />;
 }

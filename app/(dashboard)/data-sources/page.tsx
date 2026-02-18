@@ -1,8 +1,8 @@
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 
+import DataSourcesPageClient from '@/app/(dashboard)/builder/data-sources/data-sources-client';
 import { db } from '@/lib/db';
-import { SettingsPageClient } from './settings-page-client';
 
 // Helper to serialize data for client components (converts Date objects to ISO strings)
 function serializeForClient<T>(data: T): T {
@@ -10,11 +10,11 @@ function serializeForClient<T>(data: T): T {
 }
 
 export const metadata = {
-  title: 'Settings - Follio',
-  description: 'Manage your Follio account settings',
+  title: 'Data Sources - Follio',
+  description: 'Import and manage data from your resume, GitHub, LinkedIn, and other sources',
 };
 
-export default async function SettingsPage() {
+export default async function DataSourcesPage() {
   const { userId } = await auth();
 
   if (!userId) {
@@ -53,5 +53,9 @@ export default async function SettingsPage() {
 
   const serializedProfile = serializeForClient(user.profile);
 
-  return <SettingsPageClient profile={serializedProfile} />;
+  return (
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <DataSourcesPageClient profile={serializedProfile} />
+    </div>
+  );
 }

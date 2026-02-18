@@ -529,13 +529,13 @@ describe('Utils', () => {
     it('should format phone with country code', () => {
       expect(
         formatParsedPhone({ countryCode: '+91', number: '9876543210', raw: '+919876543210' })
-      ).toBe('+91 9876543210');
+      ).toBe('+91 98765 43210');
     });
 
     it('should format phone without country code', () => {
       expect(
         formatParsedPhone({ countryCode: null, number: '5551234567', raw: '5551234567' })
-      ).toBe('5551234567');
+      ).toBe('555 123 4567');
     });
 
     it('should return empty string for empty number', () => {

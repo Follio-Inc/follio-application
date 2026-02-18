@@ -1,21 +1,16 @@
 import { UserMenu } from '@/components/auth/user-menu';
-import { Logo } from '@/components/Logo';
+import { DashboardTopbar } from '@/components/dashboard-sidebar';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-muted/30">
-      {/* Top Navigation */}
-      <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
-          <Logo href="/" size="md" />
-          <div className="flex items-center gap-3">
-            <UserMenu />
-          </div>
-        </div>
-      </header>
+    <div className="flex h-screen flex-col overflow-hidden bg-muted/30">
+      {/* LinkedIn-style top navigation bar */}
+      <DashboardTopbar>
+        <UserMenu />
+      </DashboardTopbar>
 
-      {/* Main Content */}
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">{children}</main>
+      {/* Page content */}
+      <main className="flex-1 overflow-auto">{children}</main>
     </div>
   );
 }

@@ -109,13 +109,30 @@ export function formatNumber(num: number): string {
 }
 
 /**
- * Generate a random token
+ * Generate a cryptographically secure random token.
+ * Uses Web Crypto API (available in Node 19+ and all modern browsers).
+ * Falls back to Node.js `crypto` module in server environments.
  */
 export function generateToken(length: number = 32): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  const randomValues = new Uint32Array(length);
+
+  // Use Web Crypto API (works in both browser and Node 19+/Edge runtime)
+  if (typeof globalThis.crypto?.getRandomValues === 'function') {
+    globalThis.crypto.getRandomValues(randomValues);
+  } else {
+    // Fallback for older Node.js environments
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const nodeCrypto = require('crypto') as typeof import('crypto');
+    const buf = nodeCrypto.randomBytes(length * 4);
+    for (let i = 0; i < length; i++) {
+      randomValues[i] = buf.readUInt32BE(i * 4);
+    }
+  }
+
   let result = '';
   for (let i = 0; i < length; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
+    result += chars.charAt(randomValues[i] % chars.length);
   }
   return result;
 }
@@ -307,8 +324,9 @@ export function toMonthInputFormat(dateStr: string | undefined | null): string {
 }
 
 /**
- * Get image dimensions from a URL
- * Returns null if the image cannot be loaded
+ * Get image dimensions from a URL.
+ * Returns null if the image cannot be loaded or if called on the server.
+ * Note: Browser-only — uses the DOM Image constructor.
  */
 export function getImageDimensions(url: string): Promise<{ width: number; height: number } | null> {
   return new Promise((resolve) => {
@@ -317,21 +335,32 @@ export function getImageDimensions(url: string): Promise<{ width: number; height
       return;
     }
 
+    // Guard: only works in browser environments
+    if (typeof window === 'undefined' || typeof Image === 'undefined') {
+      resolve(null);
+      return;
+    }
+
     const img = new Image();
     img.crossOrigin = 'anonymous';
 
+    // Timeout to prevent hanging; also clean up the Image ref
+    const timeoutId = setTimeout(() => {
+      img.onload = null;
+      img.onerror = null;
+      img.src = ''; // Cancel pending load
+      resolve(null);
+    }, 5000);
+
     img.onload = () => {
+      clearTimeout(timeoutId);
       resolve({ width: img.naturalWidth, height: img.naturalHeight });
     };
 
     img.onerror = () => {
+      clearTimeout(timeoutId);
       resolve(null);
     };
-
-    // Set a timeout to prevent hanging
-    setTimeout(() => {
-      resolve(null);
-    }, 5000);
 
     img.src = url;
   });
@@ -534,8 +563,52 @@ export function parsePhoneWithCountryCode(phone: string | null | undefined): Par
  */
 export function formatParsedPhone(parsed: ParsedPhone): string {
   if (!parsed.number) return '';
+
+  // Format the number in standard format based on country code
+  const formatted = formatStandardPhoneNumber(parsed.number, parsed.countryCode);
+
   if (parsed.countryCode) {
-    return `${parsed.countryCode} ${parsed.number}`;
+    return `${parsed.countryCode} ${formatted}`;
   }
-  return parsed.number;
+  return formatted;
+}
+
+/**
+ * Format a phone number string into standard readable format.
+ * - US/Canada (+1, 10 digits): (XXX) XXX-XXXX
+ * - India (+91, 10 digits): XXXXX XXXXX
+ * - UK (+44, 10-11 digits): XXXX XXX XXXX
+ * - Others: groups of 3-4 digits
+ */
+function formatStandardPhoneNumber(number: string, dialCode: string | null): string {
+  const digits = number.replace(/\D/g, '');
+  if (!digits) return number;
+
+  if (dialCode === '+1' && digits.length === 10) {
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+  if (dialCode === '+91' && digits.length === 10) {
+    return `${digits.slice(0, 5)} ${digits.slice(5)}`;
+  }
+  if (dialCode === '+44' && (digits.length === 10 || digits.length === 11)) {
+    return `${digits.slice(0, 4)} ${digits.slice(4, 7)} ${digits.slice(7)}`;
+  }
+
+  // Generic: group into chunks of 3, last chunk can be 3-4
+  if (digits.length >= 7) {
+    const parts: string[] = [];
+    let i = 0;
+    while (i < digits.length) {
+      const remaining = digits.length - i;
+      if (remaining <= 4) {
+        parts.push(digits.slice(i));
+        break;
+      }
+      parts.push(digits.slice(i, i + 3));
+      i += 3;
+    }
+    return parts.join(' ');
+  }
+
+  return digits;
 }

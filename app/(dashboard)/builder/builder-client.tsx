@@ -27,6 +27,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { notifyProfileUpdated } from '@/lib/events';
 import { getPortfolioPath } from '@/lib/url';
 
 import { ImportDataDialog } from './components/import-data-dialog';
@@ -182,6 +183,7 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
       setHasChanges(false);
       setHasContactChanges(false);
       setSaveStatus('saved');
+      notifyProfileUpdated();
 
       // Reset to idle after showing "saved" status
       setTimeout(() => setSaveStatus('idle'), 2000);

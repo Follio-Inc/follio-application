@@ -4,11 +4,9 @@ import {
   ExternalLink,
   Eye,
   EyeOff,
-  FileText,
   Github,
   GripVertical,
   Loader2,
-  Monitor,
   Pin,
   Plus,
   Star,
@@ -27,18 +25,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
+import { notifyProfileUpdated } from '@/lib/events';
+import { cn } from '@/lib/utils';
 
 import type { Project } from '@/types';
 
@@ -140,6 +132,7 @@ export function ProjectsSection({ projects, onUpdate }: ProjectsSectionProps) {
       setIsDialogOpen(false);
       setFormData(emptyProject);
       setEditingProject(null);
+      notifyProfileUpdated();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -162,6 +155,7 @@ export function ProjectsSection({ projects, onUpdate }: ProjectsSectionProps) {
       }
 
       onUpdate(projects.filter((p) => p.id !== projectId));
+      notifyProfileUpdated();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -229,34 +223,21 @@ export function ProjectsSection({ projects, onUpdate }: ProjectsSectionProps) {
     }
   };
 
-  const toggleVisibility = async (
-    project: Project,
-    field: 'isVisible' | 'showOnPortfolio' | 'showOnResume'
-  ) => {
-    setIsLoading(true);
-    setError(null);
-
-    const currentValue = project[field] ?? true;
-
+  const toggleVisibility = async (project: Project) => {
+    const newValue = !(project.isVisible ?? true);
+    // Optimistic update
+    onUpdate(projects.map((p) => (p.id === project.id ? { ...p, isVisible: newValue } : p)));
     try {
       const response = await fetch(`/api/profile/projects/${project.id}/visibility`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ [field]: !currentValue }),
+        body: JSON.stringify({ isVisible: newValue }),
       });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to update visibility');
-      }
-
-      const { project: updatedProject } = await response.json();
-      const updatedProjects = projects.map((p) => (p.id === project.id ? updatedProject : p));
-      onUpdate(updatedProjects);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-    } finally {
-      setIsLoading(false);
+      if (!response.ok) throw new Error('Failed to update visibility');
+      notifyProfileUpdated();
+    } catch {
+      // Revert on error
+      onUpdate(projects.map((p) => (p.id === project.id ? { ...p, isVisible: !newValue } : p)));
     }
   };
 
@@ -435,7 +416,10 @@ export function ProjectsSection({ projects, onUpdate }: ProjectsSectionProps) {
             {projects.map((project) => (
               <div
                 key={project.id}
-                className="flex items-start gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50"
+                className={cn(
+                  'flex items-start gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50',
+                  project.isVisible === false && 'opacity-50'
+                )}
               >
                 <div className="cursor-move text-muted-foreground">
                   <GripVertical className="h-5 w-5" />
@@ -461,12 +445,6 @@ export function ProjectsSection({ projects, onUpdate }: ProjectsSectionProps) {
                           <Badge variant="outline" className="gap-1 text-xs text-amber-600">
                             <Pin className="h-3 w-3" />
                             Pinned
-                          </Badge>
-                        )}
-                        {project.isVisible === false && (
-                          <Badge variant="outline" className="gap-1 text-xs text-muted-foreground">
-                            <EyeOff className="h-3 w-3" />
-                            Hidden
                           </Badge>
                         )}
                       </div>
@@ -507,54 +485,19 @@ export function ProjectsSection({ projects, onUpdate }: ProjectsSectionProps) {
                       </div>
                     </div>
                     <div className="flex gap-1">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            disabled={isLoading}
-                            className={project.isVisible === false ? 'text-muted-foreground' : ''}
-                          >
-                            {project.isVisible === false ? (
-                              <EyeOff className="h-4 w-4" />
-                            ) : (
-                              <Eye className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Visibility</DropdownMenuLabel>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => toggleVisibility(project, 'isVisible')}>
-                            {project.isVisible === false ? (
-                              <>
-                                <Eye className="mr-2 h-4 w-4" />
-                                Show Project
-                              </>
-                            ) : (
-                              <>
-                                <EyeOff className="mr-2 h-4 w-4" />
-                                Hide Project
-                              </>
-                            )}
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            onClick={() => toggleVisibility(project, 'showOnPortfolio')}
-                            disabled={project.isVisible === false}
-                          >
-                            <Monitor className="mr-2 h-4 w-4" />
-                            Portfolio: {project.showOnPortfolio !== false ? 'On' : 'Off'}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => toggleVisibility(project, 'showOnResume')}
-                            disabled={project.isVisible === false}
-                          >
-                            <FileText className="mr-2 h-4 w-4" />
-                            Resume: {project.showOnResume !== false ? 'On' : 'Off'}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => toggleVisibility(project)}
+                        className={project.isVisible === false ? 'text-muted-foreground' : ''}
+                        title={project.isVisible === false ? 'Show on resume' : 'Hide from resume'}
+                      >
+                        {project.isVisible === false ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"

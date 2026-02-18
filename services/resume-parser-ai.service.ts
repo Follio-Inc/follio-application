@@ -12,7 +12,10 @@
  * - Extracts structured data from unstructured text
  */
 
+import { logger } from '@/lib/logger';
 import OpenAI from 'openai';
+
+const aiParseLogger = logger.child({ source: 'resume-parser-ai' });
 
 // ============================================================================
 // TYPES
@@ -88,7 +91,7 @@ interface ProjectAI {
 function getOpenAIClient(): OpenAI | null {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    console.log('[AI Parser] No OPENAI_API_KEY found, will use rule-based fallback');
+    aiParseLogger.info('No OPENAI_API_KEY found, will use rule-based fallback');
     return null;
   }
   return new OpenAI({ apiKey });
@@ -184,7 +187,7 @@ async function parseWithAI(text: string): Promise<ParsedResumeAI | null> {
   if (!client) return null;
 
   try {
-    console.log('[AI Parser] Sending to OpenAI GPT-4...');
+    aiParseLogger.info('Sending resume to OpenAI');
     const startTime = Date.now();
 
     const response = await client.chat.completions.create({
@@ -206,17 +209,23 @@ async function parseWithAI(text: string): Promise<ParsedResumeAI | null> {
     });
 
     const elapsed = Date.now() - startTime;
-    console.log(`[AI Parser] OpenAI responded in ${elapsed}ms`);
+    aiParseLogger.info('OpenAI response received', { duration: elapsed });
 
     const content = response.choices[0]?.message?.content;
     if (!content) {
-      console.error('[AI Parser] Empty response from OpenAI');
+      aiParseLogger.error('Empty response from OpenAI');
       return null;
     }
 
-    // Parse the JSON response
-    const parsed = JSON.parse(content);
-    console.log('[AI Parser] Successfully parsed AI response');
+    // Parse the JSON response safely
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(content);
+    } catch (parseError) {
+      aiParseLogger.error('Failed to parse OpenAI JSON response', parseError);
+      return null;
+    }
+    aiParseLogger.debug('AI response parsed successfully');
 
     // Transform to our format
     const result: ParsedResumeAI = {
@@ -272,21 +281,19 @@ async function parseWithAI(text: string): Promise<ParsedResumeAI | null> {
       rawText: text,
     };
 
-    // Log summary
-    console.log('[AI Parser] === EXTRACTION SUMMARY ===');
-    console.log(`  Name: ${result.basics.firstName} ${result.basics.lastName}`);
-    console.log(`  Email: ${result.basics.email}`);
-    console.log(`  Headline: ${result.basics.headline?.substring(0, 50)}`);
-    console.log(`  Experiences: ${result.workExperiences.length}`);
-    console.log(`  Education: ${result.educations.length}`);
-    console.log(`  Skills: ${result.skills.length}`);
-    console.log(`  Certifications: ${result.certifications.length}`);
-    console.log(`  Projects: ${result.projects.length}`);
-    console.log(`  Links: ${result.links.length}`);
+    // Log summary (no PII)
+    aiParseLogger.info('AI extraction complete', {
+      experienceCount: result.workExperiences.length,
+      educationCount: result.educations.length,
+      skillCount: result.skills.length,
+      certificationCount: result.certifications.length,
+      projectCount: result.projects.length,
+      linkCount: result.links.length,
+    });
 
     return result;
   } catch (error) {
-    console.error('[AI Parser] OpenAI error:', error);
+    aiParseLogger.error('OpenAI parsing failed', error);
     return null;
   }
 }
@@ -297,7 +304,7 @@ async function parseWithAI(text: string): Promise<ParsedResumeAI | null> {
 
 export async function extractTextFromPDFEnhanced(buffer: Buffer): Promise<string> {
   try {
-    console.log('[PDF Enhanced] Starting extraction with pdf-parse...');
+    aiParseLogger.debug('Starting PDF extraction with pdf-parse');
 
     // pdf-parse uses CommonJS-style default export
     const pdfParse = (await import('pdf-parse')).default;
@@ -305,20 +312,21 @@ export async function extractTextFromPDFEnhanced(buffer: Buffer): Promise<string
     // Parse the PDF buffer
     const result = await pdfParse(buffer);
 
-    console.log('[PDF Enhanced] Extracted text length:', result.text?.length);
+    aiParseLogger.debug('PDF text extracted', { textLength: result.text?.length });
     return result.text || '';
   } catch (error) {
-    console.error('[PDF Enhanced] Extraction error:', error);
+    aiParseLogger.warn('pdf-parse extraction failed, trying fallback', {
+      error: error instanceof Error ? error.message : String(error),
+    });
 
     // Fallback to unpdf if pdf-parse fails
-    console.log('[PDF Enhanced] Trying fallback with unpdf...');
     try {
       const { extractText } = await import('unpdf');
       const uint8Array = new Uint8Array(buffer);
       const { text } = await extractText(uint8Array, { mergePages: true });
       return text || '';
     } catch (fallbackError) {
-      console.error('[PDF Enhanced] Fallback also failed:', fallbackError);
+      aiParseLogger.error('PDF extraction fallback also failed', fallbackError);
       throw new Error('Failed to extract text from PDF');
     }
   }
@@ -329,7 +337,7 @@ export async function extractTextFromPDFEnhanced(buffer: Buffer): Promise<string
 // ============================================================================
 
 export async function parseResumeHybrid(buffer: Buffer, mimeType: string): Promise<ParsedResumeAI> {
-  console.log('[Hybrid Parser] Starting with mimeType:', mimeType);
+  aiParseLogger.info('Starting hybrid parse', { mimeType });
 
   // Step 1: Extract text from PDF
   let text: string;
@@ -345,17 +353,17 @@ export async function parseResumeHybrid(buffer: Buffer, mimeType: string): Promi
     throw new Error('Could not extract meaningful text from the document');
   }
 
-  console.log('[Hybrid Parser] Extracted text sample:', text.substring(0, 300));
+  aiParseLogger.debug('Text extracted', { textLength: text.length });
 
   // Step 2: Try AI parsing first
   const aiResult = await parseWithAI(text);
   if (aiResult) {
-    console.log('[Hybrid Parser] AI parsing succeeded');
+    aiParseLogger.info('AI parsing succeeded');
     return aiResult;
   }
 
   // Step 3: Fall back to rule-based parsing
-  console.log('[Hybrid Parser] Falling back to rule-based parser');
+  aiParseLogger.info('Falling back to rule-based parser');
   const { parseResumeText } = await import('./resume-parser.service');
   const ruleBasedResult = parseResumeText(text);
 
@@ -493,15 +501,15 @@ export function normalizeResumeDataAI(parsed: ParsedResumeAI): NormalizedResumeD
     },
   };
 
-  console.log('[Normalize AI] Output:');
-  console.log('  firstName:', normalized.firstName);
-  console.log('  lastName:', normalized.lastName);
-  console.log('  headline:', normalized.headline?.substring(0, 30));
-  console.log('  skills:', normalized.skills?.length);
-  console.log('  experiences:', normalized.workExperiences?.length);
-  console.log('  education:', normalized.educations?.length);
-  console.log('  certifications:', normalized.certifications?.length);
-  console.log('  parseMethod:', normalized._meta.parseMethod);
+  aiParseLogger.debug('Normalize AI output', {
+    hasFirstName: !!normalized.firstName,
+    hasLastName: !!normalized.lastName,
+    skillCount: normalized.skills?.length ?? 0,
+    experienceCount: normalized.workExperiences?.length ?? 0,
+    educationCount: normalized.educations?.length ?? 0,
+    certificationCount: normalized.certifications?.length ?? 0,
+    parseMethod: normalized._meta.parseMethod,
+  });
 
   return normalized;
 }

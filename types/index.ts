@@ -77,8 +77,8 @@ export interface PublicProfile extends Omit<Profile, 'userId'> {
  */
 export interface PublicContactInfo {
   email: string | null;
+  phone: string | null;
   website: string | null;
-  // phone is excluded from public view
 }
 
 // ===========================================
@@ -135,27 +135,42 @@ export const PROFILE_VIEWS = PORTFOLIO_VIEWS;
 // ===========================================
 
 /**
- * GitHub repository data from API
+ * GitHub repository data from API.
+ * Canonical definition — import from '@/types' everywhere.
  */
 export interface GitHubRepo {
   id: number;
   name: string;
   full_name: string;
+  owner?: {
+    login: string;
+    avatar_url: string;
+  };
   description: string | null;
   html_url: string;
   homepage: string | null;
   language: string | null;
+  languages_url?: string;
   stargazers_count: number;
   forks_count: number;
+  watchers_count?: number;
   topics: string[];
   created_at: string;
   updated_at: string;
   pushed_at: string;
-  private: boolean;
+  private?: boolean;
+  fork?: boolean;
+  archived?: boolean;
+  license?: {
+    key: string;
+    name: string;
+    spdx_id: string;
+  } | null;
 }
 
 /**
- * GitHub user data from API
+ * GitHub user data from API.
+ * Canonical definition — import from '@/types' everywhere.
  */
 export interface GitHubUser {
   login: string;
@@ -169,8 +184,11 @@ export interface GitHubUser {
   email: string | null;
   bio: string | null;
   public_repos: number;
+  public_gists?: number;
   followers: number;
   following: number;
+  created_at?: string;
+  hireable?: boolean | null;
 }
 
 /**
