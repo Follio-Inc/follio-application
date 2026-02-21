@@ -4,6 +4,7 @@ import {
   Award,
   BadgeCheck,
   BookOpen,
+  FileText,
   Globe,
   Heart,
   Image as ImageIcon,
@@ -35,6 +36,12 @@ const AVAILABLE_SECTIONS: {
   description: string;
   icon: React.ComponentType<{ className?: string }>;
 }[] = [
+  {
+    type: 'SUMMARY',
+    title: 'Summary',
+    description: 'A professional summary or about section',
+    icon: FileText,
+  },
   {
     type: 'PHOTOS',
     title: 'Photos',

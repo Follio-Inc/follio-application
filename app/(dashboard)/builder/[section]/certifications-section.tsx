@@ -1,6 +1,6 @@
 'use client';
 
-import { BadgeCheck, ExternalLink, Loader2, Plus, Trash2 } from 'lucide-react';
+import { BadgeCheck, ExternalLink, Eye, EyeOff, Loader2, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,8 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { notifyProfileUpdated } from '@/lib/events';
+import { cn } from '@/lib/utils';
 
 import type { Certification } from '@/types';
 
@@ -38,6 +40,28 @@ export function CertificationsSection({ certifications, onUpdate }: Certificatio
   const [formData, setFormData] = useState<Partial<Certification>>(emptyCertification);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const toggleVisibility = async (certification: Certification) => {
+    const newValue = !(certification.isVisible ?? true);
+    // Optimistic update
+    onUpdate(
+      certifications.map((c) => (c.id === certification.id ? { ...c, isVisible: newValue } : c))
+    );
+    try {
+      const response = await fetch(`/api/profile/certifications/${certification.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isVisible: newValue }),
+      });
+      if (!response.ok) throw new Error('Failed to update visibility');
+      notifyProfileUpdated();
+    } catch {
+      // Revert on error
+      onUpdate(
+        certifications.map((c) => (c.id === certification.id ? { ...c, isVisible: !newValue } : c))
+      );
+    }
+  };
 
   const handleOpenDialog = (certification?: Certification) => {
     if (certification) {
@@ -181,7 +205,10 @@ export function CertificationsSection({ certifications, onUpdate }: Certificatio
             {certifications.map((certification) => (
               <div
                 key={certification.id}
-                className="group flex items-start gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50"
+                className={cn(
+                  'group flex items-start gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50',
+                  certification.isVisible === false && 'opacity-50'
+                )}
               >
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
                   <BadgeCheck className="h-5 w-5 text-primary" />
@@ -193,6 +220,21 @@ export function CertificationsSection({ certifications, onUpdate }: Certificatio
                       <p className="text-sm text-muted-foreground">{certification.issuer}</p>
                     </div>
                     <div className="flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => toggleVisibility(certification)}
+                        className={certification.isVisible === false ? 'text-muted-foreground' : ''}
+                        title={
+                          certification.isVisible === false ? 'Show on resume' : 'Hide from resume'
+                        }
+                      >
+                        {certification.isVisible === false ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </Button>
                       <Button
                         variant="ghost"
                         size="sm"

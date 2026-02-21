@@ -14,6 +14,7 @@ const SLUG_TO_SECTION: Record<string, string> = {
   'basic-info': 'BASIC_INFO',
   contact: 'CONTACT',
   photos: 'PHOTOS',
+  summary: 'SUMMARY',
   experience: 'EXPERIENCE',
   education: 'EDUCATION',
   skills: 'SKILLS',

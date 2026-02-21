@@ -1,6 +1,6 @@
 'use client';
 
-import { Loader2, Plus, Sparkles, X } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Plus, Sparkles, X } from 'lucide-react';
 import { useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -15,6 +15,8 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { notifyProfileUpdated } from '@/lib/events';
+import { cn } from '@/lib/utils';
 
 import type { InterestItem, InterestsSectionContent, ProfileSection } from '@/types';
 
@@ -50,9 +52,11 @@ export function InterestsSection({ section }: InterestsSectionProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Parse existing content
-  const content = (section?.customContent as unknown as InterestsSectionContent) || { items: [] };
-  const items = content.items || [];
+  // Parse existing content — use local state so toggling is instant
+  const initialContent = (section?.customContent as unknown as InterestsSectionContent) || {
+    items: [],
+  };
+  const [items, setItems] = useState<InterestItem[]>(initialContent.items || []);
 
   // Group items by category
   const groupedItems = items.reduce(
@@ -148,6 +152,20 @@ export function InterestsSection({ section }: InterestsSectionProps) {
     }
   };
 
+  const toggleItemVisibility = async (item: InterestItem) => {
+    const newValue = !(item.isVisible ?? true);
+    const newItems = items.map((i) => (i.id === item.id ? { ...i, isVisible: newValue } : i));
+    // Optimistic update
+    setItems(newItems);
+    try {
+      await saveContent({ items: newItems });
+      notifyProfileUpdated();
+    } catch {
+      // Revert on error
+      setItems(items);
+    }
+  };
+
   const getCategoryColor = (category: string) => {
     const colors: Record<string, string> = {
       'Sports & Fitness': 'bg-green-500/10 text-green-700 border-green-500/20',
@@ -201,10 +219,24 @@ export function InterestsSection({ section }: InterestsSectionProps) {
                   {categoryItems.map((item) => (
                     <div
                       key={item.id}
-                      className="group flex items-center gap-2 rounded-full border px-3 py-1.5 transition-colors hover:bg-muted/50"
+                      className={cn(
+                        'group flex items-center gap-2 rounded-full border px-3 py-1.5 transition-colors hover:bg-muted/50',
+                        item.isVisible === false && 'opacity-50'
+                      )}
                     >
                       <span className="text-sm font-medium">{item.name}</span>
                       <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                        <button
+                          onClick={() => toggleItemVisibility(item)}
+                          className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                          title={item.isVisible === false ? 'Show on resume' : 'Hide from resume'}
+                        >
+                          {item.isVisible === false ? (
+                            <EyeOff className="h-3 w-3" />
+                          ) : (
+                            <Eye className="h-3 w-3" />
+                          )}
+                        </button>
                         <button
                           onClick={() => handleOpenDialog(item)}
                           className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"

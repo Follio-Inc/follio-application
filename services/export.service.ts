@@ -29,6 +29,22 @@ function escapeHtml(str: string | null | undefined): string {
 }
 
 /**
+ * Get body sections (non-header) from profile, sorted by sortOrder.
+ * Returns section types in the user-configured order.
+ */
+function getOrderedBodySections(profile: FullProfile): string[] {
+  if (!profile.sections || profile.sections.length === 0) {
+    // Fallback: use the legacy hardcoded order when no sections exist
+    return ['SUMMARY', 'EXPERIENCE', 'EDUCATION', 'SKILLS', 'PROJECTS', 'CERTIFICATIONS', 'AWARDS'];
+  }
+
+  return [...profile.sections]
+    .filter((s) => !HEADER_SECTION_TYPES.includes(s.type) && s.isVisible)
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((s) => s.type);
+}
+
+/**
  * Convert profile to JSON Resume format
  * @see https://jsonresume.org/schema/
  */
@@ -185,82 +201,113 @@ export function toPlainText(profile: FullProfile): string {
     }
     lines.push('');
 
-    // Summary
-    if (profile.summary) {
-      lines.push('SUMMARY');
-      lines.push('-'.repeat(50));
-      lines.push(profile.summary);
-      lines.push('');
-    }
+    // Render body sections in user-configured sortOrder
+    const sectionOrder = getOrderedBodySections(profile);
 
-    // Work Experience
-    if (visibleExperiences.length > 0) {
-      lines.push('EXPERIENCE');
-      lines.push('-'.repeat(50));
-      visibleExperiences.forEach((exp) => {
-        const dateRange = exp.isCurrent
-          ? `${formatDate(exp.startDate)} - Present`
-          : `${formatDate(exp.startDate)} - ${formatDate(exp.endDate)}`;
-        lines.push(`${exp.role} | ${exp.company}`);
-        lines.push(`${dateRange}${exp.location ? ` | ${exp.location}` : ''}`);
-        exp.bullets.forEach((bullet) => {
-          lines.push(`• ${bullet}`);
-        });
-        lines.push('');
-      });
-    }
+    for (const sectionType of sectionOrder) {
+      switch (sectionType) {
+        case 'SUMMARY':
+          if (profile.summary) {
+            lines.push('SUMMARY');
+            lines.push('-'.repeat(50));
+            lines.push(profile.summary);
+            lines.push('');
+          }
+          break;
 
-    // Education
-    if (visibleEducations.length > 0) {
-      lines.push('EDUCATION');
-      lines.push('-'.repeat(50));
-      visibleEducations.forEach((edu) => {
-        lines.push(`${edu.degree || ''} ${edu.fieldOfStudy || ''}`);
-        lines.push(edu.institution);
-        if (edu.startDate || edu.endDate) {
-          const dateRange = edu.isCurrent
-            ? `${formatDate(edu.startDate)} - Present`
-            : `${formatDate(edu.startDate)} - ${formatDate(edu.endDate)}`;
-          lines.push(dateRange);
-        }
-        if (edu.gpa) lines.push(`GPA: ${edu.gpa}`);
-        lines.push('');
-      });
-    }
+        case 'EXPERIENCE':
+          if (visibleExperiences.length > 0) {
+            lines.push('EXPERIENCE');
+            lines.push('-'.repeat(50));
+            visibleExperiences.forEach((exp) => {
+              const dateRange = exp.isCurrent
+                ? `${formatDate(exp.startDate)} - Present`
+                : `${formatDate(exp.startDate)} - ${formatDate(exp.endDate)}`;
+              lines.push(`${exp.role} | ${exp.company}`);
+              lines.push(`${dateRange}${exp.location ? ` | ${exp.location}` : ''}`);
+              exp.bullets.forEach((bullet) => {
+                lines.push(`• ${bullet}`);
+              });
+              lines.push('');
+            });
+          }
+          break;
 
-    // Skills
-    if (visibleSkills.length > 0) {
-      lines.push('SKILLS');
-      lines.push('-'.repeat(50));
-      const skillNames = visibleSkills.map((s) => s.name);
-      lines.push(skillNames.join(', '));
-      lines.push('');
-    }
+        case 'EDUCATION':
+          if (visibleEducations.length > 0) {
+            lines.push('EDUCATION');
+            lines.push('-'.repeat(50));
+            visibleEducations.forEach((edu) => {
+              lines.push(`${edu.degree || ''} ${edu.fieldOfStudy || ''}`);
+              lines.push(edu.institution);
+              if (edu.startDate || edu.endDate) {
+                const dateRange = edu.isCurrent
+                  ? `${formatDate(edu.startDate)} - Present`
+                  : `${formatDate(edu.startDate)} - ${formatDate(edu.endDate)}`;
+                lines.push(dateRange);
+              }
+              if (edu.gpa) lines.push(`GPA: ${edu.gpa}`);
+              lines.push('');
+            });
+          }
+          break;
 
-    // Projects
-    if (visibleProjects.length > 0) {
-      lines.push('PROJECTS');
-      lines.push('-'.repeat(50));
-      visibleProjects.forEach((project) => {
-        lines.push(project.title);
-        if (project.description) lines.push(project.description);
-        if (project.techStack.length > 0) {
-          lines.push(`Technologies: ${project.techStack.join(', ')}`);
-        }
-        if (project.url) lines.push(`URL: ${project.url}`);
-        lines.push('');
-      });
-    }
+        case 'SKILLS':
+          if (visibleSkills.length > 0) {
+            lines.push('SKILLS');
+            lines.push('-'.repeat(50));
+            const skillNames = visibleSkills.map((s) => s.name);
+            lines.push(skillNames.join(', '));
+            lines.push('');
+          }
+          break;
 
-    // Certifications
-    if (visibleCerts.length > 0) {
-      lines.push('CERTIFICATIONS');
-      lines.push('-'.repeat(50));
-      visibleCerts.forEach((cert) => {
-        lines.push(`${cert.name} - ${cert.issuer}`);
-        if (cert.issueDate) lines.push(`Issued: ${formatDate(cert.issueDate)}`);
-      });
-      lines.push('');
+        case 'PROJECTS':
+          if (visibleProjects.length > 0) {
+            lines.push('PROJECTS');
+            lines.push('-'.repeat(50));
+            visibleProjects.forEach((project) => {
+              lines.push(project.title);
+              if (project.description) lines.push(project.description);
+              if (project.techStack.length > 0) {
+                lines.push(`Technologies: ${project.techStack.join(', ')}`);
+              }
+              if (project.url) lines.push(`URL: ${project.url}`);
+              lines.push('');
+            });
+          }
+          break;
+
+        case 'CERTIFICATIONS':
+          if (visibleCerts.length > 0) {
+            lines.push('CERTIFICATIONS');
+            lines.push('-'.repeat(50));
+            visibleCerts.forEach((cert) => {
+              lines.push(`${cert.name} - ${cert.issuer}`);
+              if (cert.issueDate) lines.push(`Issued: ${formatDate(cert.issueDate)}`);
+            });
+            lines.push('');
+          }
+          break;
+
+        case 'AWARDS':
+          if ((profile.awards || []).filter((a) => a.isVisible !== false).length > 0) {
+            const visibleAwards = profile.awards.filter((a) => a.isVisible !== false);
+            lines.push('AWARDS');
+            lines.push('-'.repeat(50));
+            visibleAwards.forEach((award) => {
+              lines.push(award.title);
+              if (award.issuer) lines.push(award.issuer);
+              if (award.date) lines.push(formatDate(award.date));
+              if (award.description) lines.push(award.description);
+            });
+            lines.push('');
+          }
+          break;
+
+        default:
+          break;
+      }
     }
 
     return lines.join('\n');
@@ -285,6 +332,112 @@ export function toPDFHtml(profile: FullProfile): string {
     const visibleProjects = profile.projects.filter(
       (p) => p.isVisible !== false && p.showOnResume !== false
     );
+
+    // Build body sections HTML in user-configured order
+    const sectionOrder = getOrderedBodySections(profile);
+    const sectionHtmlParts: string[] = [];
+
+    for (const sectionType of sectionOrder) {
+      switch (sectionType) {
+        case 'SUMMARY':
+          if (profile.summary) {
+            sectionHtmlParts.push(`
+  <div class="section">
+    <h2>Summary</h2>
+    <p>${escapeHtml(profile.summary)}</p>
+  </div>`);
+          }
+          break;
+
+        case 'EXPERIENCE':
+          if (visibleExperiences.length > 0) {
+            sectionHtmlParts.push(`
+  <div class="section">
+    <h2>Experience</h2>
+    ${visibleExperiences
+      .map(
+        (exp) => `
+    <div class="entry">
+      <div class="entry-header">
+        <div>
+          <h3 class="entry-title">${escapeHtml(exp.role)}</h3>
+          <div class="entry-subtitle">${escapeHtml(exp.company)}${exp.location ? ` | ${escapeHtml(exp.location)}` : ''}</div>
+        </div>
+        <div class="entry-date">${formatDate(exp.startDate)} - ${exp.isCurrent ? 'Present' : formatDate(exp.endDate)}</div>
+      </div>
+      ${
+        exp.bullets.length > 0
+          ? `
+      <ul>
+        ${exp.bullets.map((b) => `<li>${escapeHtml(b)}</li>`).join('')}
+      </ul>`
+          : ''
+      }
+    </div>`
+      )
+      .join('')}
+  </div>`);
+          }
+          break;
+
+        case 'EDUCATION':
+          if (visibleEducations.length > 0) {
+            sectionHtmlParts.push(`
+  <div class="section">
+    <h2>Education</h2>
+    ${visibleEducations
+      .map(
+        (edu) => `
+    <div class="entry">
+      <div class="entry-header">
+        <div>
+          <h3 class="entry-title">${escapeHtml(edu.degree)} ${escapeHtml(edu.fieldOfStudy)}</h3>
+          <div class="entry-subtitle">${escapeHtml(edu.institution)}</div>
+        </div>
+        <div class="entry-date">${formatDate(edu.startDate)} - ${edu.isCurrent ? 'Present' : formatDate(edu.endDate)}</div>
+      </div>
+    </div>`
+      )
+      .join('')}
+  </div>`);
+          }
+          break;
+
+        case 'SKILLS':
+          if (visibleSkills.length > 0) {
+            sectionHtmlParts.push(`
+  <div class="section">
+    <h2>Skills</h2>
+    <div class="skills">
+      ${visibleSkills.map((s) => `<span class="skill">${escapeHtml(s.name)}</span>`).join('')}
+    </div>
+  </div>`);
+          }
+          break;
+
+        case 'PROJECTS':
+          if (visibleProjects.length > 0) {
+            sectionHtmlParts.push(`
+  <div class="section">
+    <h2>Projects</h2>
+    ${visibleProjects
+      .map(
+        (p) => `
+    <div class="entry">
+      <h3 class="entry-title">${escapeHtml(p.title)}</h3>
+      ${p.description ? `<div class="entry-description">${escapeHtml(p.description)}</div>` : ''}
+      ${p.techStack.length > 0 ? `<div class="entry-subtitle">Tech: ${p.techStack.map((t) => escapeHtml(t)).join(', ')}</div>` : ''}
+    </div>`
+      )
+      .join('')}
+  </div>`);
+          }
+          break;
+
+        default:
+          break;
+      }
+    }
 
     return `
 <!DOCTYPE html>
@@ -361,109 +514,7 @@ export function toPDFHtml(profile: FullProfile): string {
   `
   }
 
-  ${
-    profile.summary
-      ? `
-  <div class="section">
-    <h2>Summary</h2>
-    <p>${escapeHtml(profile.summary)}</p>
-  </div>
-  `
-      : ''
-  }
-
-  ${
-    visibleExperiences.length > 0
-      ? `
-  <div class="section">
-    <h2>Experience</h2>
-    ${visibleExperiences
-      .map(
-        (exp) => `
-    <div class="entry">
-      <div class="entry-header">
-        <div>
-          <h3 class="entry-title">${escapeHtml(exp.role)}</h3>
-          <div class="entry-subtitle">${escapeHtml(exp.company)}${exp.location ? ` | ${escapeHtml(exp.location)}` : ''}</div>
-        </div>
-        <div class="entry-date">${formatDate(exp.startDate)} - ${exp.isCurrent ? 'Present' : formatDate(exp.endDate)}</div>
-      </div>
-      ${
-        exp.bullets.length > 0
-          ? `
-      <ul>
-        ${exp.bullets.map((b) => `<li>${escapeHtml(b)}</li>`).join('')}
-      </ul>
-      `
-          : ''
-      }
-    </div>
-    `
-      )
-      .join('')}
-  </div>
-  `
-      : ''
-  }
-
-  ${
-    visibleEducations.length > 0
-      ? `
-  <div class="section">
-    <h2>Education</h2>
-    ${visibleEducations
-      .map(
-        (edu) => `
-    <div class="entry">
-      <div class="entry-header">
-        <div>
-          <h3 class="entry-title">${escapeHtml(edu.degree)} ${escapeHtml(edu.fieldOfStudy)}</h3>
-          <div class="entry-subtitle">${escapeHtml(edu.institution)}</div>
-        </div>
-        <div class="entry-date">${formatDate(edu.startDate)} - ${edu.isCurrent ? 'Present' : formatDate(edu.endDate)}</div>
-      </div>
-    </div>
-    `
-      )
-      .join('')}
-  </div>
-  `
-      : ''
-  }
-
-  ${
-    visibleSkills.length > 0
-      ? `
-  <div class="section">
-    <h2>Skills</h2>
-    <div class="skills">
-      ${visibleSkills.map((s) => `<span class="skill">${escapeHtml(s.name)}</span>`).join('')}
-    </div>
-  </div>
-  `
-      : ''
-  }
-
-  ${
-    visibleProjects.length > 0
-      ? `
-  <div class="section">
-    <h2>Projects</h2>
-    ${visibleProjects
-      .map(
-        (p) => `
-    <div class="entry">
-      <h3 class="entry-title">${escapeHtml(p.title)}</h3>
-      ${p.description ? `<div class="entry-description">${escapeHtml(p.description)}</div>` : ''}
-      ${p.techStack.length > 0 ? `<div class="entry-subtitle">Tech: ${p.techStack.map((t) => escapeHtml(t)).join(', ')}</div>` : ''}
-    </div>
-    `
-      )
-      .join('')}
-  </div>
-  `
-      : ''
-  }
+  ${sectionHtmlParts.join('\n')}
 </body>
 </html>
   `.trim();
@@ -557,172 +608,197 @@ export function generateResumePDF(profile: FullProfile): Promise<Buffer> {
       doc.moveDown(0.3);
     };
 
-    // ── Summary ─────────────────────────────────────────────
-    if (profile.summary) {
-      sectionHeader('Summary');
-      doc.fontSize(10).font('Helvetica').fillColor(primaryColor).text(profile.summary);
-    }
+    // ── Section renderers (keyed by section type) ───────────
+    const renderSummary = () => {
+      if (profile.summary) {
+        sectionHeader('Summary');
+        doc.fontSize(10).font('Helvetica').fillColor(primaryColor).text(profile.summary);
+      }
+    };
 
-    // ── Work Experience ─────────────────────────────────────
-    if (visibleExperiences.length > 0) {
-      sectionHeader('Experience');
-      visibleExperiences.forEach((exp, i) => {
-        if (i > 0) doc.moveDown(0.5);
-        const dateRange = exp.isCurrent
-          ? `${formatDate(exp.startDate)} – Present`
-          : `${formatDate(exp.startDate)} – ${formatDate(exp.endDate)}`;
+    const renderExperience = () => {
+      if (visibleExperiences.length > 0) {
+        sectionHeader('Experience');
+        visibleExperiences.forEach((exp, i) => {
+          if (i > 0) doc.moveDown(0.5);
+          const dateRange = exp.isCurrent
+            ? `${formatDate(exp.startDate)} – Present`
+            : `${formatDate(exp.startDate)} – ${formatDate(exp.endDate)}`;
 
-        doc.fontSize(11).font('Helvetica-Bold').fillColor(primaryColor).text(exp.role);
-        doc
-          .fontSize(10)
-          .font('Helvetica')
-          .fillColor(secondaryColor)
-          .text(`${exp.company}${exp.location ? ` | ${exp.location}` : ''}  •  ${dateRange}`);
-
-        if (exp.bullets.length > 0) {
-          doc.moveDown(0.2);
-          exp.bullets.forEach((bullet) => {
-            doc
-              .fontSize(10)
-              .font('Helvetica')
-              .fillColor(primaryColor)
-              .text(`•  ${bullet}`, { indent: 10 });
-          });
-        }
-      });
-    }
-
-    // ── Education ───────────────────────────────────────────
-    if (visibleEducations.length > 0) {
-      sectionHeader('Education');
-      visibleEducations.forEach((edu, i) => {
-        if (i > 0) doc.moveDown(0.3);
-        const degree = [edu.degree, edu.fieldOfStudy].filter(Boolean).join(' in ');
-        doc
-          .fontSize(11)
-          .font('Helvetica-Bold')
-          .fillColor(primaryColor)
-          .text(degree || edu.institution);
-
-        if (degree) {
-          doc.fontSize(10).font('Helvetica').fillColor(secondaryColor).text(edu.institution);
-        }
-
-        if (edu.startDate || edu.endDate) {
-          const dateRange = edu.isCurrent
-            ? `${formatDate(edu.startDate)} – Present`
-            : `${formatDate(edu.startDate)} – ${formatDate(edu.endDate)}`;
-          doc.fontSize(10).font('Helvetica').fillColor(secondaryColor).text(dateRange);
-        }
-
-        if (edu.gpa) {
-          doc.fontSize(10).font('Helvetica').fillColor(primaryColor).text(`GPA: ${edu.gpa}`);
-        }
-      });
-    }
-
-    // ── Skills ──────────────────────────────────────────────
-    if (visibleSkills.length > 0 || visibleSkillGroups.length > 0) {
-      sectionHeader('Skills');
-      if (visibleSkillGroups.length > 0) {
-        visibleSkillGroups.forEach((group) => {
+          doc.fontSize(11).font('Helvetica-Bold').fillColor(primaryColor).text(exp.role);
           doc
             .fontSize(10)
+            .font('Helvetica')
+            .fillColor(secondaryColor)
+            .text(`${exp.company}${exp.location ? ` | ${exp.location}` : ''}  •  ${dateRange}`);
+
+          if (exp.bullets.length > 0) {
+            doc.moveDown(0.2);
+            exp.bullets.forEach((bullet) => {
+              doc
+                .fontSize(10)
+                .font('Helvetica')
+                .fillColor(primaryColor)
+                .text(`•  ${bullet}`, { indent: 10 });
+            });
+          }
+        });
+      }
+    };
+
+    const renderEducation = () => {
+      if (visibleEducations.length > 0) {
+        sectionHeader('Education');
+        visibleEducations.forEach((edu, i) => {
+          if (i > 0) doc.moveDown(0.3);
+          const degree = [edu.degree, edu.fieldOfStudy].filter(Boolean).join(' in ');
+          doc
+            .fontSize(11)
             .font('Helvetica-Bold')
             .fillColor(primaryColor)
-            .text(`${group.name}: `, { continued: true });
-          doc
-            .font('Helvetica')
-            .fillColor(secondaryColor)
-            .text(group.skills.map((s) => s.name).join(', '));
-        });
-      } else {
-        doc
-          .fontSize(10)
-          .font('Helvetica')
-          .fillColor(primaryColor)
-          .text(visibleSkills.map((s) => s.name).join(', '));
-      }
-    }
+            .text(degree || edu.institution);
 
-    // ── Projects ────────────────────────────────────────────
-    if (visibleProjects.length > 0) {
-      sectionHeader('Projects');
-      visibleProjects.forEach((project, i) => {
-        if (i > 0) doc.moveDown(0.3);
-
-        const projectDateParts: string[] = [];
-        if (project.startDate) {
-          projectDateParts.push(formatDate(project.startDate));
-          if (project.isCurrent) {
-            projectDateParts.push('Present');
-          } else if (project.endDate) {
-            projectDateParts.push(formatDate(project.endDate));
+          if (degree) {
+            doc.fontSize(10).font('Helvetica').fillColor(secondaryColor).text(edu.institution);
           }
-        }
 
-        doc.fontSize(11).font('Helvetica-Bold').fillColor(primaryColor).text(project.title);
+          if (edu.startDate || edu.endDate) {
+            const dateRange = edu.isCurrent
+              ? `${formatDate(edu.startDate)} – Present`
+              : `${formatDate(edu.startDate)} – ${formatDate(edu.endDate)}`;
+            doc.fontSize(10).font('Helvetica').fillColor(secondaryColor).text(dateRange);
+          }
 
-        if (projectDateParts.length > 0) {
+          if (edu.gpa) {
+            doc.fontSize(10).font('Helvetica').fillColor(primaryColor).text(`GPA: ${edu.gpa}`);
+          }
+        });
+      }
+    };
+
+    const renderSkills = () => {
+      if (visibleSkills.length > 0 || visibleSkillGroups.length > 0) {
+        sectionHeader('Skills');
+        if (visibleSkillGroups.length > 0) {
+          visibleSkillGroups.forEach((group) => {
+            doc
+              .fontSize(10)
+              .font('Helvetica-Bold')
+              .fillColor(primaryColor)
+              .text(`${group.name}: `, { continued: true });
+            doc
+              .font('Helvetica')
+              .fillColor(secondaryColor)
+              .text(group.skills.map((s) => s.name).join(', '));
+          });
+        } else {
           doc
             .fontSize(10)
             .font('Helvetica')
-            .fillColor(secondaryColor)
-            .text(projectDateParts.join(' – '));
+            .fillColor(primaryColor)
+            .text(visibleSkills.map((s) => s.name).join(', '));
         }
+      }
+    };
 
-        if (project.description) {
-          doc.fontSize(10).font('Helvetica').fillColor(primaryColor).text(project.description);
-        }
+    const renderProjects = () => {
+      if (visibleProjects.length > 0) {
+        sectionHeader('Projects');
+        visibleProjects.forEach((project, i) => {
+          if (i > 0) doc.moveDown(0.3);
 
-        if (project.techStack.length > 0) {
-          doc
-            .fontSize(10)
-            .font('Helvetica-Oblique')
-            .fillColor(secondaryColor)
-            .text(`Technologies: ${project.techStack.join(', ')}`);
-        }
+          const projectDateParts: string[] = [];
+          if (project.startDate) {
+            projectDateParts.push(formatDate(project.startDate));
+            if (project.isCurrent) {
+              projectDateParts.push('Present');
+            } else if (project.endDate) {
+              projectDateParts.push(formatDate(project.endDate));
+            }
+          }
 
-        if (project.highlights.length > 0) {
-          project.highlights.forEach((h) => {
+          doc.fontSize(11).font('Helvetica-Bold').fillColor(primaryColor).text(project.title);
+
+          if (projectDateParts.length > 0) {
             doc
               .fontSize(10)
               .font('Helvetica')
-              .fillColor(primaryColor)
-              .text(`•  ${h}`, { indent: 10 });
-          });
-        }
-      });
-    }
+              .fillColor(secondaryColor)
+              .text(projectDateParts.join(' – '));
+          }
 
-    // ── Certifications ──────────────────────────────────────
-    if (visibleCerts.length > 0) {
-      sectionHeader('Certifications');
-      visibleCerts.forEach((cert, i) => {
-        if (i > 0) doc.moveDown(0.3);
-        doc.fontSize(10).font('Helvetica-Bold').fillColor(primaryColor).text(cert.name);
-        const details: string[] = [cert.issuer];
-        if (cert.issueDate) details.push(formatDate(cert.issueDate));
-        doc.fontSize(10).font('Helvetica').fillColor(secondaryColor).text(details.join(' | '));
-      });
-    }
+          if (project.description) {
+            doc.fontSize(10).font('Helvetica').fillColor(primaryColor).text(project.description);
+          }
 
-    // ── Awards ──────────────────────────────────────────────
-    if (visibleAwards.length > 0) {
-      sectionHeader('Awards');
-      visibleAwards.forEach((award, i) => {
-        if (i > 0) doc.moveDown(0.3);
-        doc.fontSize(10).font('Helvetica-Bold').fillColor(primaryColor).text(award.title);
-        const details: string[] = [];
-        if (award.issuer) details.push(award.issuer);
-        if (award.date) details.push(formatDate(award.date));
-        if (details.length > 0) {
+          if (project.techStack.length > 0) {
+            doc
+              .fontSize(10)
+              .font('Helvetica-Oblique')
+              .fillColor(secondaryColor)
+              .text(`Technologies: ${project.techStack.join(', ')}`);
+          }
+
+          if (project.highlights.length > 0) {
+            project.highlights.forEach((h) => {
+              doc
+                .fontSize(10)
+                .font('Helvetica')
+                .fillColor(primaryColor)
+                .text(`•  ${h}`, { indent: 10 });
+            });
+          }
+        });
+      }
+    };
+
+    const renderCertifications = () => {
+      if (visibleCerts.length > 0) {
+        sectionHeader('Certifications');
+        visibleCerts.forEach((cert, i) => {
+          if (i > 0) doc.moveDown(0.3);
+          doc.fontSize(10).font('Helvetica-Bold').fillColor(primaryColor).text(cert.name);
+          const details: string[] = [cert.issuer];
+          if (cert.issueDate) details.push(formatDate(cert.issueDate));
           doc.fontSize(10).font('Helvetica').fillColor(secondaryColor).text(details.join(' | '));
-        }
-        if (award.description) {
-          doc.fontSize(10).font('Helvetica').fillColor(primaryColor).text(award.description);
-        }
-      });
+        });
+      }
+    };
+
+    const renderAwards = () => {
+      if (visibleAwards.length > 0) {
+        sectionHeader('Awards');
+        visibleAwards.forEach((award, i) => {
+          if (i > 0) doc.moveDown(0.3);
+          doc.fontSize(10).font('Helvetica-Bold').fillColor(primaryColor).text(award.title);
+          const details: string[] = [];
+          if (award.issuer) details.push(award.issuer);
+          if (award.date) details.push(formatDate(award.date));
+          if (details.length > 0) {
+            doc.fontSize(10).font('Helvetica').fillColor(secondaryColor).text(details.join(' | '));
+          }
+          if (award.description) {
+            doc.fontSize(10).font('Helvetica').fillColor(primaryColor).text(award.description);
+          }
+        });
+      }
+    };
+
+    // ── Render body sections in user-configured sortOrder ────
+    const sectionRenderers: Record<string, () => void> = {
+      SUMMARY: renderSummary,
+      EXPERIENCE: renderExperience,
+      EDUCATION: renderEducation,
+      SKILLS: renderSkills,
+      PROJECTS: renderProjects,
+      CERTIFICATIONS: renderCertifications,
+      AWARDS: renderAwards,
+    };
+
+    const sectionOrder = getOrderedBodySections(profile);
+    for (const sectionType of sectionOrder) {
+      const renderer = sectionRenderers[sectionType];
+      if (renderer) renderer();
     }
 
     doc.end();

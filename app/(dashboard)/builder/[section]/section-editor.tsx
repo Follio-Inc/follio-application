@@ -16,6 +16,7 @@ import { ProjectsSection } from '../sections/projects-section';
 import { SettingsSection } from '../sections/settings-section';
 import { ShareSection } from '../sections/share-section';
 import { SkillsSection } from '../sections/skills-section';
+import { SummarySection } from '../sections/summary-section';
 import { AwardsSection } from './awards-section';
 import { CertificationsSection } from './certifications-section';
 import { CustomSection } from './custom-section';
@@ -37,6 +38,7 @@ const SECTION_TITLES: Record<string, string> = {
   BASIC_INFO: 'Basic Info',
   CONTACT: 'Contact',
   PHOTOS: 'Photos',
+  SUMMARY: 'Summary',
   EXPERIENCE: 'Work Experience',
   EDUCATION: 'Education',
   SKILLS: 'Skills',
@@ -110,7 +112,12 @@ export function SectionEditor({ profile, sectionType, section }: SectionEditorPr
   };
 
   const handleSave = async () => {
-    if (sectionType !== 'BASIC_INFO' && sectionType !== 'CONTACT' && sectionType !== 'PHOTOS') {
+    if (
+      sectionType !== 'BASIC_INFO' &&
+      sectionType !== 'CONTACT' &&
+      sectionType !== 'PHOTOS' &&
+      sectionType !== 'SUMMARY'
+    ) {
       // For other sections, changes are saved inline
       return;
     }
@@ -118,7 +125,10 @@ export function SectionEditor({ profile, sectionType, section }: SectionEditorPr
     setIsSaving(true);
     try {
       // Save profile info (for BASIC_INFO or PHOTOS — avatarUrl changes)
-      if ((sectionType === 'BASIC_INFO' || sectionType === 'PHOTOS') && hasChanges) {
+      if (
+        (sectionType === 'BASIC_INFO' || sectionType === 'PHOTOS' || sectionType === 'SUMMARY') &&
+        hasChanges
+      ) {
         const response = await fetch('/api/profile', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -167,6 +177,9 @@ export function SectionEditor({ profile, sectionType, section }: SectionEditorPr
     switch (sectionType) {
       case 'BASIC_INFO':
         return <BasicInfoForm profile={currentProfile} onUpdate={handleProfileUpdate} />;
+
+      case 'SUMMARY':
+        return <SummarySection profile={currentProfile} onUpdate={handleProfileUpdate} />;
 
       case 'CONTACT':
         return <ContactInfoForm profile={currentProfile} onContactUpdate={handleContactUpdate} />;
@@ -282,18 +295,21 @@ export function SectionEditor({ profile, sectionType, section }: SectionEditorPr
           <p className="text-muted-foreground">
             {sectionType === 'BASIC_INFO'
               ? 'Update your basic profile information'
-              : sectionType === 'CONTACT'
-                ? 'Manage your contact information and visibility'
-                : sectionType === 'PHOTOS'
-                  ? 'Manage your profile photo and gallery images'
-                  : sectionType === 'SHARE'
-                    ? 'Control visibility and share your profile'
-                    : 'Add, edit, or remove items'}
+              : sectionType === 'SUMMARY'
+                ? 'Write a brief introduction about yourself'
+                : sectionType === 'CONTACT'
+                  ? 'Manage your contact information and visibility'
+                  : sectionType === 'PHOTOS'
+                    ? 'Manage your profile photo and gallery images'
+                    : sectionType === 'SHARE'
+                      ? 'Control visibility and share your profile'
+                      : 'Add, edit, or remove items'}
           </p>
         </div>
         {(sectionType === 'BASIC_INFO' ||
           sectionType === 'CONTACT' ||
-          sectionType === 'PHOTOS') && (
+          sectionType === 'PHOTOS' ||
+          sectionType === 'SUMMARY') && (
           <Button
             onClick={handleSave}
             disabled={isSaving || (sectionType === 'CONTACT' ? !hasContactChanges : !hasChanges)}

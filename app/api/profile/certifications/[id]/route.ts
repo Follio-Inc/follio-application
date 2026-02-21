@@ -64,8 +64,16 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     const body = await request.json();
-    const { name, issuer, credentialId, credentialUrl, issueDate, expirationDate, sortOrder } =
-      body;
+    const {
+      name,
+      issuer,
+      credentialId,
+      credentialUrl,
+      issueDate,
+      expirationDate,
+      sortOrder,
+      isVisible,
+    } = body;
 
     const certification = await db.certification.update({
       where: {
@@ -77,6 +85,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         ...(issuer !== undefined && { issuer }),
         ...(credentialId !== undefined && { credentialId }),
         ...(credentialUrl !== undefined && { credentialUrl }),
+        ...(isVisible !== undefined && { isVisible }),
         ...(issueDate !== undefined && { issueDate: issueDate ? new Date(issueDate) : null }),
         ...(expirationDate !== undefined && {
           expirationDate: expirationDate ? new Date(expirationDate) : null,

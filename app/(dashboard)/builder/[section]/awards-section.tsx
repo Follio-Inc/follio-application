@@ -1,6 +1,6 @@
 'use client';
 
-import { Award, ExternalLink, Loader2, Plus, Trash2 } from 'lucide-react';
+import { Award, ExternalLink, Eye, EyeOff, Loader2, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { notifyProfileUpdated } from '@/lib/events';
+import { cn } from '@/lib/utils';
 
 import type { Award as AwardType } from '@/types';
 
@@ -38,6 +40,24 @@ export function AwardsSection({ awards, onUpdate }: AwardsSectionProps) {
   const [formData, setFormData] = useState<Partial<AwardType>>(emptyAward);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const toggleVisibility = async (award: AwardType) => {
+    const newValue = !(award.isVisible ?? true);
+    // Optimistic update
+    onUpdate(awards.map((a) => (a.id === award.id ? { ...a, isVisible: newValue } : a)));
+    try {
+      const response = await fetch(`/api/profile/awards/${award.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isVisible: newValue }),
+      });
+      if (!response.ok) throw new Error('Failed to update visibility');
+      notifyProfileUpdated();
+    } catch {
+      // Revert on error
+      onUpdate(awards.map((a) => (a.id === award.id ? { ...a, isVisible: !newValue } : a)));
+    }
+  };
 
   const handleOpenDialog = (award?: AwardType) => {
     if (award) {
@@ -172,7 +192,10 @@ export function AwardsSection({ awards, onUpdate }: AwardsSectionProps) {
             {awards.map((award) => (
               <div
                 key={award.id}
-                className="group flex items-start gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50"
+                className={cn(
+                  'group flex items-start gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50',
+                  award.isVisible === false && 'opacity-50'
+                )}
               >
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
                   <Award className="h-5 w-5 text-primary" />
@@ -186,6 +209,19 @@ export function AwardsSection({ awards, onUpdate }: AwardsSectionProps) {
                       )}
                     </div>
                     <div className="flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => toggleVisibility(award)}
+                        className={award.isVisible === false ? 'text-muted-foreground' : ''}
+                        title={award.isVisible === false ? 'Show on resume' : 'Hide from resume'}
+                      >
+                        {award.isVisible === false ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </Button>
                       <Button variant="ghost" size="sm" onClick={() => handleOpenDialog(award)}>
                         Edit
                       </Button>

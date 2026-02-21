@@ -33,6 +33,7 @@ import { ResumePreviewPanel } from './components/resume-preview-panel';
 import { SortableSectionItem } from './components/sortable-section-item';
 
 import type { FullProfile, ProfileSection, SectionType } from '@/types';
+import { HEADER_SECTION_TYPES } from '@/types';
 
 interface BuilderLayoutClientProps {
   profile: FullProfile;
@@ -299,31 +300,80 @@ export function BuilderLayoutClient({ profile, children }: BuilderLayoutClientPr
 
             {/* Section List with Drag & Drop */}
             <ScrollArea className="flex-1 p-2">
-              {/* Profile Sections */}
-              <DndContext
-                id="builder-sections-dnd"
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleDragEnd}
-                modifiers={[restrictToVerticalAxis, restrictToParentElement]}
-              >
-                <SortableContext
-                  items={sections.map((s) => s.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  <nav className="space-y-1">
-                    {sections.map((section) => (
-                      <SortableSectionItem
-                        key={section.id}
-                        section={section}
-                        isActive={isActiveSection(section)}
-                        onToggleVisibility={handleToggleVisibility}
-                        onDelete={handleDeleteSection}
-                      />
-                    ))}
-                  </nav>
-                </SortableContext>
-              </DndContext>
+              {/* Header Sections */}
+              {(() => {
+                const headerSections = sections.filter((s) =>
+                  HEADER_SECTION_TYPES.includes(s.type)
+                );
+                const bodySections = sections.filter((s) => !HEADER_SECTION_TYPES.includes(s.type));
+                return (
+                  <>
+                    {headerSections.length > 0 && (
+                      <div className="mb-3">
+                        <p className="mb-1 px-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                          Header
+                        </p>
+                        <DndContext
+                          id="builder-header-sections-dnd"
+                          sensors={sensors}
+                          collisionDetection={closestCenter}
+                          onDragEnd={handleDragEnd}
+                          modifiers={[restrictToVerticalAxis, restrictToParentElement]}
+                        >
+                          <SortableContext
+                            items={headerSections.map((s) => s.id)}
+                            strategy={verticalListSortingStrategy}
+                          >
+                            <nav className="space-y-1">
+                              {headerSections.map((section) => (
+                                <SortableSectionItem
+                                  key={section.id}
+                                  section={section}
+                                  isActive={isActiveSection(section)}
+                                  onToggleVisibility={handleToggleVisibility}
+                                  onDelete={handleDeleteSection}
+                                />
+                              ))}
+                            </nav>
+                          </SortableContext>
+                        </DndContext>
+                      </div>
+                    )}
+
+                    {bodySections.length > 0 && (
+                      <div>
+                        <p className="mb-1 px-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                          Body
+                        </p>
+                        <DndContext
+                          id="builder-body-sections-dnd"
+                          sensors={sensors}
+                          collisionDetection={closestCenter}
+                          onDragEnd={handleDragEnd}
+                          modifiers={[restrictToVerticalAxis, restrictToParentElement]}
+                        >
+                          <SortableContext
+                            items={bodySections.map((s) => s.id)}
+                            strategy={verticalListSortingStrategy}
+                          >
+                            <nav className="space-y-1">
+                              {bodySections.map((section) => (
+                                <SortableSectionItem
+                                  key={section.id}
+                                  section={section}
+                                  isActive={isActiveSection(section)}
+                                  onToggleVisibility={handleToggleVisibility}
+                                  onDelete={handleDeleteSection}
+                                />
+                              ))}
+                            </nav>
+                          </SortableContext>
+                        </DndContext>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
 
               {/* Add Section Button */}
               <div className="mt-3">

@@ -11,6 +11,7 @@ const DEFAULT_SECTION_CONFIGS: { type: SectionType; title: string }[] = [
   { type: 'BASIC_INFO', title: 'Basic Info' },
   { type: 'PHOTOS', title: 'Photos' },
   { type: 'CONTACT', title: 'Contact' },
+  { type: 'SUMMARY', title: 'Summary' },
   { type: 'EXPERIENCE', title: 'Experience' },
   { type: 'EDUCATION', title: 'Education' },
   { type: 'SKILLS', title: 'Skills' },
@@ -59,6 +60,63 @@ export async function GET() {
         )
       );
       return NextResponse.json(defaultSections);
+    }
+
+    // Auto-add any missing default sections for existing users
+    const existingTypes = new Set(user.profile.sections.map((s) => s.type));
+    const missingSections = DEFAULT_SECTION_CONFIGS.filter(
+      (config) => !existingTypes.has(config.type)
+    );
+
+    if (missingSections.length > 0) {
+      const maxOrder = user.profile.sections.reduce((max, s) => Math.max(max, s.sortOrder), -1);
+
+      // For SUMMARY, insert it right after CONTACT (top of body) instead of at the end
+      const contactIdx = user.profile.sections.findIndex((s) => s.type === 'CONTACT');
+      const linksIdx = user.profile.sections.findIndex((s) => s.type === 'LINKS');
+      // Find the first body section position (right after last header section)
+      const insertAfterIdx = Math.max(contactIdx, linksIdx);
+
+      const newSections = await Promise.all(
+        missingSections.map((config, i) => {
+          // Place SUMMARY right after header sections; others at the end
+          const sortOrder =
+            config.type === 'SUMMARY' && insertAfterIdx >= 0
+              ? user.profile!.sections[insertAfterIdx].sortOrder + 0.5
+              : maxOrder + 1 + i;
+
+          return db.profileSection.create({
+            data: {
+              profileId: user.profile!.id,
+              type: config.type,
+              title: config.title,
+              sortOrder,
+              isVisible: true,
+            },
+          });
+        })
+      );
+
+      // Re-normalize sort orders
+      const allSections = [...user.profile.sections, ...newSections].sort(
+        (a, b) => a.sortOrder - b.sortOrder
+      );
+      await Promise.all(
+        allSections.map((s, idx) =>
+          db.profileSection.update({
+            where: { id: s.id },
+            data: { sortOrder: idx },
+          })
+        )
+      );
+
+      // Re-fetch with correct order
+      const updatedSections = await db.profileSection.findMany({
+        where: { profileId: user.profile.id },
+        orderBy: { sortOrder: 'asc' },
+      });
+
+      return NextResponse.json(updatedSections);
     }
 
     return NextResponse.json(user.profile.sections);

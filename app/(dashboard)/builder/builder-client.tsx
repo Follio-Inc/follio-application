@@ -10,6 +10,7 @@ import {
   Download,
   ExternalLink,
   Eye,
+  FileText,
   FolderKanban,
   GraduationCap,
   Link as LinkIcon,
@@ -40,8 +41,9 @@ import { ProjectsSection } from './sections/projects-section';
 import { SettingsSection } from './sections/settings-section';
 import { ShareSection } from './sections/share-section';
 import { SkillsSection } from './sections/skills-section';
+import { SummarySection } from './sections/summary-section';
 
-import type { FullProfile } from '@/types';
+import type { FullProfile, SectionCategory } from '@/types';
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -50,15 +52,21 @@ interface BuilderClientProps {
 }
 
 const sections = [
-  { id: 'basic', label: 'Basic Info', icon: User },
-  { id: 'contact', label: 'Contact', icon: Contact },
-  { id: 'experience', label: 'Experience', icon: Briefcase },
-  { id: 'education', label: 'Education', icon: GraduationCap },
-  { id: 'skills', label: 'Skills', icon: Code },
-  { id: 'projects', label: 'Projects', icon: FolderKanban },
-  { id: 'links', label: 'Links', icon: LinkIcon },
-  { id: 'share', label: 'Share & Publish', icon: Share2 },
-  { id: 'settings', label: 'Settings', icon: Settings },
+  { id: 'basic', label: 'Basic Info', icon: User, category: 'header' as SectionCategory },
+  { id: 'contact', label: 'Contact', icon: Contact, category: 'header' as SectionCategory },
+  { id: 'links', label: 'Links', icon: LinkIcon, category: 'header' as SectionCategory },
+  { id: 'summary', label: 'Summary', icon: FileText, category: 'body' as SectionCategory },
+  { id: 'experience', label: 'Experience', icon: Briefcase, category: 'body' as SectionCategory },
+  { id: 'education', label: 'Education', icon: GraduationCap, category: 'body' as SectionCategory },
+  { id: 'skills', label: 'Skills', icon: Code, category: 'body' as SectionCategory },
+  { id: 'projects', label: 'Projects', icon: FolderKanban, category: 'body' as SectionCategory },
+  { id: 'share', label: 'Share & Publish', icon: Share2, category: 'body' as SectionCategory },
+  { id: 'settings', label: 'Settings', icon: Settings, category: 'body' as SectionCategory },
+];
+
+const sectionCategories: { key: SectionCategory; label: string }[] = [
+  { key: 'header', label: 'Header' },
+  { key: 'body', label: 'Body' },
 ];
 
 export function BuilderClient({ initialProfile }: BuilderClientProps) {
@@ -446,24 +454,35 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
           {/* Section Navigation - Desktop */}
           <div className="hidden rounded-lg border bg-card p-4 lg:block">
             <h3 className="mb-3 text-sm font-medium text-muted-foreground">Sections</h3>
-            <nav className="space-y-1">
-              {sections.map((section) => {
-                const Icon = section.icon;
-                return (
-                  <button
-                    key={section.id}
-                    onClick={() => handleSectionChange(section.id)}
-                    className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors ${
-                      activeSection === section.id
-                        ? 'bg-primary text-primary-foreground'
-                        : 'hover:bg-muted'
-                    }`}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {section.label}
-                  </button>
-                );
-              })}
+            <nav className="space-y-4">
+              {sectionCategories.map((cat) => (
+                <div key={cat.key}>
+                  <p className="mb-1 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    {cat.label}
+                  </p>
+                  <div className="space-y-1">
+                    {sections
+                      .filter((s) => s.category === cat.key)
+                      .map((section) => {
+                        const Icon = section.icon;
+                        return (
+                          <button
+                            key={section.id}
+                            onClick={() => handleSectionChange(section.id)}
+                            className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors ${
+                              activeSection === section.id
+                                ? 'bg-primary text-primary-foreground'
+                                : 'hover:bg-muted'
+                            }`}
+                          >
+                            <Icon className="h-4 w-4" />
+                            {section.label}
+                          </button>
+                        );
+                      })}
+                  </div>
+                </div>
+              ))}
             </nav>
           </div>
         </div>
@@ -476,21 +495,30 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
             onValueChange={handleSectionChange}
             className="space-y-6 lg:hidden"
           >
-            <TabsList className="flex h-auto flex-wrap gap-2 bg-transparent p-0">
-              {sections.map((section) => {
-                const Icon = section.icon;
-                return (
-                  <TabsTrigger
-                    key={section.id}
-                    value={section.id}
-                    className="gap-2 rounded-lg border bg-card px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-                  >
-                    <Icon className="h-4 w-4" />
-                    {section.label}
-                  </TabsTrigger>
-                );
-              })}
-            </TabsList>
+            {sectionCategories.map((cat) => (
+              <div key={cat.key}>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  {cat.label}
+                </p>
+                <TabsList className="flex h-auto flex-wrap gap-2 bg-transparent p-0">
+                  {sections
+                    .filter((s) => s.category === cat.key)
+                    .map((section) => {
+                      const Icon = section.icon;
+                      return (
+                        <TabsTrigger
+                          key={section.id}
+                          value={section.id}
+                          className="gap-2 rounded-lg border bg-card px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                        >
+                          <Icon className="h-4 w-4" />
+                          {section.label}
+                        </TabsTrigger>
+                      );
+                    })}
+                </TabsList>
+              </div>
+            ))}
           </Tabs>
 
           {/* Section Content */}
@@ -502,6 +530,10 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
           >
             {activeSection === 'basic' && (
               <BasicInfoForm profile={profile} onUpdate={handleProfileUpdate} />
+            )}
+
+            {activeSection === 'summary' && (
+              <SummarySection profile={profile} onUpdate={handleProfileUpdate} />
             )}
 
             {activeSection === 'contact' && (

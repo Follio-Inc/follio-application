@@ -9,7 +9,6 @@ import { ContactSection } from '@/components/contact-section';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { notifyProfileUpdated } from '@/lib/events';
 import type { ContactData } from '@/lib/hooks/use-contact-manager';
 import { ProfileBasicInfoSchema, type ProfileBasicInfo } from '@/lib/validations';
@@ -28,7 +27,6 @@ export function BasicInfoForm({ profile, onUpdate }: BasicInfoFormProps) {
       firstName: profile.firstName || '',
       lastName: profile.lastName || '',
       headline: profile.headline || '',
-      summary: profile.summary || '',
       location: profile.location || '',
       avatarUrl: profile.avatarUrl || '',
     },
@@ -43,7 +41,7 @@ export function BasicInfoForm({ profile, onUpdate }: BasicInfoFormProps) {
     <Card>
       <CardHeader>
         <CardTitle>Basic Information</CardTitle>
-        <CardDescription>Your personal details and professional summary</CardDescription>
+        <CardDescription>Your personal details</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Name */}
@@ -94,21 +92,6 @@ export function BasicInfoForm({ profile, onUpdate }: BasicInfoFormProps) {
             onChange={(e) => handleChange('location', e.target.value)}
             placeholder="San Francisco, CA"
           />
-        </div>
-
-        {/* Summary */}
-        <div className="space-y-2">
-          <Label htmlFor="summary">About / Summary</Label>
-          <Textarea
-            id="summary"
-            value={form.watch('summary')}
-            onChange={(e) => handleChange('summary', e.target.value)}
-            placeholder="Write a brief introduction about yourself, your experience, and what you're passionate about..."
-            rows={6}
-          />
-          <p className="text-xs text-muted-foreground">
-            {(form.watch('summary') || '').length}/2000 characters
-          </p>
         </div>
       </CardContent>
     </Card>

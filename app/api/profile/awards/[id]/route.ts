@@ -64,7 +64,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     const body = await request.json();
-    const { title, issuer, date, description, url, sortOrder } = body;
+    const { title, issuer, date, description, url, sortOrder, isVisible } = body;
 
     const award = await db.award.update({
       where: {
@@ -78,6 +78,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         ...(description !== undefined && { description }),
         ...(url !== undefined && { url }),
         ...(sortOrder !== undefined && { sortOrder }),
+        ...(isVisible !== undefined && { isVisible }),
       },
     });
 

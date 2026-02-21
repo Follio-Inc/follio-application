@@ -1,6 +1,15 @@
 'use client';
 
-import { ExternalLink, GripVertical, LayoutGrid, Loader2, Plus, Trash2 } from 'lucide-react';
+import {
+  ExternalLink,
+  Eye,
+  EyeOff,
+  GripVertical,
+  LayoutGrid,
+  Loader2,
+  Plus,
+  Trash2,
+} from 'lucide-react';
 import { useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -17,6 +26,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
+import { notifyProfileUpdated } from '@/lib/events';
+import { cn } from '@/lib/utils';
 
 import type { CustomSectionContent, CustomSectionItem, ProfileSection } from '@/types';
 
@@ -45,15 +56,15 @@ export function CustomSection({ section }: CustomSectionProps) {
   const [error, setError] = useState<string | null>(null);
   const [freeformContent, setFreeformContent] = useState('');
 
-  // Parse existing content
-  const content = (section?.customContent as CustomSectionContent) || { items: [] };
-  const items = content.items || [];
+  // Parse existing content — use local state so toggling is instant
+  const initialContent = (section?.customContent as CustomSectionContent) || { items: [] };
+  const [items, setItems] = useState<CustomSectionItem[]>(initialContent.items || []);
   const contentType = section?.contentType || 'STRUCTURED';
 
   // Initialize freeform content
   useState(() => {
-    if (contentType === 'FREEFORM' && content.content) {
-      setFreeformContent(content.content);
+    if (contentType === 'FREEFORM' && initialContent.content) {
+      setFreeformContent(initialContent.content);
     }
   });
 
@@ -145,6 +156,20 @@ export function CustomSection({ section }: CustomSectionProps) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const toggleItemVisibility = async (item: CustomSectionItem) => {
+    const newValue = !(item.isVisible ?? true);
+    const newItems = items.map((i) => (i.id === item.id ? { ...i, isVisible: newValue } : i));
+    // Optimistic update
+    setItems(newItems);
+    try {
+      await saveContent({ items: newItems });
+      notifyProfileUpdated();
+    } catch {
+      // Revert on error
+      setItems(items);
     }
   };
 
@@ -247,7 +272,10 @@ export function CustomSection({ section }: CustomSectionProps) {
             {items.map((item) => (
               <div
                 key={item.id}
-                className="group flex items-start gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50"
+                className={cn(
+                  'group flex items-start gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50',
+                  item.isVisible === false && 'opacity-50'
+                )}
               >
                 <div className="cursor-grab touch-none rounded p-1 hover:bg-muted">
                   <GripVertical className="h-4 w-4 text-muted-foreground" />
@@ -261,6 +289,19 @@ export function CustomSection({ section }: CustomSectionProps) {
                       )}
                     </div>
                     <div className="flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => toggleItemVisibility(item)}
+                        className={item.isVisible === false ? 'text-muted-foreground' : ''}
+                        title={item.isVisible === false ? 'Show on resume' : 'Hide from resume'}
+                      >
+                        {item.isVisible === false ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </Button>
                       <Button variant="ghost" size="sm" onClick={() => handleOpenDialog(item)}>
                         Edit
                       </Button>

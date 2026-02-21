@@ -1,6 +1,6 @@
 'use client';
 
-import { BookOpen, ExternalLink, Loader2, Plus, Trash2 } from 'lucide-react';
+import { BookOpen, ExternalLink, Eye, EyeOff, Loader2, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { notifyProfileUpdated } from '@/lib/events';
+import { cn } from '@/lib/utils';
 
 import type { ProfileSection, PublicationItem, PublicationsSectionContent } from '@/types';
 
@@ -40,11 +42,11 @@ export function PublicationsSection({ section }: PublicationsSectionProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Parse existing content
-  const content = (section?.customContent as unknown as PublicationsSectionContent) || {
+  // Parse existing content — use local state so toggling is instant
+  const initialContent = (section?.customContent as unknown as PublicationsSectionContent) || {
     items: [],
   };
-  const items = content.items || [];
+  const [items, setItems] = useState<PublicationItem[]>(initialContent.items || []);
 
   if (!section) {
     return (
@@ -134,6 +136,20 @@ export function PublicationsSection({ section }: PublicationsSectionProps) {
     }
   };
 
+  const toggleItemVisibility = async (item: PublicationItem) => {
+    const newValue = !(item.isVisible ?? true);
+    const newItems = items.map((i) => (i.id === item.id ? { ...i, isVisible: newValue } : i));
+    // Optimistic update
+    setItems(newItems);
+    try {
+      await saveContent({ items: newItems });
+      notifyProfileUpdated();
+    } catch {
+      // Revert on error
+      setItems(items);
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -166,7 +182,10 @@ export function PublicationsSection({ section }: PublicationsSectionProps) {
             {items.map((item) => (
               <div
                 key={item.id}
-                className="group flex items-start gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50"
+                className={cn(
+                  'group flex items-start gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50',
+                  item.isVisible === false && 'opacity-50'
+                )}
               >
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
                   <BookOpen className="h-5 w-5 text-primary" />
@@ -185,6 +204,19 @@ export function PublicationsSection({ section }: PublicationsSectionProps) {
                       )}
                     </div>
                     <div className="flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => toggleItemVisibility(item)}
+                        className={item.isVisible === false ? 'text-muted-foreground' : ''}
+                        title={item.isVisible === false ? 'Show on resume' : 'Hide from resume'}
+                      >
+                        {item.isVisible === false ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </Button>
                       <Button variant="ghost" size="sm" onClick={() => handleOpenDialog(item)}>
                         Edit
                       </Button>

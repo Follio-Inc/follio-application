@@ -421,6 +421,8 @@ export type {
 /**
  * Section configuration for UI
  */
+export type SectionCategory = 'header' | 'body';
+
 export interface SectionConfig {
   type: SectionType;
   defaultTitle: string;
@@ -428,6 +430,7 @@ export interface SectionConfig {
   description: string;
   isRemovable: boolean;
   hasItems: boolean; // Does this section have a list of items (experiences, projects) or just fields (basic info)
+  category: SectionCategory; // Whether this section belongs to the Header or Body group
 }
 
 /**
@@ -438,9 +441,19 @@ export const SECTION_CONFIGS: SectionConfig[] = [
     type: 'BASIC_INFO',
     defaultTitle: 'Basic Info',
     icon: 'User',
-    description: 'Name, headline, summary',
+    description: 'Name, headline',
     isRemovable: false,
     hasItems: false,
+    category: 'header',
+  },
+  {
+    type: 'SUMMARY',
+    defaultTitle: 'Summary',
+    icon: 'FileText',
+    description: 'Professional summary or about section',
+    isRemovable: true,
+    hasItems: false,
+    category: 'body',
   },
   {
     type: 'EXPERIENCE',
@@ -449,6 +462,7 @@ export const SECTION_CONFIGS: SectionConfig[] = [
     description: 'Work history',
     isRemovable: true,
     hasItems: true,
+    category: 'body',
   },
   {
     type: 'EDUCATION',
@@ -457,6 +471,7 @@ export const SECTION_CONFIGS: SectionConfig[] = [
     description: 'Schools and degrees',
     isRemovable: true,
     hasItems: true,
+    category: 'body',
   },
   {
     type: 'SKILLS',
@@ -465,6 +480,7 @@ export const SECTION_CONFIGS: SectionConfig[] = [
     description: 'Technical and soft skills',
     isRemovable: true,
     hasItems: true,
+    category: 'body',
   },
   {
     type: 'PROJECTS',
@@ -473,6 +489,7 @@ export const SECTION_CONFIGS: SectionConfig[] = [
     description: 'Portfolio projects',
     isRemovable: true,
     hasItems: true,
+    category: 'body',
   },
   {
     type: 'LINKS',
@@ -481,6 +498,7 @@ export const SECTION_CONFIGS: SectionConfig[] = [
     description: 'Social profiles and websites',
     isRemovable: true,
     hasItems: true,
+    category: 'header',
   },
   {
     type: 'AWARDS',
@@ -489,6 +507,7 @@ export const SECTION_CONFIGS: SectionConfig[] = [
     description: 'Recognition and achievements',
     isRemovable: true,
     hasItems: true,
+    category: 'body',
   },
   {
     type: 'CERTIFICATIONS',
@@ -497,6 +516,7 @@ export const SECTION_CONFIGS: SectionConfig[] = [
     description: 'Professional certifications',
     isRemovable: true,
     hasItems: true,
+    category: 'body',
   },
   {
     type: 'PUBLICATIONS',
@@ -505,6 +525,7 @@ export const SECTION_CONFIGS: SectionConfig[] = [
     description: 'Papers, articles, books',
     isRemovable: true,
     hasItems: true,
+    category: 'body',
   },
   {
     type: 'VOLUNTEERING',
@@ -513,6 +534,7 @@ export const SECTION_CONFIGS: SectionConfig[] = [
     description: 'Community involvement',
     isRemovable: true,
     hasItems: true,
+    category: 'body',
   },
   {
     type: 'LANGUAGES',
@@ -521,6 +543,7 @@ export const SECTION_CONFIGS: SectionConfig[] = [
     description: 'Languages you speak',
     isRemovable: true,
     hasItems: true,
+    category: 'body',
   },
   {
     type: 'INTERESTS',
@@ -529,6 +552,7 @@ export const SECTION_CONFIGS: SectionConfig[] = [
     description: 'Hobbies and interests',
     isRemovable: true,
     hasItems: true,
+    category: 'body',
   },
   {
     type: 'CUSTOM',
@@ -537,8 +561,15 @@ export const SECTION_CONFIGS: SectionConfig[] = [
     description: 'Create your own section',
     isRemovable: true,
     hasItems: true,
+    category: 'body',
   },
 ];
+
+/**
+ * Section types that belong to the "Header" category in the builder sidebar.
+ * Everything else is considered "Body".
+ */
+export const HEADER_SECTION_TYPES: SectionType[] = ['BASIC_INFO', 'CONTACT', 'LINKS'];
 
 /**
  * Custom section content item (for structured custom sections)
@@ -553,6 +584,7 @@ export interface CustomSectionItem {
   isCurrent?: boolean;
   url?: string;
   tags?: string[];
+  isVisible?: boolean;
 }
 
 /**
@@ -576,6 +608,7 @@ export interface VolunteeringItem {
   endDate?: string;
   isCurrent?: boolean;
   url?: string;
+  isVisible?: boolean;
 }
 
 /**
@@ -592,6 +625,7 @@ export interface LanguageItem {
   id: string;
   language: string;
   proficiency: 'NATIVE' | 'FLUENT' | 'ADVANCED' | 'INTERMEDIATE' | 'BASIC';
+  isVisible?: boolean;
 }
 
 /**
@@ -613,6 +647,7 @@ export interface PublicationItem {
   description?: string;
   url?: string;
   doi?: string;
+  isVisible?: boolean;
 }
 
 /**
@@ -629,6 +664,7 @@ export interface InterestItem {
   id: string;
   name: string;
   category?: string;
+  isVisible?: boolean;
 }
 
 /**

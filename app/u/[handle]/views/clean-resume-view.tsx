@@ -7,20 +7,18 @@ import { Button } from '@/components/ui/button';
 import { cleanPhoneDisplay } from '@/components/ui/phone-input';
 import { getPortfolioPath } from '@/lib/url';
 import { formatDate } from '@/lib/utils';
+import { applyVisibilityFilter, type FilteredProfile } from '@/lib/visibility';
 import type {
   CustomSectionContent,
   CustomSectionItem,
   InterestItem,
-  InterestsSectionContent,
   LanguageItem,
-  LanguagesSectionContent,
   ProfileSection,
   PublicationItem,
-  PublicationsSectionContent,
   PublicProfile,
   VolunteeringItem,
-  VolunteeringSectionContent,
 } from '@/types';
+import { HEADER_SECTION_TYPES } from '@/types';
 
 interface CleanResumeViewProps {
   profile: PublicProfile;
@@ -65,10 +63,13 @@ function formatDateRange(
 // HEADER SECTION
 // ============================================================================
 
-function ResumeHeader({ profile }: { profile: PublicProfile }) {
+function ResumeHeader({ profile }: { profile: FilteredProfile }) {
   const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(' ');
+
   const showPhoto =
-    (profile as Record<string, unknown>).resumeShowPhoto === true && profile.avatarUrl;
+    (profile as Record<string, unknown>).resumeShowPhoto === true &&
+    profile.avatarUrl &&
+    profile._photosVisible;
 
   // Build contact line items
   const contactItems: string[] = [];
@@ -77,27 +78,16 @@ function ResumeHeader({ profile }: { profile: PublicProfile }) {
     contactItems.push(profile.location);
   }
 
-  // For public profiles, the server already filters email/phone based on
-  // emailPublic/phonePublic. For the builder preview (which sends full
-  // ContactInfo), we check the flags directly.
-  const ci = profile.contactInfo as Record<string, unknown> | null;
-  console.log('[ResumeView] contactInfo:', {
-    email: profile.contactInfo?.email,
-    phone: profile.contactInfo?.phone,
-    emailPublic: ci?.emailPublic,
-    phonePublic: ci?.phonePublic,
-  });
-  if (profile.contactInfo?.email && ci?.emailPublic !== false) {
+  if (profile.contactInfo?.email) {
     contactItems.push(profile.contactInfo.email);
   }
 
-  if (profile.contactInfo?.phone && ci?.phonePublic !== false) {
+  if (profile.contactInfo?.phone) {
     contactItems.push(cleanPhoneDisplay(profile.contactInfo.phone));
   }
 
-  // Add visible links (visibility controlled solely by the eye icon / isVisible flag)
+  // Links — already filtered by applyVisibilityFilter (section + entry level)
   profile.links?.forEach((link) => {
-    if ((link as Record<string, unknown>).isVisible === false) return;
     // Clean URL for display (remove https://, www.)
     const displayUrl = link.url
       .replace(/^https?:\/\//, '')
@@ -212,15 +202,13 @@ function ExperienceEntry({
 }
 
 function ExperienceSection({ experiences }: { experiences: PublicProfile['workExperiences'] }) {
-  const visibleExperiences =
-    experiences?.filter((exp) => (exp as Record<string, unknown>).isVisible !== false) || [];
-  if (visibleExperiences.length === 0) return null;
+  if (!experiences || experiences.length === 0) return null;
 
   return (
     <section className="resume-section">
       <SectionDivider title="EXPERIENCE" />
       <div className="resume-entries">
-        {visibleExperiences.map((exp) => (
+        {experiences.map((exp) => (
           <ExperienceEntry
             key={exp.id}
             role={exp.role}
@@ -243,15 +231,13 @@ function ExperienceSection({ experiences }: { experiences: PublicProfile['workEx
 // ============================================================================
 
 function EducationSection({ educations }: { educations: PublicProfile['educations'] }) {
-  const visibleEducations =
-    educations?.filter((edu) => (edu as Record<string, unknown>).isVisible !== false) || [];
-  if (visibleEducations.length === 0) return null;
+  if (!educations || educations.length === 0) return null;
 
   return (
     <section className="resume-section">
       <SectionDivider title="EDUCATION" />
       <div className="resume-entries">
-        {visibleEducations.map((edu) => {
+        {educations.map((edu) => {
           const degreeLine = [edu.degree, edu.fieldOfStudy].filter(Boolean).join(' in ');
           const dateRange = formatDateRange(edu.startDate, edu.endDate, edu.isCurrent);
 
@@ -285,22 +271,13 @@ function EducationSection({ educations }: { educations: PublicProfile['education
 function SkillsSection({ profile }: { profile: PublicProfile }) {
   const { skills, skillGroups } = profile;
 
-  // If we have skill groups, display grouped (filtering hidden skills)
+  // If we have skill groups, display grouped (already filtered by applyVisibilityFilter)
   if (skillGroups && skillGroups.length > 0) {
-    const filteredGroups = skillGroups
-      .map((group) => ({
-        ...group,
-        skills: group.skills.filter((s) => (s as Record<string, unknown>).isVisible !== false),
-      }))
-      .filter((group) => group.skills.length > 0);
-
-    if (filteredGroups.length === 0) return null;
-
     return (
       <section className="resume-section">
         <SectionDivider title="SKILLS" />
         <div className="resume-skills-grouped">
-          {filteredGroups.map((group) => (
+          {skillGroups.map((group) => (
             <div key={group.id} className="resume-skill-group">
               <span className="resume-skill-group-name">{group.name}:</span>{' '}
               <span className="resume-skill-group-items">
@@ -313,15 +290,13 @@ function SkillsSection({ profile }: { profile: PublicProfile }) {
     );
   }
 
-  // Otherwise, display flat list (filtering hidden)
-  const visibleSkills =
-    skills?.filter((s) => (s as Record<string, unknown>).isVisible !== false) || [];
-  if (visibleSkills.length === 0) return null;
+  // Otherwise, display flat list (already filtered by applyVisibilityFilter)
+  if (!skills || skills.length === 0) return null;
 
   return (
     <section className="resume-section">
       <SectionDivider title="SKILLS" />
-      <p className="resume-skills-flat">{visibleSkills.map((s) => s.name).join(', ')}</p>
+      <p className="resume-skills-flat">{skills.map((s) => s.name).join(', ')}</p>
     </section>
   );
 }
@@ -331,17 +306,13 @@ function SkillsSection({ profile }: { profile: PublicProfile }) {
 // ============================================================================
 
 function ProjectsSection({ projects }: { projects: PublicProfile['projects'] }) {
-  // Filter visible projects
-  const visibleProjects =
-    projects?.filter((p) => p.isVisible !== false && p.showOnResume !== false) || [];
-
-  if (visibleProjects.length === 0) return null;
+  if (!projects || projects.length === 0) return null;
 
   return (
     <section className="resume-section">
       <SectionDivider title="PROJECTS" />
       <div className="resume-entries">
-        {visibleProjects.map((project) => {
+        {projects.map((project) => {
           const dateRange = formatDateRange(project.startDate, project.endDate, project.isCurrent);
           const description = project.customDescription || project.shortDesc || project.description;
 
@@ -394,15 +365,13 @@ function CertificationsSection({
 }: {
   certifications: PublicProfile['certifications'];
 }) {
-  const visibleCerts =
-    certifications?.filter((c) => (c as Record<string, unknown>).isVisible !== false) || [];
-  if (visibleCerts.length === 0) return null;
+  if (!certifications || certifications.length === 0) return null;
 
   return (
     <section className="resume-section">
       <SectionDivider title="CERTIFICATIONS" />
       <div className="resume-entries resume-entries-compact">
-        {visibleCerts.map((cert) => {
+        {certifications.map((cert) => {
           const issuedDate = formatResumeDate(cert.issueDate);
           const expDate = cert.expirationDate ? formatResumeDate(cert.expirationDate) : null;
 
@@ -430,15 +399,13 @@ function CertificationsSection({
 // ============================================================================
 
 function AwardsSection({ awards }: { awards: PublicProfile['awards'] }) {
-  const visibleAwards =
-    awards?.filter((a) => (a as Record<string, unknown>).isVisible !== false) || [];
-  if (visibleAwards.length === 0) return null;
+  if (!awards || awards.length === 0) return null;
 
   return (
     <section className="resume-section">
       <SectionDivider title="AWARDS & RECOGNITION" />
       <div className="resume-entries resume-entries-compact">
-        {visibleAwards.map((award) => {
+        {awards.map((award) => {
           const awardDate = formatResumeDate(award.date);
 
           return (
@@ -705,42 +672,75 @@ function ResumeActions({
 // MAIN COMPONENT
 // ============================================================================
 
-export function CleanResumeView({ profile, profileHandle }: CleanResumeViewProps) {
+export function CleanResumeView({ profile: rawProfile, profileHandle }: CleanResumeViewProps) {
   const resumeRef = useRef<HTMLDivElement>(null);
 
-  // Get section data
-  // If no sections exist yet (legacy/new profile), default to showing everything
-  const hasNoSections = !profile.sections || profile.sections.length === 0;
+  // ── Centralized visibility filtering ──────────────────────────────────
+  // Apply section-level visibility once. After this, every array/field is
+  // already empty or null when its section is hidden, so sub-components
+  // never need to check section visibility themselves.
+  const profile = applyVisibilityFilter(rawProfile, { resumeContext: true });
 
-  const getSectionByType = (type: string) =>
-    (profile.sections || []).find((s: ProfileSection) => s.type === type && s.isVisible);
-
-  // Check if a section type should be visible
-  // Shows everything by default when no sections are configured
-  const isSectionVisible = (type: string) => hasNoSections || !!getSectionByType(type);
-
-  const customSections = (profile.sections || [])
-    .filter((s: ProfileSection) => s.type === 'CUSTOM' && s.isVisible)
+  // ── Sections ordered by user-configured sortOrder ─────────────────────
+  // Header sections (BASIC_INFO, CONTACT, LINKS) are always rendered as
+  // the header block; body sections follow in their sortOrder.
+  const bodySections = (profile.sections || [])
+    .filter((s: ProfileSection) => !HEADER_SECTION_TYPES.includes(s.type))
     .sort((a: ProfileSection, b: ProfileSection) => a.sortOrder - b.sortOrder);
 
-  // Extract specialized sections
-  const volunteeringSection = getSectionByType('VOLUNTEERING');
-  const languagesSection = getSectionByType('LANGUAGES');
-  const publicationsSection = getSectionByType('PUBLICATIONS');
-  const interestsSection = getSectionByType('INTERESTS');
+  // ── Helper to extract custom-content items from a section ─────────────
+  const getCustomContentItems = <T,>(section: ProfileSection): T[] => {
+    const content = section.customContent as unknown as { items?: T[] } | null;
+    return content?.items || [];
+  };
 
-  const volunteeringItems = volunteeringSection
-    ? (volunteeringSection.customContent as unknown as VolunteeringSectionContent)?.items || []
-    : [];
-  const languageItems = languagesSection
-    ? (languagesSection.customContent as unknown as LanguagesSectionContent)?.items || []
-    : [];
-  const publicationItems = publicationsSection
-    ? (publicationsSection.customContent as unknown as PublicationsSectionContent)?.items || []
-    : [];
-  const interestItems = interestsSection
-    ? (interestsSection.customContent as unknown as InterestsSectionContent)?.items || []
-    : [];
+  // ── Render a body section by its type ─────────────────────────────────
+  const renderSection = (section: ProfileSection) => {
+    switch (section.type) {
+      case 'SUMMARY':
+        return profile.summary ? (
+          <SummarySection key={section.id} summary={profile.summary} />
+        ) : null;
+      case 'EXPERIENCE':
+        return <ExperienceSection key={section.id} experiences={profile.workExperiences} />;
+      case 'EDUCATION':
+        return <EducationSection key={section.id} educations={profile.educations} />;
+      case 'SKILLS':
+        return <SkillsSection key={section.id} profile={profile} />;
+      case 'PROJECTS':
+        return <ProjectsSection key={section.id} projects={profile.projects} />;
+      case 'CERTIFICATIONS':
+        return <CertificationsSection key={section.id} certifications={profile.certifications} />;
+      case 'AWARDS':
+        return <AwardsSection key={section.id} awards={profile.awards} />;
+      case 'PUBLICATIONS':
+        return (
+          <PublicationsSection
+            key={section.id}
+            items={getCustomContentItems<PublicationItem>(section)}
+          />
+        );
+      case 'VOLUNTEERING':
+        return (
+          <VolunteeringSection
+            key={section.id}
+            items={getCustomContentItems<VolunteeringItem>(section)}
+          />
+        );
+      case 'LANGUAGES':
+        return (
+          <LanguagesSection key={section.id} items={getCustomContentItems<LanguageItem>(section)} />
+        );
+      case 'INTERESTS':
+        return (
+          <InterestsSection key={section.id} items={getCustomContentItems<InterestItem>(section)} />
+        );
+      case 'CUSTOM':
+        return <CustomSection key={section.id} section={section} />;
+      default:
+        return null;
+    }
+  };
 
   return (
     <>
@@ -749,35 +749,8 @@ export function CleanResumeView({ profile, profileHandle }: CleanResumeViewProps
       <article ref={resumeRef} className="resume-paper">
         <ResumeHeader profile={profile} />
 
-        {profile.summary && <SummarySection summary={profile.summary} />}
-
-        {isSectionVisible('EXPERIENCE') && (
-          <ExperienceSection experiences={profile.workExperiences} />
-        )}
-
-        {isSectionVisible('EDUCATION') && <EducationSection educations={profile.educations} />}
-
-        {isSectionVisible('SKILLS') && <SkillsSection profile={profile} />}
-
-        {isSectionVisible('PROJECTS') && <ProjectsSection projects={profile.projects} />}
-
-        {isSectionVisible('CERTIFICATIONS') && (
-          <CertificationsSection certifications={profile.certifications} />
-        )}
-
-        {isSectionVisible('AWARDS') && <AwardsSection awards={profile.awards} />}
-
-        <PublicationsSection items={publicationItems} />
-
-        <VolunteeringSection items={volunteeringItems} />
-
-        <LanguagesSection items={languageItems} />
-
-        <InterestsSection items={interestItems} />
-
-        {customSections.map((section) => (
-          <CustomSection key={section.id} section={section} />
-        ))}
+        {/* Render body sections in user-configured sortOrder */}
+        {bodySections.map(renderSection)}
       </article>
     </>
   );

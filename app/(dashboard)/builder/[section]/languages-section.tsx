@@ -1,6 +1,6 @@
 'use client';
 
-import { Globe, Loader2, Plus, Trash2 } from 'lucide-react';
+import { Eye, EyeOff, Globe, Loader2, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -22,6 +22,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { notifyProfileUpdated } from '@/lib/events';
+import { cn } from '@/lib/utils';
 
 import type { LanguageItem, LanguagesSectionContent, ProfileSection } from '@/types';
 
@@ -50,9 +52,11 @@ export function LanguagesSection({ section }: LanguagesSectionProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Parse existing content
-  const content = (section?.customContent as unknown as LanguagesSectionContent) || { items: [] };
-  const items = content.items || [];
+  // Parse existing content — use local state so toggling is instant
+  const initialContent = (section?.customContent as unknown as LanguagesSectionContent) || {
+    items: [],
+  };
+  const [items, setItems] = useState<LanguageItem[]>(initialContent.items || []);
 
   if (!section) {
     return (
@@ -137,6 +141,20 @@ export function LanguagesSection({ section }: LanguagesSectionProps) {
     }
   };
 
+  const toggleItemVisibility = async (item: LanguageItem) => {
+    const newValue = !(item.isVisible ?? true);
+    const newItems = items.map((i) => (i.id === item.id ? { ...i, isVisible: newValue } : i));
+    // Optimistic update
+    setItems(newItems);
+    try {
+      await saveContent({ items: newItems });
+      notifyProfileUpdated();
+    } catch {
+      // Revert on error
+      setItems(items);
+    }
+  };
+
   const getProficiencyColor = (proficiency: string) => {
     switch (proficiency) {
       case 'NATIVE':
@@ -190,7 +208,10 @@ export function LanguagesSection({ section }: LanguagesSectionProps) {
             {items.map((item) => (
               <div
                 key={item.id}
-                className="group flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50"
+                className={cn(
+                  'group flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50',
+                  item.isVisible === false && 'opacity-50'
+                )}
               >
                 <div className="flex items-center gap-2">
                   <Globe className="h-4 w-4 text-muted-foreground" />
@@ -200,6 +221,19 @@ export function LanguagesSection({ section }: LanguagesSectionProps) {
                   {getProficiencyLabel(item.proficiency)}
                 </Badge>
                 <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => toggleItemVisibility(item)}
+                    title={item.isVisible === false ? 'Show on resume' : 'Hide from resume'}
+                  >
+                    {item.isVisible === false ? (
+                      <EyeOff className="h-3 w-3" />
+                    ) : (
+                      <Eye className="h-3 w-3" />
+                    )}
+                  </Button>
                   <Button
                     variant="ghost"
                     size="sm"

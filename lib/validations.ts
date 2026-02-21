@@ -186,6 +186,13 @@ export const ProjectSchema = z.object({
   endDate: z.coerce.date().optional().nullable(),
   isCurrent: z.boolean().optional(),
   featured: z.boolean().optional(),
+  // Visibility & display controls (must match Prisma model)
+  isVisible: z.boolean().optional(),
+  showOnPortfolio: z.boolean().optional(),
+  showOnResume: z.boolean().optional(),
+  showStats: z.boolean().optional(),
+  showReadme: z.boolean().optional(),
+  customDescription: z.string().max(2000).optional().nullable(),
 });
 
 // ===========================================

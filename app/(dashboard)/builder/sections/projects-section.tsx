@@ -228,7 +228,7 @@ export function ProjectsSection({ projects, onUpdate }: ProjectsSectionProps) {
     // Optimistic update
     onUpdate(projects.map((p) => (p.id === project.id ? { ...p, isVisible: newValue } : p)));
     try {
-      const response = await fetch(`/api/profile/projects/${project.id}/visibility`, {
+      const response = await fetch(`/api/profile/projects/${project.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isVisible: newValue }),
