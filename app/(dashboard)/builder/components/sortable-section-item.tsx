@@ -12,6 +12,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -136,7 +137,7 @@ export function SortableSectionItem({
         {...attributes}
         {...listeners}
         className={cn(
-          'cursor-grab touch-none rounded-l-lg p-2 opacity-0 transition-opacity group-hover:opacity-100',
+          'shrink-0 cursor-grab touch-none rounded-l-lg p-2 opacity-0 transition-opacity group-hover:opacity-100',
           isActive ? 'hover:bg-primary-foreground/20' : 'hover:bg-muted-foreground/20',
           isDragging && 'cursor-grabbing opacity-100'
         )}
@@ -146,34 +147,42 @@ export function SortableSectionItem({
       </button>
 
       {/* Section Link */}
-      <Link href={`/builder/${slug}`} className="flex flex-1 items-center gap-3 py-2 pr-2">
-        <Icon className="h-4 w-4" />
+      <Link href={`/builder/${slug}`} className="flex min-w-0 flex-1 items-center gap-3 py-2 pr-2">
+        <Icon className="h-4 w-4 shrink-0" />
         <span className="truncate text-sm font-medium">{section.title}</span>
       </Link>
 
       {/* Actions */}
-      <div className="mr-2 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+      <div className="mr-2 flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
         {/* Visibility Toggle */}
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            handleToggleVisibility();
-          }}
-          disabled={isTogglingVisibility}
-          className={cn(
-            'rounded p-1',
-            isActive ? 'hover:bg-primary-foreground/20' : 'hover:bg-muted-foreground/20',
-            isTogglingVisibility && 'cursor-not-allowed opacity-50'
-          )}
-          title={
-            section.isVisible
-              ? 'Hide section from public profile'
-              : 'Show section on public profile'
-          }
-        >
-          {section.isVisible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
-        </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn(
+                'h-6 w-6',
+                isActive ? 'hover:bg-primary-foreground/20' : 'hover:bg-muted-foreground/20',
+                isTogglingVisibility && 'cursor-not-allowed opacity-50'
+              )}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleToggleVisibility();
+              }}
+              disabled={isTogglingVisibility}
+            >
+              {section.isVisible ? (
+                <Eye className="h-3.5 w-3.5" />
+              ) : (
+                <EyeOff className="h-3.5 w-3.5" />
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="text-xs">
+            {section.isVisible ? 'Hide from profile' : 'Show on profile'}
+          </TooltipContent>
+        </Tooltip>
 
         {/* Delete Button */}
         {canDelete && (
@@ -185,18 +194,19 @@ export function SortableSectionItem({
             }}
           >
             <AlertDialogTrigger asChild>
-              <button
-                onClick={(e) => e.preventDefault()}
+              <Button
+                variant="ghost"
+                size="icon"
                 className={cn(
-                  'rounded p-1',
+                  'h-6 w-6',
                   isActive
                     ? 'text-primary-foreground hover:bg-destructive/20'
                     : 'hover:bg-destructive/20 hover:text-destructive'
                 )}
-                title="Delete section"
+                onClick={(e) => e.preventDefault()}
               >
-                <Trash2 className="h-3 w-3" />
-              </button>
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>

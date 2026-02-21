@@ -1,6 +1,6 @@
 'use client';
 
-import { Eye, EyeOff, Loader2, Plus, Sparkles, X } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -225,7 +225,7 @@ export function InterestsSection({ section }: InterestsSectionProps) {
                       )}
                     >
                       <span className="text-sm font-medium">{item.name}</span>
-                      <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                      <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
                         <button
                           onClick={() => toggleItemVisibility(item)}
                           className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -240,27 +240,16 @@ export function InterestsSection({ section }: InterestsSectionProps) {
                         <button
                           onClick={() => handleOpenDialog(item)}
                           className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                          title="Edit"
                         >
-                          <span className="sr-only">Edit</span>
-                          <svg
-                            className="h-3 w-3"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
-                            />
-                          </svg>
+                          <Pencil className="h-3 w-3" />
                         </button>
                         <button
                           onClick={() => handleDeleteItem(item.id)}
                           className="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                          title="Delete"
                         >
-                          <X className="h-3 w-3" />
+                          <Trash2 className="h-3 w-3" />
                         </button>
                       </div>
                     </div>

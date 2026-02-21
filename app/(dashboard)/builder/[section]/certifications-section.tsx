@@ -1,7 +1,7 @@
 'use client';
 
-import { BadgeCheck, ExternalLink, Eye, EyeOff, Loader2, Plus, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { BadgeCheck, ExternalLink, Eye, EyeOff, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
+import { useCallback, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,9 +15,18 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { notifyProfileUpdated } from '@/lib/events';
+import { useReorderPersist } from '@/lib/hooks/use-reorder-persist';
 import { cn } from '@/lib/utils';
 
+import { SortableCardList } from '../components/sortable-card-list';
+
 import type { Certification } from '@/types';
+import type { DateExtractor } from '../components/sortable-card-list';
+
+const certificationDateExtractor: DateExtractor<Certification> = (cert) => ({
+  start: cert.issueDate ? new Date(cert.issueDate) : null,
+  end: cert.expirationDate ? new Date(cert.expirationDate) : null,
+});
 
 interface CertificationsSectionProps {
   certifications: Certification[];
@@ -40,6 +49,15 @@ export function CertificationsSection({ certifications, onUpdate }: Certificatio
   const [formData, setFormData] = useState<Partial<Certification>>(emptyCertification);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const persistOrder = useReorderPersist<Certification>('certification', onUpdate);
+
+  const handleReorder = useCallback(
+    (reordered: Certification[]) => {
+      persistOrder(reordered);
+    },
+    [persistOrder]
+  );
 
   const toggleVisibility = async (certification: Certification) => {
     const newValue = !(certification.isVisible ?? true);
@@ -201,10 +219,13 @@ export function CertificationsSection({ certifications, onUpdate }: Certificatio
             </Button>
           </div>
         ) : (
-          <div className="space-y-4">
-            {certifications.map((certification) => (
+          <SortableCardList
+            items={certifications}
+            onReorder={handleReorder}
+            dateExtractor={certificationDateExtractor}
+            disabled={isLoading}
+            renderItem={(certification) => (
               <div
-                key={certification.id}
                 className={cn(
                   'group flex items-start gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50',
                   certification.isVisible === false && 'opacity-50'
@@ -219,12 +240,12 @@ export function CertificationsSection({ certifications, onUpdate }: Certificatio
                       <h4 className="font-medium">{certification.name}</h4>
                       <p className="text-sm text-muted-foreground">{certification.issuer}</p>
                     </div>
-                    <div className="flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+                    <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                       <Button
                         variant="ghost"
                         size="icon"
+                        className="h-8 w-8"
                         onClick={() => toggleVisibility(certification)}
-                        className={certification.isVisible === false ? 'text-muted-foreground' : ''}
                         title={
                           certification.isVisible === false ? 'Show on resume' : 'Hide from resume'
                         }
@@ -237,16 +258,19 @@ export function CertificationsSection({ certifications, onUpdate }: Certificatio
                       </Button>
                       <Button
                         variant="ghost"
-                        size="sm"
+                        size="icon"
+                        className="h-8 w-8"
                         onClick={() => handleOpenDialog(certification)}
+                        title="Edit"
                       >
-                        Edit
+                        <Pencil className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="ghost"
-                        size="sm"
-                        className="text-destructive hover:text-destructive"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive"
                         onClick={() => handleDelete(certification.id)}
+                        title="Delete"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -293,8 +317,8 @@ export function CertificationsSection({ certifications, onUpdate }: Certificatio
                   )}
                 </div>
               </div>
-            ))}
-          </div>
+            )}
+          />
         )}
 
         {/* Add/Edit Dialog */}

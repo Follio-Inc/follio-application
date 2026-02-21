@@ -1,6 +1,6 @@
 'use client';
 
-import { Eye, EyeOff, Globe, Loader2, Plus, Trash2 } from 'lucide-react';
+import { Eye, EyeOff, Globe, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -220,7 +220,7 @@ export function LanguagesSection({ section }: LanguagesSectionProps) {
                 <Badge variant="outline" className={getProficiencyColor(item.proficiency)}>
                   {getProficiencyLabel(item.proficiency)}
                 </Badge>
-                <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
                   <Button
                     variant="ghost"
                     size="icon"
@@ -229,26 +229,28 @@ export function LanguagesSection({ section }: LanguagesSectionProps) {
                     title={item.isVisible === false ? 'Show on resume' : 'Hide from resume'}
                   >
                     {item.isVisible === false ? (
-                      <EyeOff className="h-3 w-3" />
+                      <EyeOff className="h-3.5 w-3.5" />
                     ) : (
-                      <Eye className="h-3 w-3" />
+                      <Eye className="h-3.5 w-3.5" />
                     )}
                   </Button>
                   <Button
                     variant="ghost"
-                    size="sm"
-                    className="h-7 px-2"
+                    size="icon"
+                    className="h-7 w-7"
                     onClick={() => handleOpenDialog(item)}
+                    title="Edit"
                   >
-                    Edit
+                    <Pencil className="h-3.5 w-3.5" />
                   </Button>
                   <Button
                     variant="ghost"
-                    size="sm"
-                    className="h-7 px-2 text-destructive hover:text-destructive"
+                    size="icon"
+                    className="h-7 w-7 text-destructive hover:text-destructive"
                     onClick={() => handleDeleteItem(item.id)}
+                    title="Delete"
                   >
-                    <Trash2 className="h-3 w-3" />
+                    <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </div>
               </div>

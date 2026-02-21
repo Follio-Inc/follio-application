@@ -1,11 +1,10 @@
 'use client';
 
-import { RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { CleanResumeView } from '@/app/u/[handle]/views/clean-resume-view';
-import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+
+import { ShareDialog } from './share-dialog';
 
 import type { FullProfile, PublicProfile } from '@/types';
 
@@ -15,7 +14,6 @@ interface ResumePreviewPanelProps {
 
 export function ResumePreviewPanel({ profile: initialProfile }: ResumePreviewPanelProps) {
   const [profile, setProfile] = useState<FullProfile>(initialProfile);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0.5);
 
@@ -35,8 +33,8 @@ export function ResumePreviewPanel({ profile: initialProfile }: ResumePreviewPan
     return () => observer.disconnect();
   }, []);
 
+  // Auto-refresh: fetch latest profile data whenever section editors dispatch a save event
   const refreshProfile = useCallback(async () => {
-    setIsRefreshing(true);
     try {
       const res = await fetch(`/api/profile?full=true&t=${Date.now()}`, {
         cache: 'no-store',
@@ -49,8 +47,6 @@ export function ResumePreviewPanel({ profile: initialProfile }: ResumePreviewPan
       }
     } catch (e) {
       console.error('Failed to refresh preview:', e);
-    } finally {
-      setIsRefreshing(false);
     }
   }, []);
 
@@ -69,26 +65,17 @@ export function ResumePreviewPanel({ profile: initialProfile }: ResumePreviewPan
   return (
     <div className="flex h-full flex-col">
       {/* Preview Header */}
-      <div className="flex items-center justify-between border-b bg-background px-3 py-2">
-        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+      <div className="flex h-11 items-center justify-between px-5">
+        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Resume Preview
         </span>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={refreshProfile}
-          disabled={isRefreshing}
-          className="h-7 gap-1.5 px-2 text-xs"
-        >
-          <RefreshCw className={cn('h-3 w-3', isRefreshing && 'animate-spin')} />
-          Refresh
-        </Button>
+        <ShareDialog profile={profile} />
       </div>
 
       {/* Scaled Resume Content */}
-      <div ref={containerRef} className="flex-1 overflow-auto bg-muted/50 p-6">
+      <div ref={containerRef} className="flex-1 overflow-auto rounded-b-xl bg-muted/30 p-6">
         <div
-          className="rounded-sm bg-white shadow-md dark:bg-zinc-950"
+          className="rounded-lg bg-white shadow-sm ring-1 ring-black/5 dark:bg-zinc-950 dark:ring-white/10"
           style={{
             zoom: scale,
           }}

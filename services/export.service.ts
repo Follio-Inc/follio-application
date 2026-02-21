@@ -7,6 +7,7 @@ import { cleanPhoneDisplay } from '@/components/ui/phone-input';
 import { logger } from '@/lib/logger';
 import { formatDate } from '@/lib/utils';
 import type { FullProfile, JSONResume } from '@/types';
+import { HEADER_SECTION_TYPES } from '@/types';
 
 // pdfkit uses CJS exports – require works reliably with serverExternalPackages
 // eslint-disable-next-line @typescript-eslint/no-require-imports

@@ -9,6 +9,7 @@ import {
   Github,
   Loader2,
   Monitor,
+  Pencil,
   Pin,
   RefreshCw,
   Star,
@@ -209,7 +210,7 @@ export function GitHubProjectsSection({ projects, onUpdateAction }: GitHubProjec
     showActions?: boolean;
   }) => (
     <div
-      className={`flex items-start gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50 ${
+      className={`group flex items-start gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50 ${
         !project.isVisible ? 'opacity-60' : ''
       }`}
     >
@@ -278,10 +279,11 @@ export function GitHubProjectsSection({ projects, onUpdateAction }: GitHubProjec
             )}
           </div>
           {showActions && (
-            <div className="flex gap-1">
+            <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
               <Button
                 variant="ghost"
                 size="icon"
+                className="h-8 w-8"
                 onClick={() => handleQuickToggle(project, 'isVisible')}
                 title={project.isVisible ? 'Hide project' : 'Show project'}
                 disabled={isLoading}
@@ -294,11 +296,13 @@ export function GitHubProjectsSection({ projects, onUpdateAction }: GitHubProjec
               </Button>
               <Button
                 variant="ghost"
-                size="sm"
+                size="icon"
+                className="h-8 w-8"
                 onClick={() => handleEditVisibility(project)}
                 disabled={isLoading}
+                title="Edit visibility"
               >
-                Edit
+                <Pencil className="h-4 w-4" />
               </Button>
             </div>
           )}
@@ -322,31 +326,33 @@ export function GitHubProjectsSection({ projects, onUpdateAction }: GitHubProjec
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <div>
-          <CardTitle className="flex items-center gap-2">
-            <Github className="h-5 w-5" />
-            GitHub Projects
-          </CardTitle>
-          <CardDescription>
-            Manage which GitHub repositories appear on your portfolio and resume
-          </CardDescription>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Github className="h-5 w-5" />
+              GitHub Projects
+            </CardTitle>
+            <CardDescription>
+              Manage which GitHub repositories appear on your portfolio and resume
+            </CardDescription>
+          </div>
+          {githubConnected && githubUsername && (
+            <Button
+              onClick={handleSyncGitHub}
+              variant="outline"
+              className="gap-2"
+              disabled={isSyncing}
+            >
+              {isSyncing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              Sync from GitHub
+            </Button>
+          )}
         </div>
-        {githubConnected && githubUsername && (
-          <Button
-            onClick={handleSyncGitHub}
-            variant="outline"
-            className="gap-2"
-            disabled={isSyncing}
-          >
-            {isSyncing ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4" />
-            )}
-            Sync from GitHub
-          </Button>
-        )}
       </CardHeader>
       <CardContent>
         {error && (

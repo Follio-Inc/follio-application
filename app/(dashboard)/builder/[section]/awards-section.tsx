@@ -1,7 +1,7 @@
 'use client';
 
-import { Award, ExternalLink, Eye, EyeOff, Loader2, Plus, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { Award, ExternalLink, Eye, EyeOff, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
+import { useCallback, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,9 +16,18 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { notifyProfileUpdated } from '@/lib/events';
+import { useReorderPersist } from '@/lib/hooks/use-reorder-persist';
 import { cn } from '@/lib/utils';
 
+import { SortableCardList } from '../components/sortable-card-list';
+
 import type { Award as AwardType } from '@/types';
+import type { DateExtractor } from '../components/sortable-card-list';
+
+const awardDateExtractor: DateExtractor<AwardType> = (award) => ({
+  start: award.date ? new Date(award.date) : null,
+  end: null,
+});
 
 interface AwardsSectionProps {
   awards: AwardType[];
@@ -40,6 +49,15 @@ export function AwardsSection({ awards, onUpdate }: AwardsSectionProps) {
   const [formData, setFormData] = useState<Partial<AwardType>>(emptyAward);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const persistOrder = useReorderPersist<AwardType>('award', onUpdate);
+
+  const handleReorder = useCallback(
+    (reordered: AwardType[]) => {
+      persistOrder(reordered);
+    },
+    [persistOrder]
+  );
 
   const toggleVisibility = async (award: AwardType) => {
     const newValue = !(award.isVisible ?? true);
@@ -188,10 +206,13 @@ export function AwardsSection({ awards, onUpdate }: AwardsSectionProps) {
             </Button>
           </div>
         ) : (
-          <div className="space-y-4">
-            {awards.map((award) => (
+          <SortableCardList
+            items={awards}
+            onReorder={handleReorder}
+            dateExtractor={awardDateExtractor}
+            disabled={isLoading}
+            renderItem={(award) => (
               <div
-                key={award.id}
                 className={cn(
                   'group flex items-start gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50',
                   award.isVisible === false && 'opacity-50'
@@ -208,12 +229,12 @@ export function AwardsSection({ awards, onUpdate }: AwardsSectionProps) {
                         <p className="text-sm text-muted-foreground">{award.issuer}</p>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+                    <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                       <Button
                         variant="ghost"
                         size="icon"
+                        className="h-8 w-8"
                         onClick={() => toggleVisibility(award)}
-                        className={award.isVisible === false ? 'text-muted-foreground' : ''}
                         title={award.isVisible === false ? 'Show on resume' : 'Hide from resume'}
                       >
                         {award.isVisible === false ? (
@@ -222,14 +243,21 @@ export function AwardsSection({ awards, onUpdate }: AwardsSectionProps) {
                           <Eye className="h-4 w-4" />
                         )}
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleOpenDialog(award)}>
-                        Edit
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => handleOpenDialog(award)}
+                        title="Edit"
+                      >
+                        <Pencil className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="ghost"
-                        size="sm"
-                        className="text-destructive hover:text-destructive"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive"
                         onClick={() => handleDelete(award.id)}
+                        title="Delete"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -255,8 +283,8 @@ export function AwardsSection({ awards, onUpdate }: AwardsSectionProps) {
                   )}
                 </div>
               </div>
-            ))}
-          </div>
+            )}
+          />
         )}
 
         {/* Add/Edit Dialog */}

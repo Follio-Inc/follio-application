@@ -4,15 +4,16 @@ import {
   ExternalLink,
   Eye,
   EyeOff,
+  FolderKanban,
   Github,
-  GripVertical,
   Loader2,
+  Pencil,
   Pin,
   Plus,
   Star,
   Trash2,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -30,9 +31,18 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { notifyProfileUpdated } from '@/lib/events';
+import { useReorderPersist } from '@/lib/hooks/use-reorder-persist';
 import { cn } from '@/lib/utils';
 
+import { SortableCardList } from '../components/sortable-card-list';
+
 import type { Project } from '@/types';
+import type { DateExtractor } from '../components/sortable-card-list';
+
+const projectDateExtractor: DateExtractor<Project> = (project) => ({
+  start: project.startDate ? new Date(project.startDate) : null,
+  end: project.endDate ? new Date(project.endDate) : null,
+});
 
 interface ProjectsSectionProps {
   projects: Project[];
@@ -63,6 +73,15 @@ export function ProjectsSection({ projects, onUpdate }: ProjectsSectionProps) {
   const [highlightInput, setHighlightInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const persistOrder = useReorderPersist<Project>('project', onUpdate);
+
+  const handleReorder = useCallback(
+    (reordered: Project[]) => {
+      persistOrder(reordered);
+    },
+    [persistOrder]
+  );
 
   const handleOpenDialog = (project?: Project) => {
     if (project) {
@@ -243,189 +262,210 @@ export function ProjectsSection({ projects, onUpdate }: ProjectsSectionProps) {
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <div>
-          <CardTitle>Projects</CardTitle>
-          <CardDescription>Showcase your work and side projects</CardDescription>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle>Projects</CardTitle>
+            <CardDescription>Showcase your personal and professional projects</CardDescription>
+          </div>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={() => handleOpenDialog()} className="gap-2">
+                <Plus className="h-4 w-4" />
+                Add Project
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>{editingProject ? 'Edit' : 'Add'} Project</DialogTitle>
+              </DialogHeader>
+
+              {error && (
+                <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                  {error}
+                </div>
+              )}
+
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label>Project Title *</Label>
+                  <Input
+                    value={formData.title || ''}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))}
+                    placeholder="My Awesome Project"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Short Description</Label>
+                  <Input
+                    value={formData.shortDesc || ''}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, shortDesc: e.target.value }))
+                    }
+                    placeholder="One-liner for portfolio cards"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Full Description</Label>
+                  <Textarea
+                    value={formData.description || ''}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, description: e.target.value }))
+                    }
+                    placeholder="Detailed description of the project..."
+                    rows={4}
+                  />
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Live URL</Label>
+                    <Input
+                      value={formData.url || ''}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, url: e.target.value }))}
+                      placeholder="https://myproject.com"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Repository URL</Label>
+                    <Input
+                      value={formData.repoUrl || ''}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, repoUrl: e.target.value }))
+                      }
+                      placeholder="https://github.com/..."
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Cover Image URL</Label>
+                  <Input
+                    value={formData.imageUrl || ''}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, imageUrl: e.target.value }))}
+                    placeholder="https://example.com/image.jpg"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Tech Stack</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={techInput}
+                      onChange={(e) => setTechInput(e.target.value)}
+                      placeholder="Add technology..."
+                      onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTech())}
+                    />
+                    <Button type="button" onClick={addTech} variant="secondary">
+                      Add
+                    </Button>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {(formData.techStack || []).map((tech) => (
+                      <Badge key={tech} variant="secondary" className="gap-1">
+                        {tech}
+                        <button
+                          onClick={() => removeTech(tech)}
+                          className="ml-1 hover:text-destructive"
+                        >
+                          ×
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Highlights / Key Features</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={highlightInput}
+                      onChange={(e) => setHighlightInput(e.target.value)}
+                      placeholder="Add a highlight..."
+                      onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addHighlight())}
+                    />
+                    <Button type="button" onClick={addHighlight} variant="secondary">
+                      Add
+                    </Button>
+                  </div>
+                  <ul className="mt-2 space-y-2">
+                    {(formData.highlights || []).map((highlight, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm">
+                        <span className="flex-1 rounded bg-muted p-2">• {highlight}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeHighlight(i)}
+                          className="h-8 w-8"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={formData.featured || false}
+                    onCheckedChange={(checked) =>
+                      setFormData((prev) => ({ ...prev, featured: checked }))
+                    }
+                  />
+                  <Label>Featured project (show prominently)</Label>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsDialogOpen(false)}
+                  disabled={isLoading}
+                >
+                  Cancel
+                </Button>
+                <Button onClick={handleSave} disabled={!formData.title || isLoading}>
+                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {isLoading ? 'Saving...' : 'Save'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={() => handleOpenDialog()} className="gap-2">
-              <Plus className="h-4 w-4" />
-              Add Project
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>{editingProject ? 'Edit' : 'Add'} Project</DialogTitle>
-            </DialogHeader>
-
-            {error && (
-              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-                {error}
-              </div>
-            )}
-
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label>Project Title *</Label>
-                <Input
-                  value={formData.title || ''}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))}
-                  placeholder="My Awesome Project"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Short Description</Label>
-                <Input
-                  value={formData.shortDesc || ''}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, shortDesc: e.target.value }))}
-                  placeholder="One-liner for portfolio cards"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Full Description</Label>
-                <Textarea
-                  value={formData.description || ''}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, description: e.target.value }))
-                  }
-                  placeholder="Detailed description of the project..."
-                  rows={4}
-                />
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Live URL</Label>
-                  <Input
-                    value={formData.url || ''}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, url: e.target.value }))}
-                    placeholder="https://myproject.com"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Repository URL</Label>
-                  <Input
-                    value={formData.repoUrl || ''}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, repoUrl: e.target.value }))}
-                    placeholder="https://github.com/..."
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Cover Image URL</Label>
-                <Input
-                  value={formData.imageUrl || ''}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, imageUrl: e.target.value }))}
-                  placeholder="https://example.com/image.jpg"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Tech Stack</Label>
-                <div className="flex gap-2">
-                  <Input
-                    value={techInput}
-                    onChange={(e) => setTechInput(e.target.value)}
-                    placeholder="Add technology..."
-                    onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTech())}
-                  />
-                  <Button type="button" onClick={addTech} variant="secondary">
-                    Add
-                  </Button>
-                </div>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {(formData.techStack || []).map((tech) => (
-                    <Badge key={tech} variant="secondary" className="gap-1">
-                      {tech}
-                      <button
-                        onClick={() => removeTech(tech)}
-                        className="ml-1 hover:text-destructive"
-                      >
-                        ×
-                      </button>
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Highlights / Key Features</Label>
-                <div className="flex gap-2">
-                  <Input
-                    value={highlightInput}
-                    onChange={(e) => setHighlightInput(e.target.value)}
-                    placeholder="Add a highlight..."
-                    onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addHighlight())}
-                  />
-                  <Button type="button" onClick={addHighlight} variant="secondary">
-                    Add
-                  </Button>
-                </div>
-                <ul className="mt-2 space-y-2">
-                  {(formData.highlights || []).map((highlight, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm">
-                      <span className="flex-1 rounded bg-muted p-2">• {highlight}</span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeHighlight(i)}
-                        className="h-8 w-8"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Switch
-                  checked={formData.featured || false}
-                  onCheckedChange={(checked) =>
-                    setFormData((prev) => ({ ...prev, featured: checked }))
-                  }
-                />
-                <Label>Featured project (show prominently)</Label>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isLoading}>
-                Cancel
-              </Button>
-              <Button onClick={handleSave} disabled={!formData.title || isLoading}>
-                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {isLoading ? 'Saving...' : 'Save'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </CardHeader>
       <CardContent>
         {projects.length === 0 ? (
-          <div className="py-8 text-center text-muted-foreground">
-            No projects added yet. Click &quot;Add Project&quot; to get started.
+          <div className="rounded-lg border border-dashed p-8 text-center">
+            <FolderKanban className="mx-auto h-12 w-12 text-muted-foreground/50" />
+            <h3 className="mt-4 font-medium">No projects added yet</h3>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Add projects to showcase your work and skills
+            </p>
+            <Button onClick={() => handleOpenDialog()} className="mt-4 gap-2">
+              <Plus className="h-4 w-4" />
+              Add Project
+            </Button>
           </div>
         ) : (
-          <div className="space-y-4">
-            {projects.map((project) => (
+          <SortableCardList
+            items={projects}
+            onReorder={handleReorder}
+            dateExtractor={projectDateExtractor}
+            disabled={isLoading}
+            renderItem={(project) => (
               <div
-                key={project.id}
                 className={cn(
-                  'flex items-start gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50',
+                  'group flex items-start gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50',
                   project.isVisible === false && 'opacity-50'
                 )}
               >
-                <div className="cursor-move text-muted-foreground">
-                  <GripVertical className="h-5 w-5" />
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                  <FolderKanban className="h-5 w-5 text-primary" />
                 </div>
-                <div className="flex-1">
-                  <div className="flex items-start justify-between">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-2">
                     <div>
                       <div className="flex items-center gap-2">
                         <h4 className="font-medium">{project.title}</h4>
@@ -484,12 +524,12 @@ export function ProjectsSection({ projects, onUpdate }: ProjectsSectionProps) {
                           )}
                       </div>
                     </div>
-                    <div className="flex gap-1">
+                    <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                       <Button
                         variant="ghost"
                         size="icon"
+                        className="h-8 w-8"
                         onClick={() => toggleVisibility(project)}
-                        className={project.isVisible === false ? 'text-muted-foreground' : ''}
                         title={project.isVisible === false ? 'Show on resume' : 'Hide from resume'}
                       >
                         {project.isVisible === false ? (
@@ -501,25 +541,30 @@ export function ProjectsSection({ projects, onUpdate }: ProjectsSectionProps) {
                       <Button
                         variant="ghost"
                         size="icon"
+                        className={cn('h-8 w-8', project.featured && 'text-yellow-500')}
                         onClick={() => toggleFeatured(project)}
-                        className={project.featured ? 'text-yellow-500' : ''}
                         disabled={isLoading}
+                        title={project.featured ? 'Unfeature' : 'Feature'}
                       >
                         <Star className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="ghost"
-                        size="sm"
+                        size="icon"
+                        className="h-8 w-8"
                         onClick={() => handleOpenDialog(project)}
                         disabled={isLoading}
+                        title="Edit"
                       >
-                        Edit
+                        <Pencil className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="ghost"
-                        size="sm"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive"
                         onClick={() => handleDelete(project.id)}
                         disabled={isLoading}
+                        title="Delete"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -541,8 +586,8 @@ export function ProjectsSection({ projects, onUpdate }: ProjectsSectionProps) {
                   )}
                 </div>
               </div>
-            ))}
-          </div>
+            )}
+          />
         )}
       </CardContent>
     </Card>

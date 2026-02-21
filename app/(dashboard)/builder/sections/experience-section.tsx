@@ -1,7 +1,7 @@
 'use client';
 
-import { Eye, EyeOff, GripVertical, Loader2, Plus, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { Briefcase, Eye, EyeOff, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
+import { useCallback, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -26,9 +26,18 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { notifyProfileUpdated } from '@/lib/events';
+import { useReorderPersist } from '@/lib/hooks/use-reorder-persist';
 import { cn } from '@/lib/utils';
 
+import { SortableCardList } from '../components/sortable-card-list';
+
 import type { WorkExperience } from '@/types';
+import type { DateExtractor } from '../components/sortable-card-list';
+
+const experienceDateExtractor: DateExtractor<WorkExperience> = (exp) => ({
+  start: exp.startDate ? new Date(exp.startDate) : null,
+  end: exp.endDate ? new Date(exp.endDate) : null,
+});
 
 interface ExperienceSectionProps {
   experiences: WorkExperience[];
@@ -56,6 +65,15 @@ export function ExperienceSection({ experiences, onUpdate }: ExperienceSectionPr
   const [tagInput, setTagInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const persistOrder = useReorderPersist<WorkExperience>('workExperience', onUpdate);
+
+  const handleReorder = useCallback(
+    (reordered: WorkExperience[]) => {
+      persistOrder(reordered);
+    },
+    [persistOrder]
+  );
 
   const handleOpenDialog = (experience?: WorkExperience) => {
     if (experience) {
@@ -195,228 +213,251 @@ export function ExperienceSection({ experiences, onUpdate }: ExperienceSectionPr
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <div>
-          <CardTitle>Work Experience</CardTitle>
-          <CardDescription>Add your professional experience</CardDescription>
-        </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={() => handleOpenDialog()} className="gap-2">
-              <Plus className="h-4 w-4" />
-              Add Experience
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>{editingExperience ? 'Edit' : 'Add'} Experience</DialogTitle>
-            </DialogHeader>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle>Work Experience</CardTitle>
+            <CardDescription>Add your professional experience</CardDescription>
+          </div>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={() => handleOpenDialog()} className="gap-2">
+                <Plus className="h-4 w-4" />
+                Add Experience
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>{editingExperience ? 'Edit' : 'Add'} Experience</DialogTitle>
+              </DialogHeader>
 
-            {error && (
-              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-                {error}
-              </div>
-            )}
+              {error && (
+                <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                  {error}
+                </div>
+              )}
 
-            <div className="space-y-4 py-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Company *</Label>
-                  <Input
-                    value={formData.company || ''}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, company: e.target.value }))}
-                    placeholder="Google"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Role *</Label>
-                  <Input
-                    value={formData.role || ''}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, role: e.target.value }))}
-                    placeholder="Senior Software Engineer"
-                  />
-                </div>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Location</Label>
-                  <Input
-                    value={formData.location || ''}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, location: e.target.value }))}
-                    placeholder="San Francisco, CA"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Location Type</Label>
-                  <Select
-                    value={formData.locationType || ''}
-                    onValueChange={(value) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        locationType: value as WorkExperience['locationType'],
-                      }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ONSITE">On-site</SelectItem>
-                      <SelectItem value="REMOTE">Remote</SelectItem>
-                      <SelectItem value="HYBRID">Hybrid</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Employment Type</Label>
-                  <Select
-                    value={formData.employmentType || ''}
-                    onValueChange={(value) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        employmentType: value as WorkExperience['employmentType'],
-                      }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="FULL_TIME">Full-time</SelectItem>
-                      <SelectItem value="PART_TIME">Part-time</SelectItem>
-                      <SelectItem value="CONTRACT">Contract</SelectItem>
-                      <SelectItem value="FREELANCE">Freelance</SelectItem>
-                      <SelectItem value="INTERNSHIP">Internship</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-center gap-2 pt-7">
-                  <Switch
-                    checked={formData.isCurrent || false}
-                    onCheckedChange={(checked) =>
-                      setFormData((prev) => ({ ...prev, isCurrent: checked }))
-                    }
-                  />
-                  <Label>Currently working here</Label>
-                </div>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Start Date</Label>
-                  <Input
-                    type="month"
-                    value={
-                      formData.startDate
-                        ? new Date(formData.startDate).toISOString().slice(0, 7)
-                        : ''
-                    }
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, startDate: new Date(e.target.value) }))
-                    }
-                  />
-                </div>
-                {!formData.isCurrent && (
+              <div className="space-y-4 py-4">
+                <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <Label>End Date</Label>
+                    <Label>Company *</Label>
+                    <Input
+                      value={formData.company || ''}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, company: e.target.value }))
+                      }
+                      placeholder="Google"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Role *</Label>
+                    <Input
+                      value={formData.role || ''}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, role: e.target.value }))}
+                      placeholder="Senior Software Engineer"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Location</Label>
+                    <Input
+                      value={formData.location || ''}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, location: e.target.value }))
+                      }
+                      placeholder="San Francisco, CA"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Location Type</Label>
+                    <Select
+                      value={formData.locationType || ''}
+                      onValueChange={(value) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          locationType: value as WorkExperience['locationType'],
+                        }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ONSITE">On-site</SelectItem>
+                        <SelectItem value="REMOTE">Remote</SelectItem>
+                        <SelectItem value="HYBRID">Hybrid</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Employment Type</Label>
+                    <Select
+                      value={formData.employmentType || ''}
+                      onValueChange={(value) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          employmentType: value as WorkExperience['employmentType'],
+                        }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="FULL_TIME">Full-time</SelectItem>
+                        <SelectItem value="PART_TIME">Part-time</SelectItem>
+                        <SelectItem value="CONTRACT">Contract</SelectItem>
+                        <SelectItem value="FREELANCE">Freelance</SelectItem>
+                        <SelectItem value="INTERNSHIP">Internship</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center gap-2 pt-7">
+                    <Switch
+                      checked={formData.isCurrent || false}
+                      onCheckedChange={(checked) =>
+                        setFormData((prev) => ({ ...prev, isCurrent: checked }))
+                      }
+                    />
+                    <Label>Currently working here</Label>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Start Date</Label>
                     <Input
                       type="month"
                       value={
-                        formData.endDate ? new Date(formData.endDate).toISOString().slice(0, 7) : ''
+                        formData.startDate
+                          ? new Date(formData.startDate).toISOString().slice(0, 7)
+                          : ''
                       }
                       onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, endDate: new Date(e.target.value) }))
+                        setFormData((prev) => ({ ...prev, startDate: new Date(e.target.value) }))
                       }
                     />
                   </div>
-                )}
-              </div>
+                  {!formData.isCurrent && (
+                    <div className="space-y-2">
+                      <Label>End Date</Label>
+                      <Input
+                        type="month"
+                        value={
+                          formData.endDate
+                            ? new Date(formData.endDate).toISOString().slice(0, 7)
+                            : ''
+                        }
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, endDate: new Date(e.target.value) }))
+                        }
+                      />
+                    </div>
+                  )}
+                </div>
 
-              <div className="space-y-2">
-                <Label>Highlights</Label>
-                <Textarea
-                  value={(formData.bullets || []).join('\n')}
-                  onChange={(e) => {
-                    const lines = e.target.value.split('\n');
-                    // Keep empty lines while typing, but store only non-empty ones
-                    setFormData((prev) => ({
-                      ...prev,
-                      bullets: lines.filter((l) => l.trim().length > 0),
-                    }));
-                  }}
-                  placeholder="One highlight per line, e.g.:\nLed migration from REST to GraphQL\nReduced bundle size by 45%"
-                  rows={5}
-                />
-                <p className="text-xs text-muted-foreground">One highlight per line</p>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Skills / Technologies</Label>
-                <div className="flex gap-2">
-                  <Input
-                    value={tagInput}
-                    onChange={(e) => setTagInput(e.target.value)}
-                    placeholder="Add a skill..."
-                    onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
+                <div className="space-y-2">
+                  <Label>Highlights</Label>
+                  <Textarea
+                    value={(formData.bullets || []).join('\n')}
+                    onChange={(e) => {
+                      const lines = e.target.value.split('\n');
+                      // Keep empty lines while typing, but store only non-empty ones
+                      setFormData((prev) => ({
+                        ...prev,
+                        bullets: lines.filter((l) => l.trim().length > 0),
+                      }));
+                    }}
+                    placeholder="One highlight per line, e.g.:\nLed migration from REST to GraphQL\nReduced bundle size by 45%"
+                    rows={5}
                   />
-                  <Button type="button" onClick={addTag} variant="secondary">
-                    Add
-                  </Button>
+                  <p className="text-xs text-muted-foreground">One highlight per line</p>
                 </div>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {(formData.tags || []).map((tag) => (
-                    <Badge key={tag} variant="secondary" className="gap-1">
-                      {tag}
-                      <button
-                        onClick={() => removeTag(tag)}
-                        className="ml-1 hover:text-destructive"
-                      >
-                        ×
-                      </button>
-                    </Badge>
-                  ))}
+
+                <div className="space-y-2">
+                  <Label>Skills / Technologies</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={tagInput}
+                      onChange={(e) => setTagInput(e.target.value)}
+                      placeholder="Add a skill..."
+                      onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
+                    />
+                    <Button type="button" onClick={addTag} variant="secondary">
+                      Add
+                    </Button>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {(formData.tags || []).map((tag) => (
+                      <Badge key={tag} variant="secondary" className="gap-1">
+                        {tag}
+                        <button
+                          onClick={() => removeTag(tag)}
+                          className="ml-1 hover:text-destructive"
+                        >
+                          ×
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isLoading}>
-                Cancel
-              </Button>
-              <Button
-                onClick={handleSave}
-                disabled={!formData.company || !formData.role || isLoading}
-              >
-                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {isLoading ? 'Saving...' : 'Save'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsDialogOpen(false)}
+                  disabled={isLoading}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSave}
+                  disabled={!formData.company || !formData.role || isLoading}
+                >
+                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {isLoading ? 'Saving...' : 'Save'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       </CardHeader>
       <CardContent>
         {experiences.length === 0 ? (
-          <div className="py-8 text-center text-muted-foreground">
-            No work experience added yet. Click &quot;Add Experience&quot; to get started.
+          <div className="rounded-lg border border-dashed p-8 text-center">
+            <Briefcase className="mx-auto h-12 w-12 text-muted-foreground/50" />
+            <h3 className="mt-4 font-medium">No work experience added yet</h3>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Add your professional experience to build a compelling resume
+            </p>
+            <Button onClick={() => handleOpenDialog()} className="mt-4 gap-2">
+              <Plus className="h-4 w-4" />
+              Add Experience
+            </Button>
           </div>
         ) : (
-          <div className="space-y-4">
-            {experiences.map((exp) => (
+          <SortableCardList
+            items={experiences}
+            onReorder={handleReorder}
+            dateExtractor={experienceDateExtractor}
+            disabled={isLoading}
+            renderItem={(exp) => (
               <div
-                key={exp.id}
                 className={cn(
-                  'flex items-start gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50',
+                  'group flex items-start gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50',
                   exp.isVisible === false && 'opacity-50'
                 )}
               >
-                <div className="cursor-move text-muted-foreground">
-                  <GripVertical className="h-5 w-5" />
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                  <Briefcase className="h-5 w-5 text-primary" />
                 </div>
-                <div className="flex-1">
-                  <div className="flex items-start justify-between">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-2">
                     <div>
                       <h4 className="font-medium">{exp.role}</h4>
                       <p className="text-sm text-muted-foreground">{exp.company}</p>
@@ -436,12 +477,12 @@ export function ExperienceSection({ experiences, onUpdate }: ExperienceSectionPr
                             : ''}
                       </p>
                     </div>
-                    <div className="flex gap-1">
+                    <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                       <Button
                         variant="ghost"
                         size="icon"
+                        className="h-8 w-8"
                         onClick={() => toggleVisibility(exp)}
-                        className={exp.isVisible === false ? 'text-muted-foreground' : ''}
                         title={exp.isVisible === false ? 'Show on resume' : 'Hide from resume'}
                       >
                         {exp.isVisible === false ? (
@@ -452,17 +493,21 @@ export function ExperienceSection({ experiences, onUpdate }: ExperienceSectionPr
                       </Button>
                       <Button
                         variant="ghost"
-                        size="sm"
+                        size="icon"
+                        className="h-8 w-8"
                         onClick={() => handleOpenDialog(exp)}
                         disabled={isLoading}
+                        title="Edit"
                       >
-                        Edit
+                        <Pencil className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="ghost"
-                        size="sm"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive"
                         onClick={() => handleDelete(exp.id)}
                         disabled={isLoading}
+                        title="Delete"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -484,8 +529,8 @@ export function ExperienceSection({ experiences, onUpdate }: ExperienceSectionPr
                   )}
                 </div>
               </div>
-            ))}
-          </div>
+            )}
+          />
         )}
       </CardContent>
     </Card>

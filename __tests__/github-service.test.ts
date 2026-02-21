@@ -42,6 +42,7 @@ function makeRepo(overrides: Partial<GitHubRepo> = {}): GitHubRepo {
 function makeUser(overrides: Partial<GitHubUser> = {}): GitHubUser {
   return {
     login: 'testuser',
+    id: 1234,
     name: 'Test User',
     email: 'test@example.com',
     bio: 'Passionate developer',

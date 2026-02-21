@@ -228,17 +228,25 @@ async function parseWithAI(text: string): Promise<ParsedResumeAI | null> {
     aiParseLogger.debug('AI response parsed successfully');
 
     // Transform to our format
+    const basics = (parsed.basics ?? {}) as Record<string, unknown>;
+    const workExperiences = (parsed.workExperiences ?? []) as WorkExperienceAI[];
+    const educations = (parsed.educations ?? []) as EducationAI[];
+    const skills = (parsed.skills ?? []) as string[];
+    const certifications = (parsed.certifications ?? []) as CertificationAI[];
+    const projects = (parsed.projects ?? []) as ProjectAI[];
+    const links = (parsed.links ?? []) as LinkAI[];
+
     const result: ParsedResumeAI = {
       basics: {
-        firstName: parsed.basics?.firstName,
-        lastName: parsed.basics?.lastName,
-        email: parsed.basics?.email,
-        phone: parsed.basics?.phone,
-        location: parsed.basics?.location,
-        headline: parsed.basics?.headline,
-        summary: parsed.basics?.summary,
+        firstName: basics.firstName as string | undefined,
+        lastName: basics.lastName as string | undefined,
+        email: basics.email as string | undefined,
+        phone: basics.phone as string | undefined,
+        location: basics.location as string | undefined,
+        headline: basics.headline as string | undefined,
+        summary: basics.summary as string | undefined,
       },
-      workExperiences: (parsed.workExperiences || []).map((exp: WorkExperienceAI) => ({
+      workExperiences: workExperiences.map((exp) => ({
         title: exp.title || '',
         company: exp.company || '',
         location: exp.location,
@@ -247,7 +255,7 @@ async function parseWithAI(text: string): Promise<ParsedResumeAI | null> {
         isCurrent: exp.isCurrent || exp.endDate?.toLowerCase() === 'present',
         bullets: exp.bullets || [],
       })),
-      educations: (parsed.educations || []).map((edu: EducationAI) => ({
+      educations: educations.map((edu) => ({
         institution: edu.institution || '',
         degree: edu.degree || '',
         fieldOfStudy: edu.fieldOfStudy,
@@ -256,14 +264,14 @@ async function parseWithAI(text: string): Promise<ParsedResumeAI | null> {
         gpa: edu.gpa,
         location: edu.location,
       })),
-      skills: parsed.skills || [],
-      certifications: (parsed.certifications || []).map((cert: CertificationAI) => ({
+      skills,
+      certifications: certifications.map((cert) => ({
         name: cert.name || '',
         issuer: cert.issuer,
         date: cert.date,
         credentialId: cert.credentialId,
       })),
-      projects: (parsed.projects || []).map((proj: ProjectAI) => ({
+      projects: projects.map((proj) => ({
         title: proj.title || '',
         description: proj.description,
         url: proj.url,
@@ -271,7 +279,7 @@ async function parseWithAI(text: string): Promise<ParsedResumeAI | null> {
         startDate: proj.startDate,
         endDate: proj.endDate,
       })),
-      links: (parsed.links || []).map((link: LinkAI) => ({
+      links: links.map((link) => ({
         type: link.type || 'website',
         url: link.url || '',
         label: link.label,

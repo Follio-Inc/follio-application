@@ -289,10 +289,10 @@ export function SectionEditor({ profile, sectionType, section }: SectionEditorPr
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">
+          <h1 className="text-lg font-semibold">
             {section?.title || SECTION_TITLES[sectionType] || 'Edit Section'}
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {sectionType === 'BASIC_INFO'
               ? 'Update your basic profile information'
               : sectionType === 'SUMMARY'
@@ -313,10 +313,11 @@ export function SectionEditor({ profile, sectionType, section }: SectionEditorPr
           <Button
             onClick={handleSave}
             disabled={isSaving || (sectionType === 'CONTACT' ? !hasContactChanges : !hasChanges)}
+            size="sm"
             className="gap-2"
           >
             {isSaving ? <Spinner size="sm" /> : <Save className="h-4 w-4" />}
-            {isSaving ? 'Saving...' : 'Save Changes'}
+            {isSaving ? 'Saving...' : 'Save'}
           </Button>
         )}
       </div>

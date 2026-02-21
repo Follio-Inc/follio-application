@@ -1,7 +1,7 @@
 'use client';
 
-import { ExternalLink, Eye, EyeOff, Heart, Loader2, Plus, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { ExternalLink, Eye, EyeOff, Heart, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
+import { useCallback, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,7 +19,25 @@ import { Textarea } from '@/components/ui/textarea';
 import { notifyProfileUpdated } from '@/lib/events';
 import { cn } from '@/lib/utils';
 
+import { SortableCardList } from '../components/sortable-card-list';
+
 import type { ProfileSection, VolunteeringItem, VolunteeringSectionContent } from '@/types';
+import type { DateExtractor } from '../components/sortable-card-list';
+
+/**
+ * Parses free-text dates like "Jan 2023" into Date objects for sorting.
+ * Returns null if parsing fails.
+ */
+function parseFreeTextDate(value?: string): Date | null {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return isNaN(parsed.getTime()) ? null : parsed;
+}
+
+const volunteeringDateExtractor: DateExtractor<VolunteeringItem> = (item) => ({
+  start: parseFreeTextDate(item.startDate),
+  end: parseFreeTextDate(item.endDate),
+});
 
 interface VolunteeringSectionProps {
   section: ProfileSection | null;
@@ -49,6 +67,26 @@ export function VolunteeringSection({ section }: VolunteeringSectionProps) {
     items: [],
   };
   const [items, setItems] = useState<VolunteeringItem[]>(initialContent.items || []);
+
+  const handleReorder = useCallback(
+    async (reordered: VolunteeringItem[]) => {
+      if (!section) return;
+      setItems(reordered);
+      try {
+        const response = await fetch(`/api/profile/sections/${section.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customContent: { items: reordered } }),
+        });
+        if (!response.ok) throw new Error('Failed to save');
+        notifyProfileUpdated();
+      } catch {
+        setItems(items);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [items, section]
+  );
 
   if (!section) {
     return (
@@ -181,10 +219,13 @@ export function VolunteeringSection({ section }: VolunteeringSectionProps) {
             </Button>
           </div>
         ) : (
-          <div className="space-y-4">
-            {items.map((item) => (
+          <SortableCardList
+            items={items}
+            onReorder={handleReorder}
+            dateExtractor={volunteeringDateExtractor}
+            disabled={isLoading}
+            renderItem={(item) => (
               <div
-                key={item.id}
                 className={cn(
                   'group flex items-start gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50',
                   item.isVisible === false && 'opacity-50'
@@ -202,12 +243,12 @@ export function VolunteeringSection({ section }: VolunteeringSectionProps) {
                         <p className="text-xs text-muted-foreground">Cause: {item.cause}</p>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+                    <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                       <Button
                         variant="ghost"
                         size="icon"
+                        className="h-8 w-8"
                         onClick={() => toggleItemVisibility(item)}
-                        className={item.isVisible === false ? 'text-muted-foreground' : ''}
                         title={item.isVisible === false ? 'Show on resume' : 'Hide from resume'}
                       >
                         {item.isVisible === false ? (
@@ -216,14 +257,21 @@ export function VolunteeringSection({ section }: VolunteeringSectionProps) {
                           <Eye className="h-4 w-4" />
                         )}
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleOpenDialog(item)}>
-                        Edit
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => handleOpenDialog(item)}
+                        title="Edit"
+                      >
+                        <Pencil className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="ghost"
-                        size="sm"
-                        className="text-destructive hover:text-destructive"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive"
                         onClick={() => handleDeleteItem(item.id)}
+                        title="Delete"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -253,8 +301,8 @@ export function VolunteeringSection({ section }: VolunteeringSectionProps) {
                   )}
                 </div>
               </div>
-            ))}
-          </div>
+            )}
+          />
         )}
 
         {/* Add/Edit Dialog */}

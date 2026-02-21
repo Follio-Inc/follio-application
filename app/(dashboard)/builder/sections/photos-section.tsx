@@ -267,27 +267,29 @@ export function PhotosSection({ profile, onUpdateAction }: PhotosSectionProps) {
     <div className="space-y-6">
       {/* ── Profile Photo Card ── */}
       <Card className={cn(!resumeShowPhoto && 'opacity-50')}>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div className="flex-1 text-center">
-            <CardTitle>Profile Photo</CardTitle>
-            <CardDescription>
-              Your main profile picture, shown across your portfolio and resume views.
-              {hasSourceAvatars
-                ? ' You can also pick from photos imported from your connected accounts.'
-                : ''}
-            </CardDescription>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleResumeShowPhotoToggle}
-              className={!resumeShowPhoto ? 'text-muted-foreground' : ''}
-              title={resumeShowPhoto ? 'Hide photo from resume' : 'Show photo on resume'}
-              disabled={!hasPhoto}
-            >
-              {resumeShowPhoto ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-            </Button>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <CardTitle>Profile Photo</CardTitle>
+              <CardDescription>
+                Your main profile picture, shown across your portfolio and resume views.
+                {hasSourceAvatars
+                  ? ' You can also pick from photos imported from your connected accounts.'
+                  : ''}
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={handleResumeShowPhotoToggle}
+                title={resumeShowPhoto ? 'Hide photo from resume' : 'Show photo on resume'}
+                disabled={!hasPhoto}
+              >
+                {resumeShowPhoto ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>

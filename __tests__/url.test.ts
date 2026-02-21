@@ -49,13 +49,13 @@ describe('URL Helpers', () => {
 
   describe('PROTOCOL', () => {
     it('is https in production', async () => {
-      process.env.NODE_ENV = 'production';
+      vi.stubEnv('NODE_ENV', 'production');
       const { PROTOCOL } = await importUrl();
       expect(PROTOCOL).toBe('https');
     });
 
     it('is http in development', async () => {
-      process.env.NODE_ENV = 'development';
+      vi.stubEnv('NODE_ENV', 'development');
       const { PROTOCOL } = await importUrl();
       expect(PROTOCOL).toBe('http');
     });
@@ -110,7 +110,7 @@ describe('URL Helpers', () => {
     beforeEach(() => {
       process.env.NEXT_PUBLIC_SUBDOMAIN_ENABLED = 'false';
       process.env.NEXT_PUBLIC_APP_URL = 'http://localhost:3000';
-      process.env.NODE_ENV = 'development';
+      vi.stubEnv('NODE_ENV', 'development');
     });
 
     it('getPortfolioUrl returns path-based URL', async () => {
@@ -154,7 +154,7 @@ describe('URL Helpers', () => {
   describe('Canonical URLs with subdomains ON', () => {
     beforeEach(() => {
       process.env.NEXT_PUBLIC_SUBDOMAIN_ENABLED = 'true';
-      process.env.NODE_ENV = 'production';
+      vi.stubEnv('NODE_ENV', 'production');
       delete process.env.NEXT_PUBLIC_ROOT_DOMAIN; // use default follio.me
     });
 

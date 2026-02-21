@@ -6,16 +6,19 @@ import {
   EyeOff,
   Github,
   Globe,
-  GripVertical,
   Linkedin,
   Link as LinkIcon,
   Loader2,
+  Pencil,
   Plus,
   Trash2,
   Twitter,
   Youtube,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
+
+import { SortableCardList } from '@/app/(dashboard)/builder/components';
+import { useReorderPersist } from '@/lib/hooks/use-reorder-persist';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -76,6 +79,14 @@ export function LinksSection({ links, onUpdate }: LinksSectionProps) {
   const [formData, setFormData] = useState<Partial<Link>>(emptyLink);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const persistOrder = useReorderPersist<Link>('link', onUpdate);
+  const handleReorder = useCallback(
+    (reordered: Link[]) => {
+      persistOrder(reordered);
+    },
+    [persistOrder]
+  );
 
   const handleOpenDialog = (link?: Link) => {
     if (link) {
@@ -222,115 +233,125 @@ export function LinksSection({ links, onUpdate }: LinksSectionProps) {
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <div>
-          <CardTitle>Links & Social</CardTitle>
-          <CardDescription>Add your online presence and social profiles</CardDescription>
-        </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={() => handleOpenDialog()} className="gap-2">
-              <Plus className="h-4 w-4" />
-              Add Link
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>{editingLink ? 'Edit' : 'Add'} Link</DialogTitle>
-            </DialogHeader>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle>Links & Social</CardTitle>
+            <CardDescription>Add your online presence and social profiles</CardDescription>
+          </div>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={() => handleOpenDialog()} className="gap-2">
+                <Plus className="h-4 w-4" />
+                Add Link
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>{editingLink ? 'Edit' : 'Add'} Link</DialogTitle>
+              </DialogHeader>
 
-            {error && (
-              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-                {error}
+              {error && (
+                <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                  {error}
+                </div>
+              )}
+
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label>Link Type</Label>
+                  <Select
+                    value={formData.type || 'GITHUB'}
+                    onValueChange={(value) =>
+                      setFormData((prev) => ({ ...prev, type: value as Link['type'] }))
+                    }
+                    disabled={isLoading}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {LINK_TYPES.map((type) => {
+                        const Icon = type.icon;
+                        return (
+                          <SelectItem key={type.value} value={type.value}>
+                            <span className="flex items-center gap-2">
+                              <Icon className="h-4 w-4" />
+                              {type.label}
+                            </span>
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>URL *</Label>
+                  <Input
+                    value={formData.url || ''}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, url: e.target.value }))}
+                    placeholder={getPlaceholderForType(formData.type || 'GITHUB')}
+                    disabled={isLoading}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Label (optional)</Label>
+                  <Input
+                    value={formData.label || ''}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, label: e.target.value }))}
+                    placeholder={
+                      LINK_TYPES.find((t) => t.value === formData.type)?.label || 'Custom label'
+                    }
+                    disabled={isLoading}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Leave blank to use the default label for this link type
+                  </p>
+                </div>
               </div>
-            )}
-
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label>Link Type</Label>
-                <Select
-                  value={formData.type || 'GITHUB'}
-                  onValueChange={(value) =>
-                    setFormData((prev) => ({ ...prev, type: value as Link['type'] }))
-                  }
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsDialogOpen(false)}
                   disabled={isLoading}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {LINK_TYPES.map((type) => {
-                      const Icon = type.icon;
-                      return (
-                        <SelectItem key={type.value} value={type.value}>
-                          <span className="flex items-center gap-2">
-                            <Icon className="h-4 w-4" />
-                            {type.label}
-                          </span>
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>URL *</Label>
-                <Input
-                  value={formData.url || ''}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, url: e.target.value }))}
-                  placeholder={getPlaceholderForType(formData.type || 'GITHUB')}
-                  disabled={isLoading}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Label (optional)</Label>
-                <Input
-                  value={formData.label || ''}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, label: e.target.value }))}
-                  placeholder={
-                    LINK_TYPES.find((t) => t.value === formData.type)?.label || 'Custom label'
-                  }
-                  disabled={isLoading}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Leave blank to use the default label for this link type
-                </p>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isLoading}>
-                Cancel
-              </Button>
-              <Button onClick={handleSave} disabled={!formData.url || isLoading}>
-                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {isLoading ? 'Saving...' : 'Save'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+                  Cancel
+                </Button>
+                <Button onClick={handleSave} disabled={!formData.url || isLoading}>
+                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {isLoading ? 'Saving...' : 'Save'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       </CardHeader>
       <CardContent>
         {links.length === 0 ? (
-          <div className="py-8 text-center text-muted-foreground">
-            No links added yet. Click &quot;Add Link&quot; to connect your social profiles.
+          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-8 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+              <LinkIcon className="h-6 w-6 text-muted-foreground" />
+            </div>
+            <h3 className="mt-4 text-sm font-medium">No links added</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Click &quot;Add Link&quot; to connect your social profiles.
+            </p>
           </div>
         ) : (
-          <div className="space-y-2">
-            {links.map((link) => {
+          <SortableCardList
+            items={links}
+            onReorder={handleReorder}
+            renderItem={(link) => {
               const Icon = getIconForType(link.type);
               return (
                 <div
-                  key={link.id}
                   className={cn(
-                    'flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50',
+                    'group flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50',
                     link.isVisible === false && 'opacity-50'
                   )}
                 >
-                  <div className="cursor-move text-muted-foreground">
-                    <GripVertical className="h-4 w-4" />
-                  </div>
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
                     <Icon className="h-5 w-5" />
                   </div>
@@ -346,12 +367,12 @@ export function LinksSection({ links, onUpdate }: LinksSectionProps) {
                       <ExternalLink className="h-3 w-3 flex-shrink-0" />
                     </a>
                   </div>
-                  <div className="flex gap-1">
+                  <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                     <Button
                       variant="ghost"
                       size="icon"
+                      className="h-8 w-8"
                       onClick={() => toggleVisibility(link)}
-                      className={link.isVisible === false ? 'text-muted-foreground' : ''}
                       title={link.isVisible === false ? 'Show on resume' : 'Hide from resume'}
                     >
                       {link.isVisible === false ? (
@@ -362,25 +383,29 @@ export function LinksSection({ links, onUpdate }: LinksSectionProps) {
                     </Button>
                     <Button
                       variant="ghost"
-                      size="sm"
+                      size="icon"
+                      className="h-8 w-8"
                       onClick={() => handleOpenDialog(link)}
                       disabled={isLoading}
+                      title="Edit link"
                     >
-                      Edit
+                      <Pencil className="h-4 w-4" />
                     </Button>
                     <Button
                       variant="ghost"
-                      size="sm"
+                      size="icon"
+                      className="h-8 w-8"
                       onClick={() => handleDelete(link.id)}
                       disabled={isLoading}
+                      title="Delete link"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
               );
-            })}
-          </div>
+            }}
+          />
         )}
       </CardContent>
     </Card>
