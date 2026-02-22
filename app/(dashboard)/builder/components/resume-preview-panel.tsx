@@ -1,19 +1,22 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { CleanResumeView } from '@/app/u/[handle]/views/clean-resume-view';
 
+import { useBuilderStore } from './builder-store-provider';
 import { ShareDialog } from './share-dialog';
 
-import type { FullProfile, PublicProfile } from '@/types';
+import type { PublicProfile } from '@/types';
 
-interface ResumePreviewPanelProps {
-  profile: FullProfile;
-}
-
-export function ResumePreviewPanel({ profile: initialProfile }: ResumePreviewPanelProps) {
-  const [profile, setProfile] = useState<FullProfile>(initialProfile);
+/**
+ * ResumePreviewPanel
+ *
+ * Reads from the builder zustand store so the preview updates in real-time
+ * as the user edits fields — no API round-trip needed.
+ */
+export function ResumePreviewPanel() {
+  const profile = useBuilderStore((s) => s.draftProfile);
   const containerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0.5);
 
@@ -32,35 +35,6 @@ export function ResumePreviewPanel({ profile: initialProfile }: ResumePreviewPan
     if (containerRef.current) observer.observe(containerRef.current);
     return () => observer.disconnect();
   }, []);
-
-  // Auto-refresh: fetch latest profile data whenever section editors dispatch a save event
-  const refreshProfile = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/profile?full=true&t=${Date.now()}`, {
-        cache: 'no-store',
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.profile) {
-          setProfile(data.profile);
-        }
-      }
-    } catch (e) {
-      console.error('Failed to refresh preview:', e);
-    }
-  }, []);
-
-  // Listen for profile update events (dispatched by section editors after saves)
-  useEffect(() => {
-    const handler = () => refreshProfile();
-    window.addEventListener('profile-updated', handler);
-    return () => window.removeEventListener('profile-updated', handler);
-  }, [refreshProfile]);
-
-  // Update when initialProfile changes (e.g., on section navigation)
-  useEffect(() => {
-    setProfile(initialProfile);
-  }, [initialProfile]);
 
   return (
     <div className="flex h-full flex-col">

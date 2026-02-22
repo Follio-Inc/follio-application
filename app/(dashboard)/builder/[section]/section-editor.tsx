@@ -1,12 +1,18 @@
 'use client';
 
-import { Save } from 'lucide-react';
-import { useState } from 'react';
+import { Save, X } from 'lucide-react';
+import { useCallback } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { notifyProfileUpdated } from '@/lib/events';
+import {
+  hasContactDraftChanges,
+  hasProfileChanges,
+  type ContactDraft,
+} from '@/lib/stores/builder-store';
 
+import { useBuilderStore } from '../components/builder-store-provider';
 import { BasicInfoForm, ContactInfoForm } from '../sections/basic-info-form';
 import { EducationSection } from '../sections/education-section';
 import { ExperienceSection } from '../sections/experience-section';
@@ -28,10 +34,8 @@ import { VolunteeringSection } from './volunteering-section';
 import type { Award, Certification, FullProfile, ProfileSection } from '@/types';
 
 interface SectionEditorProps {
-  profile: FullProfile;
   sectionType: string;
   section: ProfileSection | null;
-  customSectionId: string | null;
 }
 
 const SECTION_TITLES: Record<string, string> = {
@@ -56,90 +60,78 @@ const SECTION_TITLES: Record<string, string> = {
   SETTINGS: 'Settings',
 };
 
-export function SectionEditor({ profile, sectionType, section }: SectionEditorProps) {
-  const [currentProfile, setCurrentProfile] = useState(profile);
-  const [isSaving, setIsSaving] = useState(false);
-  const [hasChanges, setHasChanges] = useState(false);
-  const [hasContactChanges, setHasContactChanges] = useState(false);
+/** Sections that use form-based editing and need explicit Save/Cancel */
+const FORM_SECTIONS = new Set(['BASIC_INFO', 'CONTACT', 'PHOTOS', 'SUMMARY']);
 
-  // Contact info state
-  const [contactInfo, setContactInfo] = useState({
-    email: profile.contactInfo?.email || '',
-    emailPublic: profile.contactInfo?.emailPublic || false,
-    phone: profile.contactInfo?.phone || '',
-    phoneCountryCode:
-      ((profile.contactInfo as Record<string, unknown>)?.phoneCountryCode as string | null) || null,
-    phoneNumber: ((profile.contactInfo as Record<string, unknown>)?.phoneNumber as string) || '',
-    phonePublic: profile.contactInfo?.phonePublic || false,
-    website: profile.contactInfo?.website || '',
-    additionalEmails: (() => {
-      try {
-        const raw = profile.contactInfo?.additionalEmails;
-        if (Array.isArray(raw)) return raw as Array<{ email: string; source: string }>;
-        if (typeof raw === 'string')
-          return JSON.parse(raw) as Array<{ email: string; source: string }>;
-        return [];
-      } catch {
-        return [];
-      }
-    })(),
-    additionalPhones: (() => {
-      try {
-        const raw = (profile.contactInfo as Record<string, unknown>)?.additionalPhones;
-        if (Array.isArray(raw))
-          return raw as Array<{ countryCode: string | null; number: string; source: string }>;
-        if (typeof raw === 'string')
-          return JSON.parse(raw) as Array<{
-            countryCode: string | null;
-            number: string;
-            source: string;
-          }>;
-        return [];
-      } catch {
-        return [];
-      }
-    })(),
-  });
+export function SectionEditor({ sectionType, section }: SectionEditorProps) {
+  // ── Store state ──
+  const draftProfile = useBuilderStore((s) => s.draftProfile);
+  const savedProfile = useBuilderStore((s) => s.savedProfile);
+  const contactDraft = useBuilderStore((s) => s.contactDraft);
+  const savedContact = useBuilderStore((s) => s.savedContact);
+  const isSaving = useBuilderStore((s) => s.isSaving);
+  const updateDraft = useBuilderStore((s) => s.updateDraft);
+  const updateContactDraft = useBuilderStore((s) => s.updateContactDraft);
+  const commitInlineChange = useBuilderStore((s) => s.commitInlineChange);
+  const markSaved = useBuilderStore((s) => s.markSaved);
+  const discardChanges = useBuilderStore((s) => s.discardChanges);
+  const setSaving = useBuilderStore((s) => s.setSaving);
 
-  const handleProfileUpdate = (updates: Partial<FullProfile>) => {
-    setCurrentProfile((prev) => ({ ...prev, ...updates }));
-    setHasChanges(true);
-  };
+  // ── Derived state ──
+  const isFormSection = FORM_SECTIONS.has(sectionType);
+  const profileChanged = hasProfileChanges(draftProfile, savedProfile);
+  const contactChanged = hasContactDraftChanges(contactDraft, savedContact);
+  const hasChanges =
+    sectionType === 'CONTACT' ? contactChanged : isFormSection ? profileChanged : false;
 
-  const handleContactUpdate = (updates: Partial<typeof contactInfo>) => {
-    setContactInfo((prev) => ({ ...prev, ...updates }));
-    setHasContactChanges(true);
-  };
+  // ── Handlers ──
+  const handleProfileUpdate = useCallback(
+    (updates: Partial<FullProfile>) => {
+      updateDraft(updates);
+    },
+    [updateDraft]
+  );
 
-  const handleSave = async () => {
-    if (
-      sectionType !== 'BASIC_INFO' &&
-      sectionType !== 'CONTACT' &&
-      sectionType !== 'PHOTOS' &&
-      sectionType !== 'SUMMARY'
-    ) {
-      // For other sections, changes are saved inline
-      return;
-    }
+  const handleContactUpdate = useCallback(
+    (updates: Partial<ContactDraft>) => {
+      updateContactDraft(updates);
+    },
+    [updateContactDraft]
+  );
 
-    setIsSaving(true);
+  /**
+   * For list sections (Experience, Education, etc.) that save inline via their
+   * own dialogs — update both draft and saved so the preview refreshes AND the
+   * saved state stays in sync.
+   */
+  const handleInlineUpdate = useCallback(
+    (updates: Partial<FullProfile>) => {
+      commitInlineChange(updates);
+    },
+    [commitInlineChange]
+  );
+
+  const handleSave = useCallback(async () => {
+    if (!isFormSection) return;
+
+    setSaving(true);
     try {
-      // Save profile info (for BASIC_INFO or PHOTOS — avatarUrl changes)
+      // Save profile info (for BASIC_INFO, PHOTOS, SUMMARY)
       if (
         (sectionType === 'BASIC_INFO' || sectionType === 'PHOTOS' || sectionType === 'SUMMARY') &&
-        hasChanges
+        profileChanged
       ) {
         const response = await fetch('/api/profile', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            firstName: currentProfile.firstName,
-            lastName: currentProfile.lastName,
-            headline: currentProfile.headline,
-            summary: currentProfile.summary,
-            location: currentProfile.location,
-            avatarUrl: currentProfile.avatarUrl,
-            status: currentProfile.status,
+            firstName: draftProfile.firstName,
+            lastName: draftProfile.lastName,
+            headline: draftProfile.headline,
+            summary: draftProfile.summary,
+            location: draftProfile.location,
+            avatarUrl: draftProfile.avatarUrl,
+            status: draftProfile.status,
           }),
         });
 
@@ -149,11 +141,11 @@ export function SectionEditor({ profile, sectionType, section }: SectionEditorPr
       }
 
       // Save contact info (for CONTACT section)
-      if (sectionType === 'CONTACT' && hasContactChanges) {
+      if (sectionType === 'CONTACT' && contactChanged) {
         const contactResponse = await fetch('/api/profile/contact', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(contactInfo),
+          body: JSON.stringify(contactDraft),
         });
 
         if (!contactResponse.ok) {
@@ -161,118 +153,131 @@ export function SectionEditor({ profile, sectionType, section }: SectionEditorPr
         }
       }
 
-      setHasChanges(false);
-      setHasContactChanges(false);
+      // Sync saved state to current draft
+      markSaved();
 
-      // Notify the resume preview to refresh
+      // Notify other parts of the app (e.g., public profile)
       notifyProfileUpdated();
     } catch (error) {
       console.error('Save error:', error);
     } finally {
-      setIsSaving(false);
+      setSaving(false);
     }
-  };
+  }, [
+    isFormSection,
+    sectionType,
+    profileChanged,
+    contactChanged,
+    draftProfile,
+    contactDraft,
+    markSaved,
+    setSaving,
+  ]);
 
+  const handleDiscard = useCallback(() => {
+    discardChanges();
+  }, [discardChanges]);
+
+  // ── Render section editor ──
   const renderEditor = () => {
     switch (sectionType) {
       case 'BASIC_INFO':
-        return <BasicInfoForm profile={currentProfile} onUpdate={handleProfileUpdate} />;
+        return <BasicInfoForm profile={draftProfile} onUpdate={handleProfileUpdate} />;
 
       case 'SUMMARY':
-        return <SummarySection profile={currentProfile} onUpdate={handleProfileUpdate} />;
+        return <SummarySection profile={draftProfile} onUpdate={handleProfileUpdate} />;
 
       case 'CONTACT':
-        return <ContactInfoForm profile={currentProfile} onContactUpdate={handleContactUpdate} />;
+        return <ContactInfoForm profile={draftProfile} onContactUpdate={handleContactUpdate} />;
 
       case 'PHOTOS':
-        return <PhotosSection profile={currentProfile} onUpdateAction={handleProfileUpdate} />;
+        return <PhotosSection profile={draftProfile} onUpdateAction={handleProfileUpdate} />;
 
       case 'EXPERIENCE':
         return (
           <ExperienceSection
-            experiences={currentProfile.workExperiences}
-            profileId={currentProfile.id}
-            onUpdate={(workExperiences) => handleProfileUpdate({ workExperiences })}
+            experiences={draftProfile.workExperiences}
+            profileId={draftProfile.id}
+            onUpdate={(workExperiences) => handleInlineUpdate({ workExperiences })}
           />
         );
 
       case 'EDUCATION':
         return (
           <EducationSection
-            educations={currentProfile.educations}
-            profileId={currentProfile.id}
-            onUpdate={(educations) => handleProfileUpdate({ educations })}
+            educations={draftProfile.educations}
+            profileId={draftProfile.id}
+            onUpdate={(educations) => handleInlineUpdate({ educations })}
           />
         );
 
       case 'SKILLS':
         return (
           <SkillsSection
-            skills={currentProfile.skills}
-            skillGroups={currentProfile.skillGroups}
-            profileId={currentProfile.id}
-            onUpdate={(skills, skillGroups) => handleProfileUpdate({ skills, skillGroups })}
+            skills={draftProfile.skills}
+            skillGroups={draftProfile.skillGroups}
+            profileId={draftProfile.id}
+            onUpdate={(skills, skillGroups) => handleInlineUpdate({ skills, skillGroups })}
           />
         );
 
       case 'PROJECTS':
         return (
           <ProjectsSection
-            projects={currentProfile.projects}
-            profileId={currentProfile.id}
-            onUpdate={(projects) => handleProfileUpdate({ projects })}
+            projects={draftProfile.projects}
+            profileId={draftProfile.id}
+            onUpdate={(projects) => handleInlineUpdate({ projects })}
           />
         );
 
       case 'LINKS':
         return (
           <LinksSection
-            links={currentProfile.links}
-            profileId={currentProfile.id}
-            onUpdate={(links) => handleProfileUpdate({ links })}
+            links={draftProfile.links}
+            profileId={draftProfile.id}
+            onUpdate={(links) => handleInlineUpdate({ links })}
           />
         );
 
       case 'AWARDS':
         return (
           <AwardsSection
-            awards={currentProfile.awards}
-            profileId={currentProfile.id}
-            onUpdate={(awards: Award[]) => handleProfileUpdate({ awards })}
+            awards={draftProfile.awards}
+            profileId={draftProfile.id}
+            onUpdate={(awards: Award[]) => handleInlineUpdate({ awards })}
           />
         );
 
       case 'CERTIFICATIONS':
         return (
           <CertificationsSection
-            certifications={currentProfile.certifications}
-            profileId={currentProfile.id}
-            onUpdate={(certifications: Certification[]) => handleProfileUpdate({ certifications })}
+            certifications={draftProfile.certifications}
+            profileId={draftProfile.id}
+            onUpdate={(certifications: Certification[]) => handleInlineUpdate({ certifications })}
           />
         );
 
       case 'VOLUNTEERING':
-        return <VolunteeringSection section={section} profileId={currentProfile.id} />;
+        return <VolunteeringSection section={section} profileId={draftProfile.id} />;
 
       case 'LANGUAGES':
-        return <LanguagesSection section={section} profileId={currentProfile.id} />;
+        return <LanguagesSection section={section} profileId={draftProfile.id} />;
 
       case 'PUBLICATIONS':
-        return <PublicationsSection section={section} profileId={currentProfile.id} />;
+        return <PublicationsSection section={section} profileId={draftProfile.id} />;
 
       case 'INTERESTS':
-        return <InterestsSection section={section} profileId={currentProfile.id} />;
+        return <InterestsSection section={section} profileId={draftProfile.id} />;
 
       case 'CUSTOM':
-        return <CustomSection section={section} profileId={currentProfile.id} />;
+        return <CustomSection section={section} profileId={draftProfile.id} />;
 
       case 'SHARE':
-        return <ShareSection profile={currentProfile} onUpdateAction={handleProfileUpdate} />;
+        return <ShareSection profile={draftProfile} onUpdateAction={handleProfileUpdate} />;
 
       case 'SETTINGS':
-        return <SettingsSection profile={currentProfile} onUpdate={handleProfileUpdate} />;
+        return <SettingsSection profile={draftProfile} onUpdate={handleProfileUpdate} />;
 
-      // Placeholder for sections not yet implemented
       default:
         return (
           <div className="rounded-lg border border-dashed p-8 text-center">
@@ -287,43 +292,53 @@ export function SectionEditor({ profile, sectionType, section }: SectionEditorPr
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-semibold">
-            {section?.title || SECTION_TITLES[sectionType] || 'Edit Section'}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {sectionType === 'BASIC_INFO'
-              ? 'Update your basic profile information'
-              : sectionType === 'SUMMARY'
-                ? 'Write a brief introduction about yourself'
-                : sectionType === 'CONTACT'
-                  ? 'Manage your contact information and visibility'
-                  : sectionType === 'PHOTOS'
-                    ? 'Manage your profile photo and gallery images'
-                    : sectionType === 'SHARE'
-                      ? 'Control visibility and share your profile'
-                      : 'Add, edit, or remove items'}
-          </p>
-        </div>
-        {(sectionType === 'BASIC_INFO' ||
-          sectionType === 'CONTACT' ||
-          sectionType === 'PHOTOS' ||
-          sectionType === 'SUMMARY') && (
-          <Button
-            onClick={handleSave}
-            disabled={isSaving || (sectionType === 'CONTACT' ? !hasContactChanges : !hasChanges)}
-            size="sm"
-            className="gap-2"
-          >
-            {isSaving ? <Spinner size="sm" /> : <Save className="h-4 w-4" />}
-            {isSaving ? 'Saving...' : 'Save'}
-          </Button>
-        )}
+      <div>
+        <h1 className="text-lg font-semibold">
+          {section?.title || SECTION_TITLES[sectionType] || 'Edit Section'}
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          {sectionType === 'BASIC_INFO'
+            ? 'Update your basic profile information'
+            : sectionType === 'SUMMARY'
+              ? 'Write a brief introduction about yourself'
+              : sectionType === 'CONTACT'
+                ? 'Manage your contact information and visibility'
+                : sectionType === 'PHOTOS'
+                  ? 'Manage your profile photo and gallery images'
+                  : sectionType === 'SHARE'
+                    ? 'Control visibility and share your profile'
+                    : 'Add, edit, or remove items'}
+        </p>
       </div>
 
       {/* Editor Content */}
       {renderEditor()}
+
+      {/* Save / Cancel bar — shown only for form-based sections with changes */}
+      {isFormSection && (
+        <div className="sticky bottom-0 z-10 -mx-5 border-t bg-background/95 px-5 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+          <div className="flex gap-2">
+            <Button
+              onClick={handleSave}
+              disabled={isSaving || !hasChanges}
+              className="flex-[4] gap-2"
+              size="lg"
+            >
+              {isSaving ? <Spinner size="sm" /> : <Save className="h-4 w-4" />}
+              {isSaving ? 'Saving...' : 'Save Changes'}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleDiscard}
+              disabled={isSaving || !hasChanges}
+              className="flex-1"
+              size="lg"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

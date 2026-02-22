@@ -138,7 +138,9 @@ export function SortableSectionItem({
         {...listeners}
         className={cn(
           'shrink-0 cursor-grab touch-none rounded-l-lg p-2 opacity-0 transition-opacity group-hover:opacity-100',
-          isActive ? 'hover:bg-primary-foreground/20' : 'hover:bg-muted-foreground/20',
+          isActive
+            ? 'hover:bg-primary-foreground/25 hover:text-primary-foreground'
+            : 'hover:bg-muted-foreground/15',
           isDragging && 'cursor-grabbing opacity-100'
         )}
         title="Drag to reorder"
@@ -162,7 +164,9 @@ export function SortableSectionItem({
               size="icon"
               className={cn(
                 'h-6 w-6',
-                isActive ? 'hover:bg-primary-foreground/20' : 'hover:bg-muted-foreground/20',
+                isActive
+                  ? 'hover:bg-primary-foreground/25 hover:text-primary-foreground'
+                  : 'hover:bg-muted-foreground/15 hover:text-foreground',
                 isTogglingVisibility && 'cursor-not-allowed opacity-50'
               )}
               onClick={(e) => {
@@ -200,8 +204,8 @@ export function SortableSectionItem({
                 className={cn(
                   'h-6 w-6',
                   isActive
-                    ? 'text-primary-foreground hover:bg-destructive/20'
-                    : 'hover:bg-destructive/20 hover:text-destructive'
+                    ? 'text-primary-foreground hover:bg-primary-foreground/25 hover:text-red-200'
+                    : 'hover:bg-destructive/15 hover:text-destructive'
                 )}
                 onClick={(e) => e.preventDefault()}
               >

@@ -16,14 +16,21 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
+import { Redo2, Undo2 } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
+import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { notifyProfileUpdated } from '@/lib/events';
 
 import { AddSectionDialog } from './components/add-section-dialog';
+import {
+  BuilderStoreProvider,
+  useBuilderStore,
+  useBuilderTemporal,
+} from './components/builder-store-provider';
 import { ResumePreviewPanel } from './components/resume-preview-panel';
 import { SortableSectionItem } from './components/sortable-section-item';
 
@@ -211,6 +218,137 @@ export function BuilderLayoutClient({ profile, children }: BuilderLayoutClientPr
   const bodySections = sections.filter((s) => !HEADER_SECTION_TYPES.includes(s.type));
 
   return (
+    <BuilderStoreProvider profile={profile}>
+      <BuilderLayoutInner
+        sections={sections}
+        isSaving={isSaving}
+        headerSections={headerSections}
+        bodySections={bodySections}
+        sensors={sensors}
+        handleDragEnd={handleDragEnd}
+        handleToggleVisibility={handleToggleVisibility}
+        handleDeleteSection={handleDeleteSection}
+        handleAddSection={handleAddSection}
+        isActiveSection={isActiveSection}
+        profile={profile}
+      >
+        {children}
+      </BuilderLayoutInner>
+    </BuilderStoreProvider>
+  );
+}
+
+// ──────────────────────────────────────────────
+// Undo/Redo toolbar (needs to be inside the provider)
+// ──────────────────────────────────────────────
+
+function UndoRedoToolbar() {
+  const undo = useBuilderTemporal((s) => s.undo);
+  const redo = useBuilderTemporal((s) => s.redo);
+  const pastLength = useBuilderTemporal((s) => s.pastStates.length);
+  const futureLength = useBuilderTemporal((s) => s.futureStates.length);
+
+  const canUndo = pastLength > 0;
+  const canRedo = futureLength > 0;
+
+  return (
+    <div className="flex items-center gap-1">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => undo()}
+            disabled={!canUndo}
+            aria-label="Undo"
+          >
+            <Undo2 className="h-4 w-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">
+          <p>Undo {canUndo && <span className="text-muted-foreground">({pastLength})</span>}</p>
+        </TooltipContent>
+      </Tooltip>
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => redo()}
+            disabled={!canRedo}
+            aria-label="Redo"
+          >
+            <Redo2 className="h-4 w-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">
+          <p>Redo {canRedo && <span className="text-muted-foreground">({futureLength})</span>}</p>
+        </TooltipContent>
+      </Tooltip>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────
+// Inner layout (renders inside the store provider)
+// ──────────────────────────────────────────────
+
+interface BuilderLayoutInnerProps {
+  sections: ProfileSection[];
+  isSaving: boolean;
+  headerSections: ProfileSection[];
+  bodySections: ProfileSection[];
+  sensors: ReturnType<typeof useSensors>;
+  handleDragEnd: (event: DragEndEvent) => void;
+  handleToggleVisibility: (section: ProfileSection) => Promise<void>;
+  handleDeleteSection: (section: ProfileSection) => Promise<{ success: boolean; error?: string }>;
+  handleAddSection: (type: SectionType, customName?: string, title?: string) => Promise<void>;
+  isActiveSection: (section: ProfileSection) => boolean;
+  profile: FullProfile;
+  children: React.ReactNode;
+}
+
+function BuilderLayoutInner({
+  sections,
+  isSaving,
+  headerSections,
+  bodySections,
+  sensors,
+  handleDragEnd,
+  handleToggleVisibility,
+  handleDeleteSection,
+  handleAddSection,
+  isActiveSection,
+  children,
+}: BuilderLayoutInnerProps) {
+  // ── Sync sidebar sections into the zustand store so the preview updates in real-time ──
+  // Visibility toggles and drag-reorder change `sections` in the parent's
+  // React state. The resume preview reads from draftProfile.sections via
+  // the zustand store, so we must keep them in sync.
+  const commitInlineChange = useBuilderStore((s) => s.commitInlineChange);
+  const storeSections = useBuilderStore((s) => s.draftProfile.sections);
+
+  useEffect(() => {
+    // Only sync when sections actually differ (avoid infinite loops)
+    const storeJson = JSON.stringify(
+      (storeSections || []).map((s) => ({
+        id: s.id,
+        isVisible: s.isVisible,
+        sortOrder: s.sortOrder,
+      }))
+    );
+    const localJson = JSON.stringify(
+      sections.map((s) => ({ id: s.id, isVisible: s.isVisible, sortOrder: s.sortOrder }))
+    );
+    if (storeJson !== localJson) {
+      commitInlineChange({ sections });
+    }
+  }, [sections, storeSections, commitInlineChange]);
+
+  return (
     <div className="flex h-[calc(100vh-3.5rem)] gap-3 bg-muted/40 p-3">
       <TooltipProvider delayDuration={300}>
         {/* Sidebar — Section Navigation */}
@@ -298,11 +436,12 @@ export function BuilderLayoutClient({ profile, children }: BuilderLayoutClientPr
 
         {/* Editor Content */}
         <main className="flex min-w-0 flex-[3] flex-col overflow-hidden rounded-xl bg-background shadow-sm">
-          {/* Editor header */}
-          <div className="flex h-11 shrink-0 items-center px-5">
+          {/* Editor header with undo/redo */}
+          <div className="flex h-11 shrink-0 items-center justify-between px-5">
             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Editor
             </span>
+            <UndoRedoToolbar />
           </div>
           <div className="flex-1 overflow-auto">
             <div className="mx-auto max-w-4xl px-5 pb-8">{children}</div>
@@ -311,7 +450,7 @@ export function BuilderLayoutClient({ profile, children }: BuilderLayoutClientPr
 
         {/* Resume Preview Panel */}
         <aside className="hidden min-w-0 flex-[4] flex-col overflow-hidden rounded-xl bg-background shadow-sm xl:flex">
-          <ResumePreviewPanel profile={profile} />
+          <ResumePreviewPanel />
         </aside>
       </TooltipProvider>
     </div>
