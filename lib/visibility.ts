@@ -141,7 +141,9 @@ export function applyVisibilityFilter(
   const isVisible = (type: string) => visibleTypes.has(type);
 
   const showBasicInfo = isVisible('BASIC_INFO');
-  const showContact = isVisible('CONTACT');
+  // Contact is merged into BASIC_INFO (Header). For backward compat with
+  // existing profiles that still have a CONTACT section row, honor either.
+  const showContact = showBasicInfo || isVisible('CONTACT');
   const showPhotos = isVisible('PHOTOS');
   // For SUMMARY: default to visible if the section doesn't exist yet (backwards compat)
   const hasSummarySection = sections.some((s) => s.type === 'SUMMARY');
@@ -174,14 +176,19 @@ export function applyVisibilityFilter(
   return {
     ...raw,
 
-    // BASIC_INFO → name, headline
+    // BASIC_INFO (Header) → name, headline
     firstName: showBasicInfo ? raw.firstName : null,
     lastName: showBasicInfo ? raw.lastName : null,
     headline: showBasicInfo ? raw.headline : null,
     summary: showSummary ? raw.summary : null,
 
-    // CONTACT → location, contactInfo
-    location: showContact ? raw.location : null,
+    // BASIC_INFO (Header) also gates location, contactInfo.
+    // locationPublic provides per-field control (defaults to visible).
+    location:
+      showContact &&
+      (raw.contactInfo as unknown as Record<string, unknown> | null)?.locationPublic !== false
+        ? raw.location
+        : null,
     contactInfo: filteredContactInfo,
 
     // Avatar URL always available; consuming views gate on _photosVisible.

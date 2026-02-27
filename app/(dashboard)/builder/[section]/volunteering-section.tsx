@@ -14,8 +14,8 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { Switch } from '@/components/ui/switch';
-import { Textarea } from '@/components/ui/textarea';
 import { notifyProfileUpdated } from '@/lib/events';
 import { cn } from '@/lib/utils';
 
@@ -42,6 +42,8 @@ const volunteeringDateExtractor: DateExtractor<VolunteeringItem> = (item) => ({
 interface VolunteeringSectionProps {
   section: ProfileSection | null;
   profileId: string;
+  /** When true, renders without Card wrapper for use inside accordion sections */
+  embedded?: boolean;
 }
 
 const emptyItem: Partial<VolunteeringItem> = {
@@ -55,7 +57,7 @@ const emptyItem: Partial<VolunteeringItem> = {
   url: '',
 };
 
-export function VolunteeringSection({ section }: VolunteeringSectionProps) {
+export function VolunteeringSection({ section, embedded }: VolunteeringSectionProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<VolunteeringItem | null>(null);
   const [formData, setFormData] = useState<Partial<VolunteeringItem>>(emptyItem);
@@ -90,15 +92,13 @@ export function VolunteeringSection({ section }: VolunteeringSectionProps) {
 
   if (!section) {
     return (
-      <Card>
-        <CardContent className="py-12 text-center">
-          <Heart className="mx-auto h-12 w-12 text-muted-foreground/50" />
-          <h3 className="mt-4 font-medium">Section not found</h3>
-          <p className="mt-2 text-sm text-muted-foreground">
-            This section doesn&apos;t exist or has been deleted.
-          </p>
-        </CardContent>
-      </Card>
+      <div className="py-12 text-center">
+        <Heart className="mx-auto h-12 w-12 text-muted-foreground/50" />
+        <h3 className="mt-4 font-medium">Section not found</h3>
+        <p className="mt-2 text-sm text-muted-foreground">
+          This section doesn&apos;t exist or has been deleted.
+        </p>
+      </div>
     );
   }
 
@@ -191,6 +191,240 @@ export function VolunteeringSection({ section }: VolunteeringSectionProps) {
     }
   };
 
+  const addButton = (
+    <Button onClick={() => handleOpenDialog()} size={embedded ? 'sm' : 'default'} className="gap-2">
+      <Plus className="h-4 w-4" />
+      Add Experience
+    </Button>
+  );
+
+  const volunteeringList = (
+    <div className={cn(!embedded && 'rounded-xl bg-muted/40 p-4')}>
+      {items.length === 0 ? (
+        <div className="rounded-lg border border-dashed p-8 text-center">
+          <Heart className="mx-auto h-12 w-12 text-muted-foreground/50" />
+          <h3 className="mt-4 font-medium">No volunteering added yet</h3>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Add volunteer experiences to showcase your community involvement
+          </p>
+          <Button onClick={() => handleOpenDialog()} className="mt-4 gap-2">
+            <Plus className="h-4 w-4" />
+            Add Experience
+          </Button>
+        </div>
+      ) : (
+        <SortableCardList
+          items={items}
+          onReorder={handleReorder}
+          dateExtractor={volunteeringDateExtractor}
+          disabled={isLoading}
+          renderItem={(item) => (
+            <div
+              className={cn(
+                'group flex items-start gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50',
+                item.isVisible === false && 'opacity-50'
+              )}
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                <Heart className="h-5 w-5 text-primary" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <h4 className="font-medium">{item.role}</h4>
+                    <p className="text-sm text-muted-foreground">{item.organization}</p>
+                    {item.cause && (
+                      <p className="text-xs text-muted-foreground">Cause: {item.cause}</p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => toggleItemVisibility(item)}
+                      title={item.isVisible === false ? 'Show on resume' : 'Hide from resume'}
+                    >
+                      {item.isVisible === false ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => handleOpenDialog(item)}
+                      title="Edit"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive hover:text-destructive"
+                      onClick={() => handleDeleteItem(item.id)}
+                      title="Delete"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+                {(item.startDate || item.endDate || item.isCurrent) && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {item.startDate}
+                    {(item.endDate || item.isCurrent) && ' — '}
+                    {item.isCurrent ? 'Present' : item.endDate}
+                  </p>
+                )}
+                {item.description && (
+                  <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
+                    {item.description}
+                  </p>
+                )}
+                {item.url && (
+                  <a
+                    href={item.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                  >
+                    View details <ExternalLink className="h-3 w-3" />
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+        />
+      )}
+    </div>
+  );
+
+  const dialog = (
+    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{editingItem ? 'Edit Volunteering' : 'Add Volunteering'}</DialogTitle>
+        </DialogHeader>
+        <div className="max-h-[60vh] space-y-4 overflow-y-auto py-4">
+          <div className="space-y-2">
+            <Label htmlFor="organization">Organization *</Label>
+            <Input
+              id="organization"
+              value={formData.organization || ''}
+              onChange={(e) => setFormData({ ...formData, organization: e.target.value })}
+              placeholder="Organization name"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="role">Role *</Label>
+            <Input
+              id="role"
+              value={formData.role || ''}
+              onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+              placeholder="Your role or position"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="cause">Cause</Label>
+            <Input
+              id="cause"
+              value={formData.cause || ''}
+              onChange={(e) => setFormData({ ...formData, cause: e.target.value })}
+              placeholder="e.g., Education, Environment, Health"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="startDate">Start Date</Label>
+              <Input
+                id="startDate"
+                value={formData.startDate || ''}
+                onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                placeholder="e.g., Jan 2023"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="endDate">End Date</Label>
+              <Input
+                id="endDate"
+                value={formData.endDate || ''}
+                onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                placeholder="e.g., Dec 2023"
+                disabled={formData.isCurrent}
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="isCurrent"
+              checked={formData.isCurrent || false}
+              onCheckedChange={(checked) => setFormData({ ...formData, isCurrent: checked })}
+            />
+            <Label htmlFor="isCurrent">I currently volunteer here</Label>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="description">Description</Label>
+            <RichTextEditor
+              value={formData.description || ''}
+              onChange={(html) => setFormData({ ...formData, description: html })}
+              placeholder="Describe your contributions and impact..."
+              minHeight="120px"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="url">Link (optional)</Label>
+            <Input
+              id="url"
+              type="url"
+              value={formData.url || ''}
+              onChange={(e) => setFormData({ ...formData, url: e.target.value })}
+              placeholder="https://..."
+            />
+          </div>
+
+          {error && (
+            <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSaveItem}
+            disabled={isLoading || !formData.organization || !formData.role}
+          >
+            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {editingItem ? 'Save Changes' : 'Add Experience'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
+  if (embedded) {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">
+            Add your volunteer work and community involvement
+          </p>
+          {addButton}
+        </div>
+        {volunteeringList}
+        {dialog}
+      </div>
+    );
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -199,222 +433,12 @@ export function VolunteeringSection({ section }: VolunteeringSectionProps) {
             <CardTitle>Volunteering</CardTitle>
             <CardDescription>Add your volunteer work and community involvement</CardDescription>
           </div>
-          <Button onClick={() => handleOpenDialog()} className="gap-2">
-            <Plus className="h-4 w-4" />
-            Add Experience
-          </Button>
+          {addButton}
         </div>
       </CardHeader>
       <CardContent>
-        {items.length === 0 ? (
-          <div className="rounded-lg border border-dashed p-8 text-center">
-            <Heart className="mx-auto h-12 w-12 text-muted-foreground/50" />
-            <h3 className="mt-4 font-medium">No volunteering added yet</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Add volunteer experiences to showcase your community involvement
-            </p>
-            <Button onClick={() => handleOpenDialog()} className="mt-4 gap-2">
-              <Plus className="h-4 w-4" />
-              Add Experience
-            </Button>
-          </div>
-        ) : (
-          <SortableCardList
-            items={items}
-            onReorder={handleReorder}
-            dateExtractor={volunteeringDateExtractor}
-            disabled={isLoading}
-            renderItem={(item) => (
-              <div
-                className={cn(
-                  'group flex items-start gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50',
-                  item.isVisible === false && 'opacity-50'
-                )}
-              >
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                  <Heart className="h-5 w-5 text-primary" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <h4 className="font-medium">{item.role}</h4>
-                      <p className="text-sm text-muted-foreground">{item.organization}</p>
-                      {item.cause && (
-                        <p className="text-xs text-muted-foreground">Cause: {item.cause}</p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => toggleItemVisibility(item)}
-                        title={item.isVisible === false ? 'Show on resume' : 'Hide from resume'}
-                      >
-                        {item.isVisible === false ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => handleOpenDialog(item)}
-                        title="Edit"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive"
-                        onClick={() => handleDeleteItem(item.id)}
-                        title="Delete"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                  {(item.startDate || item.endDate || item.isCurrent) && (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {item.startDate}
-                      {(item.endDate || item.isCurrent) && ' — '}
-                      {item.isCurrent ? 'Present' : item.endDate}
-                    </p>
-                  )}
-                  {item.description && (
-                    <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
-                      {item.description}
-                    </p>
-                  )}
-                  {item.url && (
-                    <a
-                      href={item.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-2 inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                    >
-                      View details <ExternalLink className="h-3 w-3" />
-                    </a>
-                  )}
-                </div>
-              </div>
-            )}
-          />
-        )}
-
-        {/* Add/Edit Dialog */}
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle>{editingItem ? 'Edit Volunteering' : 'Add Volunteering'}</DialogTitle>
-            </DialogHeader>
-            <div className="max-h-[60vh] space-y-4 overflow-y-auto py-4">
-              <div className="space-y-2">
-                <Label htmlFor="organization">Organization *</Label>
-                <Input
-                  id="organization"
-                  value={formData.organization || ''}
-                  onChange={(e) => setFormData({ ...formData, organization: e.target.value })}
-                  placeholder="Organization name"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="role">Role *</Label>
-                <Input
-                  id="role"
-                  value={formData.role || ''}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                  placeholder="Your role or position"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="cause">Cause</Label>
-                <Input
-                  id="cause"
-                  value={formData.cause || ''}
-                  onChange={(e) => setFormData({ ...formData, cause: e.target.value })}
-                  placeholder="e.g., Education, Environment, Health"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="startDate">Start Date</Label>
-                  <Input
-                    id="startDate"
-                    value={formData.startDate || ''}
-                    onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                    placeholder="e.g., Jan 2023"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="endDate">End Date</Label>
-                  <Input
-                    id="endDate"
-                    value={formData.endDate || ''}
-                    onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                    placeholder="e.g., Dec 2023"
-                    disabled={formData.isCurrent}
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="isCurrent"
-                  checked={formData.isCurrent || false}
-                  onCheckedChange={(checked) => setFormData({ ...formData, isCurrent: checked })}
-                />
-                <Label htmlFor="isCurrent">I currently volunteer here</Label>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  value={formData.description || ''}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Describe your contributions and impact..."
-                  rows={3}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="url">Link (optional)</Label>
-                <Input
-                  id="url"
-                  type="url"
-                  value={formData.url || ''}
-                  onChange={(e) => setFormData({ ...formData, url: e.target.value })}
-                  placeholder="https://..."
-                />
-              </div>
-
-              {error && (
-                <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
-                  {error}
-                </div>
-              )}
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button
-                onClick={handleSaveItem}
-                disabled={isLoading || !formData.organization || !formData.role}
-              >
-                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {editingItem ? 'Save Changes' : 'Add Experience'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        {volunteeringList}
+        {dialog}
       </CardContent>
     </Card>
   );

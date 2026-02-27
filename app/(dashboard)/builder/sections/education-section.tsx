@@ -1,10 +1,10 @@
 'use client';
 
-import { Eye, EyeOff, GraduationCap, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Eye, EyeOff, GraduationCap, Loader2, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { useCallback, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -15,8 +15,8 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { Switch } from '@/components/ui/switch';
-import { Textarea } from '@/components/ui/textarea';
 import { notifyProfileUpdated } from '@/lib/events';
 import { useReorderPersist } from '@/lib/hooks/use-reorder-persist';
 import { cn } from '@/lib/utils';
@@ -35,6 +35,12 @@ interface EducationSectionProps {
   educations: Education[];
   profileId: string;
   onUpdate: (educations: Education[]) => void;
+  /** When provided, auto-opens the edit dialog for this entry. */
+  autoEditId?: string | 'new';
+  /** Called when editing completes (save/cancel/close) in auto-edit mode. */
+  onEditComplete?: () => void;
+  /** When true, renders without Card wrapper for use inside accordion sections */
+  embedded?: boolean;
 }
 
 const emptyEducation: Partial<Education> = {
@@ -51,10 +57,27 @@ const emptyEducation: Partial<Education> = {
   honors: [],
 };
 
-export function EducationSection({ educations, onUpdate }: EducationSectionProps) {
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingEducation, setEditingEducation] = useState<Education | null>(null);
-  const [formData, setFormData] = useState<Partial<Education>>(emptyEducation);
+export function EducationSection({
+  educations,
+  onUpdate,
+  autoEditId,
+  onEditComplete,
+  embedded,
+}: EducationSectionProps) {
+  const [isDialogOpen, setIsDialogOpen] = useState(!!autoEditId);
+  const [editingEducation, setEditingEducation] = useState<Education | null>(() => {
+    if (autoEditId && autoEditId !== 'new') {
+      return educations.find((e) => e.id === autoEditId) ?? null;
+    }
+    return null;
+  });
+  const [formData, setFormData] = useState<Partial<Education>>(() => {
+    if (autoEditId && autoEditId !== 'new') {
+      const edu = educations.find((e) => e.id === autoEditId);
+      return edu ? { ...edu } : { ...emptyEducation };
+    }
+    return { ...emptyEducation };
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,6 +89,11 @@ export function EducationSection({ educations, onUpdate }: EducationSectionProps
     },
     [persistOrder]
   );
+
+  const handleDialogOpenChange = (open: boolean) => {
+    setIsDialogOpen(open);
+    if (!open && autoEditId) onEditComplete?.();
+  };
 
   const handleOpenDialog = (education?: Education) => {
     if (education) {
@@ -137,6 +165,7 @@ export function EducationSection({ educations, onUpdate }: EducationSectionProps
       setFormData(emptyEducation);
       setEditingEducation(null);
       notifyProfileUpdated();
+      if (autoEditId) onEditComplete?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -167,6 +196,145 @@ export function EducationSection({ educations, onUpdate }: EducationSectionProps
     }
   };
 
+  // ── Inline form (auto-edit mode) ──
+
+  const renderInlineForm = () => (
+    <div className="space-y-4 rounded-lg border-2 border-primary/30 bg-muted/30 p-4 shadow-md ring-2 ring-primary/10">
+      <div className="flex items-center gap-2 rounded-md bg-primary/10 px-3 py-2 text-sm font-medium text-primary">
+        <div className="h-2 w-2 animate-pulse rounded-full bg-primary" />
+        {editingEducation ? 'Editing education' : 'Adding new education'} — save or discard to
+        continue
+      </div>
+
+      {error && (
+        <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
+      )}
+
+      <div className="space-y-2">
+        <Label>Institution *</Label>
+        <Input
+          value={formData.institution || ''}
+          onChange={(e) => setFormData((prev) => ({ ...prev, institution: e.target.value }))}
+          placeholder="Stanford University"
+        />
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label>Degree</Label>
+          <Input
+            value={formData.degree || ''}
+            onChange={(e) => setFormData((prev) => ({ ...prev, degree: e.target.value }))}
+            placeholder="Bachelor of Science"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Field of Study</Label>
+          <Input
+            value={formData.fieldOfStudy || ''}
+            onChange={(e) => setFormData((prev) => ({ ...prev, fieldOfStudy: e.target.value }))}
+            placeholder="Computer Science"
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label>Location</Label>
+          <Input
+            value={formData.location || ''}
+            onChange={(e) => setFormData((prev) => ({ ...prev, location: e.target.value }))}
+            placeholder="Stanford, CA"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>GPA</Label>
+          <Input
+            value={formData.gpa || ''}
+            onChange={(e) => setFormData((prev) => ({ ...prev, gpa: e.target.value }))}
+            placeholder="3.9"
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <Switch
+          checked={formData.isCurrent || false}
+          onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, isCurrent: checked }))}
+        />
+        <Label>Currently studying here</Label>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label>Start Date</Label>
+          <Input
+            type="month"
+            value={formData.startDate ? new Date(formData.startDate).toISOString().slice(0, 7) : ''}
+            onChange={(e) =>
+              setFormData((prev) => ({
+                ...prev,
+                startDate: e.target.value ? new Date(e.target.value) : null,
+              }))
+            }
+          />
+        </div>
+        {!formData.isCurrent && (
+          <div className="space-y-2">
+            <Label>End Date</Label>
+            <Input
+              type="month"
+              value={formData.endDate ? new Date(formData.endDate).toISOString().slice(0, 7) : ''}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  endDate: e.target.value ? new Date(e.target.value) : null,
+                }))
+              }
+            />
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <Label>Description / Activities</Label>
+        <RichTextEditor
+          value={formData.description || ''}
+          onChange={(html) => setFormData((prev) => ({ ...prev, description: html }))}
+          placeholder="Relevant coursework, clubs, activities..."
+          minHeight="120px"
+        />
+      </div>
+
+      <div className="flex items-center gap-2 border-t pt-4">
+        <Button
+          onClick={handleSave}
+          disabled={!formData.institution || isLoading}
+          size="sm"
+          className="gap-2"
+        >
+          {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {isLoading ? 'Saving...' : 'Save'}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onEditComplete?.()}
+          disabled={isLoading}
+          className="gap-2"
+        >
+          <X className="mr-1 h-4 w-4" />
+          Discard
+        </Button>
+      </div>
+    </div>
+  );
+
+  // Auto-edit mode: render only the inline form
+  if (autoEditId) {
+    return renderInlineForm();
+  }
+
   const toggleVisibility = async (education: Education) => {
     const newValue = !(education.isVisible ?? true);
     // Optimistic update
@@ -185,178 +353,159 @@ export function EducationSection({ educations, onUpdate }: EducationSectionProps
     }
   };
 
-  return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>Education</CardTitle>
-            <CardDescription>Add your educational background</CardDescription>
+  const addButton = (
+    <Dialog open={isDialogOpen} onOpenChange={handleDialogOpenChange}>
+      <DialogTrigger asChild>
+        <Button
+          onClick={() => handleOpenDialog()}
+          className="gap-2"
+          size={embedded ? 'sm' : 'default'}
+        >
+          <Plus className="h-4 w-4" />
+          Add Education
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>{editingEducation ? 'Edit' : 'Add'} Education</DialogTitle>
+        </DialogHeader>
+
+        {error && (
+          <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
+        )}
+
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label>Institution *</Label>
+            <Input
+              value={formData.institution || ''}
+              onChange={(e) => setFormData((prev) => ({ ...prev, institution: e.target.value }))}
+              placeholder="Stanford University"
+            />
           </div>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={() => handleOpenDialog()} className="gap-2">
-                <Plus className="h-4 w-4" />
-                Add Education
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-xl">
-              <DialogHeader>
-                <DialogTitle>{editingEducation ? 'Edit' : 'Add'} Education</DialogTitle>
-              </DialogHeader>
 
-              {error && (
-                <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-                  {error}
-                </div>
-              )}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Degree</Label>
+              <Input
+                value={formData.degree || ''}
+                onChange={(e) => setFormData((prev) => ({ ...prev, degree: e.target.value }))}
+                placeholder="Bachelor of Science"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Field of Study</Label>
+              <Input
+                value={formData.fieldOfStudy || ''}
+                onChange={(e) => setFormData((prev) => ({ ...prev, fieldOfStudy: e.target.value }))}
+                placeholder="Computer Science"
+              />
+            </div>
+          </div>
 
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label>Institution *</Label>
-                  <Input
-                    value={formData.institution || ''}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, institution: e.target.value }))
-                    }
-                    placeholder="Stanford University"
-                  />
-                </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Location</Label>
+              <Input
+                value={formData.location || ''}
+                onChange={(e) => setFormData((prev) => ({ ...prev, location: e.target.value }))}
+                placeholder="Stanford, CA"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>GPA</Label>
+              <Input
+                value={formData.gpa || ''}
+                onChange={(e) => setFormData((prev) => ({ ...prev, gpa: e.target.value }))}
+                placeholder="3.9"
+              />
+            </div>
+          </div>
 
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>Degree</Label>
-                    <Input
-                      value={formData.degree || ''}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, degree: e.target.value }))}
-                      placeholder="Bachelor of Science"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Field of Study</Label>
-                    <Input
-                      value={formData.fieldOfStudy || ''}
-                      onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, fieldOfStudy: e.target.value }))
-                      }
-                      placeholder="Computer Science"
-                    />
-                  </div>
-                </div>
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={formData.isCurrent || false}
+              onCheckedChange={(checked) =>
+                setFormData((prev) => ({ ...prev, isCurrent: checked }))
+              }
+            />
+            <Label>Currently studying here</Label>
+          </div>
 
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>Location</Label>
-                    <Input
-                      value={formData.location || ''}
-                      onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, location: e.target.value }))
-                      }
-                      placeholder="Stanford, CA"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>GPA</Label>
-                    <Input
-                      value={formData.gpa || ''}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, gpa: e.target.value }))}
-                      placeholder="3.9"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Switch
-                    checked={formData.isCurrent || false}
-                    onCheckedChange={(checked) =>
-                      setFormData((prev) => ({ ...prev, isCurrent: checked }))
-                    }
-                  />
-                  <Label>Currently studying here</Label>
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>Start Date</Label>
-                    <Input
-                      type="month"
-                      value={
-                        formData.startDate
-                          ? new Date(formData.startDate).toISOString().slice(0, 7)
-                          : ''
-                      }
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          startDate: e.target.value ? new Date(e.target.value) : null,
-                        }))
-                      }
-                    />
-                  </div>
-                  {!formData.isCurrent && (
-                    <div className="space-y-2">
-                      <Label>End Date</Label>
-                      <Input
-                        type="month"
-                        value={
-                          formData.endDate
-                            ? new Date(formData.endDate).toISOString().slice(0, 7)
-                            : ''
-                        }
-                        onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            endDate: e.target.value ? new Date(e.target.value) : null,
-                          }))
-                        }
-                      />
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Description / Activities</Label>
-                  <Textarea
-                    value={formData.description || ''}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, description: e.target.value }))
-                    }
-                    placeholder="Relevant coursework, clubs, activities..."
-                    rows={3}
-                  />
-                </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Start Date</Label>
+              <Input
+                type="month"
+                value={
+                  formData.startDate ? new Date(formData.startDate).toISOString().slice(0, 7) : ''
+                }
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    startDate: e.target.value ? new Date(e.target.value) : null,
+                  }))
+                }
+              />
+            </div>
+            {!formData.isCurrent && (
+              <div className="space-y-2">
+                <Label>End Date</Label>
+                <Input
+                  type="month"
+                  value={
+                    formData.endDate ? new Date(formData.endDate).toISOString().slice(0, 7) : ''
+                  }
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      endDate: e.target.value ? new Date(e.target.value) : null,
+                    }))
+                  }
+                />
               </div>
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => setIsDialogOpen(false)}
-                  disabled={isLoading}
-                >
-                  Cancel
-                </Button>
-                <Button onClick={handleSave} disabled={!formData.institution || isLoading}>
-                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {isLoading ? 'Saving...' : 'Save'}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {educations.length === 0 ? (
-          <div className="rounded-lg border border-dashed p-8 text-center">
-            <GraduationCap className="mx-auto h-12 w-12 text-muted-foreground/50" />
-            <h3 className="mt-4 font-medium">No education added yet</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Add your educational background to showcase your qualifications
-            </p>
-            <Button onClick={() => handleOpenDialog()} className="mt-4 gap-2">
-              <Plus className="h-4 w-4" />
-              Add Education
-            </Button>
+            )}
           </div>
-        ) : (
+
+          <div className="space-y-2">
+            <Label>Description / Activities</Label>
+            <RichTextEditor
+              value={formData.description || ''}
+              onChange={(html) => setFormData((prev) => ({ ...prev, description: html }))}
+              placeholder="Relevant coursework, clubs, activities..."
+              minHeight="120px"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isLoading}>
+            Cancel
+          </Button>
+          <Button onClick={handleSave} disabled={!formData.institution || isLoading}>
+            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {isLoading ? 'Saving...' : 'Save'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
+  const educationList = (
+    <div className={cn(!embedded && 'rounded-xl bg-muted/40 p-4')}>
+      {educations.length === 0 ? (
+        <div className="rounded-lg border border-dashed p-8 text-center">
+          <GraduationCap className="mx-auto h-12 w-12 text-muted-foreground/50" />
+          <h3 className="mt-4 font-medium">No education added yet</h3>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Add your educational background to showcase your qualifications
+          </p>
+          <Button onClick={() => handleOpenDialog()} className="mt-4 gap-2">
+            <Plus className="h-4 w-4" />
+            Add Education
+          </Button>
+        </div>
+      ) : (
+        <div>
           <SortableCardList
             items={educations}
             onReorder={handleReorder}
@@ -437,8 +586,32 @@ export function EducationSection({ educations, onUpdate }: EducationSectionProps
               </div>
             )}
           />
-        )}
-      </CardContent>
+        </div>
+      )}
+    </div>
+  );
+
+  if (embedded) {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">Add your educational background</p>
+          {addButton}
+        </div>
+        {educationList}
+      </div>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardDescription>Add your educational background</CardDescription>
+          {addButton}
+        </div>
+      </CardHeader>
+      <CardContent>{educationList}</CardContent>
     </Card>
   );
 }

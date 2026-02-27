@@ -13,6 +13,7 @@ import {
   Plus,
   Trash2,
   Twitter,
+  X,
   Youtube,
 } from 'lucide-react';
 import { useCallback, useState } from 'react';
@@ -48,6 +49,8 @@ interface LinksSectionProps {
   links: Link[];
   profileId: string;
   onUpdate: (links: Link[]) => void;
+  autoEditId?: string | 'new';
+  onEditComplete?: () => void;
 }
 
 const LINK_TYPES = [
@@ -73,10 +76,40 @@ const emptyLink: Partial<Link> = {
   url: '',
 };
 
-export function LinksSection({ links, onUpdate }: LinksSectionProps) {
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingLink, setEditingLink] = useState<Link | null>(null);
-  const [formData, setFormData] = useState<Partial<Link>>(emptyLink);
+const getPlaceholderForType = (type: string) => {
+  switch (type) {
+    case 'GITHUB':
+      return 'https://github.com/username';
+    case 'LINKEDIN':
+      return 'https://linkedin.com/in/username';
+    case 'TWITTER':
+      return 'https://x.com/username';
+    case 'YOUTUBE':
+      return 'https://youtube.com/@channel';
+    case 'PORTFOLIO':
+      return 'https://myportfolio.com';
+    case 'BLOG':
+      return 'https://myblog.com';
+    default:
+      return 'https://example.com';
+  }
+};
+
+export function LinksSection({ links, onUpdate, autoEditId, onEditComplete }: LinksSectionProps) {
+  const [isDialogOpen, setIsDialogOpen] = useState(!!autoEditId);
+  const [editingLink, setEditingLink] = useState<Link | null>(() => {
+    if (autoEditId && autoEditId !== 'new') {
+      return links.find((l) => l.id === autoEditId) ?? null;
+    }
+    return null;
+  });
+  const [formData, setFormData] = useState<Partial<Link>>(() => {
+    if (autoEditId && autoEditId !== 'new') {
+      const link = links.find((l) => l.id === autoEditId);
+      return link ? { ...link } : { ...emptyLink };
+    }
+    return { ...emptyLink };
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -87,6 +120,104 @@ export function LinksSection({ links, onUpdate }: LinksSectionProps) {
     },
     [persistOrder]
   );
+
+  // ── Inline form (auto-edit mode) ──
+
+  const renderInlineForm = () => (
+    <div className="space-y-4 rounded-lg border-2 border-primary/30 bg-muted/30 p-4 shadow-md ring-2 ring-primary/10">
+      <div className="flex items-center gap-2 rounded-md bg-primary/10 px-3 py-2 text-sm font-medium text-primary">
+        <div className="h-2 w-2 animate-pulse rounded-full bg-primary" />
+        {editingLink ? 'Editing link' : 'Adding new link'} — save or discard to continue
+      </div>
+
+      {error && (
+        <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
+      )}
+
+      <div className="space-y-2">
+        <Label>Link Type</Label>
+        <Select
+          value={formData.type || 'GITHUB'}
+          onValueChange={(value) =>
+            setFormData((prev) => ({ ...prev, type: value as Link['type'] }))
+          }
+          disabled={isLoading}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select type" />
+          </SelectTrigger>
+          <SelectContent>
+            {LINK_TYPES.map((type) => {
+              const Icon = type.icon;
+              return (
+                <SelectItem key={type.value} value={type.value}>
+                  <span className="flex items-center gap-2">
+                    <Icon className="h-4 w-4" />
+                    {type.label}
+                  </span>
+                </SelectItem>
+              );
+            })}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>URL *</Label>
+        <Input
+          value={formData.url || ''}
+          onChange={(e) => setFormData((prev) => ({ ...prev, url: e.target.value }))}
+          placeholder={getPlaceholderForType(formData.type || 'GITHUB')}
+          disabled={isLoading}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Label (optional)</Label>
+        <Input
+          value={formData.label || ''}
+          onChange={(e) => setFormData((prev) => ({ ...prev, label: e.target.value }))}
+          placeholder={LINK_TYPES.find((t) => t.value === formData.type)?.label || 'Custom label'}
+          disabled={isLoading}
+        />
+        <p className="text-xs text-muted-foreground">
+          Leave blank to use the default label for this link type
+        </p>
+      </div>
+
+      <div className="flex items-center gap-2 border-t pt-4">
+        <Button
+          onClick={handleSave}
+          disabled={!formData.url || isLoading}
+          size="sm"
+          className="gap-2"
+        >
+          {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {isLoading ? 'Saving...' : 'Save'}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onEditComplete?.()}
+          disabled={isLoading}
+          className="gap-2"
+        >
+          <X className="mr-1 h-4 w-4" />
+          Discard
+        </Button>
+      </div>
+    </div>
+  );
+
+  // Auto-edit mode: render only the inline form
+  if (autoEditId) {
+    return renderInlineForm();
+  }
+
+  const handleDialogOpenChange = (open: boolean) => {
+    setIsDialogOpen(open);
+    if (!open && autoEditId) onEditComplete?.();
+  };
 
   const handleOpenDialog = (link?: Link) => {
     if (link) {
@@ -165,6 +296,7 @@ export function LinksSection({ links, onUpdate }: LinksSectionProps) {
       setIsDialogOpen(false);
       setFormData(emptyLink);
       setEditingLink(null);
+      if (autoEditId) onEditComplete?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -212,25 +344,6 @@ export function LinksSection({ links, onUpdate }: LinksSectionProps) {
     }
   };
 
-  const getPlaceholderForType = (type: string) => {
-    switch (type) {
-      case 'GITHUB':
-        return 'https://github.com/username';
-      case 'LINKEDIN':
-        return 'https://linkedin.com/in/username';
-      case 'TWITTER':
-        return 'https://x.com/username';
-      case 'YOUTUBE':
-        return 'https://youtube.com/@channel';
-      case 'PORTFOLIO':
-        return 'https://myportfolio.com';
-      case 'BLOG':
-        return 'https://myblog.com';
-      default:
-        return 'https://example.com';
-    }
-  };
-
   return (
     <Card>
       <CardHeader>
@@ -239,7 +352,7 @@ export function LinksSection({ links, onUpdate }: LinksSectionProps) {
             <CardTitle>Links & Social</CardTitle>
             <CardDescription>Add your online presence and social profiles</CardDescription>
           </div>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <Dialog open={isDialogOpen} onOpenChange={handleDialogOpenChange}>
             <DialogTrigger asChild>
               <Button onClick={() => handleOpenDialog()} className="gap-2">
                 <Plus className="h-4 w-4" />

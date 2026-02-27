@@ -5,7 +5,7 @@ import { useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -25,9 +25,11 @@ interface SkillsSectionProps {
   skillGroups: (SkillGroup & { skills: Skill[] })[];
   profileId: string;
   onUpdate: (skills: Skill[], skillGroups: (SkillGroup & { skills: Skill[] })[]) => void;
+  /** When true, renders without Card wrapper for use inside accordion sections */
+  embedded?: boolean;
 }
 
-export function SkillsSection({ skills, skillGroups, onUpdate }: SkillsSectionProps) {
+export function SkillsSection({ skills, skillGroups, onUpdate, embedded }: SkillsSectionProps) {
   const [newSkillName, setNewSkillName] = useState('');
   const [newSkillLevel, setNewSkillLevel] = useState<string>('');
   const [newGroupName, setNewGroupName] = useState('');
@@ -186,51 +188,47 @@ export function SkillsSection({ skills, skillGroups, onUpdate }: SkillsSectionPr
   // Get ungrouped skills
   const ungroupedSkills = skills.filter((s) => !s.groupId);
 
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Skills</CardTitle>
-        <CardDescription>Add your technical and professional skills</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {error && (
-          <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
-        )}
+  const skillsContent = (
+    <div className="space-y-6">
+      {error && (
+        <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
+      )}
 
-        {/* Add New Skill */}
-        <div className="space-y-2">
-          <Label>Add a skill</Label>
-          <div className="flex gap-2">
-            <Input
-              value={newSkillName}
-              onChange={(e) => setNewSkillName(e.target.value)}
-              placeholder="e.g., TypeScript, React, Python"
-              onKeyPress={(e) => e.key === 'Enter' && addSkill()}
-              className="flex-1"
-              disabled={isLoading}
-            />
-            <Select value={newSkillLevel} onValueChange={setNewSkillLevel} disabled={isLoading}>
-              <SelectTrigger className="w-32">
-                <SelectValue placeholder="Level" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="BEGINNER">Beginner</SelectItem>
-                <SelectItem value="INTERMEDIATE">Intermediate</SelectItem>
-                <SelectItem value="ADVANCED">Advanced</SelectItem>
-                <SelectItem value="EXPERT">Expert</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button onClick={addSkill} disabled={!newSkillName.trim() || isLoading}>
-              {isLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Plus className="h-4 w-4" />
-              )}
-            </Button>
-          </div>
+      {/* Add New Skill */}
+      <div className="space-y-2">
+        <Label>Add a skill</Label>
+        <div className="flex gap-2">
+          <Input
+            value={newSkillName}
+            onChange={(e) => setNewSkillName(e.target.value)}
+            placeholder="e.g., TypeScript, React, Python"
+            onKeyPress={(e) => e.key === 'Enter' && addSkill()}
+            className="flex-1"
+            disabled={isLoading}
+          />
+          <Select value={newSkillLevel} onValueChange={setNewSkillLevel} disabled={isLoading}>
+            <SelectTrigger className="w-32">
+              <SelectValue placeholder="Level" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="BEGINNER">Beginner</SelectItem>
+              <SelectItem value="INTERMEDIATE">Intermediate</SelectItem>
+              <SelectItem value="ADVANCED">Advanced</SelectItem>
+              <SelectItem value="EXPERT">Expert</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button onClick={addSkill} disabled={!newSkillName.trim() || isLoading}>
+            {isLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Plus className="h-4 w-4" />
+            )}
+          </Button>
         </div>
+      </div>
 
-        {/* Skill Groups */}
+      {/* Skill Groups & Skills */}
+      <div className="space-y-6">
         {skillGroups.map((group) => (
           <div key={group.id} className="space-y-2">
             <div className="flex items-center justify-between">
@@ -342,28 +340,44 @@ export function SkillsSection({ skills, skillGroups, onUpdate }: SkillsSectionPr
             No skills added yet. Use the input above to add skills.
           </div>
         )}
+      </div>
 
-        {/* Add Skill Group */}
-        <div className="space-y-2 border-t pt-4">
-          <Label>Create a skill group (optional)</Label>
-          <div className="flex gap-2">
-            <Input
-              value={newGroupName}
-              onChange={(e) => setNewGroupName(e.target.value)}
-              placeholder="e.g., Frontend, Backend, DevOps"
-              onKeyPress={(e) => e.key === 'Enter' && addGroup()}
-              disabled={isLoading}
-            />
-            <Button
-              onClick={addGroup}
-              variant="outline"
-              disabled={!newGroupName.trim() || isLoading}
-            >
-              {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Add Group
-            </Button>
-          </div>
+      {/* Add Skill Group */}
+      <div className="space-y-2 border-t pt-4">
+        <Label>Create a skill group (optional)</Label>
+        <div className="flex gap-2">
+          <Input
+            value={newGroupName}
+            onChange={(e) => setNewGroupName(e.target.value)}
+            placeholder="e.g., Frontend, Backend, DevOps"
+            onKeyPress={(e) => e.key === 'Enter' && addGroup()}
+            disabled={isLoading}
+          />
+          <Button onClick={addGroup} variant="outline" disabled={!newGroupName.trim() || isLoading}>
+            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Add Group
+          </Button>
         </div>
+      </div>
+    </div>
+  );
+
+  if (embedded) {
+    return (
+      <div className="space-y-3">
+        <p className="text-sm text-muted-foreground">Add your technical and professional skills</p>
+        {skillsContent}
+      </div>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardDescription>Add your technical and professional skills</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="rounded-xl bg-muted/40 p-4">{skillsContent}</div>
       </CardContent>
     </Card>
   );

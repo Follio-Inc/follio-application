@@ -130,9 +130,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       throw new AppError('Section not found', ErrorCode.NOT_FOUND, 404);
     }
 
-    // Don't allow deleting BASIC_INFO section
-    if (section.type === 'BASIC_INFO') {
-      throw new AppError('Cannot delete Basic Info section', ErrorCode.BAD_REQUEST, 400);
+    // Don't allow deleting BASIC_INFO (Header) or legacy CONTACT sections
+    if (section.type === 'BASIC_INFO' || section.type === 'CONTACT') {
+      throw new AppError('Cannot delete Header section', ErrorCode.BAD_REQUEST, 400);
     }
 
     // Check if section has content

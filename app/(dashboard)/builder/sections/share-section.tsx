@@ -382,7 +382,7 @@ export function ShareSection({ profile, onUpdateAction }: ShareSectionProps) {
   const skillCount = Array.isArray(profileAny.skills) ? (profileAny.skills as unknown[]).length : 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 rounded-xl bg-muted/40 p-4">
       {/* Portfolio Card */}
       <Card className="overflow-hidden border-primary/20">
         {/* Cropped iframe snapshot of portfolio page */}

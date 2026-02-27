@@ -39,6 +39,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 
+import { containsHtmlFormatting } from '@/lib/html-utils';
 import { getResumePath } from '@/lib/url';
 import { formatDate, formatDateRange } from '@/lib/utils';
 import type { PublicProfile } from '@/types';
@@ -601,7 +602,11 @@ export function PortfolioView({
                               className="flex items-start gap-2 text-sm text-muted-foreground"
                             >
                               <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary/60" />
-                              <span>{bullet}</span>
+                              {containsHtmlFormatting(bullet) ? (
+                                <span dangerouslySetInnerHTML={{ __html: bullet }} />
+                              ) : (
+                                <span>{bullet}</span>
+                              )}
                             </li>
                           ))}
                         </ul>

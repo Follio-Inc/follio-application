@@ -96,7 +96,7 @@ export function SortableSectionItem({
       ? `custom-${section.id}`
       : section.type.toLowerCase().replace(/_/g, '-');
 
-  const canDelete = section.type !== 'BASIC_INFO';
+  const canDelete = section.type !== 'BASIC_INFO' && section.type !== 'CONTACT';
 
   const handleDelete = async () => {
     setIsDeleting(true);

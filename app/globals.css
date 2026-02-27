@@ -440,12 +440,142 @@
     padding-left: 4px;
   }
 
+  /* Inline formatting within bullets (from rich text editor) */
+  .resume-bullets li strong {
+    font-weight: 600;
+  }
+
+  .resume-bullets li em {
+    font-style: italic;
+  }
+
+  .resume-bullets li u {
+    text-decoration: underline;
+  }
+
   .resume-bullets li::marker {
     color: #666;
   }
 
   .dark .resume-bullets li::marker {
     color: #888;
+  }
+
+  /* ── Rich-text editor HTML in resume context ──
+     When rendering the raw editor HTML (bulletsHtml) in the preview,
+     the editor CSS classes must map to the resume's visual style. */
+
+  /* Editor bullet list inside resume entries */
+  .resume-entry .rich-text-bullets,
+  .resume-entry ul[data-bullet-style] {
+    margin: 8px 0 0 0;
+    padding-left: 18px;
+    list-style: disc;
+  }
+
+  .resume-entry .rich-text-bullets li,
+  .resume-entry ul[data-bullet-style] li {
+    margin-bottom: 3px;
+    padding-left: 4px;
+  }
+
+  .resume-entry .rich-text-bullets li p,
+  .resume-entry ul[data-bullet-style] li p {
+    margin: 0;
+  }
+
+  .resume-entry .rich-text-bullets li strong {
+    font-weight: 600;
+  }
+
+  .resume-entry .rich-text-bullets li em {
+    font-style: italic;
+  }
+
+  .resume-entry .rich-text-bullets li u {
+    text-decoration: underline;
+  }
+
+  .resume-entry .rich-text-bullets li::marker {
+    color: #666;
+  }
+
+  .dark .resume-entry .rich-text-bullets li::marker {
+    color: #888;
+  }
+
+  /* Bullet style variants in resume context */
+  .resume-entry ul.bullet-style-disc {
+    list-style-type: disc;
+  }
+  .resume-entry ul.bullet-style-circle {
+    list-style-type: circle;
+  }
+  .resume-entry ul.bullet-style-square {
+    list-style-type: square;
+  }
+  .resume-entry ul.bullet-style-dash {
+    list-style-type: '–  ';
+  }
+
+  /* Ordered list in resume context */
+  .resume-entry ol.rich-text-ordered {
+    margin: 8px 0 0 0;
+    padding-left: 18px;
+    list-style-type: decimal;
+  }
+
+  .resume-entry ol.rich-text-ordered li {
+    margin-bottom: 3px;
+    padding-left: 4px;
+  }
+
+  .resume-entry ol.rich-text-ordered li p {
+    margin: 0;
+  }
+
+  /* Text alignment in resume context (from editor's inline styles) */
+  .resume-paper [style*='text-align: center'] {
+    text-align: center;
+  }
+  .resume-paper [style*='text-align: right'] {
+    text-align: right;
+  }
+  .resume-paper [style*='text-align: left'] {
+    text-align: left;
+  }
+  .resume-paper [style*='text-align: justify'] {
+    text-align: justify;
+  }
+
+  /* Rich HTML prose inside resume (summary, descriptions) */
+  .resume-rich-html {
+    text-align: justify;
+    margin: 0;
+  }
+
+  .resume-rich-html p {
+    margin: 0.15em 0;
+  }
+
+  .resume-rich-html p:first-child {
+    margin-top: 0;
+  }
+
+  .resume-rich-html p:last-child {
+    margin-bottom: 0;
+  }
+
+  .resume-rich-html strong {
+    font-weight: 600;
+  }
+
+  .resume-rich-html em {
+    font-style: italic;
+  }
+
+  .resume-rich-html u {
+    text-decoration: underline;
   }
 
   /* Skills */
@@ -649,9 +779,141 @@
     color: #444 !important;
   }
 
+  /* Rich-text bullets (from editor HTML) in print */
+  .resume-entry .rich-text-bullets,
+  .resume-entry ul[data-bullet-style] {
+    margin: 8px 0 0 0;
+    padding-left: 18px;
+    list-style: disc;
+  }
+
+  .resume-entry .rich-text-bullets li,
+  .resume-entry ul[data-bullet-style] li {
+    margin-bottom: 3px;
+    padding-left: 4px;
+  }
+
+  .resume-entry .rich-text-bullets li::marker,
+  .resume-entry ul[data-bullet-style] li::marker {
+    color: #444 !important;
+  }
+
+  .resume-entry .rich-text-bullets li p,
+  .resume-entry ul[data-bullet-style] li p {
+    margin: 0;
+  }
+
+  /* Rich HTML prose in print */
+  .resume-rich-html p {
+    margin: 0.15em 0;
+  }
+
+  .resume-rich-html p:first-child {
+    margin-top: 0;
+  }
+
+  .resume-rich-html p:last-child {
+    margin-bottom: 0;
+  }
+
   /* Page setup */
   @page {
     margin: 0.5in;
     size: letter;
   }
+}
+
+/* ─────────────────────────────────────────────
+   Rich Text Editor (Tiptap) styles
+   ───────────────────────────────────────────── */
+
+.tiptap {
+  outline: none;
+}
+
+.tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  pointer-events: none;
+  height: 0;
+  color: hsl(var(--muted-foreground));
+  opacity: 0.5;
+}
+
+/* Bullet list styles */
+.tiptap ul.rich-text-bullets {
+  padding-left: 1.25rem;
+  margin: 0.25rem 0;
+  list-style-type: disc; /* Default visible bullets; overridden by bullet-style-* variants */
+}
+
+.tiptap ul.rich-text-bullets li {
+  margin: 0.125rem 0;
+  display: list-item; /* Ensure markers render even under Tailwind Preflight */
+}
+
+.tiptap ul.rich-text-bullets li p {
+  margin: 0;
+}
+
+/* Bullet style variants */
+.tiptap ul.bullet-style-disc {
+  list-style-type: disc;
+}
+
+.tiptap ul.bullet-style-circle {
+  list-style-type: circle;
+}
+
+.tiptap ul.bullet-style-square {
+  list-style-type: square;
+}
+
+.tiptap ul.bullet-style-dash {
+  list-style-type: '–  ';
+}
+
+/* Ordered list styles */
+.tiptap ol.rich-text-ordered {
+  padding-left: 1.25rem;
+  margin: 0.25rem 0;
+  list-style-type: decimal;
+}
+
+.tiptap ol.rich-text-ordered li {
+  margin: 0.125rem 0;
+}
+
+.tiptap ol.rich-text-ordered li p {
+  margin: 0;
+}
+
+/* Text alignment */
+.tiptap [style*='text-align: justify'] {
+  text-align: justify;
+}
+
+.tiptap [style*='text-align: center'] {
+  text-align: center;
+}
+
+.tiptap [style*='text-align: right'] {
+  text-align: right;
+}
+
+.tiptap [style*='text-align: left'] {
+  text-align: left;
+}
+
+/* General prose cleanup */
+.tiptap p {
+  margin: 0.25rem 0;
+}
+
+.tiptap p:first-child {
+  margin-top: 0;
+}
+
+.tiptap p:last-child {
+  margin-bottom: 0;
 }

@@ -8,9 +8,8 @@ import type { SectionType } from '@prisma/client';
 
 // Default sections that every profile should have
 const DEFAULT_SECTION_CONFIGS: { type: SectionType; title: string }[] = [
-  { type: 'BASIC_INFO', title: 'Basic Info' },
+  { type: 'BASIC_INFO', title: 'Header' },
   { type: 'PHOTOS', title: 'Photos' },
-  { type: 'CONTACT', title: 'Contact' },
   { type: 'SUMMARY', title: 'Summary' },
   { type: 'EXPERIENCE', title: 'Experience' },
   { type: 'EDUCATION', title: 'Education' },
@@ -88,9 +87,8 @@ export default async function BuilderLayout({ children }: { children: React.Reac
     } else {
       // Existing profile missing some sections — add them
       const maxOrder = user.profile.sections.reduce((max, s) => Math.max(max, s.sortOrder), -1);
-      const contactIdx = user.profile.sections.findIndex((s) => s.type === 'CONTACT');
       const linksIdx = user.profile.sections.findIndex((s) => s.type === 'LINKS');
-      const insertAfterIdx = Math.max(contactIdx, linksIdx);
+      const insertAfterIdx = linksIdx;
 
       const newSections = await Promise.all(
         missingSections.map((config, i) => {

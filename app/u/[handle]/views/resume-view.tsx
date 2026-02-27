@@ -25,6 +25,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 
+import { containsHtmlFormatting } from '@/lib/html-utils';
 import { formatDate } from '@/lib/utils';
 import { applyVisibilityFilter } from '@/lib/visibility';
 import type {
@@ -318,7 +319,14 @@ export function ResumeView({ profile: rawProfile }: ResumeViewProps) {
                         {exp.bullets.map((bullet, i) => (
                           <li key={i} className="flex gap-2">
                             <span className="text-primary">•</span>
-                            <span className="text-muted-foreground">{bullet}</span>
+                            {containsHtmlFormatting(bullet) ? (
+                              <span
+                                className="text-muted-foreground"
+                                dangerouslySetInnerHTML={{ __html: bullet }}
+                              />
+                            ) : (
+                              <span className="text-muted-foreground">{bullet}</span>
+                            )}
                           </li>
                         ))}
                       </ul>

@@ -1,23 +1,15 @@
 'use client';
 
-import {
-  Briefcase,
-  ChevronDown,
-  ChevronUp,
-  Eye,
-  EyeOff,
-  Loader2,
-  Plus,
-  Trash2,
-  X,
-} from 'lucide-react';
-import { useCallback, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { Briefcase, ChevronDown, Eye, EyeOff, Loader2, Plus, Trash2, X } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import {
   Select,
   SelectContent,
@@ -26,9 +18,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { Textarea } from '@/components/ui/textarea';
 import { notifyProfileUpdated } from '@/lib/events';
 import { useReorderPersist } from '@/lib/hooks/use-reorder-persist';
+import { bulletsToHtml, htmlToBullets } from '@/lib/html-utils';
 import { cn } from '@/lib/utils';
 
 import { SortableCardList } from '../components/sortable-card-list';
@@ -45,6 +37,14 @@ interface ExperienceSectionProps {
   experiences: WorkExperience[];
   profileId: string;
   onUpdate: (experiences: WorkExperience[]) => void;
+  /** Called when the section enters or exits inline-editing mode. */
+  onEditingStateChange?: (isEditing: boolean) => void;
+  /** When provided, auto-starts editing this entry and renders only the form. */
+  autoEditId?: string | 'new';
+  /** Called after save/cancel/delete in auto-edit mode to return to the entry list. */
+  onEditComplete?: () => void;
+  /** When true, renders without Card wrapper for use inside accordion sections */
+  embedded?: boolean;
 }
 
 const emptyExperience: Partial<WorkExperience> = {
@@ -60,16 +60,41 @@ const emptyExperience: Partial<WorkExperience> = {
   tags: [],
 };
 
-export function ExperienceSection({ experiences, onUpdate }: ExperienceSectionProps) {
+export function ExperienceSection({
+  experiences,
+  onUpdate,
+  onEditingStateChange,
+  autoEditId,
+  onEditComplete,
+  embedded,
+}: ExperienceSectionProps) {
   /** The id of the item being edited, or 'new' for a new item, or null when idle. */
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [formData, setFormData] = useState<Partial<WorkExperience>>(emptyExperience);
+  const [editingId, setEditingId] = useState<string | null>(autoEditId ?? null);
+  const [formData, setFormData] = useState<Partial<WorkExperience>>(() => {
+    if (autoEditId && autoEditId !== 'new') {
+      const exp = experiences.find((e) => e.id === autoEditId);
+      return exp ? { ...exp } : { ...emptyExperience };
+    }
+    return { ...emptyExperience };
+  });
   const [tagInput, setTagInput] = useState('');
+  /** Local HTML state for the rich text editor — initialized from bullets, stays as HTML while editing. */
+  const [highlightsHtml, setHighlightsHtml] = useState(() => bulletsToHtml(formData.bullets));
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  /** Ref for the editing form — used for scroll-into-view. */
+  const editingFormRef = useRef<HTMLDivElement>(null);
+
+  const isEditing = editingId !== null;
+
+  // Notify parent whenever editing state changes
+  useEffect(() => {
+    onEditingStateChange?.(isEditing);
+  }, [isEditing, onEditingStateChange]);
+
   /** Snapshot of the experiences array before editing started — used to revert on cancel. */
-  const snapshotRef = useRef<WorkExperience[]>([]);
+  const snapshotRef = useRef<WorkExperience[]>(autoEditId ? [...experiences] : []);
 
   const persistOrder = useReorderPersist<WorkExperience>('workExperience', onUpdate);
 
@@ -90,9 +115,14 @@ export function ExperienceSection({ experiences, onUpdate }: ExperienceSectionPr
     if (experience) {
       setEditingId(experience.id);
       setFormData({ ...experience });
+      // Prefer the stored bulletsHtml (preserves alignment, bullet style, etc.)
+      // Fall back to reconstructing from bullets[] for backward compat
+      const storedHtml = experience.bulletsHtml;
+      setHighlightsHtml(storedHtml || bulletsToHtml(experience.bullets));
     } else {
       setEditingId('new');
       setFormData({ ...emptyExperience });
+      setHighlightsHtml('');
     }
   };
 
@@ -103,29 +133,41 @@ export function ExperienceSection({ experiences, onUpdate }: ExperienceSectionPr
     }
     setEditingId(null);
     setFormData(emptyExperience);
+    setHighlightsHtml('');
     setError(null);
     setTagInput('');
+    if (autoEditId) onEditComplete?.();
   };
 
-  /**
-   * Update a single form field and push a real-time preview update
-   * for existing items so the resume preview reflects changes instantly.
-   */
   const updateField = <K extends keyof WorkExperience>(field: K, value: WorkExperience[K]) => {
-    setFormData((prev) => {
-      const updated = { ...prev, [field]: value };
-
-      // Push real-time update for existing items
-      if (editingId && editingId !== 'new') {
-        const updatedExperiences = experiences.map((e) =>
-          e.id === editingId ? { ...e, ...updated } : e
-        );
-        onUpdate(updatedExperiences);
-      }
-
-      return updated;
-    });
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
+
+  // Push real-time preview updates for existing items when formData changes.
+  // We use refs for editingId and experiences so the effect only fires when
+  // formData actually changes — not on every parent re-render.
+  const editingIdRef = useRef(editingId);
+  editingIdRef.current = editingId;
+  const experiencesRef = useRef(experiences);
+  experiencesRef.current = experiences;
+
+  const previewTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    const id = editingIdRef.current;
+    if (!id || id === 'new') return;
+
+    if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
+    previewTimerRef.current = setTimeout(() => {
+      const updated = experiencesRef.current.map((e) => (e.id === id ? { ...e, ...formData } : e));
+      onUpdate(updated);
+    }, 150);
+
+    return () => {
+      if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData]);
 
   // ── CRUD handlers ──────────────────────────────
 
@@ -144,6 +186,7 @@ export function ExperienceSection({ experiences, onUpdate }: ExperienceSectionPr
         endDate: formData.isCurrent ? null : formData.endDate,
         isCurrent: formData.isCurrent || false,
         bullets: formData.bullets || [],
+        bulletsHtml: formData.bulletsHtml || highlightsHtml || undefined,
         tags: formData.tags || [],
       };
 
@@ -181,6 +224,7 @@ export function ExperienceSection({ experiences, onUpdate }: ExperienceSectionPr
       setFormData(emptyExperience);
       setTagInput('');
       notifyProfileUpdated();
+      if (autoEditId) onEditComplete?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -208,6 +252,7 @@ export function ExperienceSection({ experiences, onUpdate }: ExperienceSectionPr
         setFormData(emptyExperience);
       }
       notifyProfileUpdated();
+      if (autoEditId) onEditComplete?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -249,7 +294,17 @@ export function ExperienceSection({ experiences, onUpdate }: ExperienceSectionPr
   // ── Inline form ──────────────────────────────
 
   const renderInlineForm = () => (
-    <div className="space-y-4 rounded-lg border border-primary/20 bg-muted/30 p-4">
+    <div
+      ref={editingFormRef}
+      className="space-y-4 rounded-lg border-2 border-primary/30 bg-muted/30 p-4 shadow-md ring-2 ring-primary/10"
+    >
+      {/* Editing mode banner */}
+      <div className="flex items-center gap-2 rounded-md bg-primary/10 px-3 py-2 text-sm font-medium text-primary">
+        <div className="h-2 w-2 animate-pulse rounded-full bg-primary" />
+        {editingId === 'new' ? 'Adding new experience' : 'Editing experience'} — save or discard to
+        continue
+      </div>
+
       {error && (
         <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
       )}
@@ -355,19 +410,18 @@ export function ExperienceSection({ experiences, onUpdate }: ExperienceSectionPr
 
       <div className="space-y-2">
         <Label>Highlights</Label>
-        <Textarea
-          value={(formData.bullets || []).join('\n')}
-          onChange={(e) => {
-            const lines = e.target.value.split('\n');
-            updateField(
-              'bullets',
-              lines.filter((l) => l.trim().length > 0) as WorkExperience['bullets']
-            );
+        <RichTextEditor
+          value={highlightsHtml}
+          onChange={(html) => {
+            setHighlightsHtml(html);
+            // Update bullets (string[]) for backward compat AND bulletsHtml for faithful rendering
+            const bullets = htmlToBullets(html);
+            setFormData((prev) => ({ ...prev, bullets, bulletsHtml: html }));
           }}
-          placeholder="One highlight per line, e.g.:\nLed migration from REST to GraphQL\nReduced bundle size by 45%"
-          rows={5}
+          placeholder="Describe your achievements and responsibilities..."
+          minHeight="160px"
+          bulletMode
         />
-        <p className="text-xs text-muted-foreground">One highlight per line</p>
       </div>
 
       <div className="space-y-2">
@@ -404,171 +458,216 @@ export function ExperienceSection({ experiences, onUpdate }: ExperienceSectionPr
         <Button
           onClick={handleSave}
           disabled={!formData.company || !formData.role || isLoading}
-          size="sm"
+          className="gap-2"
         >
           {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {isLoading ? 'Saving...' : 'Save'}
         </Button>
-        <Button variant="ghost" size="sm" onClick={cancelEditing} disabled={isLoading}>
+        <Button variant="outline" onClick={cancelEditing} disabled={isLoading} className="gap-2">
           <X className="mr-1 h-4 w-4" />
-          Cancel
+          Discard
         </Button>
       </div>
     </div>
   );
 
   // ── Render ──────────────────────────────────
-
+  // Auto-edit mode: render only the inline form
+  if (autoEditId) {
+    return renderInlineForm();
+  }
   return (
-    <Card>
+    <Card className="relative">
       <CardHeader>
         <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>Work Experience</CardTitle>
-            <CardDescription>Add your professional experience</CardDescription>
-          </div>
-          <Button onClick={() => startEditing()} className="gap-2" disabled={editingId === 'new'}>
+          <CardDescription>Add your professional experience</CardDescription>
+          <Button onClick={() => startEditing()} className="gap-2" disabled={isEditing}>
             <Plus className="h-4 w-4" />
             Add Experience
           </Button>
         </div>
       </CardHeader>
       <CardContent>
-        {/* Inline form for adding a new experience */}
-        {editingId === 'new' && <div className="mb-4">{renderInlineForm()}</div>}
+        <div className="rounded-xl bg-muted/40 p-4">
+          {/* Inline form for adding a new experience */}
+          <AnimatePresence>
+            {editingId === 'new' && (
+              <motion.div
+                className="mb-4"
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                {renderInlineForm()}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-        {experiences.length === 0 && editingId !== 'new' ? (
-          <div className="rounded-lg border border-dashed p-8 text-center">
-            <Briefcase className="mx-auto h-12 w-12 text-muted-foreground/50" />
-            <h3 className="mt-4 font-medium">No work experience added yet</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Add your professional experience to build a compelling resume
-            </p>
-            <Button onClick={() => startEditing()} className="mt-4 gap-2">
-              <Plus className="h-4 w-4" />
-              Add Experience
-            </Button>
-          </div>
-        ) : (
-          experiences.length > 0 && (
-            <SortableCardList
-              items={experiences}
-              onReorder={handleReorder}
-              dateExtractor={experienceDateExtractor}
-              disabled={isLoading || editingId !== null}
-              renderItem={(exp) => (
-                <div>
-                  {/* Collapsed card view */}
+          {experiences.length === 0 && editingId !== 'new' ? (
+            <div className="rounded-lg border border-dashed p-8 text-center">
+              <Briefcase className="mx-auto h-12 w-12 text-muted-foreground/50" />
+              <h3 className="mt-4 font-medium">No work experience added yet</h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Add your professional experience to build a compelling resume
+              </p>
+              <Button onClick={() => startEditing()} className="mt-4 gap-2">
+                <Plus className="h-4 w-4" />
+                Add Experience
+              </Button>
+            </div>
+          ) : (
+            experiences.length > 0 && (
+              <div className="relative">
+                {/*
+                 * Editing overlay — dims and blocks interaction with the card list
+                 * when adding a new item (the form is above the list).
+                 */}
+                {editingId === 'new' && (
                   <div
-                    className={cn(
-                      'group flex items-start gap-4 rounded-lg border p-4 transition-colors',
-                      editingId === exp.id ? 'border-primary/30 bg-muted/30' : 'hover:bg-muted/50',
-                      exp.isVisible === false && editingId !== exp.id && 'opacity-50'
-                    )}
-                  >
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                      <Briefcase className="h-5 w-5 text-primary" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-2">
-                        <div
-                          className="min-w-0 flex-1 cursor-pointer"
-                          onClick={() => {
-                            if (!editingId) startEditing(exp);
-                          }}
-                        >
-                          <h4 className="font-medium">{exp.role || 'Untitled Role'}</h4>
-                          <p className="text-sm text-muted-foreground">
-                            {exp.company || 'Company'}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {new Date(exp.startDate).toLocaleDateString('en-US', {
+                    className="absolute inset-0 z-10 cursor-not-allowed rounded-lg bg-background/60 backdrop-blur-[1px]"
+                    onClick={cancelEditing}
+                    title="Save or discard your changes first"
+                  />
+                )}
+
+                <SortableCardList
+                  items={experiences}
+                  onReorder={handleReorder}
+                  dateExtractor={experienceDateExtractor}
+                  disabled={isLoading || isEditing}
+                  renderItem={(exp) => {
+                    const isThisItemEditing = editingId === exp.id;
+                    const isAnotherItemEditing = isEditing && !isThisItemEditing;
+
+                    const dateLabel = [
+                      new Date(exp.startDate).toLocaleDateString('en-US', {
+                        month: 'short',
+                        year: 'numeric',
+                      }),
+                      exp.isCurrent
+                        ? 'Present'
+                        : exp.endDate
+                          ? new Date(exp.endDate).toLocaleDateString('en-US', {
                               month: 'short',
                               year: 'numeric',
-                            })}
-                            {' - '}
-                            {exp.isCurrent
-                              ? 'Present'
-                              : exp.endDate
-                                ? new Date(exp.endDate).toLocaleDateString('en-US', {
-                                    month: 'short',
-                                    year: 'numeric',
-                                  })
-                                : ''}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => toggleVisibility(exp)}
-                            title={exp.isVisible === false ? 'Show on resume' : 'Hide from resume'}
-                          >
-                            {exp.isVisible === false ? (
-                              <EyeOff className="h-4 w-4" />
-                            ) : (
-                              <Eye className="h-4 w-4" />
-                            )}
-                          </Button>
-                          {editingId === exp.id ? (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={cancelEditing}
-                              title="Collapse"
-                            >
-                              <ChevronUp className="h-4 w-4" />
-                            </Button>
-                          ) : (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => startEditing(exp)}
-                              disabled={editingId !== null}
-                              title="Edit"
-                            >
-                              <ChevronDown className="h-4 w-4" />
-                            </Button>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive hover:text-destructive"
-                            onClick={() => handleDelete(exp.id)}
-                            disabled={isLoading}
-                            title="Delete"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                      {editingId !== exp.id && exp.tags && exp.tags.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-1">
-                          {exp.tags.slice(0, 5).map((tag) => (
-                            <Badge key={tag} variant="secondary" className="text-xs">
-                              {tag}
-                            </Badge>
-                          ))}
-                          {exp.tags.length > 5 && (
-                            <Badge variant="outline" className="text-xs">
-                              +{exp.tags.length - 5}
-                            </Badge>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                            })
+                          : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' – ');
 
-                  {/* Expanded inline edit form */}
-                  {editingId === exp.id && <div className="mt-2">{renderInlineForm()}</div>}
-                </div>
-              )}
-            />
-          )
-        )}
+                    return (
+                      <div
+                        className={cn(
+                          'relative transition-all duration-200',
+                          isAnotherItemEditing && 'pointer-events-none select-none opacity-40'
+                        )}
+                      >
+                        {/* Minimised row — always visible */}
+                        <div
+                          className={cn(
+                            'group flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors',
+                            isThisItemEditing
+                              ? 'border-primary/30 bg-muted/30'
+                              : 'cursor-pointer hover:bg-muted/50',
+                            exp.isVisible === false && !isThisItemEditing && 'opacity-50'
+                          )}
+                          onClick={() => {
+                            if (isThisItemEditing) {
+                              cancelEditing();
+                            } else if (!isEditing) {
+                              startEditing(exp);
+                            }
+                          }}
+                        >
+                          <Briefcase className="h-4 w-4 shrink-0 text-muted-foreground" />
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="truncate text-sm font-medium">
+                                {exp.role || 'Untitled Role'}
+                              </span>
+                              <span className="shrink-0 text-xs text-muted-foreground">·</span>
+                              <span className="truncate text-xs text-muted-foreground">
+                                {exp.company || 'Company'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
+                            {dateLabel}
+                          </span>
+
+                          {/* Action buttons — visible on hover or when expanded */}
+                          <div
+                            className={cn(
+                              'flex items-center gap-0.5 transition-opacity',
+                              isThisItemEditing
+                                ? 'opacity-100'
+                                : isAnotherItemEditing
+                                  ? 'opacity-0'
+                                  : 'opacity-0 group-hover:opacity-100'
+                            )}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => toggleVisibility(exp)}
+                              disabled={isEditing && !isThisItemEditing}
+                              title={
+                                exp.isVisible === false ? 'Show on resume' : 'Hide from resume'
+                              }
+                            >
+                              {exp.isVisible === false ? (
+                                <EyeOff className="h-3.5 w-3.5" />
+                              ) : (
+                                <Eye className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive hover:text-destructive"
+                              onClick={() => handleDelete(exp.id)}
+                              disabled={isLoading || isAnotherItemEditing}
+                              title="Delete"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                            <ChevronDown
+                              className={cn(
+                                'h-3.5 w-3.5 text-muted-foreground/50 transition-transform duration-200',
+                                isThisItemEditing && '-rotate-180 text-muted-foreground'
+                              )}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Expanded inline edit form */}
+                        <AnimatePresence>
+                          {isThisItemEditing && (
+                            <motion.div
+                              className="mt-2"
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto' }}
+                              exit={{ opacity: 0, height: 0 }}
+                              transition={{ duration: 0.2 }}
+                            >
+                              {renderInlineForm()}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    );
+                  }}
+                />
+              </div>
+            )
+          )}
+        </div>
       </CardContent>
     </Card>
   );

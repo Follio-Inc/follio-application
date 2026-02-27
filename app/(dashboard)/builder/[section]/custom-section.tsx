@@ -15,8 +15,8 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { Switch } from '@/components/ui/switch';
-import { Textarea } from '@/components/ui/textarea';
 import { notifyProfileUpdated } from '@/lib/events';
 import { cn } from '@/lib/utils';
 
@@ -37,6 +37,8 @@ const customItemDateExtractor: DateExtractor<CustomSectionItem> = (item) => {
 interface CustomSectionProps {
   section: ProfileSection | null;
   profileId: string;
+  /** When true, renders without Card wrapper for use inside accordion sections */
+  embedded?: boolean;
 }
 
 const emptyItem: Partial<CustomSectionItem> = {
@@ -50,7 +52,7 @@ const emptyItem: Partial<CustomSectionItem> = {
   tags: [],
 };
 
-export function CustomSection({ section }: CustomSectionProps) {
+export function CustomSection({ section, embedded }: CustomSectionProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<CustomSectionItem | null>(null);
   const [formData, setFormData] = useState<Partial<CustomSectionItem>>(emptyItem);
@@ -93,15 +95,13 @@ export function CustomSection({ section }: CustomSectionProps) {
 
   if (!section) {
     return (
-      <Card>
-        <CardContent className="py-12 text-center">
-          <LayoutGrid className="mx-auto h-12 w-12 text-muted-foreground/50" />
-          <h3 className="mt-4 font-medium">Section not found</h3>
-          <p className="mt-2 text-sm text-muted-foreground">
-            This custom section doesn&apos;t exist or has been deleted.
-          </p>
-        </CardContent>
-      </Card>
+      <div className="py-12 text-center">
+        <LayoutGrid className="mx-auto h-12 w-12 text-muted-foreground/50" />
+        <h3 className="mt-4 font-medium">Section not found</h3>
+        <p className="mt-2 text-sm text-muted-foreground">
+          This custom section doesn&apos;t exist or has been deleted.
+        </p>
+      </div>
     );
   }
 
@@ -229,6 +229,35 @@ export function CustomSection({ section }: CustomSectionProps) {
 
   // Freeform content editor
   if (contentType === 'FREEFORM') {
+    const freeformContent_el = (
+      <div className="space-y-3">
+        {embedded && (
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              Add your content using the text editor below
+            </p>
+            <Button onClick={handleSaveFreeform} disabled={isLoading} size="sm" className="gap-2">
+              {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+              Save Content
+            </Button>
+          </div>
+        )}
+        <RichTextEditor
+          value={freeformContent}
+          onChange={setFreeformContent}
+          placeholder="Write your content here..."
+          minHeight="280px"
+        />
+        {error && (
+          <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
+        )}
+      </div>
+    );
+
+    if (embedded) {
+      return freeformContent_el;
+    }
+
     return (
       <Card>
         <CardHeader>
@@ -243,24 +272,268 @@ export function CustomSection({ section }: CustomSectionProps) {
             </Button>
           </div>
         </CardHeader>
-        <CardContent>
-          <Textarea
-            value={freeformContent}
-            onChange={(e) => setFreeformContent(e.target.value)}
-            placeholder="Write your content here..."
-            rows={10}
-            className="font-mono"
-          />
-          <p className="mt-2 text-xs text-muted-foreground">
-            Supports basic formatting. Use blank lines to create paragraphs.
-          </p>
-          {error && (
-            <div className="mt-4 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
-              {error}
+        <CardContent>{freeformContent_el}</CardContent>
+      </Card>
+    );
+  }
+
+  const addButton = (
+    <Button onClick={() => handleOpenDialog()} size={embedded ? 'sm' : 'default'} className="gap-2">
+      <Plus className="h-4 w-4" />
+      Add Item
+    </Button>
+  );
+
+  const itemsList = (
+    <div className={cn(!embedded && 'rounded-xl bg-muted/40 p-4')}>
+      {items.length === 0 ? (
+        <div className="rounded-lg border border-dashed p-8 text-center">
+          <LayoutGrid className="mx-auto h-12 w-12 text-muted-foreground/50" />
+          <h3 className="mt-4 font-medium">No items added yet</h3>
+          <p className="mt-2 text-sm text-muted-foreground">Add items to this custom section</p>
+          <Button onClick={() => handleOpenDialog()} className="mt-4 gap-2">
+            <Plus className="h-4 w-4" />
+            Add Item
+          </Button>
+        </div>
+      ) : (
+        <SortableCardList
+          items={items}
+          onReorder={handleReorder}
+          dateExtractor={customItemDateExtractor}
+          disabled={isLoading}
+          renderItem={(item) => (
+            <div
+              className={cn(
+                'group flex items-start gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50',
+                item.isVisible === false && 'opacity-50'
+              )}
+            >
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <h4 className="font-medium">{item.title}</h4>
+                    {item.subtitle && (
+                      <p className="text-sm text-muted-foreground">{item.subtitle}</p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => toggleItemVisibility(item)}
+                      title={item.isVisible === false ? 'Show on resume' : 'Hide from resume'}
+                    >
+                      {item.isVisible === false ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => handleOpenDialog(item)}
+                      title="Edit"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive hover:text-destructive"
+                      onClick={() => handleDeleteItem(item.id)}
+                      title="Delete"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+                {(item.startDate || item.endDate) && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {item.startDate}
+                    {item.endDate && ` – ${item.endDate}`}
+                    {item.isCurrent && ' – Present'}
+                  </p>
+                )}
+                {item.description && (
+                  <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
+                    {item.description}
+                  </p>
+                )}
+                {item.tags && item.tags.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {item.tags.map((tag) => (
+                      <Badge key={tag} variant="secondary" className="text-xs">
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+                {item.url && (
+                  <a
+                    href={item.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                  >
+                    View details <ExternalLink className="h-3 w-3" />
+                  </a>
+                )}
+              </div>
             </div>
           )}
-        </CardContent>
-      </Card>
+        />
+      )}
+
+      {error && (
+        <div className="mt-4 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+          {error}
+        </div>
+      )}
+    </div>
+  );
+
+  const dialog = (
+    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{editingItem ? 'Edit Item' : 'Add Item'}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="title">Title *</Label>
+            <Input
+              id="title"
+              value={formData.title || ''}
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              placeholder="Item title"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="subtitle">Subtitle</Label>
+            <Input
+              id="subtitle"
+              value={formData.subtitle || ''}
+              onChange={(e) => setFormData({ ...formData, subtitle: e.target.value })}
+              placeholder="Optional subtitle"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="startDate">Start Date</Label>
+              <Input
+                id="startDate"
+                value={formData.startDate || ''}
+                onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                placeholder="e.g., Jan 2023"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="endDate">End Date</Label>
+              <Input
+                id="endDate"
+                value={formData.endDate || ''}
+                onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                placeholder="e.g., Dec 2023"
+                disabled={formData.isCurrent}
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="isCurrent"
+              checked={formData.isCurrent || false}
+              onCheckedChange={(checked) => setFormData({ ...formData, isCurrent: checked })}
+            />
+            <Label htmlFor="isCurrent">Currently ongoing</Label>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="description">Description</Label>
+            <RichTextEditor
+              value={formData.description || ''}
+              onChange={(html) => setFormData({ ...formData, description: html })}
+              placeholder="Describe this item..."
+              minHeight="140px"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="url">Link (optional)</Label>
+            <Input
+              id="url"
+              type="url"
+              value={formData.url || ''}
+              onChange={(e) => setFormData({ ...formData, url: e.target.value })}
+              placeholder="https://..."
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Tags</Label>
+            <div className="flex gap-2">
+              <Input
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addTag();
+                  }
+                }}
+                placeholder="Add a tag..."
+              />
+              <Button type="button" variant="outline" onClick={addTag}>
+                Add
+              </Button>
+            </div>
+            {formData.tags && formData.tags.length > 0 && (
+              <div className="flex flex-wrap gap-2 pt-2">
+                {formData.tags.map((tag) => (
+                  <Badge key={tag} variant="secondary" className="gap-1">
+                    {tag}
+                    <button onClick={() => removeTag(tag)} className="ml-1 hover:text-destructive">
+                      ×
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {error && (
+            <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+            Cancel
+          </Button>
+          <Button onClick={handleSaveItem} disabled={isLoading || !formData.title}>
+            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {editingItem ? 'Save Changes' : 'Add Item'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
+  if (embedded) {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">Add items to your custom section</p>
+          {addButton}
+        </div>
+        {itemsList}
+        {dialog}
+      </div>
     );
   }
 
@@ -273,253 +546,12 @@ export function CustomSection({ section }: CustomSectionProps) {
             <CardTitle>{section.title}</CardTitle>
             <CardDescription>Add items to your custom section</CardDescription>
           </div>
-          <Button onClick={() => handleOpenDialog()} className="gap-2">
-            <Plus className="h-4 w-4" />
-            Add Item
-          </Button>
+          {addButton}
         </div>
       </CardHeader>
       <CardContent>
-        {items.length === 0 ? (
-          <div className="rounded-lg border border-dashed p-8 text-center">
-            <LayoutGrid className="mx-auto h-12 w-12 text-muted-foreground/50" />
-            <h3 className="mt-4 font-medium">No items added yet</h3>
-            <p className="mt-2 text-sm text-muted-foreground">Add items to this custom section</p>
-            <Button onClick={() => handleOpenDialog()} className="mt-4 gap-2">
-              <Plus className="h-4 w-4" />
-              Add Item
-            </Button>
-          </div>
-        ) : (
-          <SortableCardList
-            items={items}
-            onReorder={handleReorder}
-            dateExtractor={customItemDateExtractor}
-            disabled={isLoading}
-            renderItem={(item) => (
-              <div
-                className={cn(
-                  'group flex items-start gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50',
-                  item.isVisible === false && 'opacity-50'
-                )}
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <h4 className="font-medium">{item.title}</h4>
-                      {item.subtitle && (
-                        <p className="text-sm text-muted-foreground">{item.subtitle}</p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => toggleItemVisibility(item)}
-                        title={item.isVisible === false ? 'Show on resume' : 'Hide from resume'}
-                      >
-                        {item.isVisible === false ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => handleOpenDialog(item)}
-                        title="Edit"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive"
-                        onClick={() => handleDeleteItem(item.id)}
-                        title="Delete"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                  {(item.startDate || item.endDate) && (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {item.startDate}
-                      {item.endDate && ` – ${item.endDate}`}
-                      {item.isCurrent && ' – Present'}
-                    </p>
-                  )}
-                  {item.description && (
-                    <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
-                      {item.description}
-                    </p>
-                  )}
-                  {item.tags && item.tags.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {item.tags.map((tag) => (
-                        <Badge key={tag} variant="secondary" className="text-xs">
-                          {tag}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                  {item.url && (
-                    <a
-                      href={item.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-2 inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                    >
-                      View details <ExternalLink className="h-3 w-3" />
-                    </a>
-                  )}
-                </div>
-              </div>
-            )}
-          />
-        )}
-
-        {error && (
-          <div className="mt-4 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
-            {error}
-          </div>
-        )}
-
-        {/* Add/Edit Dialog */}
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>{editingItem ? 'Edit Item' : 'Add Item'}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="title">Title *</Label>
-                <Input
-                  id="title"
-                  value={formData.title || ''}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  placeholder="Item title"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="subtitle">Subtitle</Label>
-                <Input
-                  id="subtitle"
-                  value={formData.subtitle || ''}
-                  onChange={(e) => setFormData({ ...formData, subtitle: e.target.value })}
-                  placeholder="Optional subtitle"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="startDate">Start Date</Label>
-                  <Input
-                    id="startDate"
-                    value={formData.startDate || ''}
-                    onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                    placeholder="e.g., Jan 2023"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="endDate">End Date</Label>
-                  <Input
-                    id="endDate"
-                    value={formData.endDate || ''}
-                    onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                    placeholder="e.g., Dec 2023"
-                    disabled={formData.isCurrent}
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="isCurrent"
-                  checked={formData.isCurrent || false}
-                  onCheckedChange={(checked) => setFormData({ ...formData, isCurrent: checked })}
-                />
-                <Label htmlFor="isCurrent">Currently ongoing</Label>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  value={formData.description || ''}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Describe this item..."
-                  rows={4}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="url">Link (optional)</Label>
-                <Input
-                  id="url"
-                  type="url"
-                  value={formData.url || ''}
-                  onChange={(e) => setFormData({ ...formData, url: e.target.value })}
-                  placeholder="https://..."
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Tags</Label>
-                <div className="flex gap-2">
-                  <Input
-                    value={tagInput}
-                    onChange={(e) => setTagInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        addTag();
-                      }
-                    }}
-                    placeholder="Add a tag..."
-                  />
-                  <Button type="button" variant="outline" onClick={addTag}>
-                    Add
-                  </Button>
-                </div>
-                {formData.tags && formData.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-2 pt-2">
-                    {formData.tags.map((tag) => (
-                      <Badge key={tag} variant="secondary" className="gap-1">
-                        {tag}
-                        <button
-                          onClick={() => removeTag(tag)}
-                          className="ml-1 hover:text-destructive"
-                        >
-                          ×
-                        </button>
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {error && (
-                <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
-                  {error}
-                </div>
-              )}
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleSaveItem} disabled={isLoading || !formData.title}>
-                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {editingItem ? 'Save Changes' : 'Add Item'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        {itemsList}
+        {dialog}
       </CardContent>
     </Card>
   );

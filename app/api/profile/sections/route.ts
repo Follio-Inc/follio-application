@@ -8,9 +8,8 @@ import type { SectionType } from '@prisma/client';
 
 // Default sections for new users
 const DEFAULT_SECTION_CONFIGS: { type: SectionType; title: string }[] = [
-  { type: 'BASIC_INFO', title: 'Basic Info' },
+  { type: 'BASIC_INFO', title: 'Header' },
   { type: 'PHOTOS', title: 'Photos' },
-  { type: 'CONTACT', title: 'Contact' },
   { type: 'SUMMARY', title: 'Summary' },
   { type: 'EXPERIENCE', title: 'Experience' },
   { type: 'EDUCATION', title: 'Education' },
@@ -71,11 +70,10 @@ export async function GET() {
     if (missingSections.length > 0) {
       const maxOrder = user.profile.sections.reduce((max, s) => Math.max(max, s.sortOrder), -1);
 
-      // For SUMMARY, insert it right after CONTACT (top of body) instead of at the end
-      const contactIdx = user.profile.sections.findIndex((s) => s.type === 'CONTACT');
+      // For SUMMARY, insert it right after LINKS (top of body) instead of at the end
       const linksIdx = user.profile.sections.findIndex((s) => s.type === 'LINKS');
       // Find the first body section position (right after last header section)
-      const insertAfterIdx = Math.max(contactIdx, linksIdx);
+      const insertAfterIdx = linksIdx;
 
       const newSections = await Promise.all(
         missingSections.map((config, i) => {

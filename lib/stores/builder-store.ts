@@ -25,9 +25,12 @@ export interface ContactDraft {
   phoneCountryCode: string | null;
   phoneNumber: string;
   phonePublic: boolean;
+  locationPublic: boolean;
   website: string;
   additionalEmails: Array<{ email: string; source: string }>;
   additionalPhones: Array<{ countryCode: string | null; number: string; source: string }>;
+  /** Order of header contact fields for drag-and-drop: ["location","email","phone",linkId,...] */
+  headerFieldsOrder?: string[];
 }
 
 // ──────────────────────────────────────────────
@@ -45,6 +48,13 @@ export interface BuilderState {
   savedContact: ContactDraft;
   /** Whether an API save is in-flight */
   isSaving: boolean;
+
+  /**
+   * Whether a section is currently in inline-editing mode (e.g. an expanded
+   * experience form). When true, the sidebar and other interactive areas
+   * should be blocked so the user focuses on saving or discarding.
+   */
+  isInlineEditing: boolean;
 
   // ── Actions ──
 
@@ -69,6 +79,9 @@ export interface BuilderState {
 
   /** Set the saving loading state. */
   setSaving: (saving: boolean) => void;
+
+  /** Set the inline-editing lock state. */
+  setInlineEditing: (editing: boolean) => void;
 }
 
 // ──────────────────────────────────────────────
@@ -96,6 +109,7 @@ export function extractContactDraft(profile: FullProfile): ContactDraft {
     phoneCountryCode: (ci?.phoneCountryCode as string | null) || null,
     phoneNumber: (ci?.phoneNumber as string) || '',
     phonePublic: (ci?.phonePublic as boolean) || false,
+    locationPublic: (ci?.locationPublic as boolean) ?? true,
     website: (ci?.website as string) || '',
     additionalEmails: parseJsonArray<{ email: string; source: string }>(ci?.additionalEmails),
     additionalPhones: parseJsonArray<{
@@ -103,6 +117,9 @@ export function extractContactDraft(profile: FullProfile): ContactDraft {
       number: string;
       source: string;
     }>(ci?.additionalPhones),
+    headerFieldsOrder: Array.isArray(ci?.headerFieldsOrder)
+      ? (ci.headerFieldsOrder as string[])
+      : undefined,
   };
 }
 
@@ -152,6 +169,7 @@ export function createBuilderStore(profile: FullProfile): BuilderStoreApi {
         contactDraft: initialContact,
         savedContact: { ...initialContact },
         isSaving: false,
+        isInlineEditing: false,
 
         updateDraft: (updates) =>
           set((state) => ({
@@ -182,6 +200,8 @@ export function createBuilderStore(profile: FullProfile): BuilderStoreApi {
           })),
 
         setSaving: (saving) => set({ isSaving: saving }),
+
+        setInlineEditing: (editing) => set({ isInlineEditing: editing }),
       }),
       {
         partialize: (state): TrackedState => ({

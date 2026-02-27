@@ -75,10 +75,11 @@ export const PhoneValueSchema = z.object({
 export const ContactInfoSchema = z.object({
   email: z.string().email().optional().or(z.literal('')),
   emailPublic: z.boolean().optional(),
-  phone: z.string().max(30).optional(), // Legacy: full phone string
-  phoneCountryCode: z.string().max(10).nullable().optional(), // New: country code
-  phoneNumber: z.string().max(20).optional(), // New: number without country code
+  phone: z.string().max(30).optional(),
+  phoneCountryCode: z.string().max(10).nullable().optional(),
+  phoneNumber: z.string().max(20).optional(),
   phonePublic: z.boolean().optional(),
+  locationPublic: z.boolean().optional(),
   website: z.string().url().optional().or(z.literal('')),
   additionalEmails: z
     .array(
@@ -98,6 +99,8 @@ export const ContactInfoSchema = z.object({
       })
     )
     .optional(),
+  /** Order of header contact fields: ["location","email","phone",linkId,...] */
+  headerFieldsOrder: z.array(z.string()).max(50).optional(),
 });
 
 // ===========================================
@@ -128,6 +131,7 @@ export const WorkExperienceSchema = z.object({
   endDate: z.coerce.date().optional().nullable(),
   isCurrent: z.boolean().optional(),
   bullets: z.array(z.string().max(500)).max(20).optional(),
+  bulletsHtml: z.string().max(15000).optional().nullable(),
   tags: z.array(z.string().max(50)).max(20).optional(),
   isVisible: z.boolean().optional(),
 });

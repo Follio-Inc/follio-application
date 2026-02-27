@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 
+import { containsHtmlFormatting } from '@/lib/html-utils';
 import { formatDate } from '@/lib/utils';
 import type { PublicProfile } from '@/types';
 
@@ -195,9 +196,16 @@ export function SnapshotView({ profile }: SnapshotViewProps) {
                 <p className="mt-1 text-sm text-muted-foreground">
                   Since {formatDate(currentRole.startDate)}
                 </p>
-                {currentRole.bullets && currentRole.bullets.length > 0 && (
-                  <p className="mt-3 text-sm text-muted-foreground">{currentRole.bullets[0]}</p>
-                )}
+                {currentRole.bullets &&
+                  currentRole.bullets.length > 0 &&
+                  (containsHtmlFormatting(currentRole.bullets[0]) ? (
+                    <p
+                      className="mt-3 text-sm text-muted-foreground"
+                      dangerouslySetInnerHTML={{ __html: currentRole.bullets[0] }}
+                    />
+                  ) : (
+                    <p className="mt-3 text-sm text-muted-foreground">{currentRole.bullets[0]}</p>
+                  ))}
               </CardContent>
             </Card>
           </motion.div>

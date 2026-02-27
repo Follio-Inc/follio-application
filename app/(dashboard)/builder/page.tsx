@@ -1,6 +1,5 @@
-import { redirect } from 'next/navigation';
-
-// Redirect /builder to /builder/basic-info
+// /builder renders the full editor — all sections are shown inline via AllSectionsEditor
+// The layout.tsx handles data fetching and wraps everything in BuilderLayoutClient
 export default function BuilderPage() {
-  redirect('/builder/basic-info');
+  return null;
 }

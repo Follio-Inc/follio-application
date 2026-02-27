@@ -49,7 +49,7 @@ export default function BuilderSectionError({
           className="gap-2"
         >
           <RotateCcw className="h-4 w-4" />
-          Go to Basic Info
+          Go to Header
         </Button>
       </div>
       {process.env.NODE_ENV === 'development' && error.message && (

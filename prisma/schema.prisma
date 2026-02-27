@@ -94,23 +94,25 @@ model ProfileSection {
 }
 
 model ContactInfo {
-  id               String     @id @default(cuid())
-  profileId        String     @unique
-  email            String?
-  emailSource      DataSource @default(MANUAL)
-  emailPublic      Boolean    @default(false)
-  additionalEmails Json?      @default("[]")
-  phone            String? // Legacy: full phone string for backward compat
-  phoneCountryCode String? // New: country code (e.g., "+91")
-  phoneNumber      String? // New: number without country code
-  phoneSource      DataSource @default(MANUAL)
-  phonePublic      Boolean    @default(false)
-  additionalPhones Json?      @default("[]")
-  website          String?
-  websiteSource    DataSource @default(MANUAL)
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
-  profile          Profile    @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  id                String     @id @default(cuid())
+  profileId         String     @unique
+  email             String?
+  emailSource       DataSource @default(MANUAL)
+  emailPublic       Boolean    @default(false)
+  additionalEmails  Json?      @default("[]")
+  phone             String? // Legacy: full phone string for backward compat
+  phoneCountryCode  String? // New: country code (e.g., "+91")
+  phoneNumber       String? // New: number without country code
+  phoneSource       DataSource @default(MANUAL)
+  phonePublic       Boolean    @default(false)
+  additionalPhones  Json?      @default("[]")
+  locationPublic    Boolean    @default(true)
+  website           String?
+  websiteSource     DataSource @default(MANUAL)
+  headerFieldsOrder Json? // Order of header fields: ["location","email","phone",linkId,...]
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  profile           Profile    @relation(fields: [profileId], references: [id], onDelete: Cascade)
 }
 
 model Link {
@@ -143,6 +145,7 @@ model WorkExperience {
   endDate        DateTime?
   isCurrent      Boolean         @default(false)
   bullets        String[]
+  bulletsHtml    String? /// Complete rich-text editor HTML for bullets (preserves alignment, bullet style, etc.)
   metrics        Json?
   tags           String[]
   isVisible      Boolean         @default(true)

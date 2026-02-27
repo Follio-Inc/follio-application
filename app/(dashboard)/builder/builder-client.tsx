@@ -6,14 +6,12 @@ import {
   Briefcase,
   Check,
   Code,
-  Contact,
   Download,
   ExternalLink,
   Eye,
   FileText,
   FolderKanban,
   GraduationCap,
-  Link as LinkIcon,
   Loader2,
   Save,
   Settings,
@@ -30,13 +28,13 @@ import { Spinner } from '@/components/ui/spinner';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { notifyProfileUpdated } from '@/lib/events';
 import { getPortfolioPath } from '@/lib/url';
+import { cn } from '@/lib/utils';
 
 import { ImportDataDialog } from './components/import-data-dialog';
 import { UnsavedChangesDialog } from './components/unsaved-changes-dialog';
-import { BasicInfoForm, ContactInfoForm } from './sections/basic-info-form';
+import { BasicInfoForm } from './sections/basic-info-form';
 import { EducationSection } from './sections/education-section';
 import { ExperienceSection } from './sections/experience-section';
-import { LinksSection } from './sections/links-section';
 import { ProjectsSection } from './sections/projects-section';
 import { SettingsSection } from './sections/settings-section';
 import { ShareSection } from './sections/share-section';
@@ -52,9 +50,7 @@ interface BuilderClientProps {
 }
 
 const sections = [
-  { id: 'basic', label: 'Basic Info', icon: User, category: 'header' as SectionCategory },
-  { id: 'contact', label: 'Contact', icon: Contact, category: 'header' as SectionCategory },
-  { id: 'links', label: 'Links', icon: LinkIcon, category: 'header' as SectionCategory },
+  { id: 'basic', label: 'Header', icon: User, category: 'header' as SectionCategory },
   { id: 'summary', label: 'Summary', icon: FileText, category: 'body' as SectionCategory },
   { id: 'experience', label: 'Experience', icon: Briefcase, category: 'body' as SectionCategory },
   { id: 'education', label: 'Education', icon: GraduationCap, category: 'body' as SectionCategory },
@@ -80,6 +76,7 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
   const [pendingSection, setPendingSection] = useState<string | null>(null);
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
+  const [isInlineEditing, setIsInlineEditing] = useState(false);
 
   // Contact info state
   const [contactInfo, setContactInfo] = useState({
@@ -246,6 +243,9 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
 
   // Handle section change with unsaved changes check
   const handleSectionChange = (newSection: string) => {
+    // Block navigation while a section is in inline-editing mode
+    if (isInlineEditing) return;
+
     if (hasChanges || hasContactChanges) {
       setPendingSection(newSection);
       setShowUnsavedDialog(true);
@@ -434,7 +434,12 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
       {/* Builder Layout - Sidebar + Main Content */}
       <div className="flex flex-col gap-6 lg:flex-row">
         {/* Left Sidebar */}
-        <div className="w-full space-y-4 lg:w-64 lg:shrink-0">
+        <div
+          className={cn(
+            'w-full space-y-4 transition-opacity duration-200 lg:w-64 lg:shrink-0',
+            isInlineEditing && 'pointer-events-none opacity-50'
+          )}
+        >
           {/* Import Data Card */}
           <div className="rounded-lg border bg-card p-4">
             <h3 className="mb-3 text-sm font-medium text-muted-foreground">Quick Actions</h3>
@@ -493,7 +498,10 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
           <Tabs
             value={activeSection}
             onValueChange={handleSectionChange}
-            className="space-y-6 lg:hidden"
+            className={cn(
+              'space-y-6 lg:hidden',
+              isInlineEditing && 'pointer-events-none opacity-50'
+            )}
           >
             {sectionCategories.map((cat) => (
               <div key={cat.key}>
@@ -536,15 +544,12 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
               <SummarySection profile={profile} onUpdate={handleProfileUpdate} />
             )}
 
-            {activeSection === 'contact' && (
-              <ContactInfoForm profile={profile} onContactUpdate={handleContactUpdate} />
-            )}
-
             {activeSection === 'experience' && (
               <ExperienceSection
                 experiences={profile.workExperiences}
                 profileId={profile.id}
                 onUpdate={(workExperiences) => handleProfileUpdate({ workExperiences })}
+                onEditingStateChange={setIsInlineEditing}
               />
             )}
 
@@ -570,14 +575,6 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
                 projects={profile.projects}
                 profileId={profile.id}
                 onUpdate={(projects) => handleProfileUpdate({ projects })}
-              />
-            )}
-
-            {activeSection === 'links' && (
-              <LinksSection
-                links={profile.links}
-                profileId={profile.id}
-                onUpdate={(links) => handleProfileUpdate({ links })}
               />
             )}
 

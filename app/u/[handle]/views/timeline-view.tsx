@@ -16,6 +16,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 
+import { stripHtmlTags } from '@/lib/html-utils';
 import { formatDate } from '@/lib/utils';
 import type { CustomSectionContent, CustomSectionItem, PublicProfile } from '@/types';
 
@@ -50,7 +51,7 @@ function buildTimeline(profile: PublicProfile): TimelineItem[] {
       isCurrent: exp.isCurrent,
       title: exp.role,
       subtitle: `${exp.company}${exp.location ? ` · ${exp.location}` : ''}`,
-      description: exp.bullets?.join(' · ') || undefined,
+      description: exp.bullets?.map((b) => stripHtmlTags(b)).join(' · ') || undefined,
       tags: exp.tags || [],
       icon: Briefcase,
       color: 'bg-blue-500',

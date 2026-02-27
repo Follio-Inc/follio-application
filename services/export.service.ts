@@ -4,6 +4,7 @@
  */
 
 import { cleanPhoneDisplay } from '@/components/ui/phone-input';
+import { containsHtmlFormatting, stripHtmlTags } from '@/lib/html-utils';
 import { logger } from '@/lib/logger';
 import { formatDate } from '@/lib/utils';
 import type { FullProfile, JSONResume } from '@/types';
@@ -102,8 +103,9 @@ export function toJSONResume(profile: FullProfile): JSONResume {
         endDate: exp.isCurrent
           ? undefined
           : formatDate(exp.endDate, { year: 'numeric', month: '2-digit' }) || undefined,
-        summary: exp.bullets.length > 0 ? exp.bullets.join('. ') : undefined,
-        highlights: exp.bullets,
+        summary:
+          exp.bullets.length > 0 ? exp.bullets.map((b) => stripHtmlTags(b)).join('. ') : undefined,
+        highlights: exp.bullets.map((b) => stripHtmlTags(b)),
       })),
       education: visibleEducations.map((edu) => ({
         institution: edu.institution,
@@ -227,7 +229,7 @@ export function toPlainText(profile: FullProfile): string {
               lines.push(`${exp.role} | ${exp.company}`);
               lines.push(`${dateRange}${exp.location ? ` | ${exp.location}` : ''}`);
               exp.bullets.forEach((bullet) => {
-                lines.push(`• ${bullet}`);
+                lines.push(`• ${stripHtmlTags(bullet)}`);
               });
               lines.push('');
             });
@@ -370,7 +372,7 @@ export function toPDFHtml(profile: FullProfile): string {
         exp.bullets.length > 0
           ? `
       <ul>
-        ${exp.bullets.map((b) => `<li>${escapeHtml(b)}</li>`).join('')}
+        ${exp.bullets.map((b) => (containsHtmlFormatting(b) ? `<li>${b}</li>` : `<li>${escapeHtml(b)}</li>`)).join('')}
       </ul>`
           : ''
       }
@@ -640,7 +642,7 @@ export function generateResumePDF(profile: FullProfile): Promise<Buffer> {
                 .fontSize(10)
                 .font('Helvetica')
                 .fillColor(primaryColor)
-                .text(`•  ${bullet}`, { indent: 10 });
+                .text(`•  ${stripHtmlTags(bullet)}`, { indent: 10 });
             });
           }
         });

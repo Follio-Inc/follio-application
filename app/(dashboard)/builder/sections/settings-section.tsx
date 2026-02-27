@@ -240,7 +240,7 @@ export function SettingsSection({ profile }: SettingsSectionProps) {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 rounded-xl bg-muted/40 p-4">
       {/* Appearance */}
       <Card>
         <CardHeader>

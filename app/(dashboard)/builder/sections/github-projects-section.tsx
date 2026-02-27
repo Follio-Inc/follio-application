@@ -28,9 +28,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Textarea } from '@/components/ui/textarea';
 
 import type { Project } from '@/types';
 
@@ -499,15 +499,15 @@ export function GitHubProjectsSection({ projects, onUpdateAction }: GitHubProjec
 
               <div className="space-y-2">
                 <Label>Custom Description</Label>
-                <Textarea
+                <RichTextEditor
                   value={visibility.customDescription || ''}
-                  onChange={(e) =>
+                  onChange={(html) =>
                     setVisibility((prev) =>
-                      prev ? { ...prev, customDescription: e.target.value || undefined } : null
+                      prev ? { ...prev, customDescription: html || undefined } : null
                     )
                   }
                   placeholder="Override the GitHub description..."
-                  rows={3}
+                  minHeight="120px"
                   disabled={!visibility.isVisible}
                 />
                 <p className="text-xs text-muted-foreground">

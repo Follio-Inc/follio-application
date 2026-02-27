@@ -41,6 +41,7 @@ import {
 } from '@/components/ui/phone-input';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
+import { containsHtmlFormatting, stripHtmlTags } from '@/lib/html-utils';
 import { toMonthInputFormat } from '@/lib/utils';
 
 // IndexedDB helpers for retrieving large uploaded photos
@@ -2525,7 +2526,7 @@ function ExperienceCard({
               placeholder="Describe your responsibilities and achievements (one per line for bullet points)..."
               value={
                 experience.bullets && experience.bullets.length > 0
-                  ? experience.bullets.join('\n')
+                  ? experience.bullets.map((b) => stripHtmlTags(b)).join('\n')
                   : ''
               }
               onChange={(e) => {
@@ -2574,9 +2575,13 @@ function ExperienceCard({
             )}
             {experience.bullets && experience.bullets.length > 0 && (
               <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-                {experience.bullets.map((bullet, idx) => (
-                  <li key={idx}>{bullet}</li>
-                ))}
+                {experience.bullets.map((bullet, idx) =>
+                  containsHtmlFormatting(bullet) ? (
+                    <li key={idx} dangerouslySetInnerHTML={{ __html: bullet }} />
+                  ) : (
+                    <li key={idx}>{bullet}</li>
+                  )
+                )}
               </ul>
             )}
           </div>

@@ -5,6 +5,7 @@ import { useCallback, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { cleanPhoneDisplay } from '@/components/ui/phone-input';
+import { containsHtmlFormatting } from '@/lib/html-utils';
 import { getPortfolioPath } from '@/lib/url';
 import { formatDate } from '@/lib/utils';
 import { applyVisibilityFilter, type FilteredProfile } from '@/lib/visibility';
@@ -142,6 +143,29 @@ function ResumeHeader({ profile }: { profile: FilteredProfile }) {
 }
 
 // ============================================================================
+// RICH HTML HELPER
+// ============================================================================
+
+/**
+ * Render a string that may contain HTML formatting from the rich text editor.
+ * Falls back to plain text rendering when no HTML is detected.
+ */
+function RichHtml({
+  html,
+  className,
+  as: Tag = 'div',
+}: {
+  html: string;
+  className?: string;
+  as?: 'div' | 'p' | 'span';
+}) {
+  if (containsHtmlFormatting(html)) {
+    return <Tag className={className} dangerouslySetInnerHTML={{ __html: html }} />;
+  }
+  return <Tag className={className}>{html}</Tag>;
+}
+
+// ============================================================================
 // SUMMARY SECTION
 // ============================================================================
 
@@ -149,7 +173,7 @@ function SummarySection({ summary }: { summary: string }) {
   return (
     <section className="resume-section">
       <SectionDivider title="SUMMARY" />
-      <p className="resume-summary">{summary}</p>
+      <RichHtml html={summary} className="resume-summary resume-rich-html" />
     </section>
   );
 }
@@ -166,6 +190,8 @@ interface ExperienceEntryProps {
   endDate: Date | string | null | undefined;
   isCurrent?: boolean;
   bullets: string[];
+  /** Complete editor HTML — when present, rendered directly for perfect fidelity. */
+  bulletsHtml?: string | null;
   tags?: string[];
 }
 
@@ -177,6 +203,7 @@ function ExperienceEntry({
   endDate,
   isCurrent,
   bullets,
+  bulletsHtml,
 }: ExperienceEntryProps) {
   const dateRange = formatDateRange(startDate, endDate, isCurrent);
   const companyLine = [company, location].filter(Boolean).join(', ');
@@ -190,12 +217,23 @@ function ExperienceEntry({
         </div>
         <span className="resume-entry-date">{dateRange}</span>
       </div>
-      {bullets && bullets.length > 0 && (
-        <ul className="resume-bullets">
-          {bullets.map((bullet, index) => (
-            <li key={index}>{bullet}</li>
-          ))}
-        </ul>
+      {/* Prefer bulletsHtml for perfect rendering (alignment, bullet style, etc.). */}
+      {/* Fall back to bullets[] for backward compat / when bulletsHtml is absent. */}
+      {bulletsHtml ? (
+        <div dangerouslySetInnerHTML={{ __html: bulletsHtml }} />
+      ) : (
+        bullets &&
+        bullets.length > 0 && (
+          <ul className="resume-bullets">
+            {bullets.map((bullet, index) =>
+              containsHtmlFormatting(bullet) ? (
+                <li key={index} dangerouslySetInnerHTML={{ __html: bullet }} />
+              ) : (
+                <li key={index}>{bullet}</li>
+              )
+            )}
+          </ul>
+        )
       )}
     </div>
   );
@@ -218,6 +256,7 @@ function ExperienceSection({ experiences }: { experiences: PublicProfile['workEx
             endDate={exp.endDate}
             isCurrent={exp.isCurrent}
             bullets={exp.bullets}
+            bulletsHtml={exp.bulletsHtml}
             tags={exp.tags}
           />
         ))}
@@ -340,12 +379,22 @@ function ProjectsSection({ projects }: { projects: PublicProfile['projects'] }) 
                 </div>
                 {dateRange && <span className="resume-entry-date">{dateRange}</span>}
               </div>
-              {description && <p className="resume-entry-description">{description}</p>}
+              {description && (
+                <RichHtml
+                  html={description}
+                  className="resume-entry-description resume-rich-html"
+                  as="div"
+                />
+              )}
               {project.highlights && project.highlights.length > 0 && (
                 <ul className="resume-bullets">
-                  {project.highlights.map((highlight, index) => (
-                    <li key={index}>{highlight}</li>
-                  ))}
+                  {project.highlights.map((highlight, index) =>
+                    containsHtmlFormatting(highlight) ? (
+                      <li key={index} dangerouslySetInnerHTML={{ __html: highlight }} />
+                    ) : (
+                      <li key={index}>{highlight}</li>
+                    )
+                  )}
                 </ul>
               )}
             </div>
@@ -682,7 +731,7 @@ export function CleanResumeView({ profile: rawProfile, profileHandle }: CleanRes
   const profile = applyVisibilityFilter(rawProfile, { resumeContext: true });
 
   // ── Sections ordered by user-configured sortOrder ─────────────────────
-  // Header sections (BASIC_INFO, CONTACT, LINKS) are always rendered as
+  // Header sections (BASIC_INFO, LINKS) are always rendered as
   // the header block; body sections follow in their sortOrder.
   const bodySections = (profile.sections || [])
     .filter((s: ProfileSection) => !HEADER_SECTION_TYPES.includes(s.type))

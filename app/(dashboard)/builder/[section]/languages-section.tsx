@@ -30,6 +30,8 @@ import type { LanguageItem, LanguagesSectionContent, ProfileSection } from '@/ty
 interface LanguagesSectionProps {
   section: ProfileSection | null;
   profileId: string;
+  /** When true, renders without Card wrapper for use inside accordion sections */
+  embedded?: boolean;
 }
 
 const PROFICIENCY_LEVELS = [
@@ -45,7 +47,7 @@ const emptyItem: Partial<LanguageItem> = {
   proficiency: 'INTERMEDIATE',
 };
 
-export function LanguagesSection({ section }: LanguagesSectionProps) {
+export function LanguagesSection({ section, embedded }: LanguagesSectionProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<LanguageItem | null>(null);
   const [formData, setFormData] = useState<Partial<LanguageItem>>(emptyItem);
@@ -60,15 +62,13 @@ export function LanguagesSection({ section }: LanguagesSectionProps) {
 
   if (!section) {
     return (
-      <Card>
-        <CardContent className="py-12 text-center">
-          <Globe className="mx-auto h-12 w-12 text-muted-foreground/50" />
-          <h3 className="mt-4 font-medium">Section not found</h3>
-          <p className="mt-2 text-sm text-muted-foreground">
-            This section doesn&apos;t exist or has been deleted.
-          </p>
-        </CardContent>
-      </Card>
+      <div className="py-12 text-center">
+        <Globe className="mx-auto h-12 w-12 text-muted-foreground/50" />
+        <h3 className="mt-4 font-medium">Section not found</h3>
+        <p className="mt-2 text-sm text-muted-foreground">
+          This section doesn&apos;t exist or has been deleted.
+        </p>
+      </div>
     );
   }
 
@@ -176,6 +176,160 @@ export function LanguagesSection({ section }: LanguagesSectionProps) {
     return PROFICIENCY_LEVELS.find((p) => p.value === proficiency)?.label || proficiency;
   };
 
+  const addButton = (
+    <Button onClick={() => handleOpenDialog()} size={embedded ? 'sm' : 'default'} className="gap-2">
+      <Plus className="h-4 w-4" />
+      Add Language
+    </Button>
+  );
+
+  const languagesList = (
+    <div className={cn(!embedded && 'rounded-xl bg-muted/40 p-4')}>
+      {items.length === 0 ? (
+        <div className="rounded-lg border border-dashed p-8 text-center">
+          <Globe className="mx-auto h-12 w-12 text-muted-foreground/50" />
+          <h3 className="mt-4 font-medium">No languages added yet</h3>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Add languages to show your multilingual abilities
+          </p>
+          <Button onClick={() => handleOpenDialog()} className="mt-4 gap-2">
+            <Plus className="h-4 w-4" />
+            Add Language
+          </Button>
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-3">
+          {items.map((item) => (
+            <div
+              key={item.id}
+              className={cn(
+                'group flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50',
+                item.isVisible === false && 'opacity-50'
+              )}
+            >
+              <div className="flex items-center gap-2">
+                <Globe className="h-4 w-4 text-muted-foreground" />
+                <span className="font-medium">{item.language}</span>
+              </div>
+              <Badge variant="outline" className={getProficiencyColor(item.proficiency)}>
+                {getProficiencyLabel(item.proficiency)}
+              </Badge>
+              <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => toggleItemVisibility(item)}
+                  title={item.isVisible === false ? 'Show on resume' : 'Hide from resume'}
+                >
+                  {item.isVisible === false ? (
+                    <EyeOff className="h-3.5 w-3.5" />
+                  ) : (
+                    <Eye className="h-3.5 w-3.5" />
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => handleOpenDialog(item)}
+                  title="Edit"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-destructive hover:text-destructive"
+                  onClick={() => handleDeleteItem(item.id)}
+                  title="Delete"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  const dialog = (
+    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{editingItem ? 'Edit Language' : 'Add Language'}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="language">Language *</Label>
+            <Input
+              id="language"
+              value={formData.language || ''}
+              onChange={(e) => setFormData({ ...formData, language: e.target.value })}
+              placeholder="e.g., English, Spanish, Mandarin"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="proficiency">Proficiency Level *</Label>
+            <Select
+              value={formData.proficiency}
+              onValueChange={(value) =>
+                setFormData({
+                  ...formData,
+                  proficiency: value as LanguageItem['proficiency'],
+                })
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select proficiency" />
+              </SelectTrigger>
+              <SelectContent>
+                {PROFICIENCY_LEVELS.map((level) => (
+                  <SelectItem key={level.value} value={level.value}>
+                    <div className="flex flex-col">
+                      <span>{level.label}</span>
+                      <span className="text-xs text-muted-foreground">{level.description}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {error && (
+            <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+            Cancel
+          </Button>
+          <Button onClick={handleSaveItem} disabled={isLoading || !formData.language}>
+            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {editingItem ? 'Save Changes' : 'Add Language'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
+  if (embedded) {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">
+            Add languages you speak and your proficiency level
+          </p>
+          {addButton}
+        </div>
+        {languagesList}
+        {dialog}
+      </div>
+    );
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -184,141 +338,12 @@ export function LanguagesSection({ section }: LanguagesSectionProps) {
             <CardTitle>Languages</CardTitle>
             <CardDescription>Add languages you speak and your proficiency level</CardDescription>
           </div>
-          <Button onClick={() => handleOpenDialog()} className="gap-2">
-            <Plus className="h-4 w-4" />
-            Add Language
-          </Button>
+          {addButton}
         </div>
       </CardHeader>
       <CardContent>
-        {items.length === 0 ? (
-          <div className="rounded-lg border border-dashed p-8 text-center">
-            <Globe className="mx-auto h-12 w-12 text-muted-foreground/50" />
-            <h3 className="mt-4 font-medium">No languages added yet</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Add languages to show your multilingual abilities
-            </p>
-            <Button onClick={() => handleOpenDialog()} className="mt-4 gap-2">
-              <Plus className="h-4 w-4" />
-              Add Language
-            </Button>
-          </div>
-        ) : (
-          <div className="flex flex-wrap gap-3">
-            {items.map((item) => (
-              <div
-                key={item.id}
-                className={cn(
-                  'group flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50',
-                  item.isVisible === false && 'opacity-50'
-                )}
-              >
-                <div className="flex items-center gap-2">
-                  <Globe className="h-4 w-4 text-muted-foreground" />
-                  <span className="font-medium">{item.language}</span>
-                </div>
-                <Badge variant="outline" className={getProficiencyColor(item.proficiency)}>
-                  {getProficiencyLabel(item.proficiency)}
-                </Badge>
-                <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={() => toggleItemVisibility(item)}
-                    title={item.isVisible === false ? 'Show on resume' : 'Hide from resume'}
-                  >
-                    {item.isVisible === false ? (
-                      <EyeOff className="h-3.5 w-3.5" />
-                    ) : (
-                      <Eye className="h-3.5 w-3.5" />
-                    )}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={() => handleOpenDialog(item)}
-                    title="Edit"
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-destructive hover:text-destructive"
-                    onClick={() => handleDeleteItem(item.id)}
-                    title="Delete"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Add/Edit Dialog */}
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>{editingItem ? 'Edit Language' : 'Add Language'}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="language">Language *</Label>
-                <Input
-                  id="language"
-                  value={formData.language || ''}
-                  onChange={(e) => setFormData({ ...formData, language: e.target.value })}
-                  placeholder="e.g., English, Spanish, Mandarin"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="proficiency">Proficiency Level *</Label>
-                <Select
-                  value={formData.proficiency}
-                  onValueChange={(value) =>
-                    setFormData({
-                      ...formData,
-                      proficiency: value as LanguageItem['proficiency'],
-                    })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select proficiency" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PROFICIENCY_LEVELS.map((level) => (
-                      <SelectItem key={level.value} value={level.value}>
-                        <div className="flex flex-col">
-                          <span>{level.label}</span>
-                          <span className="text-xs text-muted-foreground">{level.description}</span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {error && (
-                <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
-                  {error}
-                </div>
-              )}
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleSaveItem} disabled={isLoading || !formData.language}>
-                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {editingItem ? 'Save Changes' : 'Add Language'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        {languagesList}
+        {dialog}
       </CardContent>
     </Card>
   );

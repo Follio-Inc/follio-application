@@ -1,12 +1,23 @@
 'use client';
 
-import { Camera, Eye, EyeOff, Loader2, Trash2, Upload } from 'lucide-react';
+import {
+  Camera,
+  Check,
+  Eye,
+  EyeOff,
+  Github,
+  Globe,
+  Linkedin,
+  Loader2,
+  Trash2,
+  Upload,
+  User,
+} from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -24,7 +35,7 @@ import { cn } from '@/lib/utils';
 
 import type { FullProfile } from '@/types';
 
-// ─── Profile Photo Upload (moved from basic-info) ───────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 interface AvatarOption {
   id: string;
@@ -34,39 +45,14 @@ interface AvatarOption {
   isActive: boolean;
 }
 
-/** Compress image to 512×512 JPEG for Clerk's 5 MB limit */
-const compressImage = (file: File, maxSize = 512): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    const img = new Image();
-    img.onload = () => {
-      canvas.width = maxSize;
-      canvas.height = maxSize;
-      const scale = Math.max(maxSize / img.width, maxSize / img.height);
-      const w = img.width * scale;
-      const h = img.height * scale;
-      ctx?.drawImage(img, (maxSize - w) / 2, (maxSize - h) / 2, w, h);
-      resolve(canvas.toDataURL('image/jpeg', 0.85));
-    };
-    img.onerror = () => reject(new Error('Failed to load image'));
-    img.src = URL.createObjectURL(file);
-  });
-
-const getSourceIcon = (source: string) => {
-  switch (source) {
-    case 'google':
-      return '🌐';
-    case 'linkedin':
-      return '💼';
-    case 'github':
-      return '🐙';
-    default:
-      return '📷';
-  }
+const SOURCE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  google: Globe,
+  linkedin: Linkedin,
+  github: Github,
 };
 
-/** Load an image element from a URL */
+const getSourceIcon = (source: string) => SOURCE_ICONS[source] || Upload;
+
 const createImage = (url: string): Promise<HTMLImageElement> =>
   new Promise((resolve, reject) => {
     const img = new window.Image();
@@ -76,7 +62,6 @@ const createImage = (url: string): Promise<HTMLImageElement> =>
     img.src = url;
   });
 
-/** Crop the image to the given pixel area and resize to 512×512 JPEG */
 async function getCroppedImg(imageSrc: string, pixelCrop: CropArea): Promise<string> {
   const image = await createImage(imageSrc);
   const canvas = document.createElement('canvas');
@@ -102,35 +87,46 @@ async function getCroppedImg(imageSrc: string, pixelCrop: CropArea): Promise<str
   return canvas.toDataURL('image/jpeg', 0.85);
 }
 
-// ─── Photos Section ──────────────────────────────────────────────────────────
+// ─── PhotosSection ────────────────────────────────────────────────────────────
 
 interface PhotosSectionProps {
   profile: FullProfile;
   onUpdateAction: (data: Partial<FullProfile>) => void;
+  /** For changes that save directly to the API and should update the preview immediately. */
+  onInlineUpdate?: (data: Partial<FullProfile>) => void;
+  embedded?: boolean;
 }
 
-export function PhotosSection({ profile, onUpdateAction }: PhotosSectionProps) {
-  // ── Resume photo toggle state ────────────────────────────────────────────
-  const [resumeShowPhoto, setResumeShowPhoto] = useState(
-    (profile as unknown as Record<string, unknown>).resumeShowPhoto === true
-  );
-
-  // ── Profile Photo state ──────────────────────────────────────────────────
+export function PhotosSection({
+  profile,
+  onUpdateAction,
+  onInlineUpdate,
+  embedded,
+}: PhotosSectionProps) {
   const [availableAvatars, setAvailableAvatars] = useState<AvatarOption[]>([]);
   const [isLoadingAvatars, setIsLoadingAvatars] = useState(true);
-  const [profileDialogOpen, setProfileDialogOpen] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [urlInput, setUrlInput] = useState('');
   const [urlError, setUrlError] = useState('');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [cropPixels, setCropPixels] = useState<CropArea | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const profileFileRef = useRef<HTMLInputElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
-  // ── Resume photo toggle handler ──────────────────────────────────────────
+  const resumeShowPhoto = profile.resumeShowPhoto ?? false;
+
   const handleResumeShowPhotoToggle = async () => {
     const newValue = !resumeShowPhoto;
-    setResumeShowPhoto(newValue);
+    const update = { resumeShowPhoto: newValue } as Partial<FullProfile>;
+
+    // Update store immediately so the preview reflects the change
+    if (onInlineUpdate) {
+      onInlineUpdate(update);
+    } else {
+      onUpdateAction(update);
+    }
+
     try {
       await fetch('/api/profile', {
         method: 'PATCH',
@@ -140,11 +136,15 @@ export function PhotosSection({ profile, onUpdateAction }: PhotosSectionProps) {
       notifyProfileUpdated();
     } catch (error) {
       console.error('Failed to update resume photo visibility:', error);
-      setResumeShowPhoto(!newValue);
+      const revert = { resumeShowPhoto: !newValue } as Partial<FullProfile>;
+      if (onInlineUpdate) {
+        onInlineUpdate(revert);
+      } else {
+        onUpdateAction(revert);
+      }
     }
   };
 
-  // Fetch available avatars from connected sources
   useEffect(() => {
     const fetchAvatars = async () => {
       try {
@@ -162,39 +162,30 @@ export function PhotosSection({ profile, onUpdateAction }: PhotosSectionProps) {
     fetchAvatars();
   }, []);
 
-  // Keep isActive in sync with current profile avatarUrl
   useEffect(() => {
     setAvailableAvatars((prev) =>
       prev.map((a) => ({ ...a, isActive: a.url === profile.avatarUrl }))
     );
   }, [profile.avatarUrl]);
 
-  // Helper: save a photo via API and update local state
-  const savePhoto = async (
-    url: string,
-    category: 'PROFILE' | 'GALLERY',
-    caption?: string
-  ): Promise<void> => {
+  const savePhoto = async (url: string, category: 'PROFILE' | 'GALLERY'): Promise<void> => {
     try {
       await fetch('/api/profile/photos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, category, caption }),
+        body: JSON.stringify({ url, category }),
       });
     } catch (err) {
       console.error('Failed to save photo:', err);
     }
   };
 
-  // ── Profile Photo handlers ──────────────────────────────────────────────
-
-  const handleProfilePhotoChange = (url: string) => {
+  const handlePhotoChange = (url: string) => {
     onUpdateAction({ avatarUrl: url });
-    // Also save as a PROFILE photo record
     savePhoto(url, 'PROFILE');
   };
 
-  const handleProfilePhotoRemove = () => {
+  const handlePhotoRemove = () => {
     onUpdateAction({ avatarUrl: '' });
   };
 
@@ -203,17 +194,16 @@ export function PhotosSection({ profile, onUpdateAction }: PhotosSectionProps) {
     onUpdateAction({ avatarUrl: avatar.url });
   };
 
-  const handleProfileFileSelect = useCallback(async (file: File) => {
+  const handleFileSelect = useCallback(async (file: File) => {
     if (!file.type.startsWith('image/')) {
       setUrlError('Please select an image file');
       return;
     }
     if (file.size > 40 * 1024 * 1024) {
-      setUrlError('Image must be less than 40 MB');
+      setUrlError('Image must be under 40 MB');
       return;
     }
     setUrlError('');
-    // Load the full-resolution image for cropping (don't pre-compress)
     const reader = new FileReader();
     reader.onload = () => {
       setPreviewUrl(reader.result as string);
@@ -223,7 +213,7 @@ export function PhotosSection({ profile, onUpdateAction }: PhotosSectionProps) {
     reader.readAsDataURL(file);
   }, []);
 
-  const handleProfileUrlSubmit = async () => {
+  const handleUrlSubmit = async () => {
     if (!urlInput.trim()) {
       setUrlError('Please enter a URL');
       return;
@@ -238,8 +228,8 @@ export function PhotosSection({ profile, onUpdateAction }: PhotosSectionProps) {
     setUrlError('');
     const img = new Image();
     img.onload = () => {
-      handleProfilePhotoChange(urlInput);
-      setProfileDialogOpen(false);
+      handlePhotoChange(urlInput);
+      setDialogOpen(false);
       setUrlInput('');
       setIsLoading(false);
     };
@@ -250,7 +240,7 @@ export function PhotosSection({ profile, onUpdateAction }: PhotosSectionProps) {
     img.src = urlInput;
   };
 
-  const resetProfileDialog = () => {
+  const resetDialog = () => {
     setUrlInput('');
     setUrlError('');
     setPreviewUrl(null);
@@ -263,330 +253,349 @@ export function PhotosSection({ profile, onUpdateAction }: PhotosSectionProps) {
   const initials = `${profile.firstName?.[0] || ''}${profile.lastName?.[0] || ''}`;
   const hasSourceAvatars = availableAvatars.length > 0;
 
-  return (
-    <div className="space-y-6">
-      {/* ── Profile Photo Card ── */}
-      <Card className={cn(!resumeShowPhoto && 'opacity-50')}>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <CardTitle>Profile Photo</CardTitle>
-              <CardDescription>
-                Your main profile picture, shown across your portfolio and resume views.
-                {hasSourceAvatars
-                  ? ' You can also pick from photos imported from your connected accounts.'
-                  : ''}
-              </CardDescription>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={handleResumeShowPhotoToggle}
-                title={resumeShowPhoto ? 'Hide photo from resume' : 'Show photo on resume'}
-                disabled={!hasPhoto}
-              >
-                {resumeShowPhoto ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col items-center gap-6">
-            {/* Clickable avatar — large & centered */}
-            <div className="group relative shrink-0">
-              <Avatar className="h-40 w-40 border-4 border-border shadow-lg ring-4 ring-background">
+  const photoContent = (
+    <div className="flex items-center gap-5">
+      {/* Avatar with hover-to-edit overlay */}
+      <div className="group relative shrink-0">
+        <Dialog
+          open={dialogOpen}
+          onOpenChange={(open) => {
+            setDialogOpen(open);
+            if (!open) resetDialog();
+          }}
+        >
+          <DialogTrigger asChild>
+            <button
+              className="relative cursor-pointer rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+              aria-label="Change profile photo"
+            >
+              <Avatar className="h-[72px] w-[72px] border-2 border-border shadow-sm transition-shadow group-hover:shadow-md">
                 <AvatarImage
                   src={currentPhotoUrl || undefined}
                   alt="Profile photo"
                   className="object-cover"
                 />
-                <AvatarFallback className="bg-muted text-4xl font-semibold">
-                  {initials || <Camera className="h-12 w-12 text-muted-foreground" />}
+                <AvatarFallback className="bg-muted text-lg font-medium">
+                  {initials || <User className="h-7 w-7 text-muted-foreground" />}
                 </AvatarFallback>
               </Avatar>
+              <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                <Camera className="h-5 w-5 text-white" />
+              </div>
+            </button>
+          </DialogTrigger>
 
-              <Dialog
-                open={profileDialogOpen}
-                onOpenChange={(open) => {
-                  setProfileDialogOpen(open);
-                  if (!open) resetProfileDialog();
-                }}
-              >
-                <DialogTrigger asChild>
-                  <button
-                    className="absolute inset-0 flex cursor-pointer items-center justify-center rounded-full bg-black/50 opacity-0 transition-opacity group-hover:opacity-100"
-                    aria-label="Change profile photo"
-                  >
-                    <Camera className="h-6 w-6 text-white" />
-                  </button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-md">
-                  <DialogHeader>
-                    <DialogTitle>Profile Photo</DialogTitle>
-                    <DialogDescription>
-                      {hasSourceAvatars
-                        ? 'Choose from your accounts, upload a new photo, or paste a URL.'
-                        : 'Upload a photo or paste an image URL.'}
-                    </DialogDescription>
-                  </DialogHeader>
+          {/* ─── Photo Dialog ─── */}
+          <DialogContent className="gap-0 p-0 sm:max-w-[440px]">
+            <DialogHeader className="px-6 pb-0 pt-6">
+              <DialogTitle>Profile Photo</DialogTitle>
+              <DialogDescription>
+                {hasSourceAvatars
+                  ? 'Choose from connected accounts, upload a photo, or use a URL.'
+                  : 'Upload a photo or paste an image URL.'}
+              </DialogDescription>
+            </DialogHeader>
 
-                  <Tabs defaultValue={hasSourceAvatars ? 'sources' : 'upload'} className="mt-4">
-                    <TabsList
-                      className={cn(
-                        'grid w-full',
-                        hasSourceAvatars ? 'grid-cols-3' : 'grid-cols-2'
-                      )}
-                    >
-                      {hasSourceAvatars && (
-                        <TabsTrigger value="sources" className="gap-2">
-                          Sources
-                        </TabsTrigger>
-                      )}
-                      <TabsTrigger value="upload" className="gap-2">
-                        <Upload className="h-4 w-4" />
-                        Upload
-                      </TabsTrigger>
-                      <TabsTrigger value="url" className="gap-2">
-                        URL
-                      </TabsTrigger>
-                    </TabsList>
+            <div className="px-6 pb-6 pt-4">
+              <Tabs defaultValue={hasSourceAvatars ? 'accounts' : 'upload'}>
+                <TabsList
+                  className={cn('grid w-full', hasSourceAvatars ? 'grid-cols-3' : 'grid-cols-2')}
+                >
+                  {hasSourceAvatars && <TabsTrigger value="accounts">Accounts</TabsTrigger>}
+                  <TabsTrigger value="upload">Upload</TabsTrigger>
+                  <TabsTrigger value="url">URL</TabsTrigger>
+                </TabsList>
 
-                    {/* Sources Tab */}
-                    {hasSourceAvatars && (
-                      <TabsContent value="sources" className="space-y-3 pt-1">
-                        <div className="space-y-2">
-                          {availableAvatars.map((avatar) => (
-                            <button
-                              key={avatar.id}
-                              onClick={() => {
-                                handleSelectSourceAvatar(avatar);
-                                setProfileDialogOpen(false);
-                              }}
-                              className={cn(
-                                'flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors',
-                                avatar.isActive
-                                  ? 'border-primary/50 bg-primary/5'
-                                  : 'border-transparent bg-muted/40 hover:bg-muted'
-                              )}
-                            >
-                              <Avatar className="h-10 w-10 shrink-0 border border-border">
-                                <AvatarImage src={avatar.url} alt={avatar.label} />
-                                <AvatarFallback className="text-xs">
-                                  {getSourceIcon(avatar.source)}
-                                </AvatarFallback>
-                              </Avatar>
-                              <span className="flex-1 truncate text-sm font-medium">
-                                {avatar.label}
-                              </span>
-                              {avatar.isActive && (
-                                <span className="text-xs text-primary">Current</span>
-                              )}
-                            </button>
-                          ))}
-                        </div>
-                      </TabsContent>
-                    )}
-
-                    {/* Upload Tab */}
-                    <TabsContent value="upload" className="space-y-4">
-                      {previewUrl ? (
-                        <div className="space-y-3">
-                          {/* Cropper */}
-                          <div className="relative mx-auto aspect-square w-full max-w-[320px] overflow-hidden rounded-xl border border-border/40">
-                            <ImageCropper
-                              image={previewUrl}
-                              aspect={1}
-                              cropShape="round"
-                              onCropChange={(area) => setCropPixels(area)}
-                            />
+                {/* ── Accounts tab ── */}
+                {hasSourceAvatars && (
+                  <TabsContent value="accounts" className="mt-4 space-y-2">
+                    {availableAvatars.map((avatar) => {
+                      const Icon = getSourceIcon(avatar.source);
+                      return (
+                        <button
+                          key={avatar.id}
+                          onClick={() => {
+                            handleSelectSourceAvatar(avatar);
+                            setDialogOpen(false);
+                          }}
+                          className={cn(
+                            'flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition-all',
+                            avatar.isActive
+                              ? 'border-primary bg-primary/5 shadow-sm'
+                              : 'border-border bg-card hover:border-primary/30 hover:bg-muted/60'
+                          )}
+                        >
+                          <Avatar className="h-10 w-10 shrink-0 border border-border/50">
+                            <AvatarImage src={avatar.url} alt={avatar.label} />
+                            <AvatarFallback>
+                              <Icon className="h-4 w-4 text-muted-foreground" />
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                              <span className="truncate text-sm font-medium">{avatar.label}</span>
+                            </div>
                           </div>
-                          <p className="text-center text-[11px] text-muted-foreground">
-                            Drag image to reposition · Drag handles to resize · Scroll to zoom
-                          </p>
-                          <div className="flex gap-2">
-                            <Button
-                              variant="outline"
-                              className="flex-1"
-                              onClick={() => {
+                          {avatar.isActive && (
+                            <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                              <Check className="h-3 w-3" />
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </TabsContent>
+                )}
+
+                {/* ── Upload tab ── */}
+                <TabsContent value="upload" className="mt-4">
+                  {previewUrl ? (
+                    <div className="space-y-3">
+                      <div className="relative mx-auto aspect-square w-full max-w-[300px] overflow-hidden rounded-xl border border-border/40 bg-black/5">
+                        <ImageCropper
+                          image={previewUrl}
+                          aspect={1}
+                          cropShape="round"
+                          onCropChange={(area) => setCropPixels(area)}
+                        />
+                      </div>
+                      <p className="text-center text-[11px] text-muted-foreground">
+                        Drag to reposition &middot; Handles to resize &middot; Scroll to zoom
+                      </p>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => {
+                            setPreviewUrl(null);
+                            setCropPixels(null);
+                          }}
+                        >
+                          Change
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="flex-1"
+                          onClick={async () => {
+                            if (previewUrl && cropPixels) {
+                              setIsLoading(true);
+                              try {
+                                const cropped = await getCroppedImg(previewUrl, cropPixels);
+                                handlePhotoChange(cropped);
+                                setDialogOpen(false);
                                 setPreviewUrl(null);
                                 setCropPixels(null);
-                              }}
-                            >
-                              Change
-                            </Button>
-                            <Button
-                              className="flex-1"
-                              onClick={async () => {
-                                if (previewUrl && cropPixels) {
-                                  setIsLoading(true);
-                                  try {
-                                    const cropped = await getCroppedImg(previewUrl, cropPixels);
-                                    handleProfilePhotoChange(cropped);
-                                    setProfileDialogOpen(false);
-                                    setPreviewUrl(null);
-                                    setCropPixels(null);
-                                  } catch {
-                                    setUrlError('Failed to crop image');
-                                  } finally {
-                                    setIsLoading(false);
-                                  }
-                                }
-                              }}
-                              disabled={isLoading || !cropPixels}
-                            >
-                              {isLoading ? (
-                                <>
-                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                  Processing…
-                                </>
-                              ) : (
-                                'Use Photo'
-                              )}
-                            </Button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div
-                          className={cn(
-                            'cursor-pointer rounded-lg border-2 border-dashed p-8 text-center transition-colors',
-                            isDragging
-                              ? 'border-primary bg-primary/5'
-                              : 'border-muted-foreground/25 hover:border-muted-foreground/50'
-                          )}
-                          onDragOver={(e) => {
-                            e.preventDefault();
-                            setIsDragging(true);
+                              } catch {
+                                setUrlError('Failed to crop image');
+                              } finally {
+                                setIsLoading(false);
+                              }
+                            }
                           }}
-                          onDragLeave={(e) => {
-                            e.preventDefault();
-                            setIsDragging(false);
-                          }}
-                          onDrop={(e) => {
-                            e.preventDefault();
-                            setIsDragging(false);
-                            const file = e.dataTransfer.files[0];
-                            if (file) handleProfileFileSelect(file);
-                          }}
-                          onClick={() => profileFileRef.current?.click()}
+                          disabled={isLoading || !cropPixels}
                         >
-                          <input
-                            ref={profileFileRef}
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) handleProfileFileSelect(file);
-                            }}
-                            className="hidden"
-                          />
-                          <Upload className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
-                          <p className="text-sm font-medium">Drop an image or click to browse</p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            PNG, JPG, GIF up to 40 MB
-                          </p>
-                        </div>
-                      )}
-                      {urlError && (
-                        <p className="text-center text-sm text-destructive">{urlError}</p>
-                      )}
-                    </TabsContent>
-
-                    {/* URL Tab */}
-                    <TabsContent value="url" className="space-y-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="profilePhotoUrl">Image URL</Label>
-                        <Input
-                          id="profilePhotoUrl"
-                          type="url"
-                          value={urlInput}
-                          onChange={(e) => {
-                            setUrlInput(e.target.value);
-                            setUrlError('');
-                          }}
-                          placeholder="https://example.com/photo.jpg"
-                        />
-                        {urlError && <p className="text-sm text-destructive">{urlError}</p>}
+                          {isLoading ? (
+                            <>
+                              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                              Processing…
+                            </>
+                          ) : (
+                            'Use Photo'
+                          )}
+                        </Button>
                       </div>
-                      <Button
-                        className="w-full"
-                        onClick={handleProfileUrlSubmit}
-                        disabled={!urlInput.trim() || isLoading}
-                      >
-                        {isLoading ? 'Loading...' : 'Use This Photo'}
-                      </Button>
-                    </TabsContent>
-                  </Tabs>
-
-                  {/* Remove Photo */}
-                  {hasPhoto && (
-                    <div className="mt-4 border-t pt-4">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="w-full text-destructive hover:bg-destructive/10 hover:text-destructive"
-                        onClick={() => {
-                          handleProfilePhotoRemove();
-                          setProfileDialogOpen(false);
+                    </div>
+                  ) : (
+                    <div
+                      className={cn(
+                        'cursor-pointer rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors',
+                        isDragging
+                          ? 'border-primary bg-primary/5'
+                          : 'border-muted-foreground/20 hover:border-muted-foreground/40 hover:bg-muted/30'
+                      )}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setIsDragging(true);
+                      }}
+                      onDragLeave={(e) => {
+                        e.preventDefault();
+                        setIsDragging(false);
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setIsDragging(false);
+                        const file = e.dataTransfer.files[0];
+                        if (file) handleFileSelect(file);
+                      }}
+                      onClick={() => fileRef.current?.click()}
+                    >
+                      <input
+                        ref={fileRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleFileSelect(file);
                         }}
-                      >
-                        <Trash2 className="mr-2 h-3.5 w-3.5" />
-                        Remove Photo
-                      </Button>
+                        className="hidden"
+                      />
+                      <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+                        <Upload className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                      <p className="text-sm font-medium">Drop an image or click to browse</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        PNG, JPG, GIF up to 40 MB
+                      </p>
                     </div>
                   )}
-                </DialogContent>
-              </Dialog>
-            </div>
+                  {urlError && (
+                    <p className="mt-2 text-center text-sm text-destructive">{urlError}</p>
+                  )}
+                </TabsContent>
 
-            {/* Center info text */}
-            <div className="space-y-1 text-center">
-              <p className="text-sm text-muted-foreground">
-                {hasPhoto ? 'Hover the photo to change it' : 'Click the avatar to add a photo'}
-              </p>
-            </div>
+                {/* ── URL tab ── */}
+                <TabsContent value="url" className="mt-4 space-y-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="profilePhotoUrl">Image URL</Label>
+                    <Input
+                      id="profilePhotoUrl"
+                      type="url"
+                      value={urlInput}
+                      onChange={(e) => {
+                        setUrlInput(e.target.value);
+                        setUrlError('');
+                      }}
+                      placeholder="https://example.com/photo.jpg"
+                    />
+                    {urlError && <p className="text-sm text-destructive">{urlError}</p>}
+                  </div>
+                  <Button
+                    className="w-full"
+                    size="sm"
+                    onClick={handleUrlSubmit}
+                    disabled={!urlInput.trim() || isLoading}
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                        Loading…
+                      </>
+                    ) : (
+                      'Use This Photo'
+                    )}
+                  </Button>
+                </TabsContent>
+              </Tabs>
 
-            {/* Source avatars — horizontal row below */}
-            {isLoadingAvatars ? (
-              <div className="flex items-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                <span className="text-sm text-muted-foreground">Loading connected photos…</span>
-              </div>
-            ) : hasSourceAvatars ? (
-              <div className="flex flex-col items-center gap-3">
-                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  Or pick from your accounts
-                </p>
-                <div className="flex items-center gap-3">
-                  {availableAvatars.map((avatar) => (
-                    <button
-                      key={avatar.id}
-                      onClick={() => handleSelectSourceAvatar(avatar)}
-                      className={cn(
-                        'group/avatar relative rounded-full transition-all duration-200',
-                        avatar.isActive
-                          ? 'scale-105 ring-[3px] ring-primary ring-offset-[3px] ring-offset-background'
-                          : 'opacity-75 hover:scale-110 hover:opacity-100'
-                      )}
-                      title={avatar.isActive ? `${avatar.label} (current)` : `Use ${avatar.label}`}
-                    >
-                      <Avatar className="h-14 w-14 border-2 border-border shadow-sm">
-                        <AvatarImage src={avatar.url} alt={avatar.label} className="object-cover" />
-                        <AvatarFallback className="text-sm">
-                          {getSourceIcon(avatar.source)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] font-medium text-muted-foreground">
-                        {avatar.source.charAt(0).toUpperCase() + avatar.source.slice(1)}
-                      </span>
-                    </button>
-                  ))}
+              {/* Remove photo */}
+              {hasPhoto && (
+                <div className="mt-4 border-t pt-3">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => {
+                      handlePhotoRemove();
+                      setDialogOpen(false);
+                    }}
+                  >
+                    <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                    Remove Photo
+                  </Button>
                 </div>
-              </div>
-            ) : null}
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* Right side: label + source avatar quick-pick + resume visibility toggle */}
+      <div className="min-w-0 flex-1 space-y-2">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className="text-sm font-medium">Profile Photo</p>
+            <p className="text-xs text-muted-foreground">
+              {hasPhoto ? 'Hover to change' : 'Click to add a photo'}
+            </p>
           </div>
-        </CardContent>
+          {hasPhoto && (
+            <button
+              type="button"
+              onClick={handleResumeShowPhotoToggle}
+              className={cn(
+                'flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-accent',
+                resumeShowPhoto ? 'text-primary' : 'text-muted-foreground'
+              )}
+              title={
+                resumeShowPhoto
+                  ? 'Photo visible on resume — click to hide'
+                  : 'Photo hidden from resume — click to show'
+              }
+            >
+              {resumeShowPhoto ? (
+                <Eye className="h-3.5 w-3.5" />
+              ) : (
+                <EyeOff className="h-3.5 w-3.5" />
+              )}
+            </button>
+          )}
+        </div>
+
+        {/* Source avatar quick-pick row */}
+        {isLoadingAvatars ? (
+          <div className="flex items-center gap-1.5">
+            <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+            <span className="text-[11px] text-muted-foreground">Loading photos…</span>
+          </div>
+        ) : hasSourceAvatars ? (
+          <div className="flex items-center gap-1.5">
+            {availableAvatars.map((avatar) => {
+              const Icon = getSourceIcon(avatar.source);
+              return (
+                <button
+                  key={avatar.id}
+                  onClick={() => handleSelectSourceAvatar(avatar)}
+                  className={cn(
+                    'relative rounded-full transition-all duration-150',
+                    avatar.isActive
+                      ? 'ring-2 ring-primary ring-offset-2 ring-offset-background'
+                      : 'opacity-60 hover:opacity-100'
+                  )}
+                  title={avatar.isActive ? `${avatar.label} (current)` : `Use ${avatar.label}`}
+                >
+                  <Avatar className="h-8 w-8 border border-border/60">
+                    <AvatarImage src={avatar.url} alt={avatar.label} />
+                    <AvatarFallback className="text-[10px]">
+                      <Icon className="h-3 w-3 text-muted-foreground" />
+                    </AvatarFallback>
+                  </Avatar>
+                  {avatar.isActive && (
+                    <div className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm">
+                      <Check className="h-2 w-2" />
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+
+  if (embedded) {
+    return photoContent;
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Profile Photo</CardTitle>
+        </CardHeader>
+        <CardContent>{photoContent}</CardContent>
       </Card>
     </div>
   );

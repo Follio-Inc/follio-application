@@ -23,6 +23,8 @@ import type { InterestItem, InterestsSectionContent, ProfileSection } from '@/ty
 interface InterestsSectionProps {
   section: ProfileSection | null;
   profileId: string;
+  /** When true, renders without Card wrapper for use inside accordion sections */
+  embedded?: boolean;
 }
 
 const SUGGESTED_CATEGORIES = [
@@ -45,7 +47,7 @@ const emptyItem: Partial<InterestItem> = {
   category: '',
 };
 
-export function InterestsSection({ section }: InterestsSectionProps) {
+export function InterestsSection({ section, embedded }: InterestsSectionProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InterestItem | null>(null);
   const [formData, setFormData] = useState<Partial<InterestItem>>(emptyItem);
@@ -71,15 +73,13 @@ export function InterestsSection({ section }: InterestsSectionProps) {
 
   if (!section) {
     return (
-      <Card>
-        <CardContent className="py-12 text-center">
-          <Sparkles className="mx-auto h-12 w-12 text-muted-foreground/50" />
-          <h3 className="mt-4 font-medium">Section not found</h3>
-          <p className="mt-2 text-sm text-muted-foreground">
-            This section doesn&apos;t exist or has been deleted.
-          </p>
-        </CardContent>
-      </Card>
+      <div className="py-12 text-center">
+        <Sparkles className="mx-auto h-12 w-12 text-muted-foreground/50" />
+        <h3 className="mt-4 font-medium">Section not found</h3>
+        <p className="mt-2 text-sm text-muted-foreground">
+          This section doesn&apos;t exist or has been deleted.
+        </p>
+      </div>
     );
   }
 
@@ -183,6 +183,151 @@ export function InterestsSection({ section }: InterestsSectionProps) {
     return colors[category] || 'bg-gray-500/10 text-gray-700 border-gray-500/20';
   };
 
+  const addButton = (
+    <Button onClick={() => handleOpenDialog()} size={embedded ? 'sm' : 'default'} className="gap-2">
+      <Plus className="h-4 w-4" />
+      Add Interest
+    </Button>
+  );
+
+  const interestsList = (
+    <div className={cn(!embedded && 'rounded-xl bg-muted/40 p-4')}>
+      {items.length === 0 ? (
+        <div className="rounded-lg border border-dashed p-8 text-center">
+          <Sparkles className="mx-auto h-12 w-12 text-muted-foreground/50" />
+          <h3 className="mt-4 font-medium">No interests added yet</h3>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Add your hobbies and interests to show your personality
+          </p>
+          <Button onClick={() => handleOpenDialog()} className="mt-4 gap-2">
+            <Plus className="h-4 w-4" />
+            Add Interest
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {Object.entries(groupedItems).map(([category, categoryItems]) => (
+            <div key={category}>
+              <h4 className="mb-3 text-sm font-medium text-muted-foreground">{category}</h4>
+              <div className="flex flex-wrap gap-2">
+                {categoryItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className={cn(
+                      'group flex items-center gap-2 rounded-full border px-3 py-1.5 transition-colors hover:bg-muted/50',
+                      item.isVisible === false && 'opacity-50'
+                    )}
+                  >
+                    <span className="text-sm font-medium">{item.name}</span>
+                    <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                      <button
+                        onClick={() => toggleItemVisibility(item)}
+                        className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                        title={item.isVisible === false ? 'Show on resume' : 'Hide from resume'}
+                      >
+                        {item.isVisible === false ? (
+                          <EyeOff className="h-3 w-3" />
+                        ) : (
+                          <Eye className="h-3 w-3" />
+                        )}
+                      </button>
+                      <button
+                        onClick={() => handleOpenDialog(item)}
+                        className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                        title="Edit"
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteItem(item.id)}
+                        className="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                        title="Delete"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  const dialog = (
+    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{editingItem ? 'Edit Interest' : 'Add Interest'}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="name">Interest *</Label>
+            <Input
+              id="name"
+              value={formData.name || ''}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              placeholder="e.g., Photography, Hiking, Chess"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="category">Category</Label>
+            <div className="flex flex-wrap gap-2">
+              {SUGGESTED_CATEGORIES.map((cat) => (
+                <Badge
+                  key={cat}
+                  variant={formData.category === cat ? 'default' : 'outline'}
+                  className={`cursor-pointer transition-colors ${
+                    formData.category === cat ? '' : getCategoryColor(cat)
+                  }`}
+                  onClick={() => setFormData({ ...formData, category: cat })}
+                >
+                  {cat}
+                </Badge>
+              ))}
+            </div>
+            <Input
+              id="category"
+              value={formData.category || ''}
+              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+              placeholder="Or type a custom category"
+              className="mt-2"
+            />
+          </div>
+
+          {error && (
+            <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+            Cancel
+          </Button>
+          <Button onClick={handleSaveItem} disabled={isLoading || !formData.name}>
+            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {editingItem ? 'Save Changes' : 'Add Interest'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
+  if (embedded) {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">Add your personal interests and hobbies</p>
+          {addButton}
+        </div>
+        {interestsList}
+        {dialog}
+      </div>
+    );
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -191,134 +336,12 @@ export function InterestsSection({ section }: InterestsSectionProps) {
             <CardTitle>Interests & Hobbies</CardTitle>
             <CardDescription>Add your personal interests and hobbies</CardDescription>
           </div>
-          <Button onClick={() => handleOpenDialog()} className="gap-2">
-            <Plus className="h-4 w-4" />
-            Add Interest
-          </Button>
+          {addButton}
         </div>
       </CardHeader>
       <CardContent>
-        {items.length === 0 ? (
-          <div className="rounded-lg border border-dashed p-8 text-center">
-            <Sparkles className="mx-auto h-12 w-12 text-muted-foreground/50" />
-            <h3 className="mt-4 font-medium">No interests added yet</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Add your hobbies and interests to show your personality
-            </p>
-            <Button onClick={() => handleOpenDialog()} className="mt-4 gap-2">
-              <Plus className="h-4 w-4" />
-              Add Interest
-            </Button>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {Object.entries(groupedItems).map(([category, categoryItems]) => (
-              <div key={category}>
-                <h4 className="mb-3 text-sm font-medium text-muted-foreground">{category}</h4>
-                <div className="flex flex-wrap gap-2">
-                  {categoryItems.map((item) => (
-                    <div
-                      key={item.id}
-                      className={cn(
-                        'group flex items-center gap-2 rounded-full border px-3 py-1.5 transition-colors hover:bg-muted/50',
-                        item.isVisible === false && 'opacity-50'
-                      )}
-                    >
-                      <span className="text-sm font-medium">{item.name}</span>
-                      <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-                        <button
-                          onClick={() => toggleItemVisibility(item)}
-                          className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                          title={item.isVisible === false ? 'Show on resume' : 'Hide from resume'}
-                        >
-                          {item.isVisible === false ? (
-                            <EyeOff className="h-3 w-3" />
-                          ) : (
-                            <Eye className="h-3 w-3" />
-                          )}
-                        </button>
-                        <button
-                          onClick={() => handleOpenDialog(item)}
-                          className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                          title="Edit"
-                        >
-                          <Pencil className="h-3 w-3" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteItem(item.id)}
-                          className="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                          title="Delete"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Add/Edit Dialog */}
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>{editingItem ? 'Edit Interest' : 'Add Interest'}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Interest *</Label>
-                <Input
-                  id="name"
-                  value={formData.name || ''}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="e.g., Photography, Hiking, Chess"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="category">Category</Label>
-                <div className="flex flex-wrap gap-2">
-                  {SUGGESTED_CATEGORIES.map((cat) => (
-                    <Badge
-                      key={cat}
-                      variant={formData.category === cat ? 'default' : 'outline'}
-                      className={`cursor-pointer transition-colors ${
-                        formData.category === cat ? '' : getCategoryColor(cat)
-                      }`}
-                      onClick={() => setFormData({ ...formData, category: cat })}
-                    >
-                      {cat}
-                    </Badge>
-                  ))}
-                </div>
-                <Input
-                  id="category"
-                  value={formData.category || ''}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  placeholder="Or type a custom category"
-                  className="mt-2"
-                />
-              </div>
-
-              {error && (
-                <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
-                  {error}
-                </div>
-              )}
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleSaveItem} disabled={isLoading || !formData.name}>
-                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {editingItem ? 'Save Changes' : 'Add Interest'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        {interestsList}
+        {dialog}
       </CardContent>
     </Card>
   );

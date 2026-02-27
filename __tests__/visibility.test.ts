@@ -61,7 +61,6 @@ function buildProfile(overrides: Partial<PublicProfile> = {}): PublicProfile {
     youtubeVideos: [] as PublicProfile['youtubeVideos'],
     sections: [
       section('BASIC_INFO'),
-      section('CONTACT'),
       section('PHOTOS'),
       section('EXPERIENCE'),
       section('EDUCATION'),
@@ -94,13 +93,13 @@ describe('applyVisibilityFilter', () => {
     expect(result._photosVisible).toBe(true);
   });
 
-  // ── BASIC_INFO ────────────────────────────────────────────────────────
+  // ── BASIC_INFO (Header) ───────────────────────────────────────────────
 
   it('hides name, headline, summary when BASIC_INFO is hidden', () => {
     const raw = buildProfile({
       sections: [
         section('BASIC_INFO', false),
-        section('CONTACT'),
+        section('SUMMARY', false),
         section('EXPERIENCE'),
       ] as unknown as PublicProfile['sections'],
     });
@@ -110,8 +109,9 @@ describe('applyVisibilityFilter', () => {
     expect(result.lastName).toBeNull();
     expect(result.headline).toBeNull();
     expect(result.summary).toBeNull();
-    // Contact should still work
-    expect(result.contactInfo?.email).toBe('alice@example.com');
+    // Contact is merged into BASIC_INFO — also hidden
+    expect(result.contactInfo).toBeNull();
+    expect(result.location).toBeNull();
   });
 
   it('shows name, headline, summary when BASIC_INFO is visible', () => {
@@ -124,13 +124,18 @@ describe('applyVisibilityFilter', () => {
     expect(result.summary).toBe('A summary.');
   });
 
-  // ── CONTACT ───────────────────────────────────────────────────────────
+  it('shows contact info when BASIC_INFO is visible (contact merged into Header)', () => {
+    const raw = buildProfile();
+    const result = applyVisibilityFilter(raw);
 
-  it('hides location and contactInfo when CONTACT is hidden', () => {
+    expect(result.contactInfo?.email).toBe('alice@example.com');
+    expect(result.location).toBe('New York');
+  });
+
+  it('hides location and contactInfo when BASIC_INFO is hidden', () => {
     const raw = buildProfile({
       sections: [
-        section('BASIC_INFO'),
-        section('CONTACT', false),
+        section('BASIC_INFO', false),
         section('EXPERIENCE'),
       ] as unknown as PublicProfile['sections'],
     });
@@ -138,8 +143,6 @@ describe('applyVisibilityFilter', () => {
 
     expect(result.location).toBeNull();
     expect(result.contactInfo).toBeNull();
-    // Name should still show
-    expect(result.firstName).toBe('Alice');
   });
 
   it('respects emailPublic/phonePublic flags on contactInfo', () => {
@@ -165,7 +168,6 @@ describe('applyVisibilityFilter', () => {
     const raw = buildProfile({
       sections: [
         section('BASIC_INFO'),
-        section('CONTACT'),
         section('PHOTOS', false),
         section('EXPERIENCE'),
       ] as unknown as PublicProfile['sections'],
@@ -203,7 +205,6 @@ describe('applyVisibilityFilter', () => {
       const raw = buildProfile({
         sections: [
           section('BASIC_INFO'),
-          section('CONTACT'),
           section(type, false),
         ] as unknown as PublicProfile['sections'],
       });
@@ -216,7 +217,6 @@ describe('applyVisibilityFilter', () => {
       const raw = buildProfile({
         sections: [
           section('BASIC_INFO'),
-          section('CONTACT'),
           section(type, true),
         ] as unknown as PublicProfile['sections'],
       });
@@ -237,7 +237,6 @@ describe('applyVisibilityFilter', () => {
       ] as unknown as PublicProfile['skillGroups'],
       sections: [
         section('BASIC_INFO'),
-        section('CONTACT'),
         section('SKILLS', false),
       ] as unknown as PublicProfile['sections'],
     });
@@ -253,7 +252,6 @@ describe('applyVisibilityFilter', () => {
     const raw = buildProfile({
       sections: [
         section('BASIC_INFO', true),
-        section('CONTACT', true),
         section('EXPERIENCE', false),
         section('EDUCATION', true),
       ] as unknown as PublicProfile['sections'],
@@ -262,7 +260,6 @@ describe('applyVisibilityFilter', () => {
 
     const types = result.sections.map((s) => s.type);
     expect(types).toContain('BASIC_INFO');
-    expect(types).toContain('CONTACT');
     expect(types).toContain('EDUCATION');
     expect(types).not.toContain('EXPERIENCE');
   });
@@ -273,7 +270,7 @@ describe('applyVisibilityFilter', () => {
     const raw = buildProfile({
       sections: [
         section('BASIC_INFO', false),
-        section('CONTACT', false),
+        section('SUMMARY', false),
         section('PHOTOS', false),
         section('EXPERIENCE', false),
         section('EDUCATION', false),
@@ -309,7 +306,6 @@ describe('applyVisibilityFilter', () => {
     const raw = buildProfile({
       sections: [
         section('BASIC_INFO'),
-        section('CONTACT'),
         section('EXPERIENCE', false),
       ] as unknown as PublicProfile['sections'],
     });

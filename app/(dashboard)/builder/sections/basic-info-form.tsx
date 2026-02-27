@@ -15,12 +15,24 @@ import { ProfileBasicInfoSchema, type ProfileBasicInfo } from '@/lib/validations
 
 import type { FullProfile } from '@/types';
 
+// ──────────────────────────────────────────────
+// BasicInfoForm — Name + Headline
+// Contact details and links are rendered by
+// ContactDetailsSection below this form in the Header section.
+// ──────────────────────────────────────────────
+
 interface BasicInfoFormProps {
   profile: FullProfile;
   onUpdate: (data: Partial<FullProfile>) => void;
+  /** @deprecated Contact/link updates now handled by ContactDetailsSection */
+  onContactUpdate?: (data: Record<string, unknown>) => void;
+  /** @deprecated Links now handled by ContactDetailsSection */
+  onLinksUpdate?: (links: unknown[]) => void;
+  /** When true, renders without Card wrapper for use inside accordion sections */
+  embedded?: boolean;
 }
 
-export function BasicInfoForm({ profile, onUpdate }: BasicInfoFormProps) {
+export function BasicInfoForm({ profile, onUpdate, embedded }: BasicInfoFormProps) {
   const form = useForm<ProfileBasicInfo>({
     resolver: zodResolver(ProfileBasicInfoSchema),
     defaultValues: {
@@ -37,62 +49,67 @@ export function BasicInfoForm({ profile, onUpdate }: BasicInfoFormProps) {
     onUpdate({ [field]: value });
   };
 
+  const formFields = (
+    <div className="space-y-6">
+      {/* Name */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="firstName">First Name *</Label>
+          <Input
+            id="firstName"
+            value={form.watch('firstName')}
+            onChange={(e) => handleChange('firstName', e.target.value)}
+            placeholder="Alex"
+          />
+          {form.formState.errors.firstName && (
+            <p className="text-sm text-destructive">{form.formState.errors.firstName.message}</p>
+          )}
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="lastName">Last Name</Label>
+          <Input
+            id="lastName"
+            value={form.watch('lastName')}
+            onChange={(e) => handleChange('lastName', e.target.value)}
+            placeholder="Chen"
+          />
+        </div>
+      </div>
+
+      {/* Headline */}
+      <div className="space-y-2">
+        <Label htmlFor="headline">Professional Headline</Label>
+        <Input
+          id="headline"
+          value={form.watch('headline')}
+          onChange={(e) => handleChange('headline', e.target.value)}
+          placeholder="Senior Software Engineer at Google"
+        />
+        <p className="text-xs text-muted-foreground">
+          A short tagline that appears below your name
+        </p>
+      </div>
+    </div>
+  );
+
+  if (embedded) {
+    return (
+      <div className="space-y-3">
+        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
+          Name &amp; Headline
+        </p>
+        {formFields}
+      </div>
+    );
+  }
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Basic Information</CardTitle>
-        <CardDescription>Your personal details</CardDescription>
+        <CardDescription>Your name and professional headline</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6">
-        {/* Name */}
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="firstName">First Name *</Label>
-            <Input
-              id="firstName"
-              value={form.watch('firstName')}
-              onChange={(e) => handleChange('firstName', e.target.value)}
-              placeholder="Alex"
-            />
-            {form.formState.errors.firstName && (
-              <p className="text-sm text-destructive">{form.formState.errors.firstName.message}</p>
-            )}
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="lastName">Last Name</Label>
-            <Input
-              id="lastName"
-              value={form.watch('lastName')}
-              onChange={(e) => handleChange('lastName', e.target.value)}
-              placeholder="Chen"
-            />
-          </div>
-        </div>
-
-        {/* Headline */}
-        <div className="space-y-2">
-          <Label htmlFor="headline">Professional Headline</Label>
-          <Input
-            id="headline"
-            value={form.watch('headline')}
-            onChange={(e) => handleChange('headline', e.target.value)}
-            placeholder="Senior Software Engineer at Google"
-          />
-          <p className="text-xs text-muted-foreground">
-            A short tagline that appears below your name
-          </p>
-        </div>
-
-        {/* Location */}
-        <div className="space-y-2">
-          <Label htmlFor="location">Location</Label>
-          <Input
-            id="location"
-            value={form.watch('location')}
-            onChange={(e) => handleChange('location', e.target.value)}
-            placeholder="San Francisco, CA"
-          />
-        </div>
+      <CardContent>
+        <div className="space-y-6 rounded-xl bg-muted/40 p-4">{formFields}</div>
       </CardContent>
     </Card>
   );
@@ -255,65 +272,25 @@ export function ContactInfoForm({ profile, onContactUpdate }: ContactInfoFormPro
     [onContactUpdate]
   );
 
-  const handleEmailPublicChange = async (checked: boolean) => {
-    console.log(
-      '[EmailToggle] handleEmailPublicChange called with:',
-      checked,
-      'prev:',
-      emailPublic
-    );
-    // Optimistic update: update local UI + sync to parent state
-    const prev = emailPublic;
-    setEmailPublic(checked);
-    // Keep parent's contactInfo state in sync so that if the user saves
-    // other contact changes (Save button), emailPublic isn't overwritten
-    onContactUpdate({ emailPublic: checked });
+  const handleVisibilityChange = async (field: 'emailPublic' | 'phonePublic', checked: boolean) => {
+    const setter = field === 'emailPublic' ? setEmailPublic : setPhonePublic;
+    const getter = field === 'emailPublic' ? emailPublic : phonePublic;
+    const prev = getter;
+
+    setter(checked);
+    onContactUpdate({ [field]: checked });
 
     try {
       const res = await fetch('/api/profile/contact', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ emailPublic: checked }),
+        body: JSON.stringify({ [field]: checked }),
       });
-      console.log('[EmailToggle] API response status:', res.status);
-      if (!res.ok) throw new Error('Failed to update email visibility');
+      if (!res.ok) throw new Error(`Failed to update ${field}`);
       notifyProfileUpdated();
-    } catch (err) {
-      console.error('[EmailToggle] Failed to update email visibility:', err);
-      setEmailPublic(prev);
-      onContactUpdate({ emailPublic: prev });
-    }
-  };
-
-  const handlePhonePublicChange = async (checked: boolean) => {
-    console.log(
-      '[PhoneToggle] handlePhonePublicChange called with:',
-      checked,
-      'prev:',
-      phonePublic
-    );
-    const prev = phonePublic;
-    setPhonePublic(checked);
-    onContactUpdate({ phonePublic: checked });
-
-    try {
-      const res = await fetch('/api/profile/contact', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phonePublic: checked }),
-      });
-      console.log('[PhoneToggle] API response status:', res.status);
-      if (!res.ok) {
-        const errBody = await res.text();
-        console.error('[PhoneToggle] API error body:', errBody);
-        throw new Error('Failed to update phone visibility');
-      }
-      console.log('[PhoneToggle] Success, dispatching profile-updated event');
-      notifyProfileUpdated();
-    } catch (err) {
-      console.error('[PhoneToggle] Failed to update phone visibility:', err);
-      setPhonePublic(prev);
-      onContactUpdate({ phonePublic: prev });
+    } catch {
+      setter(prev);
+      onContactUpdate({ [field]: prev });
     }
   };
 
@@ -328,34 +305,36 @@ export function ContactInfoForm({ profile, onContactUpdate }: ContactInfoFormPro
         <CardTitle>Contact Information</CardTitle>
         <CardDescription>Manage your email addresses and phone numbers.</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6">
-        {/* Contact Section with full Clerk integration */}
-        <ContactSection
-          initialData={initialContactData}
-          onChange={handleContactChange}
-          showCard={false}
-          title=""
-          description=""
-          emailPublic={emailPublic}
-          phonePublic={phonePublic}
-          onEmailPublicChange={handleEmailPublicChange}
-          onPhonePublicChange={handlePhonePublicChange}
-        />
-
-        {/* Website */}
-        <div className="space-y-2">
-          <Label htmlFor="website" className="flex items-center gap-2">
-            <Globe className="h-4 w-4" />
-            Personal Website
-          </Label>
-          <Input
-            id="website"
-            type="url"
-            value={website}
-            onChange={(e) => handleWebsiteChange(e.target.value)}
-            placeholder="https://yourwebsite.com"
+      <CardContent>
+        <div className="space-y-6 rounded-xl bg-muted/40 p-4">
+          {/* Contact Section with full Clerk integration */}
+          <ContactSection
+            initialData={initialContactData}
+            onChange={handleContactChange}
+            showCard={false}
+            title=""
+            description=""
+            emailPublic={emailPublic}
+            phonePublic={phonePublic}
+            onEmailPublicChange={(val) => handleVisibilityChange('emailPublic', val)}
+            onPhonePublicChange={(val) => handleVisibilityChange('phonePublic', val)}
           />
-          <p className="text-xs text-muted-foreground">Your personal website or blog</p>
+
+          {/* Website */}
+          <div className="space-y-2">
+            <Label htmlFor="website" className="flex items-center gap-2">
+              <Globe className="h-4 w-4" />
+              Personal Website
+            </Label>
+            <Input
+              id="website"
+              type="url"
+              value={website}
+              onChange={(e) => handleWebsiteChange(e.target.value)}
+              placeholder="https://yourwebsite.com"
+            />
+            <p className="text-xs text-muted-foreground">Your personal website or blog</p>
+          </div>
         </div>
       </CardContent>
     </Card>

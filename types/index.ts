@@ -439,9 +439,9 @@ export interface SectionConfig {
 export const SECTION_CONFIGS: SectionConfig[] = [
   {
     type: 'BASIC_INFO',
-    defaultTitle: 'Basic Info',
+    defaultTitle: 'Header',
     icon: 'User',
-    description: 'Name, headline',
+    description: 'Name, headline, contact details',
     isRemovable: false,
     hasItems: false,
     category: 'header',
@@ -569,7 +569,7 @@ export const SECTION_CONFIGS: SectionConfig[] = [
  * Section types that belong to the "Header" category in the builder sidebar.
  * Everything else is considered "Body".
  */
-export const HEADER_SECTION_TYPES: SectionType[] = ['BASIC_INFO', 'CONTACT', 'LINKS'];
+export const HEADER_SECTION_TYPES: SectionType[] = ['BASIC_INFO', 'LINKS'];
 
 /**
  * Custom section content item (for structured custom sections)
