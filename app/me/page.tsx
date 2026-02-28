@@ -1,3 +1,4 @@
+import { resolveActiveProfileContextOrNull } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { getPortfolioPath } from '@/lib/url';
 import { auth } from '@clerk/nextjs/server';
@@ -18,20 +19,21 @@ export default async function MyProfilePage() {
   }
 
   try {
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: {
-        profile: {
-          select: { handle: true },
-        },
-      },
-    });
-
-    if (!user?.profile?.handle) {
+    const context = await resolveActiveProfileContextOrNull(userId);
+    if (!context) {
       redirect('/onboarding');
     }
 
-    redirect(getPortfolioPath(user.profile.handle));
+    const profile = await db.profile.findUnique({
+      where: { id: context.profileId },
+      select: { handle: true },
+    });
+
+    if (!profile?.handle) {
+      redirect('/onboarding');
+    }
+
+    redirect(getPortfolioPath(profile.handle));
   } catch (error: unknown) {
     // Re-throw Next.js redirect errors (redirect() uses throw internally)
     if (

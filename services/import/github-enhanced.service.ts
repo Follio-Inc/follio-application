@@ -10,6 +10,7 @@
  * Saves data to the new GitHubProfile model and enhanced Project fields.
  */
 
+import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import {
   fetchGitHubUser,
@@ -203,7 +204,7 @@ export class EnhancedGitHubImportService {
       // Get user by Clerk ID to get database user ID
       const user = await db.user.findUnique({
         where: { clerkId: userId },
-        include: { profile: true },
+        select: { id: true },
       });
 
       if (!user) {
@@ -213,6 +214,8 @@ export class EnhancedGitHubImportService {
           errorCode: 'NOT_FOUND',
         };
       }
+
+      const context = await resolveActiveProfileContext(userId).catch(() => null);
 
       // Create job for tracking (use database user ID, not Clerk ID)
       const job = await db.importJob.create({
@@ -262,18 +265,17 @@ export class EnhancedGitHubImportService {
           data: { progress: 70, currentStep: 'Saving to profile...' },
         });
 
-        // User already fetched at start of function
-        if (user.profile) {
+        if (context?.profileId) {
           // Store raw import data
           await db.rawImportPayload.upsert({
             where: {
               profileId_source: {
-                profileId: user.profile.id,
+                profileId: context.profileId,
                 source: 'GITHUB',
               },
             },
             create: {
-              profileId: user.profile.id,
+              profileId: context.profileId,
               source: 'GITHUB',
               rawData: githubData as unknown as Prisma.InputJsonValue,
               status: 'COMPLETED',
@@ -293,9 +295,9 @@ export class EnhancedGitHubImportService {
 
           // Save or update GitHubProfile
           await db.gitHubProfile.upsert({
-            where: { profileId: user.profile.id },
+            where: { profileId: context.profileId },
             create: {
-              profileId: user.profile.id,
+              profileId: context.profileId,
               username: githubData.githubProfile.username,
               githubId: githubData.githubProfile.githubId,
               avatarUrl: githubData.githubProfile.avatarUrl,
@@ -350,12 +352,12 @@ export class EnhancedGitHubImportService {
           await db.dataSourceConnection.upsert({
             where: {
               profileId_source: {
-                profileId: user.profile.id,
+                profileId: context.profileId,
                 source: 'GITHUB',
               },
             },
             create: {
-              profileId: user.profile.id,
+              profileId: context.profileId,
               source: 'GITHUB',
               status: 'CONNECTED',
               externalId: username,
@@ -440,16 +442,16 @@ export class EnhancedGitHubImportService {
         });
 
         // Update connection status (user already fetched at start of function)
-        if (user.profile) {
+        if (context?.profileId) {
           await db.dataSourceConnection.upsert({
             where: {
               profileId_source: {
-                profileId: user.profile.id,
+                profileId: context.profileId,
                 source: 'GITHUB',
               },
             },
             create: {
-              profileId: user.profile.id,
+              profileId: context.profileId,
               source: 'GITHUB',
               status: 'ERROR',
               importError: importError instanceof Error ? importError.message : 'Import failed',
@@ -462,7 +464,7 @@ export class EnhancedGitHubImportService {
 
           // Also update GitHubProfile sync status if it exists
           await db.gitHubProfile.updateMany({
-            where: { profileId: user.profile.id },
+            where: { profileId: context.profileId },
             data: {
               syncStatus: 'error',
               syncError: importError instanceof Error ? importError.message : 'Import failed',
@@ -513,25 +515,18 @@ export class EnhancedGitHubImportService {
       languages: number;
     };
   }> {
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: {
-        profile: {
-          include: {
-            githubProfile: true,
-            dataSourceConnections: {
-              where: { source: 'GITHUB' },
-            },
-          },
-        },
-      },
-    });
-
-    if (!user?.profile?.githubProfile) {
+    const context = await resolveActiveProfileContext(userId).catch(() => null);
+    if (!context?.profileId) {
       return { connected: false };
     }
 
-    const ghProfile = user.profile.githubProfile;
+    const ghProfile = await db.gitHubProfile.findUnique({
+      where: { profileId: context.profileId },
+    });
+
+    if (!ghProfile) {
+      return { connected: false };
+    }
 
     return {
       connected: true,
@@ -568,14 +563,27 @@ export async function saveEnhancedGitHubToProfile(
     // Get user by Clerk ID
     const user = await db.user.findUnique({
       where: { clerkId: userId },
-      include: { profile: true },
+      select: { id: true },
     });
 
-    if (!user || !user.profile) {
+    if (!user) {
+      return { success: false, error: 'User not found' };
+    }
+
+    const context = await resolveActiveProfileContext(userId).catch(() => null);
+    if (!context?.profileId) {
       return { success: false, error: 'Profile not found' };
     }
 
-    const profileId = user.profile.id;
+    const profileId = context.profileId;
+
+    const currentProfile = await db.profile.findUnique({
+      where: { id: profileId },
+    });
+
+    if (!currentProfile) {
+      return { success: false, error: 'Profile not found' };
+    }
 
     // Update profile with GitHub data based on source priority
     const profileUpdate: Partial<{
@@ -592,8 +600,6 @@ export async function saveEnhancedGitHubToProfile(
       avatarUrl: string;
       avatarUrlSource: DataSource;
     }> = {};
-
-    const currentProfile = user.profile;
 
     if (
       data.profile.firstName &&

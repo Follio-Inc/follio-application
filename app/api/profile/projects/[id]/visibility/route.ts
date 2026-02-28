@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
+import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 
 /**
@@ -39,12 +40,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       );
     }
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: { profile: true },
-    });
+    const { profileId } = await resolveActiveProfileContext(userId);
 
-    if (!user || !user.profile) {
+    if (!profileId) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
@@ -52,7 +50,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const existingProject = await db.project.findFirst({
       where: {
         id,
-        profileId: user.profile.id,
+        profileId,
       },
     });
 
@@ -110,19 +108,16 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const { id } = await params;
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: { profile: true },
-    });
+    const { profileId } = await resolveActiveProfileContext(userId);
 
-    if (!user || !user.profile) {
+    if (!profileId) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
     const project = await db.project.findFirst({
       where: {
         id,
-        profileId: user.profile.id,
+        profileId,
       },
       select: {
         id: true,

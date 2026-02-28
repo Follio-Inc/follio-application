@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 
 import DataSourcesPageClient from '@/app/(dashboard)/builder/data-sources/data-sources-client';
+import { resolveActiveProfileContextOrNull } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 
 // Helper to serialize data for client components (converts Date objects to ISO strings)
@@ -21,37 +22,38 @@ export default async function DataSourcesPage() {
     redirect('/sign-in');
   }
 
-  const user = await db.user.findUnique({
-    where: { clerkId: userId },
-    include: {
-      profile: {
-        include: {
-          contactInfo: true,
-          links: { orderBy: { sortOrder: 'asc' } },
-          workExperiences: { orderBy: { sortOrder: 'asc' } },
-          educations: { orderBy: { sortOrder: 'asc' } },
-          skills: { orderBy: { sortOrder: 'asc' } },
-          skillGroups: {
-            include: { skills: { orderBy: { sortOrder: 'asc' } } },
-            orderBy: { sortOrder: 'asc' },
-          },
-          projects: { orderBy: { sortOrder: 'asc' } },
-          awards: { orderBy: { sortOrder: 'asc' } },
-          certifications: { orderBy: { sortOrder: 'asc' } },
-          blogPosts: { orderBy: { createdAt: 'desc' } },
-          youtubeVideos: { orderBy: { createdAt: 'desc' } },
-          photos: { orderBy: { sortOrder: 'asc' } },
-          sections: { orderBy: { sortOrder: 'asc' } },
-        },
-      },
-    },
-  });
-
-  if (!user || !user.profile) {
+  const context = await resolveActiveProfileContextOrNull(userId);
+  if (!context) {
     redirect('/onboarding');
   }
 
-  const serializedProfile = serializeForClient(user.profile);
+  const profile = await db.profile.findUnique({
+    where: { id: context.profileId },
+    include: {
+      contactInfo: true,
+      links: { orderBy: { sortOrder: 'asc' } },
+      workExperiences: { orderBy: { sortOrder: 'asc' } },
+      educations: { orderBy: { sortOrder: 'asc' } },
+      skills: { orderBy: { sortOrder: 'asc' } },
+      skillGroups: {
+        include: { skills: { orderBy: { sortOrder: 'asc' } } },
+        orderBy: { sortOrder: 'asc' },
+      },
+      projects: { orderBy: { sortOrder: 'asc' } },
+      awards: { orderBy: { sortOrder: 'asc' } },
+      certifications: { orderBy: { sortOrder: 'asc' } },
+      blogPosts: { orderBy: { createdAt: 'desc' } },
+      youtubeVideos: { orderBy: { createdAt: 'desc' } },
+      photos: { orderBy: { sortOrder: 'asc' } },
+      sections: { orderBy: { sortOrder: 'asc' } },
+    },
+  });
+
+  if (!profile) {
+    redirect('/onboarding');
+  }
+
+  const serializedProfile = serializeForClient(profile);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">

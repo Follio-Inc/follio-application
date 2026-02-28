@@ -6,6 +6,7 @@
  * we save what we have so users can edit later.
  */
 
+import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { parseResumeFromPdfBuffer, type ParsedResume } from '@/lib/resume-parser';
 import { LinkType, Prisma } from '@prisma/client';
@@ -299,15 +300,12 @@ export async function importResumeFromPdf(buffer: Buffer, userId: string): Promi
 
     // Store raw import data for debugging
     try {
-      const user = await db.user.findUnique({
-        where: { clerkId: userId },
-        include: { profile: true },
-      });
+      const context = await resolveActiveProfileContext(userId).catch(() => null);
 
-      if (user?.profile) {
+      if (context?.profileId) {
         await db.rawImportPayload.create({
           data: {
-            profileId: user.profile.id,
+            profileId: context.profileId,
             source: 'RESUME',
             rawData: {
               parsed: parsed as unknown as Prisma.InputJsonValue,
@@ -348,24 +346,34 @@ export async function saveResumeDataToProfile(
   try {
     const user = await db.user.findUnique({
       where: { clerkId: userId },
-      include: { profile: true },
+      select: { id: true },
     });
 
     if (!user) {
       return { success: false, error: 'User not found' };
     }
 
-    // Create profile if it doesn't exist
-    let profileId = user.profile?.id;
+    let profileId = (await resolveActiveProfileContext(userId).catch(() => null))?.profileId;
     if (!profileId) {
       const newProfile = await db.profile.create({
         data: {
           userId: user.id,
+          resumeTitle: 'Imported Resume',
           handle: `user-${user.id.slice(0, 8)}`,
           firstName: data.profile.firstName,
           lastName: data.profile.lastName,
         },
       });
+
+      await db.user.update({
+        where: { id: user.id },
+        data: {
+          profile: {
+            connect: { id: newProfile.id },
+          },
+        },
+      });
+
       profileId = newProfile.id;
     }
 

@@ -1,9 +1,41 @@
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { syncAvatarToClerk } from '@/lib/clerk-avatar-sync';
 import { db } from '@/lib/db';
 import { CreateProfileSchema } from '@/lib/validations';
+
+async function ensureActiveProfileForUser(clerkId: string): Promise<void> {
+  const user = await db.user.findUnique({
+    where: { clerkId },
+    select: {
+      id: true,
+      profile: { select: { id: true } },
+    },
+  });
+
+  if (!user) return;
+
+  if (user.profile) return;
+
+  const firstOwnedProfile = await db.profile.findFirst({
+    where: { userId: user.id },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true },
+  });
+
+  if (!firstOwnedProfile) return;
+
+  await db.user.update({
+    where: { id: user.id },
+    data: {
+      profile: {
+        connect: { id: firstOwnedProfile.id },
+      },
+    },
+  });
+}
 
 /**
  * POST /api/profile
@@ -97,7 +129,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user already has a profile
-    const existingProfile = await db.profile.findUnique({
+    const existingProfile = await db.profile.findFirst({
       where: { userId: user.id },
     });
 
@@ -126,6 +158,7 @@ export async function POST(request: NextRequest) {
       data: {
         userId: user.id,
         handle,
+        resumeTitle: [firstName, lastName].filter(Boolean).join(' ').trim() || 'Untitled Resume',
         firstName,
         lastName,
         headline,
@@ -164,34 +197,33 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
+    await ensureActiveProfileForUser(userId);
+    const context = await resolveActiveProfileContext(userId);
+
+    const profile = await db.profile.findUnique({
+      where: { id: context.profileId },
       include: {
-        profile: {
-          include: {
-            contactInfo: true,
-            links: { orderBy: { sortOrder: 'asc' } },
-            workExperiences: { orderBy: { sortOrder: 'asc' } },
-            educations: { orderBy: { sortOrder: 'asc' } },
-            skills: { orderBy: { sortOrder: 'asc' } },
-            skillGroups: { include: { skills: true }, orderBy: { sortOrder: 'asc' } },
-            projects: { orderBy: { sortOrder: 'asc' } },
-            awards: { orderBy: { sortOrder: 'asc' } },
-            certifications: { orderBy: { sortOrder: 'asc' } },
-            photos: { orderBy: { sortOrder: 'asc' } },
-            blogPosts: { orderBy: { createdAt: 'desc' } },
-            youtubeVideos: { orderBy: { createdAt: 'desc' } },
-            sections: { orderBy: { sortOrder: 'asc' } },
-          },
-        },
+        contactInfo: true,
+        links: { orderBy: { sortOrder: 'asc' } },
+        workExperiences: { orderBy: { sortOrder: 'asc' } },
+        educations: { orderBy: { sortOrder: 'asc' } },
+        skills: { orderBy: { sortOrder: 'asc' } },
+        skillGroups: { include: { skills: true }, orderBy: { sortOrder: 'asc' } },
+        projects: { orderBy: { sortOrder: 'asc' } },
+        awards: { orderBy: { sortOrder: 'asc' } },
+        certifications: { orderBy: { sortOrder: 'asc' } },
+        photos: { orderBy: { sortOrder: 'asc' } },
+        blogPosts: { orderBy: { createdAt: 'desc' } },
+        youtubeVideos: { orderBy: { createdAt: 'desc' } },
+        sections: { orderBy: { sortOrder: 'asc' } },
       },
     });
 
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    if (!profile) {
+      return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ profile: user.profile });
+    return NextResponse.json({ profile });
   } catch (error) {
     console.error('Error fetching profile:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -212,21 +244,26 @@ export async function PATCH(request: NextRequest) {
 
     const body = await request.json();
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: { profile: true },
+    const context = await resolveActiveProfileContext(userId).catch(() => null);
+    if (!context?.profileId) {
+      return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
+    }
+
+    const existingProfile = await db.profile.findUnique({
+      where: { id: context.profileId },
+      select: { id: true, handle: true, avatarUrl: true },
     });
 
-    if (!user || !user.profile) {
+    if (!existingProfile) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
     // If handle is being updated, check availability first
-    if (body.handle && body.handle !== user.profile.handle) {
+    if (body.handle && body.handle !== existingProfile.handle) {
       const handleTaken = await db.profile.findFirst({
         where: {
           handle: body.handle,
-          id: { not: user.profile.id },
+          id: { not: existingProfile.id },
         },
         select: { id: true },
       });
@@ -239,9 +276,11 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
+    const shouldSyncAvatarToClerk = body.syncAvatarToClerk !== false;
+
     // Update profile
     const profile = await db.profile.update({
-      where: { id: user.profile.id },
+      where: { id: existingProfile.id },
       data: {
         ...(body.handle && { handle: body.handle }),
         firstName: body.firstName,
@@ -259,8 +298,8 @@ export async function PATCH(request: NextRequest) {
       },
     });
 
-    // Sync avatar to Clerk if it was updated
-    if (body.avatarUrl && body.avatarUrl !== user.profile.avatarUrl) {
+    // Sync avatar to Clerk if it was updated and caller has not opted out
+    if (shouldSyncAvatarToClerk && body.avatarUrl && body.avatarUrl !== existingProfile.avatarUrl) {
       syncAvatarToClerk(userId, body.avatarUrl).catch((err) => {
         console.error('[PATCH /api/profile] Failed to sync avatar to Clerk:', err);
       });

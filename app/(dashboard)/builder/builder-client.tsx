@@ -16,6 +16,7 @@ import {
   Save,
   Settings,
   Share2,
+  Upload,
   User,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -31,6 +32,7 @@ import { getPortfolioPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
 
 import { ImportDataDialog } from './components/import-data-dialog';
+import { ImportResumeDialog } from './components/import-resume-dialog';
 import { UnsavedChangesDialog } from './components/unsaved-changes-dialog';
 import { BasicInfoForm } from './sections/basic-info-form';
 import { EducationSection } from './sections/education-section';
@@ -76,6 +78,7 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
   const [pendingSection, setPendingSection] = useState<string | null>(null);
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
+  const [showImportResumeDialog, setShowImportResumeDialog] = useState(false);
   const [isInlineEditing, setIsInlineEditing] = useState(false);
 
   // Contact info state
@@ -124,6 +127,17 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
   const AUTO_SAVE_DELAY = 2000; // 2 seconds
 
+  // Detect whether the current resume has any meaningful content
+  const hasExistingData =
+    profile.workExperiences.length > 0 ||
+    profile.educations.length > 0 ||
+    profile.skills.length > 0 ||
+    profile.projects.length > 0 ||
+    !!profile.firstName ||
+    !!profile.lastName ||
+    !!profile.headline ||
+    !!profile.summary;
+
   // Handle import completion - refresh the page to get updated data
   const handleImportComplete = useCallback(() => {
     router.refresh();
@@ -164,6 +178,7 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
             location: profile.location,
             avatarUrl: profile.avatarUrl,
             status: profile.status,
+            syncAvatarToClerk: false,
           }),
         });
 
@@ -399,6 +414,15 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
         onImportComplete={handleImportComplete}
       />
 
+      {/* Import Resume Dialog */}
+      <ImportResumeDialog
+        open={showImportResumeDialog}
+        onOpenChange={setShowImportResumeDialog}
+        profileId={profile.id}
+        hasExistingData={hasExistingData}
+        onImportComplete={handleImportComplete}
+      />
+
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -443,16 +467,26 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
           {/* Import Data Card */}
           <div className="rounded-lg border bg-card p-4">
             <h3 className="mb-3 text-sm font-medium text-muted-foreground">Quick Actions</h3>
-            <Button
-              variant="outline"
-              className="w-full justify-start gap-2"
-              onClick={() => setShowImportDialog(true)}
-            >
-              <Download className="h-4 w-4" />
-              Import Data
-            </Button>
+            <div className="space-y-2">
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-2"
+                onClick={() => setShowImportResumeDialog(true)}
+              >
+                <Upload className="h-4 w-4" />
+                Import Resume
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-2"
+                onClick={() => setShowImportDialog(true)}
+              >
+                <Download className="h-4 w-4" />
+                Import Data
+              </Button>
+            </div>
             <p className="mt-2 text-xs text-muted-foreground">
-              Import from LinkedIn, GitHub, resume, or add links
+              Import from a PDF resume, LinkedIn, GitHub, or add links
             </p>
           </div>
 

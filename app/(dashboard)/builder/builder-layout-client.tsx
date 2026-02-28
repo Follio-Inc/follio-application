@@ -1,17 +1,13 @@
 'use client';
 
-import { Redo2, Undo2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 
-import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 import { AllSectionsEditor } from './components/all-sections-editor';
-import {
-  BuilderStoreProvider,
-  useBuilderStore,
-  useBuilderTemporal,
-} from './components/builder-store-provider';
+import { BuilderStoreProvider, useBuilderStore } from './components/builder-store-provider';
+import { BuilderToolbar } from './components/builder-toolbar';
+import { ImportSuggestionDialog } from './components/import-suggestion-dialog';
 import { ResumePreviewPanel } from './components/resume-preview-panel';
 
 import type { FullProfile, ProfileSection } from '@/types';
@@ -43,61 +39,10 @@ export function BuilderLayoutClient({ profile }: BuilderLayoutClientProps) {
   return (
     <BuilderStoreProvider profile={profile}>
       <BuilderLayoutInner sections={sections} />
+      <Suspense fallback={null}>
+        <ImportSuggestionDialog />
+      </Suspense>
     </BuilderStoreProvider>
-  );
-}
-
-// ──────────────────────────────────────────────
-// Undo/Redo toolbar (needs to be inside the provider)
-// ──────────────────────────────────────────────
-
-function UndoRedoToolbar() {
-  const undo = useBuilderTemporal((s) => s.undo);
-  const redo = useBuilderTemporal((s) => s.redo);
-  const pastLength = useBuilderTemporal((s) => s.pastStates.length);
-  const futureLength = useBuilderTemporal((s) => s.futureStates.length);
-
-  const canUndo = pastLength > 0;
-  const canRedo = futureLength > 0;
-
-  return (
-    <div className="flex items-center gap-1">
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={() => undo()}
-            disabled={!canUndo}
-            aria-label="Undo"
-          >
-            <Undo2 className="h-4 w-4" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">
-          <p>Undo {canUndo && <span className="text-muted-foreground">({pastLength})</span>}</p>
-        </TooltipContent>
-      </Tooltip>
-
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={() => redo()}
-            disabled={!canRedo}
-            aria-label="Redo"
-          >
-            <Redo2 className="h-4 w-4" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">
-          <p>Redo {canRedo && <span className="text-muted-foreground">({futureLength})</span>}</p>
-        </TooltipContent>
-      </Tooltip>
-    </div>
   );
 }
 
@@ -131,32 +76,31 @@ function BuilderLayoutInner({ sections }: BuilderLayoutInnerProps) {
   }, [sections, storeSections, commitInlineChange]);
 
   return (
-    <div className="flex min-h-[calc(100vh-3.5rem)] gap-3 bg-muted/40 p-3">
+    <div className="flex min-h-[calc(100vh-3.5rem)] flex-col bg-muted/30">
       <TooltipProvider delayDuration={300}>
-        {/* Editor — All sections stacked vertically, grows with content */}
-        <main className="flex min-w-0 flex-1 flex-col rounded-xl bg-background shadow-sm">
-          {/* Editor header */}
-          <div className="sticky top-3 z-10 flex h-11 shrink-0 items-center justify-between rounded-t-xl border-b bg-background/95 px-5 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Editor
-            </span>
-            <UndoRedoToolbar />
-          </div>
+        {/* Toolbar — spans full width, sticks to top of the scroll container */}
+        <div className="sticky top-0 z-20 border-b border-border/40 bg-muted/50 backdrop-blur-sm">
+          <BuilderToolbar />
+        </div>
 
-          {/* Section editors — expand naturally, no inner scroll */}
-          <div className="min-h-[60vh] flex-1">
-            <div className="mx-auto max-w-3xl px-5 py-6">
-              <AllSectionsEditor />
+        <div className="flex min-h-0 flex-1">
+          {/* Editor — All sections stacked vertically, grows with content */}
+          <main className="flex min-w-0 flex-[4] flex-col bg-muted/50">
+            {/* Section editors — expand naturally, no inner scroll */}
+            <div className="min-h-[60vh] flex-1">
+              <div className="flat-cards mx-auto max-w-3xl px-5 py-6">
+                <AllSectionsEditor />
+              </div>
             </div>
-          </div>
-        </main>
+          </main>
 
-        {/* Resume Preview Panel — sticky so it stays visible while scrolling */}
-        <aside className="hidden min-w-0 flex-1 xl:block">
-          <div className="sticky top-3 h-[calc(100vh-3.5rem-1.5rem)] overflow-hidden rounded-xl bg-background shadow-sm">
-            <ResumePreviewPanel />
-          </div>
-        </aside>
+          {/* Resume Preview Panel — sticky, height accounts for topbar + toolbar */}
+          <aside className="hidden min-w-0 flex-[5] border-l border-border/40 bg-muted/20 xl:block">
+            <div className="sticky top-0 h-[calc(100vh-3.5rem)] overflow-hidden">
+              <ResumePreviewPanel />
+            </div>
+          </aside>
+        </div>
       </TooltipProvider>
     </div>
   );

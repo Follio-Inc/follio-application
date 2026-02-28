@@ -214,6 +214,8 @@ interface SortableEntryRowProps {
   onBlur?: () => void;
   /** Whether this kind supports visibility toggle */
   hasVisibilityToggle: boolean;
+  /** data-entry-id forwarded from the parent list */
+  'data-entry-id'?: string;
 }
 
 function SortableEntryRow({
@@ -223,8 +225,17 @@ function SortableEntryRow({
   onRemove,
   onBlur,
   hasVisibilityToggle,
+  'data-entry-id': dataEntryId,
 }: SortableEntryRowProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
     id: entry.id,
   });
 
@@ -242,7 +253,7 @@ function SortableEntryRow({
     <div
       ref={setNodeRef}
       style={style}
-      {...attributes}
+      data-entry-id={dataEntryId}
       className={cn(
         'group flex items-center gap-2 rounded-lg border bg-background px-2 py-1.5 transition-colors',
         isDragging && 'z-50 shadow-lg ring-2 ring-primary/20',
@@ -251,10 +262,11 @@ function SortableEntryRow({
     >
       {/* Drag handle */}
       <button
+        ref={setActivatorNodeRef}
         type="button"
         className="flex shrink-0 cursor-grab touch-none items-center text-muted-foreground/40 hover:text-muted-foreground active:cursor-grabbing"
+        {...attributes}
         {...listeners}
-        tabIndex={-1}
       >
         <GripVertical className="h-4 w-4" />
       </button>
@@ -547,43 +559,45 @@ export function ContactDetailsSection({
       const { active, over } = event;
       if (!over || active.id === over.id) return;
 
-      setEntries((prev) => {
-        const oldIndex = prev.findIndex((e) => e.id === active.id);
-        const newIndex = prev.findIndex((e) => e.id === over.id);
-        if (oldIndex === -1 || newIndex === -1) return prev;
+      // Compute the reordered list (pure, no side effects)
+      const oldIndex = entries.findIndex((e) => e.id === (active.id as string));
+      const newIndex = entries.findIndex((e) => e.id === (over.id as string));
+      if (oldIndex === -1 || newIndex === -1) return;
 
-        const reordered = arrayMove(prev, oldIndex, newIndex);
+      const reordered = arrayMove(entries, oldIndex, newIndex);
 
-        // Persist full header fields order (Location, Email, Phone, Links, etc.)
-        const orderIds = reordered.map((e) => e.id);
-        onContactUpdate({ headerFieldsOrder: orderIds });
-        fetch('/api/profile/contact', {
+      // 1. Update local UI state
+      setEntries(reordered);
+
+      // 2. Sync order to the builder store so the preview updates in real-time
+      const orderIds = reordered.map((e) => e.id);
+      onContactUpdate({ headerFieldsOrder: orderIds });
+
+      // 3. Persist to API
+      fetch('/api/profile/contact', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ headerFieldsOrder: orderIds }),
+      })
+        .then(() => notifyProfileUpdated())
+        .catch((err) => console.error('Failed to persist header order:', err));
+
+      // Persist link sortOrder for links (keeps link entity order in sync)
+      const linkEntries = reordered
+        .filter((e) => e.kind === 'link' && e.linkId)
+        .map((e, idx) => ({ id: e.linkId!, sortOrder: idx }));
+
+      if (linkEntries.length > 0) {
+        fetch('/api/profile/reorder', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ headerFieldsOrder: orderIds }),
+          body: JSON.stringify({ model: 'link', items: linkEntries }),
         })
           .then(() => notifyProfileUpdated())
-          .catch((err) => console.error('Failed to persist header order:', err));
-
-        // Persist link sortOrder for links (keeps link entity order in sync)
-        const linkEntries = reordered
-          .filter((e) => e.kind === 'link' && e.linkId)
-          .map((e, idx) => ({ id: e.linkId!, sortOrder: idx }));
-
-        if (linkEntries.length > 0) {
-          fetch('/api/profile/reorder', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model: 'link', items: linkEntries }),
-          })
-            .then(() => notifyProfileUpdated())
-            .catch((err) => console.error('Failed to persist link order:', err));
-        }
-
-        return reordered;
-      });
+          .catch((err) => console.error('Failed to persist link order:', err));
+      }
     },
-    [onContactUpdate]
+    [entries, onContactUpdate]
   );
 
   // ── Quick add ──
@@ -698,16 +712,16 @@ export function ContactDetailsSection({
         <SortableContext items={entryIds} strategy={verticalListSortingStrategy}>
           <div className="space-y-1.5">
             {entries.map((entry) => (
-              <div key={entry.id} data-entry-id={entry.id}>
-                <SortableEntryRow
-                  entry={entry}
-                  onValueChange={(val) => handleValueChange(entry.id, entry.kind, val)}
-                  onVisibilityToggle={() => handleVisibilityToggle(entry)}
-                  onRemove={entry.removable ? () => handleRemoveLink(entry) : undefined}
-                  onBlur={entry.kind === 'link' ? () => handleLinkBlur(entry) : undefined}
-                  hasVisibilityToggle
-                />
-              </div>
+              <SortableEntryRow
+                key={entry.id}
+                data-entry-id={entry.id}
+                entry={entry}
+                onValueChange={(val) => handleValueChange(entry.id, entry.kind, val)}
+                onVisibilityToggle={() => handleVisibilityToggle(entry)}
+                onRemove={entry.removable ? () => handleRemoveLink(entry) : undefined}
+                onBlur={entry.kind === 'link' ? () => handleLinkBlur(entry) : undefined}
+                hasVisibilityToggle
+              />
             ))}
           </div>
         </SortableContext>

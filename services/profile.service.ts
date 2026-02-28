@@ -84,6 +84,9 @@ export async function getPublicProfile(handle: string): Promise<PublicProfile | 
           email: profile.contactInfo.emailPublic ? profile.contactInfo.email : null,
           phone: profile.contactInfo.phonePublic ? profile.contactInfo.phone : null,
           website: profile.contactInfo.website,
+          headerFieldsOrder: Array.isArray(profile.contactInfo.headerFieldsOrder)
+            ? (profile.contactInfo.headerFieldsOrder as string[])
+            : null,
         }
       : null;
 

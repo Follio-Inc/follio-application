@@ -14,6 +14,7 @@ import { redirect } from 'next/navigation';
 
 import { Logo } from '@/components/Logo';
 import { Button } from '@/components/ui/button';
+import { resolveActiveProfileContextOrNull } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { getPortfolioPath } from '@/lib/url';
 
@@ -33,16 +34,21 @@ export default async function HomePage() {
 
   // If user is logged in, redirect to their Follio profile
   if (userId) {
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: { profile: { select: { handle: true } } },
-    });
-
-    if (user?.profile?.handle) {
-      redirect(getPortfolioPath(user.profile.handle));
-    } else {
+    const context = await resolveActiveProfileContextOrNull(userId);
+    if (!context) {
       redirect('/onboarding');
     }
+
+    const activeProfile = await db.profile.findUnique({
+      where: { id: context.profileId },
+      select: { handle: true },
+    });
+
+    if (!activeProfile?.handle) {
+      redirect('/onboarding');
+    }
+
+    redirect(getPortfolioPath(activeProfile.handle));
   }
 
   return (

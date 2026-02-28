@@ -32,7 +32,7 @@ async function main() {
 
   // Create demo profile
   const profile = await prisma.profile.upsert({
-    where: { userId: user.id },
+    where: { handle: 'alexchen' },
     update: {},
     create: {
       userId: user.id,

@@ -1,3 +1,4 @@
+import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { parseDateFlexible } from '@/lib/utils';
 import { auth } from '@clerk/nextjs/server';
@@ -135,27 +136,26 @@ export async function POST(request: NextRequest) {
 
     const source = toDataSource(rawSource);
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: {
-        profile: {
-          include: {
-            contactInfo: true,
-            workExperiences: true,
-            educations: true,
-            skills: true,
-            projects: true,
-            links: true,
-          },
-        },
-      },
-    });
-
-    if (!user?.profile) {
+    const context = await resolveActiveProfileContext(userId).catch(() => null);
+    if (!context?.profileId) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
-    const existingProfile = user.profile;
+    const existingProfile = await db.profile.findUnique({
+      where: { id: context.profileId },
+      include: {
+        contactInfo: true,
+        workExperiences: true,
+        educations: true,
+        skills: true,
+        projects: true,
+        links: true,
+      },
+    });
+
+    if (!existingProfile) {
+      return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
+    }
     const results = {
       profileFieldsUpdated: [] as string[],
       profileFieldsSkipped: [] as string[],

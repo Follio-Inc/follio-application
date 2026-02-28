@@ -5,17 +5,24 @@
  * POST - Regenerate the unlisted key (invalidates old unlisted links)
  */
 
+import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { getOrCreateUnlistedKey, regenerateUnlistedKey } from '@/services/profile.service';
 import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 
 async function getProfile(clerkId: string) {
-  const user = await db.user.findUnique({
-    where: { clerkId },
-    include: { profile: { select: { id: true, unlistedKey: true, handle: true } } },
+  const { profileId } = await resolveActiveProfileContext(clerkId);
+  if (!profileId) {
+    return null;
+  }
+
+  const profile = await db.profile.findUnique({
+    where: { id: profileId },
+    select: { id: true, unlistedKey: true, handle: true },
   });
-  return user?.profile ?? null;
+
+  return profile ?? null;
 }
 
 /**

@@ -5,7 +5,6 @@ import { useEffect, useRef, useState } from 'react';
 import { CleanResumeView } from '@/app/u/[handle]/views/clean-resume-view';
 
 import { useBuilderStore } from './builder-store-provider';
-import { ShareDialog } from './share-dialog';
 
 import type { PublicProfile } from '@/types';
 
@@ -37,25 +36,17 @@ export function ResumePreviewPanel() {
   }, []);
 
   return (
-    <div className="flex h-full flex-col">
-      {/* Preview Header */}
-      <div className="flex h-11 items-center justify-between px-5">
-        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Resume Preview
-        </span>
-        <ShareDialog profile={profile} />
-      </div>
-
+    <div className="relative flex h-full flex-col">
       {/* Scaled Resume Content */}
-      <div ref={containerRef} className="flex-1 overflow-auto rounded-b-xl bg-muted/30 p-6">
+      <div ref={containerRef} className="flex-1 overflow-auto px-6 pb-6 pt-6">
         <div
-          className="rounded-lg bg-white shadow-sm ring-1 ring-black/5 dark:bg-zinc-950 dark:ring-white/10"
+          className="overflow-hidden"
           style={{
             zoom: scale,
           }}
         >
           {/* Hide ResumeActions (print/copy buttons) in preview mode */}
-          <div className="[&>.resume-actions]:hidden">
+          <div className="pt-4 [&>.resume-actions]:hidden">
             <CleanResumeView profile={profile as unknown as PublicProfile} />
           </div>
         </div>

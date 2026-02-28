@@ -26,6 +26,7 @@ export async function saveProfileDraft({
         location: draftProfile.location,
         avatarUrl: draftProfile.avatarUrl,
         status: draftProfile.status,
+        syncAvatarToClerk: false,
       }),
     });
 

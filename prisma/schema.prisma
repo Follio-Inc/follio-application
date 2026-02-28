@@ -18,7 +18,8 @@ model User {
   importJobs     ImportJob[]
   importLogs     ImportLog[]
   importSessions ImportSession[]
-  profile        Profile?
+  profile        Profile?        @relation("ActiveProfile")
+  profiles       Profile[]       @relation("OwnedProfiles")
   shareTokens    ShareToken[]
 
   @@index([clerkId])
@@ -27,7 +28,10 @@ model User {
 
 model Profile {
   id                     String                 @id @default(cuid())
-  userId                 String                 @unique
+  userId                 String
+  activeForUserId        String?                @unique
+  resumeTitle            String                 @default("Untitled Resume")
+  isArchived             Boolean                @default(false)
   handle                 String                 @unique
   status                 ProfileStatus          @default(DRAFT)
   resumeVisibility       ContentVisibility      @default(UNLISTED)
@@ -61,7 +65,8 @@ model Profile {
   githubProfile          GitHubProfile?
   links                  Link[]
   photos                 ProfilePhoto[]
-  user                   User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                   User                   @relation("OwnedProfiles", fields: [userId], references: [id], onDelete: Cascade)
+  activeForUser          User?                  @relation("ActiveProfile", fields: [activeForUserId], references: [id], onDelete: SetNull)
   sections               ProfileSection[]
   projects               Project[]
   rawImports             RawImportPayload[]
@@ -72,6 +77,7 @@ model Profile {
 
   @@index([handle])
   @@index([status])
+  @@index([userId])
 }
 
 model ProfileSection {

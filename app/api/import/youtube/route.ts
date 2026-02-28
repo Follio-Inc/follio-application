@@ -1,3 +1,4 @@
+import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import type { NormalizedLink, NormalizedYouTubeVideo } from '@/services/import/types';
 import { youtubeImportService } from '@/services/import/youtube.service';
@@ -91,14 +92,10 @@ async function saveYouTubeToProfile(
   videos: NormalizedYouTubeVideo[],
   links?: NormalizedLink[]
 ) {
-  const user = await db.user.findUnique({
-    where: { clerkId },
-    include: { profile: true },
-  });
+  const context = await resolveActiveProfileContext(clerkId).catch(() => null);
+  if (!context?.profileId) return;
 
-  if (!user?.profile) return;
-
-  const profileId = user.profile.id;
+  const profileId = context.profileId;
 
   // Upsert videos (dedup by videoId)
   for (const video of videos) {

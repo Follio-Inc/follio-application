@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { AppError, ErrorCode, handleApiError } from '@/lib/errors';
 
@@ -18,19 +19,15 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     const { id } = await params;
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: { profile: true },
-    });
-
-    if (!user?.profile) {
+    const { profileId } = await resolveActiveProfileContext(userId);
+    if (!profileId) {
       throw new AppError('Profile not found', ErrorCode.NOT_FOUND, 404);
     }
 
     const award = await db.award.findFirst({
       where: {
         id,
-        profileId: user.profile.id,
+        profileId,
       },
     });
 
@@ -54,12 +51,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     const { id } = await params;
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: { profile: true },
-    });
-
-    if (!user?.profile) {
+    const { profileId } = await resolveActiveProfileContext(userId);
+    if (!profileId) {
       throw new AppError('Profile not found', ErrorCode.NOT_FOUND, 404);
     }
 
@@ -69,7 +62,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const award = await db.award.update({
       where: {
         id,
-        profileId: user.profile.id,
+        profileId,
       },
       data: {
         ...(title !== undefined && { title }),
@@ -98,19 +91,15 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
     const { id } = await params;
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: { profile: true },
-    });
-
-    if (!user?.profile) {
+    const { profileId } = await resolveActiveProfileContext(userId);
+    if (!profileId) {
       throw new AppError('Profile not found', ErrorCode.NOT_FOUND, 404);
     }
 
     await db.award.delete({
       where: {
         id,
-        profileId: user.profile.id,
+        profileId,
       },
     });
 

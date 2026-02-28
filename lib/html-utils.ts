@@ -23,6 +23,23 @@ export function containsHtmlFormatting(str: string): boolean {
   return HTML_TAG_PATTERN.test(str);
 }
 
+// ─── HTML Emptiness Check ───────────────────────────────────────────────────
+
+/**
+ * Check whether an HTML string is effectively empty (no visible text content).
+ * Returns true for null, undefined, empty string, whitespace-only strings,
+ * and strings that contain only HTML tags with no text (e.g. `<p></p>`, `<p><br></p>`).
+ */
+export function isHtmlEmpty(html: string | null | undefined): boolean {
+  if (!html) return true;
+  const text = html
+    .replace(/<br\s*\/?>/gi, '')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, '')
+    .trim();
+  return text.length === 0;
+}
+
 // ─── HTML Escaping / Stripping ──────────────────────────────────────────────
 
 /** Escape special characters for safe HTML injection of plain text. */

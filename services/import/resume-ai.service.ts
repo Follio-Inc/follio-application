@@ -14,6 +14,7 @@
  * - Supports JSON mode for reliable output
  */
 
+import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { parseDateFlexible } from '@/lib/utils';
 import { DataSource, LinkType, Prisma } from '@prisma/client';
@@ -765,24 +766,35 @@ export async function saveAIResumeToProfile(
     // Get user by Clerk ID
     const user = await db.user.findUnique({
       where: { clerkId: userId },
-      include: { profile: true },
+      select: { id: true },
     });
 
     if (!user) {
       return { success: false, error: 'User not found' };
     }
 
-    // Create profile if it doesn't exist
-    let profileId = user.profile?.id;
+    // Resolve active profile, or create one as fallback
+    let profileId = (await resolveActiveProfileContext(userId).catch(() => null))?.profileId;
     if (!profileId) {
       const newProfile = await db.profile.create({
         data: {
           userId: user.id,
+          resumeTitle: 'Imported Resume',
           handle: `user-${user.id.slice(0, 8)}`,
           firstName: data.profile.firstName,
           lastName: data.profile.lastName,
         },
       });
+
+      await db.user.update({
+        where: { id: user.id },
+        data: {
+          profile: {
+            connect: { id: newProfile.id },
+          },
+        },
+      });
+
       profileId = newProfile.id;
     }
 

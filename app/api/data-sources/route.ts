@@ -1,3 +1,4 @@
+import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
@@ -14,24 +15,22 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
+    const { profileId } = await resolveActiveProfileContext(userId);
+
+    const profile = await db.profile.findUnique({
+      where: { id: profileId },
       include: {
-        profile: {
-          include: {
-            dataSourceConnections: true,
-          },
-        },
+        dataSourceConnections: true,
       },
     });
 
-    if (!user?.profile) {
+    if (!profile) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
     // Return the data source connections
     return NextResponse.json({
-      connections: user.profile.dataSourceConnections,
+      connections: profile.dataSourceConnections,
     });
   } catch (error) {
     console.error('Error fetching data sources:', error);

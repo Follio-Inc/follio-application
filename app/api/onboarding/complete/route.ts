@@ -239,6 +239,7 @@ export async function POST(request: NextRequest) {
       manualLinks,
       resumeFileName,
       galleryPhotos,
+      targetProfileId,
     } = body as {
       importedData?: Record<string, NormalizedImportResult | undefined>;
       reviewedData?: ReviewedData;
@@ -248,12 +249,15 @@ export async function POST(request: NextRequest) {
       manualLinks?: ManualLinkInput[];
       resumeFileName?: string;
       galleryPhotos?: string[];
+      /** When creating a new resume from the builder, this targets the specific blank profile */
+      targetProfileId?: string;
     };
 
     console.log('[Onboarding Complete] Has reviewedData:', !!reviewedData);
     console.log('[Onboarding Complete] Has importedData:', !!importedData);
     console.log('[Onboarding Complete] providedFirstName:', providedFirstName);
     console.log('[Onboarding Complete] providedHandle:', providedHandle);
+    console.log('[Onboarding Complete] targetProfileId:', targetProfileId || '(none)');
 
     // Get or create user
     let user = await db.user.findUnique({
@@ -312,6 +316,25 @@ export async function POST(request: NextRequest) {
         include: { profile: true },
       });
       console.log('[Onboarding Complete] Created new user:', user.id);
+    }
+
+    // When targetProfileId is specified (e.g. "New resume from upload" in builder),
+    // resolve and use that specific profile instead of whatever `user.profile` points to.
+    // This ensures the imported data goes into the correct blank resume.
+    if (targetProfileId && user) {
+      const targetProfile = await db.profile.findFirst({
+        where: { id: targetProfileId, userId: user.id },
+      });
+      if (targetProfile) {
+        // Override user.profile so handleReviewedData populates the target resume
+        (user as typeof user & { profile: typeof targetProfile }).profile = targetProfile;
+        console.log('[Onboarding Complete] Using targetProfileId:', targetProfileId);
+      } else {
+        console.warn(
+          '[Onboarding Complete] targetProfileId not found or unauthorized:',
+          targetProfileId
+        );
+      }
     }
 
     // If we have reviewedData from the review flow, use it directly
@@ -455,6 +478,8 @@ export async function POST(request: NextRequest) {
         data: {
           userId: user.id,
           handle,
+          resumeTitle:
+            [finalFirstName, finalLastName].filter(Boolean).join(' ').trim() || 'Untitled Resume',
           firstName: finalFirstName,
           lastName: finalLastName,
           headline: mergedProfile.headline,
@@ -471,6 +496,15 @@ export async function POST(request: NextRequest) {
           summarySource: toDataSource(mergedProfile.summarySource),
           locationSource: toDataSource(mergedProfile.locationSource),
           avatarUrlSource: finalAvatarSource,
+        },
+      });
+
+      await db.user.update({
+        where: { id: user.id },
+        data: {
+          profile: {
+            connect: { id: profile.id },
+          },
         },
       });
 
@@ -803,6 +837,8 @@ async function handleReviewedData(
       data: {
         userId: user.id,
         handle,
+        resumeTitle:
+          [finalFirstName, finalLastName].filter(Boolean).join(' ').trim() || 'Untitled Resume',
         firstName: finalFirstName,
         lastName: finalLastName,
         headline: reviewedData.profile.headline,
@@ -814,6 +850,16 @@ async function handleReviewedData(
         portfolioVisibility: 'PUBLIC',
       },
     });
+
+    await db.user.update({
+      where: { id: user.id },
+      data: {
+        profile: {
+          connect: { id: profile.id },
+        },
+      },
+    });
+
     profileId = profile.id;
     console.log('[handleReviewedData] Created new profile:', profileId);
   } else {

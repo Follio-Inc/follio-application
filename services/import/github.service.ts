@@ -5,6 +5,7 @@
  * Handles normalization, deduplication, and error handling.
  */
 
+import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import {
   fetchGitHubUser,
@@ -104,7 +105,7 @@ export class GitHubImportService implements IGitHubImportService {
       // Get user by Clerk ID to get database user ID
       const user = await db.user.findUnique({
         where: { clerkId: userId },
-        include: { profile: true },
+        select: { id: true },
       });
 
       if (!user) {
@@ -114,6 +115,8 @@ export class GitHubImportService implements IGitHubImportService {
           errorCode: 'NOT_FOUND',
         };
       }
+
+      const context = await resolveActiveProfileContext(userId).catch(() => null);
 
       // Create job for tracking (use database user ID, not Clerk ID)
       const job = await db.importJob.create({
@@ -158,18 +161,17 @@ export class GitHubImportService implements IGitHubImportService {
 
         const result = toNormalizedResult(githubData);
 
-        // User already fetched at start of function
-        if (user.profile) {
+        if (context?.profileId) {
           // Store raw import data
           await db.rawImportPayload.upsert({
             where: {
               profileId_source: {
-                profileId: user.profile.id,
+                profileId: context.profileId,
                 source: 'GITHUB',
               },
             },
             create: {
-              profileId: user.profile.id,
+              profileId: context.profileId,
               source: 'GITHUB',
               rawData: githubData as unknown as Prisma.InputJsonValue,
               status: 'COMPLETED',
@@ -186,12 +188,12 @@ export class GitHubImportService implements IGitHubImportService {
           await db.dataSourceConnection.upsert({
             where: {
               profileId_source: {
-                profileId: user.profile.id,
+                profileId: context.profileId,
                 source: 'GITHUB',
               },
             },
             create: {
-              profileId: user.profile.id,
+              profileId: context.profileId,
               source: 'GITHUB',
               status: 'CONNECTED',
               externalId: username,
@@ -255,16 +257,16 @@ export class GitHubImportService implements IGitHubImportService {
         });
 
         // Update connection status (user already fetched at start of function)
-        if (user.profile) {
+        if (context?.profileId) {
           await db.dataSourceConnection.upsert({
             where: {
               profileId_source: {
-                profileId: user.profile.id,
+                profileId: context.profileId,
                 source: 'GITHUB',
               },
             },
             create: {
-              profileId: user.profile.id,
+              profileId: context.profileId,
               source: 'GITHUB',
               status: 'ERROR',
               importError: importError instanceof Error ? importError.message : 'Import failed',

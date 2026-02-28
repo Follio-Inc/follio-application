@@ -1,3 +1,4 @@
+import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
@@ -14,7 +15,6 @@ export async function GET() {
     const user = await db.user.findUnique({
       where: { clerkId: userId },
       include: {
-        profile: true,
         shareTokens: {
           where: {
             OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
@@ -25,7 +25,21 @@ export async function GET() {
       },
     });
 
-    if (!user || !user.profile) {
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    const { profileId } = await resolveActiveProfileContext(userId);
+    if (!profileId) {
+      return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
+    }
+
+    const profile = await db.profile.findUnique({
+      where: { id: profileId },
+      select: { handle: true },
+    });
+
+    if (!profile) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
@@ -33,7 +47,7 @@ export async function GET() {
 
     return NextResponse.json({
       token: activeToken?.token || null,
-      handle: user.profile.handle,
+      handle: profile.handle,
       expiresAt: activeToken?.expiresAt || null,
       viewCount: activeToken?.viewCount || 0,
     });
@@ -54,10 +68,23 @@ export async function POST(request: Request) {
 
     const user = await db.user.findUnique({
       where: { clerkId: userId },
-      include: { profile: true },
     });
 
-    if (!user || !user.profile) {
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    const { profileId } = await resolveActiveProfileContext(userId);
+    if (!profileId) {
+      return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
+    }
+
+    const profile = await db.profile.findUnique({
+      where: { id: profileId },
+      select: { handle: true },
+    });
+
+    if (!profile) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
@@ -90,7 +117,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       token: shareToken.token,
-      handle: user.profile.handle,
+      handle: profile.handle,
       expiresAt: shareToken.expiresAt,
       maxViews: shareToken.maxViews,
       viewCount: 0,

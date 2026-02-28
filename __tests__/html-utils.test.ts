@@ -5,6 +5,7 @@ import {
   containsHtmlFormatting,
   escapeHtml,
   htmlToBullets,
+  isHtmlEmpty,
   stripHtmlTags,
 } from '@/lib/html-utils';
 
@@ -51,6 +52,54 @@ describe('escapeHtml', () => {
 
   it('leaves safe text unchanged', () => {
     expect(escapeHtml('Hello world')).toBe('Hello world');
+  });
+});
+
+// ─── isHtmlEmpty ───────────────────────────────────────────────────────────
+
+describe('isHtmlEmpty', () => {
+  it('returns true for null and undefined', () => {
+    expect(isHtmlEmpty(null)).toBe(true);
+    expect(isHtmlEmpty(undefined)).toBe(true);
+  });
+
+  it('returns true for empty string', () => {
+    expect(isHtmlEmpty('')).toBe(true);
+  });
+
+  it('returns true for whitespace-only string', () => {
+    expect(isHtmlEmpty('   ')).toBe(true);
+    expect(isHtmlEmpty('\n\t')).toBe(true);
+  });
+
+  it('returns true for empty paragraph tags (Tiptap default)', () => {
+    expect(isHtmlEmpty('<p></p>')).toBe(true);
+  });
+
+  it('returns true for paragraph with only a <br>', () => {
+    expect(isHtmlEmpty('<p><br></p>')).toBe(true);
+    expect(isHtmlEmpty('<p><br/></p>')).toBe(true);
+    expect(isHtmlEmpty('<p><br /></p>')).toBe(true);
+  });
+
+  it('returns true for nested empty tags', () => {
+    expect(isHtmlEmpty('<p><strong></strong></p>')).toBe(true);
+  });
+
+  it('returns true for &nbsp; only', () => {
+    expect(isHtmlEmpty('<p>&nbsp;</p>')).toBe(true);
+  });
+
+  it('returns false for content with text', () => {
+    expect(isHtmlEmpty('<p>Hello world</p>')).toBe(false);
+  });
+
+  it('returns false for formatted text', () => {
+    expect(isHtmlEmpty('<p><strong>Bold</strong> text</p>')).toBe(false);
+  });
+
+  it('returns false for plain text', () => {
+    expect(isHtmlEmpty('Some summary text')).toBe(false);
   });
 });
 

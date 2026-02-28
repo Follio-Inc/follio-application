@@ -1,3 +1,4 @@
+import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
@@ -35,26 +36,25 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
+    const context = await resolveActiveProfileContext(userId).catch(() => null);
+    if (!context?.profileId) {
+      return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
+    }
+
+    const profile = await db.profile.findUnique({
+      where: { id: context.profileId },
       include: {
-        profile: {
-          include: {
-            githubProfile: { select: { avatarUrl: true, username: true } },
-            photos: {
-              where: { category: 'PROFILE' },
-              orderBy: { createdAt: 'desc' },
-            },
-          },
+        githubProfile: { select: { avatarUrl: true, username: true } },
+        photos: {
+          where: { category: 'PROFILE' },
+          orderBy: { createdAt: 'desc' },
         },
       },
     });
 
-    if (!user?.profile) {
+    if (!profile) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
-
-    const profile = user.profile;
     const currentAvatarUrl = profile.avatarUrl;
 
     // Get Clerk user for external accounts and their avatars

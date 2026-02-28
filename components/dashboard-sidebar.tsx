@@ -1,6 +1,6 @@
 'use client';
 
-import { Database, FileText, Menu, Palette, Settings, Share2, X } from 'lucide-react';
+import { Database, FileText, LayoutGrid, Menu, Palette, Settings, Share2, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -22,8 +22,14 @@ interface NavItemConfig {
 /** Left side — the products users build */
 const leftItems: NavItemConfig[] = [
   {
+    href: '/resumes',
+    label: 'My Resumes',
+    icon: LayoutGrid,
+    match: (path) => path.startsWith('/resumes'),
+  },
+  {
     href: '/builder',
-    label: 'Resume',
+    label: 'Editor',
     icon: FileText,
     match: (path) => path.startsWith('/builder'),
   },
@@ -132,7 +138,7 @@ export function DashboardTopbar({ children }: { children?: React.ReactNode }) {
   return (
     <>
       {/* ── Desktop / Tablet: top bar ─────────────────────────────── */}
-      <nav className="hidden h-14 items-center border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 md:flex">
+      <nav className="relative z-50 hidden h-14 items-center border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 md:flex">
         {/* Left cluster: Logo + product nav */}
         <div className="flex items-center gap-1 pl-4 sm:pl-6">
           <div className="mr-4">

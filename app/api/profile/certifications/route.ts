@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { AppError, ErrorCode, handleApiError } from '@/lib/errors';
 
@@ -12,22 +13,17 @@ export async function GET() {
       throw new AppError('Unauthorized', ErrorCode.UNAUTHORIZED, 401);
     }
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: {
-        profile: {
-          include: {
-            certifications: { orderBy: { sortOrder: 'asc' } },
-          },
-        },
-      },
-    });
-
-    if (!user?.profile) {
+    const { profileId } = await resolveActiveProfileContext(userId);
+    if (!profileId) {
       throw new AppError('Profile not found', ErrorCode.NOT_FOUND, 404);
     }
 
-    return NextResponse.json(user.profile.certifications);
+    const certifications = await db.certification.findMany({
+      where: { profileId },
+      orderBy: { sortOrder: 'asc' },
+    });
+
+    return NextResponse.json(certifications);
   } catch (error) {
     return handleApiError(error);
   }
@@ -41,12 +37,8 @@ export async function POST(request: NextRequest) {
       throw new AppError('Unauthorized', ErrorCode.UNAUTHORIZED, 401);
     }
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: { profile: true },
-    });
-
-    if (!user?.profile) {
+    const { profileId } = await resolveActiveProfileContext(userId);
+    if (!profileId) {
       throw new AppError('Profile not found', ErrorCode.NOT_FOUND, 404);
     }
 
@@ -59,13 +51,13 @@ export async function POST(request: NextRequest) {
 
     // Get max sortOrder
     const maxOrder = await db.certification.aggregate({
-      where: { profileId: user.profile.id },
+      where: { profileId },
       _max: { sortOrder: true },
     });
 
     const certification = await db.certification.create({
       data: {
-        profileId: user.profile.id,
+        profileId,
         name,
         issuer,
         credentialId,
@@ -73,6 +65,7 @@ export async function POST(request: NextRequest) {
         issueDate: issueDate ? new Date(issueDate) : null,
         expirationDate: expirationDate ? new Date(expirationDate) : null,
         sortOrder: (maxOrder._max.sortOrder ?? -1) + 1,
+        source: 'MANUAL',
       },
     });
 

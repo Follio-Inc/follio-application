@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 
 /**
@@ -18,18 +19,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const { id } = await params;
     const body = await request.json();
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: { profile: true },
-    });
+    const { profileId } = await resolveActiveProfileContext(userId);
 
-    if (!user || !user.profile) {
+    if (!profileId) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
     // Verify the photo belongs to the user's profile
     const existingPhoto = await db.profilePhoto.findFirst({
-      where: { id, profileId: user.profile.id },
+      where: { id, profileId },
     });
 
     if (!existingPhoto) {
@@ -75,18 +73,15 @@ export async function DELETE(
 
     const { id } = await params;
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: { profile: true },
-    });
+    const { profileId } = await resolveActiveProfileContext(userId);
 
-    if (!user || !user.profile) {
+    if (!profileId) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
     // Verify the photo belongs to the user's profile
     const existingPhoto = await db.profilePhoto.findFirst({
-      where: { id, profileId: user.profile.id },
+      where: { id, profileId },
     });
 
     if (!existingPhoto) {

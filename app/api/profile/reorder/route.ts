@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
+import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { AppError, ErrorCode, handleApiError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
@@ -79,14 +80,7 @@ export async function PATCH(request: NextRequest) {
       throw new AppError('Unauthorized', ErrorCode.UNAUTHORIZED, 401);
     }
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: { profile: { select: { id: true } } },
-    });
-
-    if (!user?.profile) {
-      throw new AppError('Profile not found', ErrorCode.NOT_FOUND, 404);
-    }
+    const context = await resolveActiveProfileContext(userId);
 
     const body = await request.json();
     const parsed = ReorderSchema.parse(body);
@@ -99,7 +93,7 @@ export async function PATCH(request: NextRequest) {
     const existingCount = await delegate.count({
       where: {
         id: { in: parsed.items.map((i) => i.id) },
-        [modelConfig.ownerField]: user.profile.id,
+        [modelConfig.ownerField]: context.profileId,
       },
     });
 
@@ -122,7 +116,7 @@ export async function PATCH(request: NextRequest) {
     );
 
     logger.info('Reordered items', {
-      userId: user.id,
+      userId: context.userId,
       model: parsed.model,
       count: parsed.items.length,
     });

@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
+import { NextRequest, NextResponse } from 'next/server';
 
+import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { ProjectSchema } from '@/lib/validations';
 
@@ -16,22 +17,18 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: {
-        profile: {
-          include: {
-            projects: { orderBy: { sortOrder: 'asc' } },
-          },
-        },
-      },
-    });
+    const { profileId } = await resolveActiveProfileContext(userId);
 
-    if (!user || !user.profile) {
+    if (!profileId) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ projects: user.profile.projects });
+    const projects = await db.project.findMany({
+      where: { profileId },
+      orderBy: { sortOrder: 'asc' },
+    });
+
+    return NextResponse.json({ projects });
   } catch (error) {
     console.error('Error fetching projects:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -60,24 +57,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: { profile: true },
-    });
+    const { profileId } = await resolveActiveProfileContext(userId);
 
-    if (!user || !user.profile) {
+    if (!profileId) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
     // Get the highest sortOrder
     const lastProject = await db.project.findFirst({
-      where: { profileId: user.profile.id },
+      where: { profileId },
       orderBy: { sortOrder: 'desc' },
     });
 
     const project = await db.project.create({
       data: {
-        profileId: user.profile.id,
+        profileId,
         ...validatedData.data,
         sortOrder: (lastProject?.sortOrder ?? -1) + 1,
         source: 'MANUAL',

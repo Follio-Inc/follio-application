@@ -4,7 +4,7 @@
  */
 
 import { cleanPhoneDisplay } from '@/components/ui/phone-input';
-import { containsHtmlFormatting, stripHtmlTags } from '@/lib/html-utils';
+import { containsHtmlFormatting, isHtmlEmpty, stripHtmlTags } from '@/lib/html-utils';
 import { logger } from '@/lib/logger';
 import { formatDate } from '@/lib/utils';
 import type { FullProfile, JSONResume } from '@/types';
@@ -28,6 +28,101 @@ function escapeHtml(str: string | null | undefined): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+/** A single contact item for resume header rendering. */
+interface ContactItem {
+  id: string;
+  value: string;
+  /** For HTML contexts: optional href (mailto:, tel:, or URL). */
+  href?: string;
+}
+
+/**
+ * Build the ordered list of contact items respecting the user's
+ * drag-and-drop `headerFieldsOrder` from ContactInfo.
+ *
+ * Each ID in the order maps to:
+ *  - `'location'` → profile.location
+ *  - `'email'`    → contactInfo.email (when emailPublic)
+ *  - `'phone'`    → contactInfo.phone (when phonePublic)
+ *  - any other ID → a link from profile.links (by link.id)
+ *
+ * Items not in the stored order are appended at the end.
+ * Website is always included if present (after ordered items).
+ */
+function getOrderedContactItems(profile: FullProfile): ContactItem[] {
+  const ci = profile.contactInfo;
+  const visibleLinks = profile.links.filter((l) => l.isVisible !== false);
+
+  // Build a map: id → ContactItem
+  const itemMap = new Map<string, ContactItem>();
+
+  if (profile.location) {
+    itemMap.set('location', { id: 'location', value: profile.location });
+  }
+  if (ci?.email && ci.emailPublic) {
+    itemMap.set('email', {
+      id: 'email',
+      value: ci.email,
+      href: `mailto:${ci.email}`,
+    });
+  }
+  if (ci?.phone && ci.phonePublic) {
+    itemMap.set('phone', {
+      id: 'phone',
+      value: cleanPhoneDisplay(ci.phone),
+      href: `tel:${ci.phone}`,
+    });
+  }
+
+  // Links — keyed by their database id
+  for (const link of visibleLinks) {
+    itemMap.set(link.id, {
+      id: link.id,
+      value: link.url,
+      href: link.url,
+    });
+  }
+
+  // Read stored order
+  const storedOrder = Array.isArray(ci?.headerFieldsOrder)
+    ? (ci!.headerFieldsOrder as string[])
+    : null;
+
+  if (storedOrder && storedOrder.length > 0) {
+    const ordered: ContactItem[] = [];
+    const seen = new Set<string>();
+    for (const id of storedOrder) {
+      const item = itemMap.get(id);
+      if (item && !seen.has(id)) {
+        ordered.push(item);
+        seen.add(id);
+      }
+    }
+    // Append any items that weren't in the stored order
+    for (const [id, item] of itemMap) {
+      if (!seen.has(id)) ordered.push(item);
+    }
+    // Website is a standalone field, always appended if present
+    if (ci?.website) {
+      ordered.push({ id: 'website', value: ci.website, href: ci.website });
+    }
+    return ordered;
+  }
+
+  // Fallback: default order (location → email → phone → website → links)
+  const fallback: ContactItem[] = [];
+  if (itemMap.has('location')) fallback.push(itemMap.get('location')!);
+  if (itemMap.has('email')) fallback.push(itemMap.get('email')!);
+  if (itemMap.has('phone')) fallback.push(itemMap.get('phone')!);
+  if (ci?.website) {
+    fallback.push({ id: 'website', value: ci.website, href: ci.website });
+  }
+  for (const link of visibleLinks) {
+    fallback.push(itemMap.get(link.id)!);
+  }
+  return fallback;
 }
 
 /**
@@ -178,29 +273,15 @@ export function toPlainText(profile: FullProfile): string {
       (p) => p.isVisible !== false && p.showOnResume !== false
     );
     const visibleCerts = profile.certifications.filter((c) => c.isVisible !== false);
-    const visibleLinks = profile.links.filter((l) => l.isVisible !== false);
 
     // Header
     lines.push(fullName.toUpperCase());
     if (profile.headline) lines.push(profile.headline);
-    if (profile.location) lines.push(profile.location);
 
-    // Contact
-    const contacts: string[] = [];
-    if (profile.contactInfo?.email && profile.contactInfo.emailPublic) {
-      contacts.push(profile.contactInfo.email);
-    }
-    if (profile.contactInfo?.phone && profile.contactInfo.phonePublic) {
-      contacts.push(cleanPhoneDisplay(profile.contactInfo.phone));
-    }
-    if (profile.contactInfo?.website) {
-      contacts.push(profile.contactInfo.website);
-    }
-    visibleLinks.forEach((link) => {
-      contacts.push(link.url);
-    });
-    if (contacts.length > 0) {
-      lines.push(contacts.join(' | '));
+    // Contact – respects user-configured header field order
+    const contactItems = getOrderedContactItems(profile);
+    if (contactItems.length > 0) {
+      lines.push(contactItems.map((c) => c.value).join(' | '));
     }
     lines.push('');
 
@@ -210,7 +291,7 @@ export function toPlainText(profile: FullProfile): string {
     for (const sectionType of sectionOrder) {
       switch (sectionType) {
         case 'SUMMARY':
-          if (profile.summary) {
+          if (profile.summary && !isHtmlEmpty(profile.summary)) {
             lines.push('SUMMARY');
             lines.push('-'.repeat(50));
             lines.push(profile.summary);
@@ -343,7 +424,7 @@ export function toPDFHtml(profile: FullProfile): string {
     for (const sectionType of sectionOrder) {
       switch (sectionType) {
         case 'SUMMARY':
-          if (profile.summary) {
+          if (profile.summary && !isHtmlEmpty(profile.summary)) {
             sectionHtmlParts.push(`
   <div class="section">
     <h2>Summary</h2>
@@ -486,36 +567,34 @@ export function toPDFHtml(profile: FullProfile): string {
   </style>
 </head>
 <body>
-  ${
-    profile.resumeShowPhoto && profile.avatarUrl
-      ? `
+  ${(() => {
+    const pdfContactItems = getOrderedContactItems(profile);
+    const contactHtml = pdfContactItems
+      .map((c) =>
+        c.href && c.href.startsWith('http')
+          ? `<a href="${escapeHtml(c.href)}">${escapeHtml(c.value)}</a>`
+          : escapeHtml(c.value)
+      )
+      .join(' | ');
+
+    if (profile.resumeShowPhoto && profile.avatarUrl) {
+      return `
   <div class="header-with-photo">
     <img src="${escapeHtml(profile.avatarUrl)}" alt="${escapeHtml(fullName)}" class="header-photo" />
     <div class="header-info">
       <h1>${escapeHtml(fullName)}</h1>
       ${profile.headline ? `<div class="headline">${escapeHtml(profile.headline)}</div>` : ''}
-      <div class="contact">
-        ${profile.location ? `${escapeHtml(profile.location)}` : ''}
-        ${profile.contactInfo?.email && profile.contactInfo.emailPublic ? ` | ${escapeHtml(profile.contactInfo.email)}` : ''}
-        ${profile.contactInfo?.phone && profile.contactInfo.phonePublic ? ` | ${escapeHtml(profile.contactInfo.phone)}` : ''}
-        ${profile.contactInfo?.website ? ` | <a href="${escapeHtml(profile.contactInfo.website)}">${escapeHtml(profile.contactInfo.website)}</a>` : ''}
-      </div>
+      ${contactHtml ? `<div class="contact">${contactHtml}</div>` : ''}
     </div>
-  </div>
-  `
-      : `
+  </div>`;
+    }
+    return `
   <div class="header">
     <h1>${escapeHtml(fullName)}</h1>
     ${profile.headline ? `<div class="headline">${escapeHtml(profile.headline)}</div>` : ''}
-    <div class="contact">
-      ${profile.location ? `${escapeHtml(profile.location)}` : ''}
-      ${profile.contactInfo?.email && profile.contactInfo.emailPublic ? ` | ${escapeHtml(profile.contactInfo.email)}` : ''}
-      ${profile.contactInfo?.phone && profile.contactInfo.phonePublic ? ` | ${escapeHtml(profile.contactInfo.phone)}` : ''}
-      ${profile.contactInfo?.website ? ` | <a href="${escapeHtml(profile.contactInfo.website)}">${escapeHtml(profile.contactInfo.website)}</a>` : ''}
-    </div>
-  </div>
-  `
-  }
+    ${contactHtml ? `<div class="contact">${contactHtml}</div>` : ''}
+  </div>`;
+  })()}
 
   ${sectionHtmlParts.join('\n')}
 </body>
@@ -561,7 +640,6 @@ export function generateResumePDF(profile: FullProfile): Promise<Buffer> {
     );
     const visibleCerts = profile.certifications.filter((c) => c.isVisible !== false);
     const visibleAwards = profile.awards.filter((a) => a.isVisible !== false);
-    const visibleLinks = profile.links.filter((l) => l.isVisible !== false);
 
     // Colors
     const primaryColor = '#1a1a1a';
@@ -575,20 +653,15 @@ export function generateResumePDF(profile: FullProfile): Promise<Buffer> {
       doc.fontSize(11).font('Helvetica').fillColor(secondaryColor).text(profile.headline);
     }
 
-    // Contact line
-    const contacts: string[] = [];
-    if (profile.location) contacts.push(profile.location);
-    if (profile.contactInfo?.email && profile.contactInfo.emailPublic) {
-      contacts.push(profile.contactInfo.email);
-    }
-    if (profile.contactInfo?.phone && profile.contactInfo.phonePublic) {
-      contacts.push(profile.contactInfo.phone);
-    }
-    if (profile.contactInfo?.website) contacts.push(profile.contactInfo.website);
-    visibleLinks.forEach((link) => contacts.push(link.url));
+    // Contact line – respects user-configured header field order
+    const pdfKitContactItems = getOrderedContactItems(profile);
 
-    if (contacts.length > 0) {
-      doc.fontSize(9).font('Helvetica').fillColor(secondaryColor).text(contacts.join('  |  '));
+    if (pdfKitContactItems.length > 0) {
+      doc
+        .fontSize(9)
+        .font('Helvetica')
+        .fillColor(secondaryColor)
+        .text(pdfKitContactItems.map((c) => c.value).join('  |  '));
     }
 
     doc.moveDown(0.5);
@@ -613,7 +686,7 @@ export function generateResumePDF(profile: FullProfile): Promise<Buffer> {
 
     // ── Section renderers (keyed by section type) ───────────
     const renderSummary = () => {
-      if (profile.summary) {
+      if (profile.summary && !isHtmlEmpty(profile.summary)) {
         sectionHeader('Summary');
         doc.fontSize(10).font('Helvetica').fillColor(primaryColor).text(profile.summary);
       }

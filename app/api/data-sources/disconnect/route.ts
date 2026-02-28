@@ -1,3 +1,4 @@
+import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { auth } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
@@ -21,19 +22,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Source is required' }, { status: 400 });
     }
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: { profile: true },
-    });
+    const { profileId } = await resolveActiveProfileContext(userId);
 
-    if (!user?.profile) {
+    if (!profileId) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
     // Update connection status
     await db.dataSourceConnection.updateMany({
       where: {
-        profileId: user.profile.id,
+        profileId,
         source: source,
       },
       data: {

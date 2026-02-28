@@ -1,6 +1,7 @@
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import type { NormalizedProfileData } from '@/services/import/types';
 import { shouldOverrideSource } from '@/services/multi-source-merger.service';
@@ -150,19 +151,22 @@ export async function POST(request: NextRequest) {
     // Optionally save to profile
     if (saveToProfile) {
       try {
-        const dbUser = await db.user.findUnique({
-          where: { clerkId: userId },
-          include: { profile: true },
-        });
+        const context = await resolveActiveProfileContext(userId).catch(() => null);
 
-        if (dbUser?.profile) {
-          const profileId = dbUser.profile.id;
+        if (context?.profileId) {
+          const profileId = context.profileId;
+          const currentProfile = await db.profile.findUnique({
+            where: { id: profileId },
+          });
+
+          if (!currentProfile) {
+            throw new Error('Profile not found');
+          }
 
           // Update profile with Google data based on source priority
           // Note: GOOGLE is treated similarly to other OAuth sources
           // Using string type for DataSource as GOOGLE may not be in the generated client yet
           const profileUpdate: Record<string, string> = {};
-          const currentProfile = dbUser.profile;
 
           if (
             firstName &&

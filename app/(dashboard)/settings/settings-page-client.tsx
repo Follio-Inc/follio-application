@@ -1,40 +1,82 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 
-import { ContactInfoForm } from '@/app/(dashboard)/builder/sections/basic-info-form';
-import { SettingsSection } from '@/app/(dashboard)/builder/sections/settings-section';
-import type { FullProfile } from '@/types';
+import type { ContactInfo, Profile } from '@prisma/client';
+
+import { AccountSection, type AccountContactUpdatePayload } from './_sections/account-section';
+import { AppearanceSection } from './_sections/appearance-section';
+import { PrivacySection } from './_sections/privacy-section';
+import { SettingsDesktopNav, SettingsMobileNav, type SettingsTab } from './_sections/settings-nav';
+
+// ============================================================================
+// Types
+// ============================================================================
+
+/** Settings page only needs the profile + contact info — not all relations */
+export type SettingsProfile = Profile & {
+  contactInfo: ContactInfo | null;
+};
 
 interface SettingsPageClientProps {
-  profile: FullProfile;
+  profile: SettingsProfile;
 }
+
+// ============================================================================
+// Component
+// ============================================================================
 
 export function SettingsPageClient({ profile }: SettingsPageClientProps) {
   const [currentProfile, setCurrentProfile] = useState(profile);
+  const [activeTab, setActiveTab] = useState<SettingsTab>('account');
 
-  const handleProfileUpdate = (updates: Partial<FullProfile>) => {
+  const handleProfileUpdate = useCallback((updates: Partial<Profile>) => {
     setCurrentProfile((prev) => ({ ...prev, ...updates }));
-  };
+  }, []);
 
-  const handleContactUpdate = (updates: Record<string, unknown>) => {
+  const handleContactUpdate = useCallback((updates: AccountContactUpdatePayload) => {
     setCurrentProfile((prev) => ({
       ...prev,
       contactInfo: prev.contactInfo
         ? { ...prev.contactInfo, ...updates }
-        : (updates as FullProfile['contactInfo']),
+        : ({ ...updates } as ContactInfo),
     }));
-  };
+  }, []);
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold">Settings</h1>
-          <p className="text-muted-foreground">Account preferences & configuration</p>
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      {/* Page header */}
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
+        <p className="mt-1 text-muted-foreground">Manage your account, preferences, and privacy</p>
+      </div>
+
+      {/* Mobile tabs (shown above content on smaller screens) */}
+      <div className="lg:hidden">
+        <SettingsMobileNav activeTab={activeTab} onTabChange={setActiveTab} />
+      </div>
+
+      {/* Desktop: sidebar + content */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-8">
+        {/* Desktop sidebar */}
+        <div className="hidden lg:block">
+          <SettingsDesktopNav activeTab={activeTab} onTabChange={setActiveTab} />
         </div>
-        <ContactInfoForm profile={currentProfile} onContactUpdate={handleContactUpdate} />
-        <SettingsSection profile={currentProfile} onUpdate={handleProfileUpdate} />
+
+        {/* Content area */}
+        <section className="min-w-0" aria-label={`${activeTab} settings`}>
+          {activeTab === 'account' && (
+            <AccountSection
+              profile={currentProfile}
+              onProfileUpdateAction={handleProfileUpdate}
+              onContactUpdateAction={handleContactUpdate}
+            />
+          )}
+
+          {activeTab === 'appearance' && <AppearanceSection />}
+
+          {activeTab === 'privacy' && <PrivacySection profile={currentProfile} />}
+        </section>
       </div>
     </div>
   );

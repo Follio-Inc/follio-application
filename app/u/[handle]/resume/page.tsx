@@ -22,15 +22,28 @@ async function validateShareToken(handle: string, token: string): Promise<boolea
 
   const shareToken = await db.shareToken.findUnique({
     where: { token },
-    include: {
-      user: {
-        include: { profile: true },
-      },
+    select: {
+      id: true,
+      userId: true,
+      expiresAt: true,
+      maxViews: true,
+      viewCount: true,
+      allowedView: true,
     },
   });
 
   if (!shareToken) return false;
-  if (shareToken.user.profile?.handle !== handle) return false;
+
+  const matchingProfile = await db.profile.findFirst({
+    where: {
+      userId: shareToken.userId,
+      handle,
+      isArchived: false,
+    },
+    select: { id: true },
+  });
+  if (!matchingProfile) return false;
+
   if (shareToken.expiresAt && shareToken.expiresAt < new Date()) return false;
   if (shareToken.maxViews && shareToken.viewCount >= shareToken.maxViews) return false;
 
@@ -51,12 +64,16 @@ async function getAuthState(handle: string): Promise<'owner' | 'authenticated' |
     const { userId } = await auth();
     if (!userId) return 'anonymous';
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: { profile: { select: { handle: true } } },
+    const ownedProfile = await db.profile.findFirst({
+      where: {
+        handle,
+        user: { clerkId: userId },
+        isArchived: false,
+      },
+      select: { id: true },
     });
 
-    if (user?.profile?.handle === handle) return 'owner';
+    if (ownedProfile) return 'owner';
     return 'authenticated';
   } catch {
     return 'anonymous';

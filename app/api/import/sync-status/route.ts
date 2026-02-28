@@ -1,3 +1,4 @@
+import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
@@ -21,29 +22,28 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: {
-        profile: {
-          include: {
-            dataSourceConnections: true,
-            workExperiences: { select: { id: true, source: true, company: true } },
-            educations: { select: { id: true, source: true, institution: true } },
-            skills: { select: { id: true, source: true, name: true } },
-            projects: { select: { id: true, source: true, title: true } },
-            links: { select: { id: true, source: true, url: true } },
-            certifications: { select: { id: true, source: true, name: true } },
-            githubProfile: { select: { username: true } },
-          },
-        },
-      },
-    });
-
-    if (!user?.profile) {
+    const context = await resolveActiveProfileContext(userId).catch(() => null);
+    if (!context?.profileId) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
-    const profile = user.profile;
+    const profile = await db.profile.findUnique({
+      where: { id: context.profileId },
+      include: {
+        dataSourceConnections: true,
+        workExperiences: { select: { id: true, source: true, company: true } },
+        educations: { select: { id: true, source: true, institution: true } },
+        skills: { select: { id: true, source: true, name: true } },
+        projects: { select: { id: true, source: true, title: true } },
+        links: { select: { id: true, source: true, url: true } },
+        certifications: { select: { id: true, source: true, name: true } },
+        githubProfile: { select: { username: true } },
+      },
+    });
+
+    if (!profile) {
+      return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
+    }
 
     // Get Clerk external accounts to check OAuth connections
     const clerkUser = await currentUser();

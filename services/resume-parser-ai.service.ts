@@ -2,7 +2,7 @@
  * AI-Powered Resume Parser Service (Hybrid Approach)
  *
  * This service uses a hybrid approach for maximum reliability:
- * 1. Primary: OpenAI GPT-4 for intelligent parsing (when API key available)
+ * 1. Primary: Claude AI for intelligent parsing (when API key available)
  * 2. Fallback: Rule-based parser for when AI is unavailable
  *
  * The AI approach is superior because:
@@ -13,7 +13,7 @@
  */
 
 import { logger } from '@/lib/logger';
-import OpenAI from 'openai';
+import Anthropic from '@anthropic-ai/sdk';
 
 const aiParseLogger = logger.child({ source: 'resume-parser-ai' });
 
@@ -85,16 +85,16 @@ interface ProjectAI {
 }
 
 // ============================================================================
-// OPENAI CLIENT
+// ANTHROPIC CLIENT
 // ============================================================================
 
-function getOpenAIClient(): OpenAI | null {
-  const apiKey = process.env.OPENAI_API_KEY;
+function getAnthropicClient(): Anthropic | null {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    aiParseLogger.info('No OPENAI_API_KEY found, will use rule-based fallback');
+    aiParseLogger.info('No ANTHROPIC_API_KEY found, will use rule-based fallback');
     return null;
   }
-  return new OpenAI({ apiKey });
+  return new Anthropic({ apiKey });
 }
 
 // ============================================================================
@@ -183,21 +183,18 @@ RESUME TEXT:
 // ============================================================================
 
 async function parseWithAI(text: string): Promise<ParsedResumeAI | null> {
-  const client = getOpenAIClient();
+  const client = getAnthropicClient();
   if (!client) return null;
 
   try {
-    aiParseLogger.info('Sending resume to OpenAI');
+    aiParseLogger.info('Sending resume to Claude');
     const startTime = Date.now();
 
-    const response = await client.chat.completions.create({
-      model: 'gpt-4o-mini', // Fast and cost-effective, good for structured extraction
+    const response = await client.messages.create({
+      model: 'claude-haiku-4-20250414', // Fast and cost-effective, good for structured extraction
+      system:
+        'You are a resume parsing assistant. Extract structured data from resumes accurately. Always respond with valid JSON only, no markdown formatting.',
       messages: [
-        {
-          role: 'system',
-          content:
-            'You are a resume parsing assistant. Extract structured data from resumes accurately. Always respond with valid JSON only, no markdown formatting.',
-        },
         {
           role: 'user',
           content: RESUME_PARSING_PROMPT + text,
@@ -205,15 +202,15 @@ async function parseWithAI(text: string): Promise<ParsedResumeAI | null> {
       ],
       temperature: 0.1, // Low temperature for consistent, accurate extraction
       max_tokens: 4000,
-      response_format: { type: 'json_object' },
     });
 
     const elapsed = Date.now() - startTime;
-    aiParseLogger.info('OpenAI response received', { duration: elapsed });
+    aiParseLogger.info('Claude response received', { duration: elapsed });
 
-    const content = response.choices[0]?.message?.content;
+    const contentBlock = response.content[0];
+    const content = contentBlock?.type === 'text' ? contentBlock.text : null;
     if (!content) {
-      aiParseLogger.error('Empty response from OpenAI');
+      aiParseLogger.error('Empty response from Claude');
       return null;
     }
 
@@ -222,7 +219,7 @@ async function parseWithAI(text: string): Promise<ParsedResumeAI | null> {
     try {
       parsed = JSON.parse(content);
     } catch (parseError) {
-      aiParseLogger.error('Failed to parse OpenAI JSON response', parseError);
+      aiParseLogger.error('Failed to parse Claude JSON response', parseError);
       return null;
     }
     aiParseLogger.debug('AI response parsed successfully');
@@ -301,7 +298,7 @@ async function parseWithAI(text: string): Promise<ParsedResumeAI | null> {
 
     return result;
   } catch (error) {
-    aiParseLogger.error('OpenAI parsing failed', error);
+    aiParseLogger.error('Claude parsing failed', error);
     return null;
   }
 }
@@ -527,5 +524,5 @@ export function normalizeResumeDataAI(parsed: ParsedResumeAI): NormalizedResumeD
 // ============================================================================
 
 export function isAIParserAvailable(): boolean {
-  return !!process.env.OPENAI_API_KEY;
+  return !!process.env.ANTHROPIC_API_KEY;
 }

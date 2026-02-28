@@ -285,6 +285,11 @@ export default function OnboardingImportPage() {
   const [hasRestoredPersistedState, setHasRestoredPersistedState] = useState(false);
   const [isCheckingProfile, setIsCheckingProfile] = useState(true);
 
+  // Detect if arriving from builder's "New resume from upload" flow
+  const isFromBuilder =
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('from') === 'builder';
+
   // ─── Step navigation ────────────────────────────────────────────
   const [currentStep, setCurrentStep] = useState<OnboardingStep>('resume');
   const currentStepIndex = STEPS.indexOf(currentStep);
@@ -296,10 +301,18 @@ export default function OnboardingImportPage() {
     return () => clearTimeout(fallbackTimeout);
   }, []);
 
-  // Check if user already has a profile
+  // Check if user already has a profile (skip when coming from builder to add a new resume)
   useEffect(() => {
     if (!isUserLoaded) return;
     if (!user) {
+      setIsCheckingProfile(false);
+      return;
+    }
+
+    // When arriving from builder, the user already has a profile and is creating
+    // a new resume via upload — skip the redirect and set the return URL.
+    if (isFromBuilder) {
+      sessionStorage.setItem('importReturnUrl', '/builder');
       setIsCheckingProfile(false);
       return;
     }
@@ -329,7 +342,7 @@ export default function OnboardingImportPage() {
     return () => {
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [isUserLoaded, user, router]);
+  }, [isUserLoaded, user, router, isFromBuilder]);
 
   // ─── OAuth states ───────────────────────────────────────────────
   const [githubConnecting, setGithubConnecting] = useState(false);

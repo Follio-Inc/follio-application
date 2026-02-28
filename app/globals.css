@@ -81,6 +81,13 @@
     text-wrap: balance;
   }
 
+  /* Remove card backgrounds/borders/shadows inside flat-cards containers */
+  .flat-cards [data-slot='card'] {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+  }
+
   /* Gradient text */
   .gradient-text {
     @apply bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent;
@@ -240,6 +247,7 @@
   .resume-paper {
     @apply mx-auto bg-white text-gray-900;
     max-width: 816px; /* 8.5 inches at 96dpi */
+    min-height: 1056px; /* 11 inches at 96dpi — full US Letter page */
     padding: 48px 56px;
     font-family: 'Georgia', 'Times New Roman', Times, serif;
     font-size: 13px;

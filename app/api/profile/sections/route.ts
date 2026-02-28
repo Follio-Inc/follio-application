@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { AppError, ErrorCode, handleApiError } from '@/lib/errors';
 
@@ -28,28 +29,19 @@ export async function GET() {
       throw new AppError('Unauthorized', ErrorCode.UNAUTHORIZED, 401);
     }
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: {
-        profile: {
-          include: {
-            sections: { orderBy: { sortOrder: 'asc' } },
-          },
-        },
-      },
+    const context = await resolveActiveProfileContext(userId);
+    const sections = await db.profileSection.findMany({
+      where: { profileId: context.profileId },
+      orderBy: { sortOrder: 'asc' },
     });
 
-    if (!user?.profile) {
-      throw new AppError('Profile not found', ErrorCode.NOT_FOUND, 404);
-    }
-
     // If no sections exist, create default sections
-    if (user.profile.sections.length === 0) {
+    if (sections.length === 0) {
       const defaultSections = await Promise.all(
         DEFAULT_SECTION_CONFIGS.map((config, index) =>
           db.profileSection.create({
             data: {
-              profileId: user.profile!.id,
+              profileId: context.profileId,
               type: config.type,
               title: config.title,
               sortOrder: index,
@@ -62,16 +54,16 @@ export async function GET() {
     }
 
     // Auto-add any missing default sections for existing users
-    const existingTypes = new Set(user.profile.sections.map((s) => s.type));
+    const existingTypes = new Set(sections.map((s) => s.type));
     const missingSections = DEFAULT_SECTION_CONFIGS.filter(
       (config) => !existingTypes.has(config.type)
     );
 
     if (missingSections.length > 0) {
-      const maxOrder = user.profile.sections.reduce((max, s) => Math.max(max, s.sortOrder), -1);
+      const maxOrder = sections.reduce((max, s) => Math.max(max, s.sortOrder), -1);
 
       // For SUMMARY, insert it right after LINKS (top of body) instead of at the end
-      const linksIdx = user.profile.sections.findIndex((s) => s.type === 'LINKS');
+      const linksIdx = sections.findIndex((s) => s.type === 'LINKS');
       // Find the first body section position (right after last header section)
       const insertAfterIdx = linksIdx;
 
@@ -80,12 +72,12 @@ export async function GET() {
           // Place SUMMARY right after header sections; others at the end
           const sortOrder =
             config.type === 'SUMMARY' && insertAfterIdx >= 0
-              ? user.profile!.sections[insertAfterIdx].sortOrder + 0.5
+              ? sections[insertAfterIdx].sortOrder + 0.5
               : maxOrder + 1 + i;
 
           return db.profileSection.create({
             data: {
-              profileId: user.profile!.id,
+              profileId: context.profileId,
               type: config.type,
               title: config.title,
               sortOrder,
@@ -96,9 +88,7 @@ export async function GET() {
       );
 
       // Re-normalize sort orders
-      const allSections = [...user.profile.sections, ...newSections].sort(
-        (a, b) => a.sortOrder - b.sortOrder
-      );
+      const allSections = [...sections, ...newSections].sort((a, b) => a.sortOrder - b.sortOrder);
       await Promise.all(
         allSections.map((s, idx) =>
           db.profileSection.update({
@@ -110,14 +100,14 @@ export async function GET() {
 
       // Re-fetch with correct order
       const updatedSections = await db.profileSection.findMany({
-        where: { profileId: user.profile.id },
+        where: { profileId: context.profileId },
         orderBy: { sortOrder: 'asc' },
       });
 
       return NextResponse.json(updatedSections);
     }
 
-    return NextResponse.json(user.profile.sections);
+    return NextResponse.json(sections);
   } catch (error) {
     return handleApiError(error);
   }
@@ -131,20 +121,12 @@ export async function POST(request: NextRequest) {
       throw new AppError('Unauthorized', ErrorCode.UNAUTHORIZED, 401);
     }
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: {
-        profile: {
-          include: {
-            sections: true,
-          },
-        },
-      },
-    });
+    const context = await resolveActiveProfileContext(userId);
 
-    if (!user?.profile) {
-      throw new AppError('Profile not found', ErrorCode.NOT_FOUND, 404);
-    }
+    const existingSections = await db.profileSection.findMany({
+      where: { profileId: context.profileId },
+      orderBy: { sortOrder: 'asc' },
+    });
 
     const body = await request.json();
     const { type, customName, title } = body;
@@ -155,18 +137,18 @@ export async function POST(request: NextRequest) {
 
     // Check if section already exists (except for CUSTOM)
     if (type !== 'CUSTOM') {
-      const existingSection = user.profile.sections.find((s) => s.type === type);
+      const existingSection = existingSections.find((s) => s.type === type);
       if (existingSection) {
         throw new AppError('Section already exists', ErrorCode.BAD_REQUEST, 400);
       }
     }
 
     // Get max sortOrder
-    const maxOrder = user.profile.sections.reduce((max, s) => Math.max(max, s.sortOrder), -1);
+    const maxOrder = existingSections.reduce((max, s) => Math.max(max, s.sortOrder), -1);
 
     const newSection = await db.profileSection.create({
       data: {
-        profileId: user.profile.id,
+        profileId: context.profileId,
         type: type as SectionType,
         customName: type === 'CUSTOM' ? customName : null,
         title:
@@ -195,14 +177,7 @@ export async function PATCH(request: NextRequest) {
       throw new AppError('Unauthorized', ErrorCode.UNAUTHORIZED, 401);
     }
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: { profile: true },
-    });
-
-    if (!user?.profile) {
-      throw new AppError('Profile not found', ErrorCode.NOT_FOUND, 404);
-    }
+    const context = await resolveActiveProfileContext(userId);
 
     const body = await request.json();
     const { sections } = body as {
@@ -213,7 +188,7 @@ export async function PATCH(request: NextRequest) {
     await Promise.all(
       sections.map((s) =>
         db.profileSection.update({
-          where: { id: s.id, profileId: user.profile!.id },
+          where: { id: s.id, profileId: context.profileId },
           data: {
             sortOrder: s.sortOrder,
             ...(s.isVisible !== undefined && { isVisible: s.isVisible }),
@@ -224,7 +199,7 @@ export async function PATCH(request: NextRequest) {
 
     // Return updated sections
     const updatedSections = await db.profileSection.findMany({
-      where: { profileId: user.profile.id },
+      where: { profileId: context.profileId },
       orderBy: { sortOrder: 'asc' },
     });
 

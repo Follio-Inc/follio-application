@@ -5,6 +5,7 @@
  * Designed to be swappable with better parsing engines later.
  */
 
+import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { normalizeResumeData, parseResume } from '@/services/resume-parser.service';
 import type { Prisma } from '@prisma/client';
@@ -198,7 +199,7 @@ export class ResumeImportService implements IResumeImportService {
       // Get user by Clerk ID to get database user ID
       const user = await db.user.findUnique({
         where: { clerkId: userId },
-        include: { profile: true },
+        select: { id: true },
       });
 
       if (!user) {
@@ -239,11 +240,12 @@ export class ResumeImportService implements IResumeImportService {
         const normalized = normalizeResumeData(parsed);
         const result = toNormalizedResult(normalized, parsed.rawText);
 
-        // User already fetched at start of function
-        if (user.profile) {
+        const context = await resolveActiveProfileContext(userId).catch(() => null);
+
+        if (context?.profileId) {
           await db.rawImportPayload.create({
             data: {
-              profileId: user.profile.id,
+              profileId: context.profileId,
               source: 'RESUME',
               rawData: {
                 text: parsed.rawText.substring(0, 50000), // Limit stored text

@@ -820,6 +820,8 @@ function ReviewPageContent() {
           handle: storedHandle,
           resumeFileName: resumeFileName || undefined,
           galleryPhotos: resolvedGalleryPhotos.length > 0 ? resolvedGalleryPhotos : undefined,
+          // When adding a new resume from builder, target the specific blank profile
+          targetProfileId: sessionStorage.getItem('importTargetProfileId') || undefined,
           reviewedData: {
             profile: profileForApi,
             experiences: data.experiences,
@@ -865,9 +867,10 @@ function ReviewPageContent() {
       // Clear session data and IndexedDB photos
       sessionStorage.removeItem('onboarding_parsed_resume');
       sessionStorage.removeItem('onboarding_handle');
+      sessionStorage.removeItem('importTargetProfileId');
       await clearPhotosFromIndexedDB();
 
-      // Check if there's a return URL (e.g., coming from builder's Import & Sync)
+      // Check if there's a return URL (e.g., coming from builder's "New resume from upload")
       const returnUrl = sessionStorage.getItem('importReturnUrl');
       sessionStorage.removeItem('importReturnUrl');
 

@@ -79,6 +79,7 @@ export interface PublicContactInfo {
   email: string | null;
   phone: string | null;
   website: string | null;
+  headerFieldsOrder?: string[] | null;
 }
 
 // ===========================================

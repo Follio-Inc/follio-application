@@ -94,8 +94,24 @@ export function SectionEditor({ sectionType, section }: SectionEditorProps) {
   const handleContactUpdate = useCallback(
     (updates: Partial<ContactDraft>) => {
       updateContactDraft(updates);
+
+      // Sync contact fields back to draftProfile.contactInfo so that:
+      // 1. The resume preview reflects the change immediately
+      // 2. If ContactDetailsSection remounts, it rebuilds from up-to-date contactInfo
+      const ci = (draftProfile.contactInfo ?? {}) as Record<string, unknown>;
+      const merged = { ...ci };
+      let changed = false;
+      for (const key of Object.keys(updates) as (keyof ContactDraft)[]) {
+        if (updates[key] !== undefined && merged[key] !== updates[key]) {
+          merged[key] = updates[key];
+          changed = true;
+        }
+      }
+      if (changed) {
+        updateDraft({ contactInfo: merged as FullProfile['contactInfo'] });
+      }
     },
-    [updateContactDraft]
+    [updateContactDraft, updateDraft, draftProfile.contactInfo]
   );
 
   /**

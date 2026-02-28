@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
+import { NextRequest, NextResponse } from 'next/server';
 
+import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { SkillGroupSchema } from '@/lib/validations';
 
@@ -16,25 +17,19 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: {
-        profile: {
-          include: {
-            skillGroups: {
-              include: { skills: { orderBy: { sortOrder: 'asc' } } },
-              orderBy: { sortOrder: 'asc' },
-            },
-          },
-        },
-      },
-    });
+    const { profileId } = await resolveActiveProfileContext(userId);
 
-    if (!user || !user.profile) {
+    if (!profileId) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ skillGroups: user.profile.skillGroups });
+    const skillGroups = await db.skillGroup.findMany({
+      where: { profileId },
+      include: { skills: { orderBy: { sortOrder: 'asc' } } },
+      orderBy: { sortOrder: 'asc' },
+    });
+
+    return NextResponse.json({ skillGroups });
   } catch (error) {
     console.error('Error fetching skill groups:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -63,19 +58,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: { profile: true },
-    });
+    const { profileId } = await resolveActiveProfileContext(userId);
 
-    if (!user || !user.profile) {
+    if (!profileId) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
     // Check for duplicate group name
     const existingGroup = await db.skillGroup.findFirst({
       where: {
-        profileId: user.profile.id,
+        profileId,
         name: validatedData.data.name,
       },
     });
@@ -89,13 +81,13 @@ export async function POST(request: NextRequest) {
 
     // Get the highest sortOrder
     const lastGroup = await db.skillGroup.findFirst({
-      where: { profileId: user.profile.id },
+      where: { profileId },
       orderBy: { sortOrder: 'desc' },
     });
 
     const skillGroup = await db.skillGroup.create({
       data: {
-        profileId: user.profile.id,
+        profileId,
         name: validatedData.data.name,
         sortOrder: (lastGroup?.sortOrder ?? -1) + 1,
       },

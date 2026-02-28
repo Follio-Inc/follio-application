@@ -36,6 +36,11 @@ export function UserMenu() {
   const [copied, setCopied] = useState(false);
   const [handle, setHandle] = useState<string | null>(null);
   const [profileStatus, setProfileStatus] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const fetchHandle = useCallback(async () => {
     try {
@@ -54,7 +59,15 @@ export function UserMenu() {
     if (user) fetchHandle();
   }, [user, fetchHandle]);
 
-  if (!user) return null;
+  // Render a stable placeholder during SSR and initial hydration to prevent mismatch.
+  // After hydration, useEffect sets `mounted` to true and the real UI renders.
+  if (!mounted || !user) {
+    return (
+      <div className="flex items-center gap-2">
+        <div className="h-8 w-8 animate-pulse rounded-full bg-muted" />
+      </div>
+    );
+  }
 
   const initials =
     [user.firstName?.[0], user.lastName?.[0]].filter(Boolean).join('').toUpperCase() ||

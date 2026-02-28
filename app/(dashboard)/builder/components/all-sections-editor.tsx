@@ -24,7 +24,6 @@ import {
 } from 'lucide-react';
 import { useCallback, useState } from 'react';
 
-import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -43,9 +42,9 @@ import {
 } from '@/lib/stores/builder-store';
 import { cn } from '@/lib/utils';
 
-import { FormSaveBar } from './form-save-bar';
-import { useBuilderStore } from './builder-store-provider';
 import { saveProfileDraft } from '../lib/save-profile-draft';
+import { useBuilderStore } from './builder-store-provider';
+import { FormSaveBar } from './form-save-bar';
 
 import { AwardsSection } from '../[section]/awards-section';
 import { CertificationsSection } from '../[section]/certifications-section';
@@ -359,7 +358,7 @@ export function AllSectionsEditor() {
                 entryId: 'new',
               })
             }
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-muted-foreground/30 py-8 text-sm text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border/30 py-8 text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
           >
             <Plus className="h-4 w-4" />
             Add {singularName}
@@ -368,7 +367,7 @@ export function AllSectionsEditor() {
       }
 
       return (
-        <div className="space-y-1.5">
+        <div className="space-y-1">
           {entries.map((entry) => (
             <button
               key={entry.id}
@@ -380,7 +379,7 @@ export function AllSectionsEditor() {
                   entryId: entry.id,
                 })
               }
-              className="group/entry flex w-full items-center gap-3 rounded-lg border bg-background px-4 py-3 text-left transition-all hover:border-primary/20 hover:bg-muted/50"
+              className="group/entry flex w-full items-center gap-3 rounded-lg border border-border/30 bg-background px-3 py-2.5 text-left transition-colors hover:border-border/50 hover:shadow-sm"
             >
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">{entry.title}</p>
@@ -389,9 +388,9 @@ export function AllSectionsEditor() {
                 )}
               </div>
               {entry.meta && (
-                <span className="shrink-0 text-xs text-muted-foreground">{entry.meta}</span>
+                <span className="shrink-0 text-xs text-muted-foreground/70">{entry.meta}</span>
               )}
-              <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground/30 transition-transform duration-150 group-hover/entry:-rotate-90" />
+              <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground/20 transition-transform duration-150 group-hover/entry:-rotate-90" />
             </button>
           ))}
           <button
@@ -403,7 +402,7 @@ export function AllSectionsEditor() {
                 entryId: 'new',
               })
             }
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-muted-foreground/25 py-2.5 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border/20 py-2.5 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
           >
             <Plus className="h-3.5 w-3.5" />
             Add {singularName}
@@ -608,7 +607,7 @@ export function AllSectionsEditor() {
         <button
           type="button"
           onClick={handleEditComplete}
-          className="flex w-full items-center gap-3 rounded-xl border bg-background px-4 py-3.5 text-left shadow-sm transition-colors duration-200 hover:bg-muted/50"
+          className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left transition-colors duration-200 hover:bg-muted/50"
         >
           <ArrowLeft className="h-4 w-4 text-muted-foreground" />
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -662,33 +661,33 @@ export function AllSectionsEditor() {
               {/* Unified section container — header + content share one visual card */}
               <div
                 className={cn(
-                  'overflow-hidden rounded-xl border bg-background shadow-sm transition-all duration-200',
+                  'overflow-hidden rounded-xl border transition-all duration-200',
                   isExpanded
-                    ? 'border-primary/20 shadow-md ring-1 ring-primary/10'
-                    : 'border-border/60 hover:border-border hover:shadow-md'
+                    ? 'border-border/50 bg-background ring-1 ring-primary/10'
+                    : 'border-border/30 bg-background/70 hover:border-border/50 hover:bg-background'
                 )}
               >
                 {/* Section card header */}
                 <button
                   type="button"
                   onClick={() => toggleSection(section.id)}
-                  className="flex w-full items-center gap-3.5 px-5 py-4 text-left transition-colors"
+                  className="flex w-full items-center gap-3.5 px-5 py-3.5 text-left transition-colors"
                 >
                   <div
                     className={cn(
-                      'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors duration-200',
+                      'flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors duration-200',
                       isExpanded
                         ? 'bg-primary/10 text-primary'
-                        : 'bg-muted text-muted-foreground group-hover/section:bg-primary/10 group-hover/section:text-primary'
+                        : 'text-muted-foreground group-hover/section:text-primary'
                     )}
                   >
                     <Icon className="h-4 w-4" />
                   </div>
-                  <span className="flex-1 text-sm font-semibold tracking-tight">{title}</span>
+                  <span className="flex-1 text-sm font-medium">{title}</span>
                   <ChevronDown
                     className={cn(
-                      'h-3.5 w-3.5 shrink-0 text-muted-foreground/40 transition-transform duration-200',
-                      isExpanded && '-rotate-180 text-primary/70'
+                      'h-3.5 w-3.5 shrink-0 text-muted-foreground/30 transition-transform duration-200',
+                      isExpanded && '-rotate-180 text-primary/60'
                     )}
                   />
                 </button>
@@ -703,7 +702,7 @@ export function AllSectionsEditor() {
                       transition={{ duration: 0.2, ease: 'easeInOut' }}
                       className="overflow-hidden"
                     >
-                      <div className="border-t border-border/40 px-5 pb-5 pt-4">
+                      <div className="rounded-b-xl border-t border-border/20 bg-muted/50 px-5 pb-5 pt-4">
                         {ENTRY_SECTIONS.has(section.type)
                           ? renderEntryList(section)
                           : renderSection(section)}
@@ -725,6 +724,23 @@ export function AllSectionsEditor() {
           );
         })}
       </div>
+      <AlertDialog
+        open={showDiscardWarning}
+        onOpenChange={(open) => !open && handleCancelDiscard()}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard unsaved changes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have unsaved edits in this section. Discarding will permanently remove them.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleCancelDiscard}>Keep Editing</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmDiscard}>Discard Changes</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

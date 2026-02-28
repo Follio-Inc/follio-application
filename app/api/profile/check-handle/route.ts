@@ -1,7 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 
-import { db } from '@/lib/db';
+import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { isHandleAvailable } from '@/services/profile.service';
 
 export async function GET(request: NextRequest) {
@@ -22,11 +22,8 @@ export async function GET(request: NextRequest) {
     let excludeProfileId: string | undefined;
     const { userId } = await auth();
     if (userId) {
-      const user = await db.user.findUnique({
-        where: { clerkId: userId },
-        include: { profile: { select: { id: true } } },
-      });
-      excludeProfileId = user?.profile?.id;
+      const context = await resolveActiveProfileContext(userId);
+      excludeProfileId = context.profileId ?? undefined;
     }
 
     const available = await isHandleAvailable(handle, excludeProfileId);

@@ -5,7 +5,7 @@ import { useCallback, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { cleanPhoneDisplay } from '@/components/ui/phone-input';
-import { containsHtmlFormatting } from '@/lib/html-utils';
+import { containsHtmlFormatting, isHtmlEmpty } from '@/lib/html-utils';
 import { getPortfolioPath } from '@/lib/url';
 import { formatDate } from '@/lib/utils';
 import { applyVisibilityFilter, type FilteredProfile } from '@/lib/visibility';
@@ -72,30 +72,53 @@ function ResumeHeader({ profile }: { profile: FilteredProfile }) {
     profile.avatarUrl &&
     profile._photosVisible;
 
-  // Build contact line items
-  const contactItems: string[] = [];
+  // Build contact line items — respects user-configured headerFieldsOrder
+  const contactItems: string[] = (() => {
+    // Build a map: id → display string
+    const itemMap = new Map<string, string>();
 
-  if (profile.location) {
-    contactItems.push(profile.location);
-  }
+    if (profile.location) {
+      itemMap.set('location', profile.location);
+    }
+    if (profile.contactInfo?.email) {
+      itemMap.set('email', profile.contactInfo.email);
+    }
+    if (profile.contactInfo?.phone) {
+      itemMap.set('phone', cleanPhoneDisplay(profile.contactInfo.phone));
+    }
 
-  if (profile.contactInfo?.email) {
-    contactItems.push(profile.contactInfo.email);
-  }
+    // Links — already filtered by applyVisibilityFilter (section + entry level)
+    profile.links?.forEach((link) => {
+      const displayUrl = link.url
+        .replace(/^https?:\/\//, '')
+        .replace(/^www\./, '')
+        .replace(/\/$/, '');
+      itemMap.set(link.id, displayUrl);
+    });
 
-  if (profile.contactInfo?.phone) {
-    contactItems.push(cleanPhoneDisplay(profile.contactInfo.phone));
-  }
+    const storedOrder = (profile.contactInfo as Record<string, unknown> | null)?.headerFieldsOrder;
+    const order = Array.isArray(storedOrder) ? (storedOrder as string[]) : null;
 
-  // Links — already filtered by applyVisibilityFilter (section + entry level)
-  profile.links?.forEach((link) => {
-    // Clean URL for display (remove https://, www.)
-    const displayUrl = link.url
-      .replace(/^https?:\/\//, '')
-      .replace(/^www\./, '')
-      .replace(/\/$/, '');
-    contactItems.push(displayUrl);
-  });
+    if (order && order.length > 0) {
+      const ordered: string[] = [];
+      const seen = new Set<string>();
+      for (const id of order) {
+        const val = itemMap.get(id);
+        if (val && !seen.has(id)) {
+          ordered.push(val);
+          seen.add(id);
+        }
+      }
+      // Append items not in the stored order
+      for (const [id, val] of itemMap) {
+        if (!seen.has(id)) ordered.push(val);
+      }
+      return ordered;
+    }
+
+    // Fallback: default order
+    return Array.from(itemMap.values());
+  })();
 
   return (
     <header className="resume-header relative">
@@ -747,7 +770,7 @@ export function CleanResumeView({ profile: rawProfile, profileHandle }: CleanRes
   const renderSection = (section: ProfileSection) => {
     switch (section.type) {
       case 'SUMMARY':
-        return profile.summary ? (
+        return profile.summary && !isHtmlEmpty(profile.summary) ? (
           <SummarySection key={section.id} summary={profile.summary} />
         ) : null;
       case 'EXPERIENCE':

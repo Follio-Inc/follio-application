@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
+import { NextRequest, NextResponse } from 'next/server';
 
+import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { EducationSchema } from '@/lib/validations';
 
@@ -27,12 +28,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       );
     }
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: { profile: true },
-    });
+    const { profileId } = await resolveActiveProfileContext(userId);
 
-    if (!user || !user.profile) {
+    if (!profileId) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
@@ -40,7 +38,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const existingEducation = await db.education.findFirst({
       where: {
         id,
-        profileId: user.profile.id,
+        profileId,
       },
     });
 
@@ -80,12 +78,9 @@ export async function DELETE(
 
     const { id } = await params;
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: { profile: true },
-    });
+    const { profileId } = await resolveActiveProfileContext(userId);
 
-    if (!user || !user.profile) {
+    if (!profileId) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
@@ -93,7 +88,7 @@ export async function DELETE(
     const existingEducation = await db.education.findFirst({
       where: {
         id,
-        profileId: user.profile.id,
+        profileId,
       },
     });
 

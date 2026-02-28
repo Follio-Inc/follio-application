@@ -460,9 +460,9 @@ export function ShareDialog({ profile }: ShareDialogProps) {
           <TooltipTrigger asChild>
             <DialogTrigger asChild>
               <Button
-                variant="ghost"
+                variant="outline"
                 size="sm"
-                className="h-7 gap-1.5 px-2 text-xs text-muted-foreground"
+                className="h-7 gap-1.5 rounded-full bg-background/80 px-3 text-xs shadow-sm backdrop-blur-sm hover:bg-background"
               >
                 <Share2 className="h-3 w-3" />
                 Share

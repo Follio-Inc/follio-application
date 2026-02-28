@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { SkillSchema } from '@/lib/validations';
 import { z } from 'zod';
@@ -17,28 +18,27 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: {
-        profile: {
-          include: {
-            skills: { orderBy: { sortOrder: 'asc' } },
-            skillGroups: {
-              include: { skills: { orderBy: { sortOrder: 'asc' } } },
-              orderBy: { sortOrder: 'asc' },
-            },
-          },
-        },
-      },
-    });
+    const { profileId } = await resolveActiveProfileContext(userId);
 
-    if (!user || !user.profile) {
+    if (!profileId) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
+    const [skills, skillGroups] = await Promise.all([
+      db.skill.findMany({
+        where: { profileId },
+        orderBy: { sortOrder: 'asc' },
+      }),
+      db.skillGroup.findMany({
+        where: { profileId },
+        include: { skills: { orderBy: { sortOrder: 'asc' } } },
+        orderBy: { sortOrder: 'asc' },
+      }),
+    ]);
+
     return NextResponse.json({
-      skills: user.profile.skills,
-      skillGroups: user.profile.skillGroups,
+      skills,
+      skillGroups,
     });
   } catch (error) {
     console.error('Error fetching skills:', error);
@@ -73,19 +73,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: { profile: true },
-    });
+    const { profileId } = await resolveActiveProfileContext(userId);
 
-    if (!user || !user.profile) {
+    if (!profileId) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
     // Check for duplicate skill name
     const existingSkill = await db.skill.findFirst({
       where: {
-        profileId: user.profile.id,
+        profileId,
         name: validatedData.data.name,
       },
     });
@@ -96,13 +93,13 @@ export async function POST(request: NextRequest) {
 
     // Get the highest sortOrder
     const lastSkill = await db.skill.findFirst({
-      where: { profileId: user.profile.id },
+      where: { profileId },
       orderBy: { sortOrder: 'desc' },
     });
 
     const skill = await db.skill.create({
       data: {
-        profileId: user.profile.id,
+        profileId,
         name: validatedData.data.name,
         level: validatedData.data.level,
         yearsOfExp: validatedData.data.yearsOfExp,

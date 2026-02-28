@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { AppError, ErrorCode, handleApiError } from '@/lib/errors';
 import type { SectionType } from '@/types';
@@ -19,19 +20,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     const { id } = await params;
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: { profile: true },
-    });
+    const { profileId } = await resolveActiveProfileContext(userId);
 
-    if (!user?.profile) {
+    if (!profileId) {
       throw new AppError('Profile not found', ErrorCode.NOT_FOUND, 404);
     }
 
     const section = await db.profileSection.findFirst({
       where: {
         id,
-        profileId: user.profile.id,
+        profileId,
       },
     });
 
@@ -55,12 +53,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     const { id } = await params;
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: { profile: true },
-    });
+    const { profileId } = await resolveActiveProfileContext(userId);
 
-    if (!user?.profile) {
+    if (!profileId) {
       throw new AppError('Profile not found', ErrorCode.NOT_FOUND, 404);
     }
 
@@ -70,7 +65,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const section = await db.profileSection.update({
       where: {
         id,
-        profileId: user.profile.id,
+        profileId,
       },
       data: {
         ...(title !== undefined && { title }),
@@ -97,24 +92,26 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
     const { id } = await params;
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
+    const { profileId } = await resolveActiveProfileContext(userId);
+
+    if (!profileId) {
+      throw new AppError('Profile not found', ErrorCode.NOT_FOUND, 404);
+    }
+
+    const profile = await db.profile.findUnique({
+      where: { id: profileId },
       include: {
-        profile: {
-          include: {
-            workExperiences: true,
-            educations: true,
-            skills: true,
-            projects: true,
-            links: true,
-            awards: true,
-            certifications: true,
-          },
-        },
+        workExperiences: true,
+        educations: true,
+        skills: true,
+        projects: true,
+        links: true,
+        awards: true,
+        certifications: true,
       },
     });
 
-    if (!user?.profile) {
+    if (!profile) {
       throw new AppError('Profile not found', ErrorCode.NOT_FOUND, 404);
     }
 
@@ -122,7 +119,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const section = await db.profileSection.findFirst({
       where: {
         id,
-        profileId: user.profile.id,
+        profileId,
       },
     });
 
@@ -136,7 +133,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     }
 
     // Check if section has content
-    const hasContent = checkSectionHasContent(section.type, user.profile, section);
+    const hasContent = checkSectionHasContent(section.type, profile, section);
     if (hasContent) {
       throw new AppError(
         'Cannot delete section with content. Please remove all items first or hide the section instead.',

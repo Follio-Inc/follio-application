@@ -159,6 +159,7 @@ export function applyVisibilityFilter(
       email: ci.emailPublic !== false ? filteredContactInfo.email : null,
       phone: ci.phonePublic !== false ? filteredContactInfo.phone : null,
       website: filteredContactInfo.website ?? null,
+      headerFieldsOrder: Array.isArray(ci.headerFieldsOrder) ? ci.headerFieldsOrder : null,
     } as PublicProfile['contactInfo'];
   }
 

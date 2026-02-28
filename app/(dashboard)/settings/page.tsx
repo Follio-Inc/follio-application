@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 
+import { resolveActiveProfileContextOrNull } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { SettingsPageClient } from './settings-page-client';
 
@@ -21,37 +22,24 @@ export default async function SettingsPage() {
     redirect('/sign-in');
   }
 
-  const user = await db.user.findUnique({
-    where: { clerkId: userId },
-    include: {
-      profile: {
-        include: {
-          contactInfo: true,
-          links: { orderBy: { sortOrder: 'asc' } },
-          workExperiences: { orderBy: { sortOrder: 'asc' } },
-          educations: { orderBy: { sortOrder: 'asc' } },
-          skills: { orderBy: { sortOrder: 'asc' } },
-          skillGroups: {
-            include: { skills: { orderBy: { sortOrder: 'asc' } } },
-            orderBy: { sortOrder: 'asc' },
-          },
-          projects: { orderBy: { sortOrder: 'asc' } },
-          awards: { orderBy: { sortOrder: 'asc' } },
-          certifications: { orderBy: { sortOrder: 'asc' } },
-          blogPosts: { orderBy: { createdAt: 'desc' } },
-          youtubeVideos: { orderBy: { createdAt: 'desc' } },
-          photos: { orderBy: { sortOrder: 'asc' } },
-          sections: { orderBy: { sortOrder: 'asc' } },
-        },
-      },
-    },
-  });
-
-  if (!user || !user.profile) {
+  // Only fetch the data settings actually needs — not the entire profile graph
+  const context = await resolveActiveProfileContextOrNull(userId);
+  if (!context) {
     redirect('/onboarding');
   }
 
-  const serializedProfile = serializeForClient(user.profile);
+  const profile = await db.profile.findUnique({
+    where: { id: context.profileId },
+    include: {
+      contactInfo: true,
+    },
+  });
+
+  if (!profile) {
+    redirect('/onboarding');
+  }
+
+  const serializedProfile = serializeForClient(profile);
 
   return <SettingsPageClient profile={serializedProfile} />;
 }

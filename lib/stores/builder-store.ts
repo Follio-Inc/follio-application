@@ -1,15 +1,13 @@
 /**
  * Builder Store
  *
- * Zustand store with zundo temporal middleware for undo/redo.
+ * Zustand store for the builder.
  * Holds the draft profile state for the builder, enabling:
  * - Real-time preview updates (preview reads from draftProfile)
  * - Explicit save (draft is persisted to API only on Save)
  * - Cancel/discard changes (revert draft to last saved state)
- * - Undo/redo for all draft changes
  */
 
-import { temporal, type TemporalState } from 'zundo';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 
 import type { FullProfile } from '@/types';
@@ -145,71 +143,53 @@ export function hasContactDraftChanges(draft: ContactDraft, saved: ContactDraft)
 }
 
 // ──────────────────────────────────────────────
-// Partialised type for undo/redo tracking
-// ──────────────────────────────────────────────
-
-type TrackedState = Pick<BuilderState, 'draftProfile' | 'contactDraft'>;
-
 // ──────────────────────────────────────────────
 // Store Factory
 // ──────────────────────────────────────────────
 
-export type BuilderStoreApi = StoreApi<BuilderState> & {
-  temporal: StoreApi<TemporalState<TrackedState>>;
-};
+export type BuilderStoreApi = StoreApi<BuilderState>;
 
 export function createBuilderStore(profile: FullProfile): BuilderStoreApi {
   const initialContact = extractContactDraft(profile);
 
-  return createStore<BuilderState>()(
-    temporal(
-      (set) => ({
-        draftProfile: profile,
-        savedProfile: profile,
-        contactDraft: initialContact,
-        savedContact: { ...initialContact },
-        isSaving: false,
-        isInlineEditing: false,
+  return createStore<BuilderState>()((set) => ({
+    draftProfile: profile,
+    savedProfile: profile,
+    contactDraft: initialContact,
+    savedContact: { ...initialContact },
+    isSaving: false,
+    isInlineEditing: false,
 
-        updateDraft: (updates) =>
-          set((state) => ({
-            draftProfile: { ...state.draftProfile, ...updates },
-          })),
+    updateDraft: (updates) =>
+      set((state) => ({
+        draftProfile: { ...state.draftProfile, ...updates },
+      })),
 
-        updateContactDraft: (updates) =>
-          set((state) => ({
-            contactDraft: { ...state.contactDraft, ...updates },
-          })),
+    updateContactDraft: (updates) =>
+      set((state) => ({
+        contactDraft: { ...state.contactDraft, ...updates },
+      })),
 
-        commitInlineChange: (updates) =>
-          set((state) => ({
-            draftProfile: { ...state.draftProfile, ...updates },
-            savedProfile: { ...state.savedProfile, ...updates },
-          })),
+    commitInlineChange: (updates) =>
+      set((state) => ({
+        draftProfile: { ...state.draftProfile, ...updates },
+        savedProfile: { ...state.savedProfile, ...updates },
+      })),
 
-        markSaved: () =>
-          set((state) => ({
-            savedProfile: { ...state.draftProfile },
-            savedContact: { ...state.contactDraft },
-          })),
+    markSaved: () =>
+      set((state) => ({
+        savedProfile: { ...state.draftProfile },
+        savedContact: { ...state.contactDraft },
+      })),
 
-        discardChanges: () =>
-          set((state) => ({
-            draftProfile: { ...state.savedProfile },
-            contactDraft: { ...state.savedContact },
-          })),
+    discardChanges: () =>
+      set((state) => ({
+        draftProfile: { ...state.savedProfile },
+        contactDraft: { ...state.savedContact },
+      })),
 
-        setSaving: (saving) => set({ isSaving: saving }),
+    setSaving: (saving) => set({ isSaving: saving }),
 
-        setInlineEditing: (editing) => set({ isInlineEditing: editing }),
-      }),
-      {
-        partialize: (state): TrackedState => ({
-          draftProfile: state.draftProfile,
-          contactDraft: state.contactDraft,
-        }),
-        limit: 100,
-      }
-    )
-  ) as BuilderStoreApi;
+    setInlineEditing: (editing) => set({ isInlineEditing: editing }),
+  }));
 }
