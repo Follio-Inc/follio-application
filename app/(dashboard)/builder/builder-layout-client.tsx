@@ -1,12 +1,15 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Palette, PenLine } from 'lucide-react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 
 import { AllSectionsEditor } from './components/all-sections-editor';
 import { BuilderStoreProvider, useBuilderStore } from './components/builder-store-provider';
 import { BuilderToolbar } from './components/builder-toolbar';
+import { DesignerPanel } from './components/designer-panel';
 import { ImportSuggestionDialog } from './components/import-suggestion-dialog';
 import { ResumePreviewPanel } from './components/resume-preview-panel';
 
@@ -55,10 +58,15 @@ interface BuilderLayoutInnerProps {
 }
 
 function BuilderLayoutInner({ sections }: BuilderLayoutInnerProps) {
-  // Keep sections in sync with the zustand store so the preview stays up-to-date
   const commitInlineChange = useBuilderStore((s) => s.commitInlineChange);
   const storeSections = useBuilderStore((s) => s.draftProfile.sections);
+  const [designerActive, setDesignerActive] = useState(false);
 
+  const toggleDesigner = useCallback(() => {
+    setDesignerActive((prev) => !prev);
+  }, []);
+
+  // Keep sections in sync with the zustand store so the preview stays up-to-date
   useEffect(() => {
     const storeJson = JSON.stringify(
       (storeSections || []).map((s) => ({
@@ -76,30 +84,81 @@ function BuilderLayoutInner({ sections }: BuilderLayoutInnerProps) {
   }, [sections, storeSections, commitInlineChange]);
 
   return (
-    <div className="flex min-h-[calc(100vh-3.5rem)] flex-col bg-muted/30">
+    <div className="flex min-h-[calc(100vh-3.5rem)] flex-col bg-muted/30 xl:h-[calc(100vh-3.5rem)]">
       <TooltipProvider delayDuration={300}>
-        {/* Toolbar — spans full width, sticks to top of the scroll container */}
-        <div className="sticky top-0 z-20 border-b border-border/40 bg-muted/50 backdrop-blur-sm">
+        {/* Toolbar — spans full width */}
+        <div className="sticky top-0 z-20 flex-shrink-0 border-b border-border/40 bg-muted/50 backdrop-blur-sm">
           <BuilderToolbar />
         </div>
 
-        <div className="flex min-h-0 flex-1">
-          {/* Editor — All sections stacked vertically, grows with content */}
-          <main className="flex min-w-0 flex-[4] flex-col bg-muted/50">
-            {/* Section editors — expand naturally, no inner scroll */}
-            <div className="min-h-[60vh] flex-1">
-              <div className="flat-cards mx-auto max-w-3xl px-5 py-6">
-                <AllSectionsEditor />
+        {/* Content area — on xl+ fixed height with overflow hidden for sliding */}
+        <div className="relative flex-1 xl:min-h-0 xl:overflow-hidden">
+          {/* ── 3-panel sliding strip ── */}
+          <div
+            className="builder-slide flex h-full"
+            data-designer-active={designerActive || undefined}
+          >
+            {/* ── Panel 1: Editor ── */}
+            <main className="flex w-full min-w-0 flex-col bg-muted/50 xl:w-auto xl:flex-[4_0_0%] xl:overflow-y-auto">
+              <div className="min-h-[60vh] flex-1">
+                <div className="flat-cards mx-auto max-w-3xl px-5 py-6">
+                  <AllSectionsEditor />
+                </div>
+              </div>
+            </main>
+
+            {/* ── Panel 2: Resume Preview ── */}
+            <div className="hidden min-w-0 border-l border-border/40 bg-muted/20 xl:flex xl:flex-[5_0_0%]">
+              <div className="h-full w-full overflow-hidden">
+                <ResumePreviewPanel />
               </div>
             </div>
-          </main>
 
-          {/* Resume Preview Panel — sticky, height accounts for topbar + toolbar */}
-          <aside className="hidden min-w-0 flex-[5] border-l border-border/40 bg-muted/20 xl:block">
-            <div className="sticky top-0 h-[calc(100vh-3.5rem)] overflow-hidden">
-              <ResumePreviewPanel />
-            </div>
-          </aside>
+            {/* ── Panel 3: Designer ── */}
+            <aside className="hidden min-w-0 border-l border-border/40 bg-background xl:flex xl:flex-[4_0_0%] xl:flex-col">
+              <DesignerPanel />
+            </aside>
+          </div>
+
+          {/* ── Gutter tab: Designer (right edge, visible when editor mode) ── */}
+          <button
+            type="button"
+            onClick={toggleDesigner}
+            aria-label="Open designer panel"
+            className={cn(
+              'absolute right-0 top-1/2 z-30 -translate-y-1/2',
+              'hidden flex-col items-center gap-2 px-1.5 py-4 xl:flex',
+              'rounded-l-lg border border-r-0 border-primary/30',
+              'bg-primary shadow-lg shadow-primary/25',
+              'text-primary-foreground hover:bg-primary/90',
+              'transition-all duration-300 ease-out',
+              'hover:px-2 hover:shadow-xl hover:shadow-primary/30',
+              designerActive && 'pointer-events-none opacity-0'
+            )}
+          >
+            <Palette className="h-4 w-4" />
+            <span className="text-[10px] font-medium [writing-mode:vertical-rl]">Design</span>
+          </button>
+
+          {/* ── Gutter tab: Editor (left edge, visible when designer mode) ── */}
+          <button
+            type="button"
+            onClick={toggleDesigner}
+            aria-label="Return to editor"
+            className={cn(
+              'absolute left-0 top-1/2 z-30 -translate-y-1/2',
+              'hidden flex-col items-center gap-2 px-1.5 py-4 xl:flex',
+              'rounded-r-lg border border-l-0 border-primary/30',
+              'bg-primary shadow-lg shadow-primary/25',
+              'text-primary-foreground hover:bg-primary/90',
+              'transition-all duration-300 ease-out',
+              'hover:px-2 hover:shadow-xl hover:shadow-primary/30',
+              !designerActive && 'pointer-events-none opacity-0'
+            )}
+          >
+            <PenLine className="h-4 w-4" />
+            <span className="text-[10px] font-medium [writing-mode:vertical-rl]">Editor</span>
+          </button>
         </div>
       </TooltipProvider>
     </div>

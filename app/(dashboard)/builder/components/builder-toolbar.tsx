@@ -1,6 +1,6 @@
 'use client';
 
-import { Eye, Palette } from 'lucide-react';
+import { Eye } from 'lucide-react';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 
 import { useBuilderStore } from './builder-store-provider';
 import { DownloadDialog } from './download-dialog';
-import { ResumeDesignPanel } from './resume-design-panel';
 import { ShareDialog } from './share-dialog';
 
 // ─── Types ────────────────────────────────────────────────────────
@@ -57,7 +56,6 @@ export function BuilderToolbar() {
   const profile = useBuilderStore((s) => s.draftProfile);
   const commitInlineChange = useBuilderStore((s) => s.commitInlineChange);
   const [shareOpen, setShareOpen] = useState(false);
-  const [designOpen, setDesignOpen] = useState(false);
 
   const resumeTitle = profile.resumeTitle || 'Untitled Resume';
   const handle = profile.handle;
@@ -72,16 +70,6 @@ export function BuilderToolbar() {
     <>
       <div className="flex w-full items-center justify-center px-4 py-1.5">
         <div className="flex items-center gap-0.5 rounded-xl border border-border/60 bg-background/80 px-3 py-1 shadow-sm backdrop-blur-sm">
-          {/* Customize — opens the design customisation panel */}
-          <ToolbarButton
-            icon={<Palette className="h-4 w-4" />}
-            label="Customize design and theme"
-            text="Customize"
-            onClick={() => setDesignOpen(true)}
-          />
-
-          <ToolbarSeparator />
-
           {/* Download — opens dialog with layout options */}
           <DownloadDialog
             handle={handle}
@@ -112,9 +100,6 @@ export function BuilderToolbar() {
           />
         </div>
       </div>
-
-      {/* Design customisation slide-out panel */}
-      <ResumeDesignPanel open={designOpen} onCloseAction={() => setDesignOpen(false)} />
     </>
   );
 }
