@@ -6,6 +6,13 @@
 import { z } from 'zod';
 
 // ===========================================
+// LIMITS
+// ===========================================
+
+/** Maximum number of resumes a single user can create. */
+export const MAX_RESUMES_PER_USER = 6;
+
+// ===========================================
 // ENUMS (matching Prisma enums)
 // ===========================================
 

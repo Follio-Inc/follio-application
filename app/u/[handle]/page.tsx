@@ -161,7 +161,7 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
   }
 
   // Determine resume visibility for the cross-link button
-  const resumeVisibility = profile.resumeVisibility || 'UNLISTED';
+  const resumeVisibility = profile.resumeVisibility || 'PRIVATE';
 
   // Serialize the profile data to convert Date objects to strings for client component
   const serializedProfile = serializeForClient(profile);

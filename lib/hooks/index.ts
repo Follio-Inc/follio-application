@@ -6,3 +6,5 @@ export type {
   UseContactManagerOptions,
   UseContactManagerReturn,
 } from './use-contact-manager';
+
+export { useResumeDownload } from './use-resume-download';

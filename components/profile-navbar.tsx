@@ -112,7 +112,7 @@ function ProfileMenu({ profileHandle }: { profileHandle?: string } = {}) {
         const data = await res.json();
         setHandle(data.profile?.handle || null);
         setProfileStatus(data.profile?.status || null);
-        setResumeVisibility(data.profile?.resumeVisibility || 'UNLISTED');
+        setResumeVisibility(data.profile?.resumeVisibility || 'PRIVATE');
         setPortfolioVisibility(data.profile?.portfolioVisibility || 'PUBLIC');
         setLinksVisibility(data.profile?.linksVisibility || 'PUBLIC');
       }

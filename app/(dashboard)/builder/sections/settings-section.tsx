@@ -105,7 +105,7 @@ export function SettingsSection({ profile }: SettingsSectionProps) {
 
   // Visibility state
   const [resumeVisibility, setResumeVisibility] = useState<'PUBLIC' | 'UNLISTED' | 'PRIVATE'>(
-    profile.resumeVisibility || 'UNLISTED'
+    profile.resumeVisibility || 'PRIVATE'
   );
   const [portfolioVisibility, setPortfolioVisibility] = useState<'PUBLIC' | 'UNLISTED' | 'PRIVATE'>(
     profile.portfolioVisibility || 'PUBLIC'

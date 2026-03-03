@@ -83,6 +83,17 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      // Resume preview iframe: allow short browser cache to avoid redundant
+      // full SSR + heavy DB queries when the dashboard is revisited.
+      {
+        source: '/resume-preview/:id*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'private, max-age=60, stale-while-revalidate=120',
+          },
+        ],
+      },
     ];
   },
 };

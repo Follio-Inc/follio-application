@@ -1,11 +1,23 @@
+import { auth } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { db } from '@/lib/db';
+import type { PdfLayout } from '@/services/export.service';
 import { generateResumePDF } from '@/services/export.service';
 import { getProfileByHandle } from '@/services/profile.service';
 
+const VALID_LAYOUTS = new Set<PdfLayout>(['paged', 'continuous']);
+
 /**
- * GET /api/export/[handle]/pdf
- * Export profile as a downloadable PDF resume
+ * GET /api/export/[handle]/pdf?layout=paged|continuous
+ * Export profile as a downloadable PDF resume.
+ *
+ * Query params:
+ *  - `layout` – `'paged'` (default) or `'continuous'`.
+ *
+ * The profile owner may always download their own PDF, regardless of
+ * visibility settings. External visitors are subject to the normal
+ * PUBLIC + resume-visibility checks.
  */
 export async function GET(
   request: NextRequest,
@@ -13,22 +25,42 @@ export async function GET(
 ) {
   try {
     const { handle } = await params;
+
+    // Parse layout from query string, default to 'paged'
+    const layoutParam = request.nextUrl.searchParams.get('layout') ?? 'paged';
+    const layout: PdfLayout = VALID_LAYOUTS.has(layoutParam as PdfLayout)
+      ? (layoutParam as PdfLayout)
+      : 'paged';
+
     const profile = await getProfileByHandle(handle);
 
     if (!profile) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
-    if (profile.status !== 'PUBLIC') {
-      return NextResponse.json({ error: 'Profile is not public' }, { status: 403 });
+    // Determine if the requester owns this profile
+    const { userId: clerkId } = await auth();
+    let isOwner = false;
+    if (clerkId) {
+      const user = await db.user.findUnique({
+        where: { clerkId },
+        select: { id: true },
+      });
+      isOwner = user?.id === profile.userId;
     }
 
-    // Resume exports respect resume-specific visibility
-    if (profile.resumeVisibility === 'UNLISTED') {
-      return NextResponse.json({ error: 'Resume is unlisted' }, { status: 403 });
+    // Only enforce visibility checks for non-owners
+    if (!isOwner) {
+      if (profile.status !== 'PUBLIC') {
+        return NextResponse.json({ error: 'Profile is not public' }, { status: 403 });
+      }
+
+      if (profile.resumeVisibility === 'UNLISTED') {
+        return NextResponse.json({ error: 'Resume is unlisted' }, { status: 403 });
+      }
     }
 
-    const pdfBuffer = await generateResumePDF(profile);
+    const pdfBuffer = await generateResumePDF(profile, { layout });
     const uint8 = new Uint8Array(pdfBuffer);
 
     return new NextResponse(uint8, {

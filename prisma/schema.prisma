@@ -34,7 +34,7 @@ model Profile {
   isArchived             Boolean                @default(false)
   handle                 String                 @unique
   status                 ProfileStatus          @default(DRAFT)
-  resumeVisibility       ContentVisibility      @default(UNLISTED)
+  resumeVisibility       ContentVisibility      @default(PRIVATE)
   portfolioVisibility    ContentVisibility      @default(PUBLIC)
   linksVisibility        ContentVisibility      @default(PUBLIC)
   firstName              String?
@@ -49,6 +49,7 @@ model Profile {
   avatarUrl              String?
   avatarUrlSource        DataSource             @default(MANUAL)
   resumeShowPhoto        Boolean                @default(false)
+  resumeDesign           Json?
   location               String?
   locationSource         DataSource             @default(MANUAL)
   unlistedKey            String?                @unique @default(cuid())

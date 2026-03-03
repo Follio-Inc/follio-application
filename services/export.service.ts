@@ -607,14 +607,44 @@ export function toPDFHtml(profile: FullProfile): string {
 }
 
 /**
- * Generate a clean PDF resume from profile data using PDFKit
+ * PDF layout mode.
+ * - `'paged'`      – Standard A4 pages with automatic page breaks (print-friendly).
+ * - `'continuous'`  – Single long page trimmed to content height (screen-friendly).
  */
-export function generateResumePDF(profile: FullProfile): Promise<Buffer> {
+export type PdfLayout = 'paged' | 'continuous';
+
+interface PdfOptions {
+  /** @default 'paged' */
+  layout?: PdfLayout;
+}
+
+/**
+ * Generate a clean PDF resume from profile data using PDFKit.
+ *
+ * Accepts an optional `layout` parameter:
+ *  - `'paged'` (default) produces standard A4 pages with page breaks.
+ *  - `'continuous'` renders all content on one tall page, then trims the
+ *    MediaBox so the PDF height equals the content height.
+ */
+export function generateResumePDF(
+  profile: FullProfile,
+  { layout = 'paged' }: PdfOptions = {}
+): Promise<Buffer> {
   return new Promise((resolve, reject) => {
+    const A4_WIDTH = 595.28;
+    const A4_HEIGHT = 841.89;
+    const MAX_HEIGHT = 15000; // ~5 m – more than enough for any resume
+    const PAGE_MARGINS = { top: 50, bottom: 50, left: 50, right: 50 };
+
+    const isContinuous = layout === 'continuous';
+
     const doc = new PDFDocument({
-      size: 'A4',
-      margins: { top: 50, bottom: 50, left: 50, right: 50 },
+      size: isContinuous
+        ? ([A4_WIDTH, MAX_HEIGHT] as [number, number])
+        : ([A4_WIDTH, A4_HEIGHT] as [number, number]),
+      margins: PAGE_MARGINS,
       bufferPages: true,
+      autoFirstPage: true,
     });
 
     const chunks: Buffer[] = [];
@@ -875,6 +905,14 @@ export function generateResumePDF(profile: FullProfile): Promise<Buffer> {
     for (const sectionType of sectionOrder) {
       const renderer = sectionRenderers[sectionType];
       if (renderer) renderer();
+    }
+
+    // For continuous layout, trim the oversized page to actual content height
+    // so the PDF has no trailing blank space. Paged layout uses standard A4
+    // pages and needs no trimming.
+    if (isContinuous) {
+      const actualHeight = doc.y + PAGE_MARGINS.bottom;
+      doc.page.dictionary.data.MediaBox = [0, MAX_HEIGHT - actualHeight, A4_WIDTH, MAX_HEIGHT];
     }
 
     doc.end();

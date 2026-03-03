@@ -18,6 +18,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { MAX_RESUMES_PER_USER } from '@/lib/validations';
 
 // ─── Types ────────────────────────────────────────────────────────
 
@@ -433,35 +434,43 @@ export function ResumeSwitcher() {
 
           {/* Create new resume actions */}
           <div className="space-y-1">
-            <button
-              type="button"
-              onClick={() => openNewResumeDialog('BLANK')}
-              disabled={isMutating}
-              className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted disabled:opacity-50"
-            >
-              <Plus className="h-4 w-4" />
-              Create blank resume
-            </button>
+            {resumes.length >= MAX_RESUMES_PER_USER ? (
+              <p className="px-2 py-1.5 text-xs text-muted-foreground">
+                Resume limit reached ({MAX_RESUMES_PER_USER}/{MAX_RESUMES_PER_USER})
+              </p>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => openNewResumeDialog('BLANK')}
+                  disabled={isMutating}
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted disabled:opacity-50"
+                >
+                  <Plus className="h-4 w-4" />
+                  Create blank resume
+                </button>
 
-            <button
-              type="button"
-              onClick={() => openNewResumeDialog('CLONE')}
-              disabled={!activeProfileId || isMutating}
-              className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Copy className="h-4 w-4" />
-              Clone current resume
-            </button>
+                <button
+                  type="button"
+                  onClick={() => openNewResumeDialog('CLONE')}
+                  disabled={!activeProfileId || isMutating}
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Copy className="h-4 w-4" />
+                  Clone current resume
+                </button>
 
-            <button
-              type="button"
-              onClick={() => openNewResumeDialog('UPLOAD')}
-              disabled={isMutating}
-              className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted disabled:opacity-50"
-            >
-              <Upload className="h-4 w-4" />
-              New resume from upload
-            </button>
+                <button
+                  type="button"
+                  onClick={() => openNewResumeDialog('UPLOAD')}
+                  disabled={isMutating}
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted disabled:opacity-50"
+                >
+                  <Upload className="h-4 w-4" />
+                  New resume from upload
+                </button>
+              </>
+            )}
           </div>
 
           {error && <p className="mt-2 px-2 text-xs text-destructive">{error}</p>}

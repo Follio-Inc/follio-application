@@ -10,6 +10,8 @@ const isProtectedRoute = createRouteMatcher([
   '/data-sources(.*)',
   '/share',
   '/me(.*)',
+  '/resume-preview(.*)',
+  '/resumes(.*)',
 ]);
 
 // Define public routes that should never require auth

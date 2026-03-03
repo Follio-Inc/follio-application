@@ -13,7 +13,7 @@ function serializeForClient<T>(data: T): T {
 
 interface ResumePageProps {
   params: Promise<{ handle: string }>;
-  searchParams: Promise<{ token?: string; key?: string }>;
+  searchParams: Promise<{ token?: string; key?: string; minimal?: string }>;
 }
 
 // Validate a share token for an unlisted resume
@@ -122,7 +122,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function ResumePage({ params, searchParams }: ResumePageProps) {
   const { handle } = await params;
-  const { token, key } = await searchParams;
+  const { token, key, minimal } = await searchParams;
 
   const [profile, authState] = await Promise.all([getPublicProfile(handle), getAuthState(handle)]);
 
@@ -140,7 +140,7 @@ export default async function ResumePage({ params, searchParams }: ResumePagePro
   }
 
   // Check resume-specific visibility
-  const resumeVisibility = profile.resumeVisibility || 'UNLISTED';
+  const resumeVisibility = profile.resumeVisibility || 'PRIVATE';
   if (resumeVisibility === 'PRIVATE' && authState !== 'owner') {
     notFound();
   }
@@ -155,6 +155,11 @@ export default async function ResumePage({ params, searchParams }: ResumePagePro
   const serializedProfile = serializeForClient(profile);
 
   return (
-    <ResumePageViewer profile={serializedProfile} authState={authState} profileHandle={handle} />
+    <ResumePageViewer
+      profile={serializedProfile}
+      authState={authState}
+      profileHandle={handle}
+      minimal={minimal === '1'}
+    />
   );
 }

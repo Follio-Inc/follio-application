@@ -1,11 +1,12 @@
 'use client';
 
 import { Check, Copy, Grid3X3, Printer } from 'lucide-react';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { cleanPhoneDisplay } from '@/components/ui/phone-input';
 import { containsHtmlFormatting, isHtmlEmpty } from '@/lib/html-utils';
+import { buildResumeDesignStyles, parseResumeDesign } from '@/lib/resume-design';
 import { getPortfolioPath } from '@/lib/url';
 import { formatDate } from '@/lib/utils';
 import { applyVisibilityFilter, type FilteredProfile } from '@/lib/visibility';
@@ -19,7 +20,9 @@ import type {
   PublicProfile,
   VolunteeringItem,
 } from '@/types';
-import { HEADER_SECTION_TYPES } from '@/types';
+import { HEADER_SECTION_TYPES, type ResumeDesign, type ResumeFontFamily } from '@/types';
+
+import { ResumeFontLoader } from './resume-font-loader';
 
 interface CleanResumeViewProps {
   profile: PublicProfile;
@@ -753,6 +756,12 @@ export function CleanResumeView({ profile: rawProfile, profileHandle }: CleanRes
   // never need to check section visibility themselves.
   const profile = applyVisibilityFilter(rawProfile, { resumeContext: true });
 
+  // ── Resume design settings → CSS custom properties ────────────────────
+  const designStyles = useMemo(
+    () => buildResumeDesignStyles(parseResumeDesign(rawProfile.resumeDesign)),
+    [rawProfile]
+  );
+
   // ── Sections ordered by user-configured sortOrder ─────────────────────
   // Header sections (BASIC_INFO, LINKS) are always rendered as
   // the header block; body sections follow in their sortOrder.
@@ -814,11 +823,16 @@ export function CleanResumeView({ profile: rawProfile, profileHandle }: CleanRes
     }
   };
 
+  // ── Determine the font family for the font loader ──────────────────
+  const activeFontFamily = (parseResumeDesign(rawProfile.resumeDesign) as ResumeDesign | null)
+    ?.fontFamily as ResumeFontFamily | undefined;
+
   return (
     <>
+      <ResumeFontLoader fontFamily={activeFontFamily} />
       <ResumeActions resumeRef={resumeRef} profileHandle={profileHandle} />
 
-      <article ref={resumeRef} className="resume-paper">
+      <article ref={resumeRef} className="resume-paper" style={designStyles}>
         <ResumeHeader profile={profile} />
 
         {/* Render body sections in user-configured sortOrder */}

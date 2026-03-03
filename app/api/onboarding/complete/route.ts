@@ -487,7 +487,7 @@ export async function POST(request: NextRequest) {
           location: mergedProfile.location,
           avatarUrl: finalAvatarUrl,
           status: 'PUBLIC', // Make profile public by default
-          resumeVisibility: 'UNLISTED', // Resume unlisted by default
+          resumeVisibility: 'PRIVATE', // Resume private by default
           portfolioVisibility: 'PUBLIC', // Portfolio public by default
           // Set sources for provenance
           firstNameSource: toDataSource(finalNameSource),
@@ -846,7 +846,7 @@ async function handleReviewedData(
         location: reviewedData.profile.location,
         avatarUrl: avatarUrlForDb,
         status: 'PUBLIC',
-        resumeVisibility: 'UNLISTED',
+        resumeVisibility: 'PRIVATE',
         portfolioVisibility: 'PUBLIC',
       },
     });

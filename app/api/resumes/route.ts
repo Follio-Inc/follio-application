@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { handleApiError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { MAX_RESUMES_PER_USER } from '@/lib/validations';
 
 /**
  * Convert a Prisma JsonValue (which can be `null`) to a valid nullable JSON input.
@@ -617,6 +618,7 @@ export async function GET() {
         handle: true,
         resumeTitle: true,
         status: true,
+        resumeVisibility: true,
         firstName: true,
         lastName: true,
         headline: true,
@@ -660,6 +662,20 @@ export async function POST(request: NextRequest) {
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    // Enforce per-user resume limit
+    const existingCount = await db.profile.count({
+      where: { userId: user.id, isArchived: false },
+    });
+
+    if (existingCount >= MAX_RESUMES_PER_USER) {
+      return NextResponse.json(
+        {
+          error: `You can create up to ${MAX_RESUMES_PER_USER} resumes. Please delete an existing resume to create a new one.`,
+        },
+        { status: 403 }
+      );
     }
 
     const result = await db.$transaction(async (tx) => {

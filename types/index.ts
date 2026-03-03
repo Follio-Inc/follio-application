@@ -31,6 +31,95 @@ import type {
 export type { ContentVisibility } from '@prisma/client';
 
 // ===========================================
+// RESUME DESIGN TYPES
+// ===========================================
+
+/** Font families available for resume rendering */
+export type ResumeFontFamily =
+  | 'georgia'
+  | 'times'
+  | 'garamond'
+  | 'inter'
+  | 'roboto'
+  | 'lato'
+  | 'merriweather'
+  | 'source-sans'
+  | 'open-sans'
+  | 'raleway';
+
+/** Header alignment options */
+export type ResumeHeaderAlignment = 'left' | 'center' | 'right';
+
+/** Section divider style */
+export type ResumeDividerStyle = 'line' | 'double' | 'dotted' | 'dashed' | 'thick' | 'none';
+
+/** Paper density / spacing */
+export type ResumeDensity = 'compact' | 'normal' | 'relaxed';
+
+/**
+ * Resume design settings — stored as JSON on the Profile model.
+ * All fields are optional; missing values fall back to defaults.
+ */
+export interface ResumeDesign {
+  /** Color for section headings (CSS color, e.g. '#1a1a1a' or '#2563eb') */
+  headingColor?: string;
+  /** Accent color for divider lines, bullets, etc. */
+  accentColor?: string;
+  /** Font family applied to the entire resume */
+  fontFamily?: ResumeFontFamily;
+  /** Header block alignment: left / center / right */
+  headerAlignment?: ResumeHeaderAlignment;
+  /** Style of the divider line below section headings */
+  dividerStyle?: ResumeDividerStyle;
+  /** Base font size in px (default 13) */
+  fontSize?: number;
+  /** Content density / spacing */
+  density?: ResumeDensity;
+  /** Name font size in px (default 28) */
+  nameFontSize?: number;
+}
+
+/** Default design settings applied when no custom design is configured */
+export const RESUME_DESIGN_DEFAULTS: Required<ResumeDesign> = {
+  headingColor: '#000000',
+  accentColor: '#000000',
+  fontFamily: 'georgia',
+  headerAlignment: 'center',
+  dividerStyle: 'line',
+  fontSize: 13,
+  density: 'normal',
+  nameFontSize: 28,
+};
+
+/** Maps font family identifiers to CSS font-family values */
+export const RESUME_FONT_MAP: Record<ResumeFontFamily, string> = {
+  georgia: "'Georgia', 'Times New Roman', Times, serif",
+  times: "'Times New Roman', Times, serif",
+  garamond: "'EB Garamond', 'Garamond', 'Georgia', serif",
+  inter: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+  roboto: "'Roboto', -apple-system, 'Segoe UI', sans-serif",
+  lato: "'Lato', -apple-system, 'Segoe UI', sans-serif",
+  merriweather: "'Merriweather', 'Georgia', serif",
+  'source-sans': "'Source Sans 3', -apple-system, 'Segoe UI', sans-serif",
+  'open-sans': "'Open Sans', -apple-system, 'Segoe UI', sans-serif",
+  raleway: "'Raleway', -apple-system, 'Segoe UI', sans-serif",
+};
+
+/** Human-readable labels for font families */
+export const RESUME_FONT_LABELS: Record<ResumeFontFamily, string> = {
+  georgia: 'Georgia',
+  times: 'Times New Roman',
+  garamond: 'EB Garamond',
+  inter: 'Inter',
+  roboto: 'Roboto',
+  lato: 'Lato',
+  merriweather: 'Merriweather',
+  'source-sans': 'Source Sans',
+  'open-sans': 'Open Sans',
+  raleway: 'Raleway',
+};
+
+// ===========================================
 // PROFILE TYPES
 // ===========================================
 
@@ -51,6 +140,8 @@ export interface FullProfile extends Profile {
   youtubeVideos: YouTubeVideo[];
   photos: ProfilePhoto[];
   sections: ProfileSection[];
+  /** Resume design settings (JSON column, may be null) */
+  resumeDesign?: ResumeDesign | null;
 }
 
 /**
@@ -70,6 +161,8 @@ export interface PublicProfile extends Omit<Profile, 'userId'> {
   youtubeVideos: YouTubeVideo[];
   photos: ProfilePhoto[];
   sections: ProfileSection[];
+  /** Resume design settings (JSON column, may be null) */
+  resumeDesign?: ResumeDesign | null;
 }
 
 /**
