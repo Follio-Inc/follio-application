@@ -6,14 +6,25 @@ import {
   AlignLeft,
   AlignRight,
   Minus,
-  MoreHorizontal,
   Palette,
+  Pencil,
   RotateCcw,
   Type,
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -46,22 +57,22 @@ import { useBuilderStore } from './builder-store-provider';
 // ─── Constants ────────────────────────────────────────────────────
 
 const PRESET_COLORS = [
-  '#000000',
-  '#1a1a1a',
-  '#374151',
-  '#1e40af',
-  '#2563eb',
-  '#7c3aed',
-  '#9333ea',
-  '#db2777',
-  '#dc2626',
-  '#ea580c',
-  '#d97706',
-  '#059669',
-  '#0d9488',
-  '#0891b2',
-  '#4f46e5',
-  '#6d28d9',
+  '#0f172a', // Deep Ink
+  '#1e293b', // Charcoal Slate
+  '#334155', // Cool Slate
+  '#475569', // Pewter Gray
+  '#0c4a6e', // Dark Cerulean
+  '#1e3a5f', // Classic Navy
+  '#1e40af', // Oxford Blue
+  '#1d4ed8', // Royal Blue
+  '#134e4a', // Deep Teal
+  '#065f46', // Evergreen
+  '#3730a3', // Deep Indigo
+  '#4c1d95', // Royal Purple
+  '#7f1d1d', // Dark Maroon
+  '#831843', // Burgundy
+  '#78350f', // Rich Espresso
+  '#92400e', // Dark Amber
 ] as const;
 
 const DIVIDER_STYLE_OPTIONS: { value: ResumeDividerStyle; label: string }[] = [
@@ -120,26 +131,23 @@ function ColorPicker({ value, onChange, label }: ColorPickerProps) {
             aria-label={`Select color ${color}`}
           />
         ))}
-        {/* Custom color picker trigger */}
+        {/* Custom color picker trigger — rainbow wheel + pencil */}
         <button
           type="button"
           className={cn(
-            'relative flex h-6 w-6 items-center justify-center rounded-full border-2 transition-all hover:scale-110',
-            !PRESET_COLORS.includes(value as (typeof PRESET_COLORS)[number])
-              ? 'border-foreground ring-1 ring-foreground/20'
-              : 'border-muted-foreground/30'
+            'relative flex h-6 w-6 items-center justify-center rounded-full transition-all hover:scale-110',
+            !PRESET_COLORS.includes(value as (typeof PRESET_COLORS)[number]) &&
+              'ring-2 ring-foreground ring-offset-1 ring-offset-background'
           )}
           style={{
-            backgroundColor: !PRESET_COLORS.includes(value as (typeof PRESET_COLORS)[number])
+            background: !PRESET_COLORS.includes(value as (typeof PRESET_COLORS)[number])
               ? value
-              : undefined,
+              : 'conic-gradient(#ef4444, #f59e0b, #22c55e, #3b82f6, #8b5cf6, #ec4899, #ef4444)',
           }}
           onClick={() => inputRef.current?.click()}
           aria-label="Pick custom color"
         >
-          {PRESET_COLORS.includes(value as (typeof PRESET_COLORS)[number]) && (
-            <MoreHorizontal className="h-3 w-3 text-muted-foreground" />
-          )}
+          <Pencil className="h-2.5 w-2.5 text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.7)]" />
         </button>
         <input
           ref={inputRef}
@@ -193,35 +201,28 @@ function AlignmentSelector({ value, onChange }: AlignmentSelectorProps) {
   );
 }
 
-// ─── Font Preview ─────────────────────────────────────────────────
+// ─── Font Dropdown ────────────────────────────────────────────────
 
-function FontPreviewItem({
-  font,
-  selected,
-  onClick,
+function FontFamilySelect({
+  value,
+  onChange,
 }: {
-  font: ResumeFontFamily;
-  selected: boolean;
-  onClick: () => void;
+  value: ResumeFontFamily;
+  onChange: (font: ResumeFontFamily) => void;
 }) {
   return (
-    <button
-      type="button"
-      className={cn(
-        'flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition-all',
-        selected
-          ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
-          : 'border-transparent hover:border-border hover:bg-muted/50'
-      )}
-      onClick={onClick}
-    >
-      <span className="flex-1 text-sm" style={{ fontFamily: RESUME_FONT_MAP[font] }}>
-        {RESUME_FONT_LABELS[font]}
-      </span>
-      <span className="text-xs text-muted-foreground" style={{ fontFamily: RESUME_FONT_MAP[font] }}>
-        Aa
-      </span>
-    </button>
+    <Select value={value} onValueChange={(v) => onChange(v as ResumeFontFamily)}>
+      <SelectTrigger className="h-9 w-full text-sm" style={{ fontFamily: RESUME_FONT_MAP[value] }}>
+        <SelectValue placeholder="Select font" />
+      </SelectTrigger>
+      <SelectContent>
+        {FONT_OPTIONS.map((font) => (
+          <SelectItem key={font} value={font}>
+            <span style={{ fontFamily: RESUME_FONT_MAP[font] }}>{RESUME_FONT_LABELS[font]}</span>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
 
@@ -384,16 +385,10 @@ export function ResumeDesignPanel({ open, onCloseAction }: ResumeDesignPanelProp
 
                   <div className="space-y-2">
                     <Label className="text-xs font-medium text-muted-foreground">Font Family</Label>
-                    <div className="space-y-0.5">
-                      {FONT_OPTIONS.map((font) => (
-                        <FontPreviewItem
-                          key={font}
-                          font={font}
-                          selected={design.fontFamily === font}
-                          onClick={() => updateDesign({ fontFamily: font })}
-                        />
-                      ))}
-                    </div>
+                    <FontFamilySelect
+                      value={design.fontFamily}
+                      onChange={(fontFamily) => updateDesign({ fontFamily })}
+                    />
                   </div>
 
                   <div className="space-y-2">
@@ -493,6 +488,35 @@ export function ResumeDesignPanel({ open, onCloseAction }: ResumeDesignPanelProp
                     </div>
                   </div>
                 </section>
+
+                <Separator />
+
+                {/* ── Restore Defaults ── */}
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full gap-2 text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      Restore Defaults
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Restore default design?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will reset all design settings — colors, typography, layout, and
+                        spacing — back to their original defaults. This action cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleReset}>Restore Defaults</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             </ScrollArea>
           </motion.div>

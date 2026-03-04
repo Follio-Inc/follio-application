@@ -1,8 +1,12 @@
 'use client';
 
+import { useSearchParams } from 'next/navigation';
 import { useCallback, useState } from 'react';
 
 import type { ContactInfo, Profile } from '@prisma/client';
+
+import DataSourcesPageClient from '@/app/(dashboard)/builder/data-sources/data-sources-client';
+import type { FullProfile } from '@/types';
 
 import { AccountSection, type AccountContactUpdatePayload } from './_sections/account-section';
 import { AppearanceSection } from './_sections/appearance-section';
@@ -13,10 +17,8 @@ import { SettingsDesktopNav, SettingsMobileNav, type SettingsTab } from './_sect
 // Types
 // ============================================================================
 
-/** Settings page only needs the profile + contact info — not all relations */
-export type SettingsProfile = Profile & {
-  contactInfo: ContactInfo | null;
-};
+/** Settings page needs the full profile for the Data Sources tab */
+export type SettingsProfile = FullProfile;
 
 interface SettingsPageClientProps {
   profile: SettingsProfile;
@@ -26,9 +28,21 @@ interface SettingsPageClientProps {
 // Component
 // ============================================================================
 
+const VALID_TABS: SettingsTab[] = ['account', 'appearance', 'data-sources', 'privacy'];
+
+function resolveInitialTab(param: string | null): SettingsTab {
+  if (param && VALID_TABS.includes(param as SettingsTab)) {
+    return param as SettingsTab;
+  }
+  return 'account';
+}
+
 export function SettingsPageClient({ profile }: SettingsPageClientProps) {
+  const searchParams = useSearchParams();
   const [currentProfile, setCurrentProfile] = useState(profile);
-  const [activeTab, setActiveTab] = useState<SettingsTab>('account');
+  const [activeTab, setActiveTab] = useState<SettingsTab>(() =>
+    resolveInitialTab(searchParams.get('tab'))
+  );
 
   const handleProfileUpdate = useCallback((updates: Partial<Profile>) => {
     setCurrentProfile((prev) => ({ ...prev, ...updates }));
@@ -48,7 +62,9 @@ export function SettingsPageClient({ profile }: SettingsPageClientProps) {
       {/* Page header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-        <p className="mt-1 text-muted-foreground">Manage your account, preferences, and privacy</p>
+        <p className="mt-1 text-muted-foreground">
+          Manage your account, preferences, data sources, and privacy
+        </p>
       </div>
 
       {/* Mobile tabs (shown above content on smaller screens) */}
@@ -74,6 +90,8 @@ export function SettingsPageClient({ profile }: SettingsPageClientProps) {
           )}
 
           {activeTab === 'appearance' && <AppearanceSection />}
+
+          {activeTab === 'data-sources' && <DataSourcesPageClient profile={currentProfile} />}
 
           {activeTab === 'privacy' && <PrivacySection profile={currentProfile} />}
         </section>

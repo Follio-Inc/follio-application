@@ -44,7 +44,7 @@ const nextConfig: NextConfig = {
   },
 
   // Externalize packages that don't work with webpack bundling
-  serverExternalPackages: ['pdf-parse', 'pdfkit'],
+  serverExternalPackages: ['pdf-parse', 'puppeteer'],
 
   // Headers for security and SEO
   async headers() {

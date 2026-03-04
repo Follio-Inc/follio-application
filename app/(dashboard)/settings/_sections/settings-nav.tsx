@@ -1,13 +1,13 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import { Palette, Shield, User } from 'lucide-react';
+import { Database, Palette, Shield, User } from 'lucide-react';
 
 // ============================================================================
 // Types
 // ============================================================================
 
-export type SettingsTab = 'account' | 'appearance' | 'privacy';
+export type SettingsTab = 'account' | 'appearance' | 'data-sources' | 'privacy';
 
 interface NavItem {
   id: SettingsTab;
@@ -32,6 +32,12 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Appearance',
     icon: Palette,
     description: 'Theme & display',
+  },
+  {
+    id: 'data-sources',
+    label: 'Data Sources',
+    icon: Database,
+    description: 'Import & sync external data',
   },
   {
     id: 'privacy',

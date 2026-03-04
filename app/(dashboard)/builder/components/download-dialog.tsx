@@ -35,6 +35,13 @@ interface DownloadDialogProps {
   resumeTitle: string;
   /** Called when the user clicks the share button in the banner. */
   onShareClick?: () => void;
+  /**
+   * Controlled open state. When provided, the dialog operates in controlled
+   * mode and the built-in trigger button is hidden.
+   */
+  open?: boolean;
+  /** Callback fired when the dialog's open state changes (controlled mode). */
+  onOpenChange?: (open: boolean) => void;
 }
 
 // ─── Illustrations ──────────────────────────────────────────────────
@@ -431,8 +438,19 @@ const DEFAULT_LAYOUT: PdfLayout = 'continuous';
 
 // ─── Component ──────────────────────────────────────────────────────
 
-export function DownloadDialog({ handle, resumeTitle, onShareClick }: DownloadDialogProps) {
-  const [open, setOpen] = useState(false);
+export function DownloadDialog({
+  handle,
+  resumeTitle,
+  onShareClick,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
+}: DownloadDialogProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+
+  const isControlled = controlledOpen !== undefined;
+  const open = isControlled ? controlledOpen : internalOpen;
+  const setOpen = isControlled ? (controlledOnOpenChange ?? (() => {})) : setInternalOpen;
+
   const [layout, setLayout] = useState<PdfLayout>(DEFAULT_LAYOUT);
 
   const { download, isDownloading } = useResumeDownload({
@@ -444,23 +462,26 @@ export function DownloadDialog({ handle, resumeTitle, onShareClick }: DownloadDi
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <DialogTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 gap-1.5 px-2.5 text-xs text-muted-foreground hover:text-foreground"
-            >
-              <Download className="h-4 w-4" />
-              <span className="hidden sm:inline">Download</span>
-            </Button>
-          </DialogTrigger>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" className="text-xs">
-          Download as PDF
-        </TooltipContent>
-      </Tooltip>
+      {/* Built-in trigger — only rendered in uncontrolled mode */}
+      {!isControlled && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DialogTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-1.5 px-2.5 text-xs text-muted-foreground hover:text-foreground"
+              >
+                <Download className="h-4 w-4" />
+                <span className="hidden sm:inline">Download</span>
+              </Button>
+            </DialogTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="text-xs">
+            Download as PDF
+          </TooltipContent>
+        </Tooltip>
+      )}
 
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
@@ -468,24 +489,26 @@ export function DownloadDialog({ handle, resumeTitle, onShareClick }: DownloadDi
           <DialogDescription>Choose a layout for your resume.</DialogDescription>
         </DialogHeader>
 
-        {/* ── Share banner ── */}
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
-          <p className="text-sm text-muted-foreground">
-            Follio resumes are true digital resumes and can be shared directly with employers.
-          </p>
-          <Button
-            variant="outline"
-            size="sm"
-            className="shrink-0 gap-1.5"
-            onClick={() => {
-              setOpen(false);
-              onShareClick?.();
-            }}
-          >
-            <Share2 className="h-3.5 w-3.5" />
-            Share
-          </Button>
-        </div>
+        {/* ── Share banner (only shown when a share callback is provided) ── */}
+        {onShareClick && (
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
+            <p className="text-sm text-muted-foreground">
+              Follio resumes are true digital resumes and can be shared directly with employers.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="shrink-0 gap-1.5"
+              onClick={() => {
+                setOpen(false);
+                onShareClick();
+              }}
+            >
+              <Share2 className="h-3.5 w-3.5" />
+              Share
+            </Button>
+          </div>
+        )}
 
         {/* ── Side-by-side layout cards ── */}
         <div className="mt-4 grid grid-cols-2 gap-4">

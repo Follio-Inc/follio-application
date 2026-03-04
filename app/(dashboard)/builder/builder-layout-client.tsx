@@ -1,7 +1,7 @@
 'use client';
 
-import { Palette, PenLine } from 'lucide-react';
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { PenLine, WandSparkles } from 'lucide-react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -66,22 +66,31 @@ function BuilderLayoutInner({ sections }: BuilderLayoutInnerProps) {
     setDesignerActive((prev) => !prev);
   }, []);
 
-  // Keep sections in sync with the zustand store so the preview stays up-to-date
+  // Keep sections in sync with the zustand store so the preview stays up-to-date.
+  // Only sync from props → store on initial mount or when sections prop identity
+  // changes (e.g. server revalidation). Once the user drags to reorder, the store
+  // is the source of truth and we should NOT overwrite it with stale prop data.
+  const initialSyncDone = useRef(false);
   useEffect(() => {
-    const storeJson = JSON.stringify(
-      (storeSections || []).map((s) => ({
-        id: s.id,
-        isVisible: s.isVisible,
-        sortOrder: s.sortOrder,
-      }))
-    );
-    const localJson = JSON.stringify(
-      sections.map((s) => ({ id: s.id, isVisible: s.isVisible, sortOrder: s.sortOrder }))
-    );
-    if (storeJson !== localJson) {
-      commitInlineChange({ sections });
+    if (!initialSyncDone.current) {
+      // First render: ensure store has the latest sections from the server
+      const storeJson = JSON.stringify(
+        (storeSections || []).map((s) => ({
+          id: s.id,
+          isVisible: s.isVisible,
+          sortOrder: s.sortOrder,
+        }))
+      );
+      const localJson = JSON.stringify(
+        sections.map((s) => ({ id: s.id, isVisible: s.isVisible, sortOrder: s.sortOrder }))
+      );
+      if (storeJson !== localJson) {
+        commitInlineChange({ sections });
+      }
+      initialSyncDone.current = true;
     }
-  }, [sections, storeSections, commitInlineChange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sections]);
 
   return (
     <div className="flex min-h-[calc(100vh-3.5rem)] flex-col bg-muted/30 xl:h-[calc(100vh-3.5rem)]">
@@ -127,37 +136,37 @@ function BuilderLayoutInner({ sections }: BuilderLayoutInnerProps) {
             aria-label="Open designer panel"
             className={cn(
               'absolute right-0 top-1/2 z-30 -translate-y-1/2',
-              'hidden flex-col items-center gap-2 px-1.5 py-4 xl:flex',
+              'hidden flex-col items-center gap-3 px-2 py-[22px] xl:flex',
               'rounded-l-lg border border-r-0 border-primary/30',
               'bg-primary shadow-lg shadow-primary/25',
               'text-primary-foreground hover:bg-primary/90',
               'transition-all duration-300 ease-out',
-              'hover:px-2 hover:shadow-xl hover:shadow-primary/30',
+              'hover:px-3 hover:shadow-xl hover:shadow-primary/30',
               designerActive && 'pointer-events-none opacity-0'
             )}
           >
-            <Palette className="h-4 w-4" />
-            <span className="text-[10px] font-medium [writing-mode:vertical-rl]">Design</span>
+            <WandSparkles className="h-[22px] w-[22px]" />
+            <span className="text-[14px] font-medium [writing-mode:vertical-rl]">Designer</span>
           </button>
 
-          {/* ── Gutter tab: Editor (left edge, visible when designer mode) ── */}
+          {/* ── Gutter tab: Content (left edge, visible when designer mode) ── */}
           <button
             type="button"
             onClick={toggleDesigner}
-            aria-label="Return to editor"
+            aria-label="Return to content editor"
             className={cn(
               'absolute left-0 top-1/2 z-30 -translate-y-1/2',
-              'hidden flex-col items-center gap-2 px-1.5 py-4 xl:flex',
+              'hidden flex-col items-center gap-3 px-2 py-[22px] xl:flex',
               'rounded-r-lg border border-l-0 border-primary/30',
               'bg-primary shadow-lg shadow-primary/25',
               'text-primary-foreground hover:bg-primary/90',
               'transition-all duration-300 ease-out',
-              'hover:px-2 hover:shadow-xl hover:shadow-primary/30',
+              'hover:px-3 hover:shadow-xl hover:shadow-primary/30',
               !designerActive && 'pointer-events-none opacity-0'
             )}
           >
-            <PenLine className="h-4 w-4" />
-            <span className="text-[10px] font-medium [writing-mode:vertical-rl]">Editor</span>
+            <PenLine className="h-[22px] w-[22px]" />
+            <span className="text-[14px] font-medium [writing-mode:vertical-rl]">Content</span>
           </button>
         </div>
       </TooltipProvider>

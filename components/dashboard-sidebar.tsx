@@ -1,6 +1,6 @@
 'use client';
 
-import { Database, FileText, LayoutGrid, Menu, Palette, Settings, Share2, X } from 'lucide-react';
+import { LayoutGrid, Menu, Palette, Settings, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -19,19 +19,13 @@ interface NavItemConfig {
 
 /* ───────────────────────────── Data ────────────────────────────── */
 
-/** Left side — the products users build */
+/** Left side — primary product areas */
 const leftItems: NavItemConfig[] = [
   {
     href: '/resumes',
     label: 'My Resumes',
     icon: LayoutGrid,
-    match: (path) => path.startsWith('/resumes'),
-  },
-  {
-    href: '/builder',
-    label: 'Editor',
-    icon: FileText,
-    match: (path) => path.startsWith('/builder'),
+    match: (path) => path.startsWith('/resumes') || path.startsWith('/builder'),
   },
   {
     href: '/portfolio',
@@ -41,25 +35,13 @@ const leftItems: NavItemConfig[] = [
   },
 ];
 
-/** Right side — utilities & account */
+/** Right side — account & settings */
 const rightItems: NavItemConfig[] = [
-  {
-    href: '/data-sources',
-    label: 'Data Sources',
-    icon: Database,
-    match: (path) => path.startsWith('/data-sources'),
-  },
-  {
-    href: '/share',
-    label: 'Share',
-    icon: Share2,
-    match: (path) => path.startsWith('/share'),
-  },
   {
     href: '/settings',
     label: 'Settings',
     icon: Settings,
-    match: (path) => path.startsWith('/settings'),
+    match: (path) => path.startsWith('/settings') || path.startsWith('/data-sources'),
   },
 ];
 
@@ -113,10 +95,10 @@ function MobileNavItem({
 /* ──────────────────────── Main Component ────────────────────────── */
 
 /**
- * LinkedIn-style top navigation bar.
+ * Top navigation bar.
  *
- * Left:  [Logo]  |  [Resume]  [Portfolio]
- * Right: [Data Sources]  [Share]  [Settings]  [children → UserMenu]
+ * Left:  [Logo]  |  [My Resumes]  [Portfolio]
+ * Right: [Settings]  [children → UserMenu]
  */
 export function DashboardTopbar({ children }: { children?: React.ReactNode }) {
   const pathname = usePathname();

@@ -12,7 +12,7 @@ function serializeForClient<T>(data: T): T {
 
 export const metadata = {
   title: 'Settings - Follio',
-  description: 'Manage your Follio account settings',
+  description: 'Manage your Follio account settings, data sources, and preferences',
 };
 
 export default async function SettingsPage() {
@@ -22,7 +22,6 @@ export default async function SettingsPage() {
     redirect('/sign-in');
   }
 
-  // Only fetch the data settings actually needs — not the entire profile graph
   const context = await resolveActiveProfileContextOrNull(userId);
   if (!context) {
     redirect('/onboarding');
@@ -32,6 +31,21 @@ export default async function SettingsPage() {
     where: { id: context.profileId },
     include: {
       contactInfo: true,
+      links: { orderBy: { sortOrder: 'asc' } },
+      workExperiences: { orderBy: { sortOrder: 'asc' } },
+      educations: { orderBy: { sortOrder: 'asc' } },
+      skills: { orderBy: { sortOrder: 'asc' } },
+      skillGroups: {
+        include: { skills: { orderBy: { sortOrder: 'asc' } } },
+        orderBy: { sortOrder: 'asc' },
+      },
+      projects: { orderBy: { sortOrder: 'asc' } },
+      awards: { orderBy: { sortOrder: 'asc' } },
+      certifications: { orderBy: { sortOrder: 'asc' } },
+      blogPosts: { orderBy: { createdAt: 'desc' } },
+      youtubeVideos: { orderBy: { createdAt: 'desc' } },
+      photos: { orderBy: { sortOrder: 'asc' } },
+      sections: { orderBy: { sortOrder: 'asc' } },
     },
   });
 

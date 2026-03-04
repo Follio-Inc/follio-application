@@ -440,7 +440,7 @@ describe('toPDFHtml', () => {
   it('generates valid HTML with name in title', () => {
     const html = toPDFHtml(makeProfile());
     expect(html).toContain('<title>John Doe - Resume</title>');
-    expect(html).toContain('<h1>John Doe</h1>');
+    expect(html).toContain('class="resume-name">John Doe</h1>');
   });
 
   it('includes headline', () => {
@@ -478,10 +478,32 @@ describe('toPDFHtml', () => {
       summary: null,
     } as unknown as Partial<FullProfile>);
     const html = toPDFHtml(profile);
-    expect(html).not.toContain('<h2>Experience</h2>');
-    expect(html).not.toContain('<h2>Education</h2>');
-    expect(html).not.toContain('<h2>Skills</h2>');
-    expect(html).not.toContain('<h2>Projects</h2>');
-    expect(html).not.toContain('<h2>Summary</h2>');
+    expect(html).not.toContain('EXPERIENCE</h2>');
+    expect(html).not.toContain('EDUCATION</h2>');
+    expect(html).not.toContain('SKILLS</h2>');
+    expect(html).not.toContain('PROJECTS</h2>');
+    expect(html).not.toContain('SUMMARY</h2>');
+  });
+
+  it('uses resume design CSS custom properties', () => {
+    const profile = makeProfile({
+      resumeDesign: {
+        fontFamily: 'inter',
+        headingColor: '#2563eb',
+        accentColor: '#dc2626',
+        headerAlignment: 'left',
+      },
+    } as unknown as Partial<FullProfile>);
+    const html = toPDFHtml(profile);
+    expect(html).toContain('--rd-heading-color: #2563eb');
+    expect(html).toContain('--rd-accent-color: #dc2626');
+    expect(html).toContain('--rd-header-alignment: left');
+    expect(html).toContain('fonts.googleapis.com/css2?family=Inter');
+  });
+
+  it('uses resume-paper class matching CleanResumeView', () => {
+    const html = toPDFHtml(makeProfile());
+    expect(html).toContain('class="resume-paper"');
+    expect(html).toContain('class="resume-section"');
   });
 });

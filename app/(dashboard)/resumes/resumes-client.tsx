@@ -22,6 +22,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { DownloadDialog } from '@/app/(dashboard)/builder/components/download-dialog';
 import { ShareDialog } from '@/components/share-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -46,7 +47,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { useResumeDownload } from '@/lib/hooks';
 import { ResumeThumbnail } from './resume-thumbnail';
 
 // ─── Types ────────────────────────────────────────────────────────
@@ -136,28 +136,6 @@ function getDisplayName(resume: ResumeItem): string | null {
 }
 
 // ─── Sub-components ───────────────────────────────────────────────
-
-/** Dropdown item that triggers a PDF download for a single resume. */
-function ResumeDownloadMenuItem({ handle, resumeTitle }: { handle: string; resumeTitle: string }) {
-  const { download, isDownloading } = useResumeDownload({ handle, resumeTitle });
-
-  return (
-    <DropdownMenuItem
-      disabled={isDownloading}
-      onClick={(e) => {
-        e.preventDefault();
-        void download();
-      }}
-    >
-      {isDownloading ? (
-        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-      ) : (
-        <Download className="mr-2 h-4 w-4" />
-      )}
-      {isDownloading ? 'Downloading…' : 'Download PDF'}
-    </DropdownMenuItem>
-  );
-}
 
 /** Inline input for renaming a resume directly on the card. */
 function InlineRenameInput({
@@ -262,6 +240,10 @@ export function ResumeDashboardClient({
   // Delete confirmation dialog state
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deletingResume, setDeletingResume] = useState<ResumeItem | null>(null);
+
+  // Download dialog state
+  const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
+  const [downloadingResume, setDownloadingResume] = useState<ResumeItem | null>(null);
 
   // Share dialog state
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
@@ -484,6 +466,11 @@ export function ResumeDashboardClient({
     }
   };
 
+  const handleOpenDownloadDialog = (resume: ResumeItem) => {
+    setDownloadingResume(resume);
+    setDownloadDialogOpen(true);
+  };
+
   const handleOpenShareDialog = (resume: ResumeItem) => {
     setSharingResume(resume);
     setShareDialogOpen(true);
@@ -655,10 +642,10 @@ export function ResumeDashboardClient({
                             View Resume
                           </Link>
                         </DropdownMenuItem>
-                        <ResumeDownloadMenuItem
-                          handle={resume.handle}
-                          resumeTitle={resume.resumeTitle}
-                        />
+                        <DropdownMenuItem onClick={() => handleOpenDownloadDialog(resume)}>
+                          <Download className="mr-2 h-4 w-4" />
+                          Download PDF
+                        </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => handleOpenShareDialog(resume)}>
                           <Share2 className="mr-2 h-4 w-4" />
                           Share
@@ -884,6 +871,23 @@ export function ResumeDashboardClient({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ─── Download Dialog (reuses builder's layout picker) ──── */}
+      {downloadingResume && (
+        <DownloadDialog
+          handle={downloadingResume.handle}
+          resumeTitle={downloadingResume.resumeTitle}
+          open={downloadDialogOpen}
+          onOpenChange={(open) => {
+            setDownloadDialogOpen(open);
+            if (!open) setDownloadingResume(null);
+          }}
+          onShareClick={() => {
+            setDownloadDialogOpen(false);
+            handleOpenShareDialog(downloadingResume);
+          }}
+        />
+      )}
 
       {/* ─── Share Dialog (reuses builder's share service) ──── */}
       {sharingResume && (

@@ -5,7 +5,7 @@ import { ResumeSwitcher } from './builder/components/resume-switcher';
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-muted/30">
-      {/* LinkedIn-style top navigation bar */}
+      {/* Top navigation bar */}
       <DashboardTopbar>
         <div className="flex items-center gap-2">
           <ResumeSwitcher />
