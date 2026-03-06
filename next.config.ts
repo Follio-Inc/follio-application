@@ -94,6 +94,17 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      // Portfolio preview iframe: same short browser cache for the
+      // dashboard thumbnail to avoid full SSR on every page load.
+      {
+        source: '/u/:handle*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'private, max-age=60, stale-while-revalidate=120',
+          },
+        ],
+      },
     ];
   },
 };

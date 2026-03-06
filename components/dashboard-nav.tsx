@@ -1,12 +1,18 @@
 'use client';
 
-import { Database, FileText, Palette, Share2 } from 'lucide-react';
+import { Database, FileText, Home, Palette, Share2 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 import { cn } from '@/lib/utils';
 
 const navItems = [
+  {
+    href: '/dashboard',
+    label: 'Dashboard',
+    icon: Home,
+    match: (path: string) => path === '/dashboard',
+  },
   {
     href: '/builder',
     label: 'Resume',

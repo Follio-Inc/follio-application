@@ -1,6 +1,6 @@
 'use client';
 
-import { LayoutGrid, Menu, Palette, Settings, X } from 'lucide-react';
+import { Home, LayoutGrid, Menu, Palette, Settings, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -21,6 +21,12 @@ interface NavItemConfig {
 
 /** Left side — primary product areas */
 const leftItems: NavItemConfig[] = [
+  {
+    href: '/dashboard',
+    label: 'Dashboard',
+    icon: Home,
+    match: (path) => path === '/dashboard',
+  },
   {
     href: '/resumes',
     label: 'My Resumes',
@@ -97,7 +103,7 @@ function MobileNavItem({
 /**
  * Top navigation bar.
  *
- * Left:  [Logo]  |  [My Resumes]  [Portfolio]
+ * Left:  [Logo]  |  [Dashboard]  [My Resumes]  [Portfolio]
  * Right: [Settings]  [children → UserMenu]
  */
 export function DashboardTopbar({ children }: { children?: React.ReactNode }) {
@@ -124,7 +130,7 @@ export function DashboardTopbar({ children }: { children?: React.ReactNode }) {
         {/* Left cluster: Logo + product nav */}
         <div className="flex items-center gap-1 pl-4 sm:pl-6">
           <div className="mr-4">
-            <Logo href="/" size="md" />
+            <Logo href="/dashboard" size="md" />
           </div>
           <div className="flex items-center border-l pl-4">
             {leftItems.map((item) => (
@@ -155,7 +161,7 @@ export function DashboardTopbar({ children }: { children?: React.ReactNode }) {
         >
           <Menu className="h-5 w-5" />
         </button>
-        <Logo href="/" size="sm" />
+        <Logo href="/dashboard" size="sm" />
         <div className="flex-1" />
         {/* User menu on mobile too */}
         {children && <div className="pr-4">{children}</div>}
@@ -179,7 +185,7 @@ export function DashboardTopbar({ children }: { children?: React.ReactNode }) {
         )}
       >
         <div className="flex h-14 items-center justify-between border-b px-4">
-          <Logo href="/" size="md" />
+          <Logo href="/dashboard" size="md" />
           <button
             onClick={() => setMobileOpen(false)}
             className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"

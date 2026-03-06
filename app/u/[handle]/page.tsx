@@ -13,7 +13,7 @@ function serializeForClient<T>(data: T): T {
 
 interface ProfilePageProps {
   params: Promise<{ handle: string }>;
-  searchParams: Promise<{ view?: string; token?: string; key?: string }>;
+  searchParams: Promise<{ view?: string; token?: string; key?: string; preview?: string }>;
 }
 
 // Validate a share token for a private profile
@@ -130,7 +130,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function ProfilePage({ params, searchParams }: ProfilePageProps) {
   const { handle } = await params;
-  const { view = 'portfolio', token, key } = await searchParams;
+  const { view = 'portfolio', token, key, preview } = await searchParams;
 
   const [profile, authState] = await Promise.all([getPublicProfile(handle), getAuthState(handle)]);
 
@@ -173,6 +173,7 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
       authState={authState}
       profileHandle={handle}
       resumeVisibility={resumeVisibility}
+      embed={preview === 'true'}
     />
   );
 }
