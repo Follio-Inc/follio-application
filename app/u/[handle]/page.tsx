@@ -6,6 +6,9 @@ import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { ProfileViewer } from './profile-viewer';
 
+import type { TemplatePortfolio } from '@/lib/portfolio/templates/types';
+import type { PortfolioPlan, PortfolioUserOverrides } from '@/types/portfolio';
+
 // Helper to serialize data for client components (converts Date objects to ISO strings)
 function serializeForClient<T>(data: T): T {
   return JSON.parse(JSON.stringify(data));
@@ -13,7 +16,7 @@ function serializeForClient<T>(data: T): T {
 
 interface ProfilePageProps {
   params: Promise<{ handle: string }>;
-  searchParams: Promise<{ view?: string; token?: string; key?: string; preview?: string }>;
+  searchParams: Promise<{ token?: string; key?: string; preview?: string }>;
 }
 
 // Validate a share token for a private profile
@@ -130,7 +133,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function ProfilePage({ params, searchParams }: ProfilePageProps) {
   const { handle } = await params;
-  const { view = 'portfolio', token, key, preview } = await searchParams;
+  const { token, key, preview } = await searchParams;
 
   const [profile, authState] = await Promise.all([getPublicProfile(handle), getAuthState(handle)]);
 
@@ -163,17 +166,98 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
   // Determine resume visibility for the cross-link button
   const resumeVisibility = profile.resumeVisibility || 'PRIVATE';
 
+  // Fetch generated portfolio if it exists
+  let generatedPlan: PortfolioPlan | null = null;
+  let generatedOverrides: PortfolioUserOverrides | null = null;
+  let templatePortfolio: TemplatePortfolio | null = null;
+
+  try {
+    const profileRecord = await db.profile.findFirst({
+      where: { handle, isArchived: false },
+      select: { id: true },
+    });
+
+    if (profileRecord) {
+      const generatedPortfolio = await db.generatedPortfolio.findFirst({
+        where: {
+          profileId: profileRecord.id,
+          isActive: true,
+          status: { in: ['PUBLISHED', 'DRAFT'] },
+        },
+        orderBy: { version: 'desc' },
+        select: {
+          plan: true,
+          userOverrides: true,
+          status: true,
+        },
+      });
+
+      // Only show published portfolios to non-owners
+      if (generatedPortfolio) {
+        const isPublished = generatedPortfolio.status === 'PUBLISHED';
+        if (isPublished || authState === 'owner') {
+          const plan = generatedPortfolio.plan as Record<string, unknown>;
+
+          // Detect template-based portfolio: plan has a `templateId` field
+          if (plan && typeof plan.templateId === 'string') {
+            templatePortfolio = plan as unknown as TemplatePortfolio;
+          } else {
+            // Legacy AI-generated portfolio plan
+            generatedPlan = plan as unknown as PortfolioPlan;
+            generatedOverrides =
+              generatedPortfolio.userOverrides as unknown as PortfolioUserOverrides | null;
+          }
+        }
+      }
+    }
+  } catch {
+    // If portfolio fetch fails (e.g., migration not run yet), gracefully fall back
+    generatedPlan = null;
+    templatePortfolio = null;
+  }
+
+  // For template-based portfolios, fetch GitHub profile data if available
+  let githubProfile = null;
+  if (templatePortfolio) {
+    try {
+      const profileRecord = await db.profile.findFirst({
+        where: { handle, isArchived: false },
+        select: { id: true },
+      });
+      if (profileRecord) {
+        const ghProfile = await db.gitHubProfile.findUnique({
+          where: { profileId: profileRecord.id },
+          select: {
+            username: true,
+            avatarUrl: true,
+            bio: true,
+            publicRepos: true,
+            followers: true,
+            totalStars: true,
+            primaryLanguages: true,
+          },
+        });
+        githubProfile = ghProfile;
+      }
+    } catch {
+      // GitHub profile fetch is optional — ignore errors
+    }
+  }
+
   // Serialize the profile data to convert Date objects to strings for client component
   const serializedProfile = serializeForClient(profile);
 
   return (
     <ProfileViewer
       profile={serializedProfile}
-      initialView={view as 'portfolio' | 'timeline' | 'snapshot'}
       authState={authState}
       profileHandle={handle}
       resumeVisibility={resumeVisibility}
       embed={preview === 'true'}
+      generatedPlan={generatedPlan ? serializeForClient(generatedPlan) : null}
+      generatedOverrides={generatedOverrides ? serializeForClient(generatedOverrides) : null}
+      templatePortfolio={templatePortfolio ? serializeForClient(templatePortfolio) : null}
+      githubProfile={githubProfile ? serializeForClient(githubProfile) : null}
     />
   );
 }

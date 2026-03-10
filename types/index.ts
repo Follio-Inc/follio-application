@@ -176,55 +176,6 @@ export interface PublicContactInfo {
 }
 
 // ===========================================
-// VIEW TYPES
-// ===========================================
-
-/**
- * Portfolio sub-view types (displayed within /u/[handle])
- * Resume is now a separate route: /u/[handle]/resume
- */
-export type PortfolioView = 'portfolio' | 'timeline' | 'snapshot';
-
-/**
- * Legacy: kept for backward compat but prefer PortfolioView
- */
-export type ProfileView = PortfolioView;
-
-/**
- * View configuration
- */
-export interface ViewConfig {
-  id: PortfolioView;
-  name: string;
-  description: string;
-  icon: string;
-}
-
-export const PORTFOLIO_VIEWS: ViewConfig[] = [
-  {
-    id: 'portfolio',
-    name: 'Portfolio',
-    description: 'Project-focused showcase',
-    icon: 'Briefcase',
-  },
-  {
-    id: 'timeline',
-    name: 'Timeline',
-    description: 'Chronological journey',
-    icon: 'Clock',
-  },
-  {
-    id: 'snapshot',
-    name: 'SnapShot',
-    description: 'Quick facts & metrics',
-    icon: 'Users',
-  },
-];
-
-/** @deprecated Use PORTFOLIO_VIEWS instead */
-export const PROFILE_VIEWS = PORTFOLIO_VIEWS;
-
-// ===========================================
 // IMPORT TYPES
 // ===========================================
 

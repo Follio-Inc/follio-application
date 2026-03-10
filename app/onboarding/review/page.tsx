@@ -735,11 +735,16 @@ function ReviewPageContent() {
       const lastName = data.profile.lastName || '';
 
       // Handle avatar upload to Clerk directly from client
-      // Don't send base64 through API - it's too large
       const avatarUrl = data.profile.avatarUrl;
       const profileForApi = { ...data.profile };
 
+      // Keep the original full-resolution data URL for permanent storage.
+      // Clerk gets a compressed 512×512 copy; the server stores the original
+      // in ProfilePhoto and serves it via /api/photos/[id] for the portfolio.
+      let originalAvatarDataUrl: string | undefined;
+
       if (avatarUrl?.startsWith('data:')) {
+        originalAvatarDataUrl = avatarUrl;
         console.log('[Review] Uploading avatar directly to Clerk...');
         try {
           // Convert base64 to File and compress
@@ -747,24 +752,20 @@ function ReviewPageContent() {
           const compressedFile = await compressImageForClerk(originalFile);
 
           // Upload to Clerk using the user object
-          const imageResource = await user?.setProfileImage({ file: compressedFile });
+          await user?.setProfileImage({ file: compressedFile });
           console.log('[Review] Successfully uploaded avatar to Clerk');
 
-          // Get the new Clerk image URL and store it for the database
-          // This ensures the profile shows the avatar in Follio views too
-          if (imageResource?.publicUrl) {
-            profileForApi.avatarUrl = imageResource.publicUrl;
-            console.log('[Review] Clerk image URL:', imageResource.publicUrl);
+          // Always use the canonical user.imageUrl after a successful upload.
+          // imageResource.publicUrl is version-specific and becomes invalid if
+          // the image is re-synced server-side. user.imageUrl is the stable,
+          // canonical URL that Clerk keeps up-to-date.
+          await user?.reload();
+          if (user?.imageUrl) {
+            profileForApi.avatarUrl = user.imageUrl;
+            console.log('[Review] Clerk canonical image URL:', user.imageUrl);
           } else {
-            // Reload user to get the updated imageUrl from Clerk
-            await user?.reload();
-            if (user?.imageUrl) {
-              profileForApi.avatarUrl = user.imageUrl;
-              console.log('[Review] Using reloaded user.imageUrl:', user.imageUrl);
-            } else {
-              console.warn('[Review] No avatar URL available from Clerk after upload');
-              delete profileForApi.avatarUrl;
-            }
+            console.warn('[Review] No avatar URL available from Clerk after upload');
+            delete profileForApi.avatarUrl;
           }
         } catch (uploadErr) {
           console.error('[Review] Failed to upload avatar to Clerk:', uploadErr);
@@ -820,6 +821,8 @@ function ReviewPageContent() {
           handle: storedHandle,
           resumeFileName: resumeFileName || undefined,
           galleryPhotos: resolvedGalleryPhotos.length > 0 ? resolvedGalleryPhotos : undefined,
+          // Original full-resolution avatar for permanent storage (separate from Clerk)
+          originalAvatarDataUrl: originalAvatarDataUrl || undefined,
           // When adding a new resume from builder, target the specific blank profile
           targetProfileId: sessionStorage.getItem('importTargetProfileId') || undefined,
           reviewedData: {

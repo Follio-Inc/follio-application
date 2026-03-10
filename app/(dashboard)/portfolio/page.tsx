@@ -1,61 +1,113 @@
-import { Palette, Sparkles } from 'lucide-react';
+import { auth } from '@clerk/nextjs/server';
+import { redirect } from 'next/navigation';
+
+import { resolveActiveProfileContextOrNull } from '@/lib/active-profile';
+import { db } from '@/lib/db';
+
+import type { TemplatePortfolio } from '@/lib/portfolio/templates/types';
+import type { PublicProfile } from '@/types';
+
+import { PortfolioBuilder } from './portfolio-builder';
 
 export const metadata = {
   title: 'Portfolio Builder - Follio',
   description: 'Design and customize your portfolio',
 };
 
-export default function PortfolioPage() {
+// Helper to serialize data for client components (converts Date objects to ISO strings)
+function serializeForClient<T>(data: T): T {
+  return JSON.parse(JSON.stringify(data));
+}
+
+export default async function PortfolioPage() {
+  const { userId } = await auth();
+  if (!userId) {
+    redirect('/sign-in');
+  }
+
+  const context = await resolveActiveProfileContextOrNull(userId);
+  if (!context) {
+    redirect('/onboarding');
+  }
+
+  // Fetch profile with all relations
+  const profile = await db.profile.findUnique({
+    where: { id: context.profileId },
+    include: {
+      contactInfo: true,
+      links: { orderBy: { sortOrder: 'asc' } },
+      workExperiences: { orderBy: { sortOrder: 'asc' } },
+      educations: { orderBy: { sortOrder: 'asc' } },
+      skills: { orderBy: { sortOrder: 'asc' } },
+      skillGroups: {
+        include: { skills: { orderBy: { sortOrder: 'asc' } } },
+        orderBy: { sortOrder: 'asc' },
+      },
+      projects: { orderBy: { sortOrder: 'asc' } },
+      awards: { orderBy: { sortOrder: 'asc' } },
+      certifications: { orderBy: { sortOrder: 'asc' } },
+      blogPosts: { orderBy: { createdAt: 'desc' } },
+      youtubeVideos: { orderBy: { createdAt: 'desc' } },
+      photos: { orderBy: { sortOrder: 'asc' } },
+      sections: { orderBy: { sortOrder: 'asc' } },
+    },
+  });
+
+  if (!profile) {
+    redirect('/onboarding');
+  }
+
+  // Fetch active generated portfolio
+  const generatedPortfolio = await db.generatedPortfolio.findFirst({
+    where: {
+      profileId: context.profileId,
+      isActive: true,
+      status: { in: ['PUBLISHED', 'DRAFT'] },
+    },
+    orderBy: { version: 'desc' },
+    select: {
+      id: true,
+      plan: true,
+      status: true,
+      version: true,
+      createdAt: true,
+    },
+  });
+
+  // Check if it's a template portfolio
+  const plan = generatedPortfolio?.plan as Record<string, unknown> | null;
+  const isTemplatePortfolio = plan && typeof plan.templateId === 'string';
+
+  // Fetch GitHub profile for template rendering
+  let githubProfile = null;
+  try {
+    githubProfile = await db.gitHubProfile.findUnique({
+      where: { profileId: context.profileId },
+      select: {
+        username: true,
+        avatarUrl: true,
+        bio: true,
+        publicRepos: true,
+        followers: true,
+        totalStars: true,
+        primaryLanguages: true,
+      },
+    });
+  } catch {
+    // Optional
+  }
+
+  const serializedProfile = serializeForClient(profile);
+
   return (
-    <div className="mx-auto max-w-4xl px-4 py-16 sm:px-6 lg:px-8">
-      <div className="flex flex-col items-center justify-center text-center">
-        {/* Icon */}
-        <div className="relative mb-6">
-          <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/10 via-primary/5 to-transparent">
-            <Palette className="h-10 w-10 text-primary" />
-          </div>
-          <div className="absolute -right-1 -top-1 flex h-7 w-7 items-center justify-center rounded-full bg-primary/10">
-            <Sparkles className="h-4 w-4 text-primary" />
-          </div>
-        </div>
-
-        {/* Title */}
-        <h1 className="mb-3 text-3xl font-bold tracking-tight">Portfolio Builder</h1>
-
-        {/* Description */}
-        <p className="mb-8 max-w-lg text-muted-foreground">
-          A fully customizable portfolio experience is coming soon. You&apos;ll be able to choose
-          themes, layouts, and control exactly how your work is presented to the world.
-        </p>
-
-        {/* Feature Preview */}
-        <div className="grid w-full max-w-2xl gap-4 sm:grid-cols-3">
-          <div className="rounded-xl border bg-card p-5 text-left">
-            <div className="mb-2 text-sm font-semibold">Themes</div>
-            <p className="text-xs text-muted-foreground">
-              Choose from beautiful pre-built themes or create your own custom design.
-            </p>
-          </div>
-          <div className="rounded-xl border bg-card p-5 text-left">
-            <div className="mb-2 text-sm font-semibold">Layouts</div>
-            <p className="text-xs text-muted-foreground">
-              Flexible layouts to showcase projects, blog posts, photos, and more.
-            </p>
-          </div>
-          <div className="rounded-xl border bg-card p-5 text-left">
-            <div className="mb-2 text-sm font-semibold">Live Preview</div>
-            <p className="text-xs text-muted-foreground">
-              See changes in real-time as you design your portfolio side by side.
-            </p>
-          </div>
-        </div>
-
-        {/* Status Badge */}
-        <div className="mt-8 inline-flex items-center gap-2 rounded-full border bg-muted/50 px-4 py-2 text-sm text-muted-foreground">
-          <div className="h-2 w-2 animate-pulse rounded-full bg-amber-500" />
-          Coming Soon
-        </div>
-      </div>
-    </div>
+    <PortfolioBuilder
+      profile={serializedProfile as unknown as PublicProfile}
+      templatePortfolio={
+        isTemplatePortfolio ? serializeForClient(plan as unknown as TemplatePortfolio) : null
+      }
+      portfolioId={generatedPortfolio?.id ?? null}
+      githubProfile={githubProfile ? serializeForClient(githubProfile) : null}
+      handle={profile.handle}
+    />
   );
 }

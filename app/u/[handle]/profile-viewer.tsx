@@ -1,90 +1,100 @@
 'use client';
 
-import { AnimatePresence, MotionConfig, motion } from 'framer-motion';
+import { MotionConfig } from 'framer-motion';
 import Link from 'next/link';
-import { useState } from 'react';
 
 import { ProfileNavbar } from '@/components/profile-navbar';
 
-import { ViewSwitcher } from './view-switcher';
+import { AIPortfolioView } from './views/ai-portfolio-view';
 import { PortfolioView } from './views/portfolio-view';
-import { SnapshotView } from './views/snapshot-view';
-import { TimelineView } from './views/timeline-view';
+import { TemplatePortfolioView } from './views/template-portfolio-view';
 
-import type { PortfolioView as PortfolioViewType, PublicProfile } from '@/types';
+import type { TemplatePortfolio } from '@/lib/portfolio/templates/types';
+import type { PublicProfile } from '@/types';
+import type { PortfolioPlan, PortfolioUserOverrides } from '@/types/portfolio';
 
 interface ProfileViewerProps {
   profile: PublicProfile;
-  initialView: PortfolioViewType;
   authState: 'owner' | 'authenticated' | 'anonymous';
   profileHandle: string;
   resumeVisibility: 'PUBLIC' | 'UNLISTED' | 'PRIVATE';
-  /** When true, hides navbar, view switcher, and footer (used for dashboard thumbnail). */
+  /** When true, hides navbar and footer (used for dashboard thumbnail). */
   embed?: boolean;
+  /** AI-generated portfolio plan (null if not generated yet). */
+  generatedPlan?: PortfolioPlan | null;
+  /** User overrides for the AI portfolio. */
+  generatedOverrides?: PortfolioUserOverrides | null;
+  /** Template-based portfolio data (null if not using template system). */
+  templatePortfolio?: TemplatePortfolio | null;
+  /** GitHub profile data for template rendering. */
+  githubProfile?: {
+    username: string;
+    avatarUrl: string | null;
+    bio: string | null;
+    publicRepos: number;
+    followers: number;
+    totalStars: number;
+    primaryLanguages: string[];
+  } | null;
 }
 
 export function ProfileViewer({
   profile,
-  initialView,
   authState,
   profileHandle,
   resumeVisibility,
   embed = false,
+  generatedPlan = null,
+  generatedOverrides = null,
+  templatePortfolio = null,
+  githubProfile = null,
 }: ProfileViewerProps) {
-  const [currentView, setCurrentView] = useState<PortfolioViewType>(initialView);
-
-  const handleViewChange = (view: PortfolioViewType) => {
-    setCurrentView(view);
-    // Update URL without navigation
-    window.history.replaceState(null, '', `?view=${view}`);
+  /** Render the portfolio view — uses template, AI-generated, or default. */
+  const renderPortfolioView = () => {
+    // Priority 1: Template-based portfolio
+    if (templatePortfolio) {
+      return (
+        <TemplatePortfolioView
+          profile={profile}
+          templateData={templatePortfolio}
+          githubProfile={githubProfile}
+        />
+      );
+    }
+    // Priority 2: Legacy AI-generated portfolio
+    if (generatedPlan) {
+      return (
+        <AIPortfolioView
+          plan={generatedPlan}
+          overrides={generatedOverrides}
+          isPreview={embed}
+          isOwner={authState === 'owner'}
+        />
+      );
+    }
+    // Fallback: Default portfolio view
+    return (
+      <PortfolioView
+        profile={profile}
+        profileHandle={profileHandle}
+        resumeVisibility={resumeVisibility}
+        authState={authState}
+      />
+    );
   };
+
+  const hasFullPagePortfolio = !!(templatePortfolio || generatedPlan);
 
   return (
     <MotionConfig reducedMotion={embed ? 'always' : 'never'}>
       <div className="min-h-screen bg-gradient-to-b from-muted/30 to-background">
         {!embed && <ProfileNavbar authState={authState} profileHandle={profileHandle} />}
 
-        {!embed && <ViewSwitcher currentView={currentView} onViewChange={handleViewChange} />}
+        <main className={hasFullPagePortfolio ? '' : 'container max-w-5xl py-8 pb-24'}>
+          {renderPortfolioView()}
+        </main>
 
-        {embed ? (
-          /* Embed mode: render instantly without AnimatePresence wrapper */
-          <main className="container max-w-5xl py-8 pb-24">
-            {currentView === 'portfolio' && (
-              <PortfolioView
-                profile={profile}
-                profileHandle={profileHandle}
-                resumeVisibility={resumeVisibility}
-                authState={authState}
-              />
-            )}
-            {currentView === 'timeline' && <TimelineView profile={profile} />}
-            {currentView === 'snapshot' && <SnapshotView profile={profile} />}
-          </main>
-        ) : (
-          <AnimatePresence mode="wait">
-            <motion.main
-              key={currentView}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3 }}
-              className="container max-w-5xl py-8 pb-24"
-            >
-              {currentView === 'portfolio' && (
-                <PortfolioView
-                  profile={profile}
-                  profileHandle={profileHandle}
-                  resumeVisibility={resumeVisibility}
-                  authState={authState}
-                />
-              )}
-              {currentView === 'timeline' && <TimelineView profile={profile} />}
-              {currentView === 'snapshot' && <SnapshotView profile={profile} />}
-            </motion.main>
-          </AnimatePresence>
-        )}
-
-        {!embed && (
+        {!embed && !hasFullPagePortfolio && (
           <footer className="border-t bg-background py-6">
             <div className="container text-center text-sm text-muted-foreground">
               <p>

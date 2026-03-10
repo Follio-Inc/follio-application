@@ -75,6 +75,7 @@ model Profile {
   skillGroups            SkillGroup[]
   workExperiences        WorkExperience[]
   youtubeVideos          YouTubeVideo[]
+  generatedPortfolios    GeneratedPortfolio[]
 
   @@index([handle])
   @@index([status])
@@ -571,6 +572,52 @@ model GitHubProfile {
   profile             Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
   @@index([username])
+}
+
+// ============================================================================
+// PORTFOLIO GENERATION
+// ============================================================================
+
+/// Stores a generated portfolio plan and its pipeline outputs.
+/// Each profile can have multiple versions; only one is published at a time.
+model GeneratedPortfolio {
+  id               String          @id @default(cuid())
+  profileId        String
+  version          Int             @default(1)
+  status           PortfolioStatus @default(DRAFT)
+  /// The complete PortfolioPlan JSON — the renderer contract
+  plan             Json
+  /// Raw collected profile data used as pipeline input
+  collectedData    Json?
+  /// Full pipeline debug info (all 6 stage outputs)
+  pipelineOutput   Json?
+  /// User's manual overrides on top of AI generation
+  userOverrides    Json?
+  /// Total generation time in milliseconds
+  generationTimeMs Int?
+  /// Total tokens consumed across all pipeline stages
+  totalTokensUsed  Json?
+  /// Pipeline version identifier (for tracking prompt/model changes)
+  pipelineVersion  String?
+  /// Whether this is the currently active/published portfolio
+  isActive         Boolean         @default(false)
+  publishedAt      DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  profile          Profile         @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, version])
+  @@index([profileId])
+  @@index([status])
+  @@index([isActive])
+}
+
+enum PortfolioStatus {
+  GENERATING
+  DRAFT
+  PUBLISHED
+  FAILED
+  ARCHIVED
 }
 
 enum MainPurpose {

@@ -168,21 +168,39 @@ export function PhotosSection({
     );
   }, [profile.avatarUrl]);
 
-  const savePhoto = async (url: string, category: 'PROFILE' | 'GALLERY'): Promise<void> => {
+  const savePhoto = async (
+    url: string,
+    category: 'PROFILE' | 'GALLERY'
+  ): Promise<string | null> => {
     try {
-      await fetch('/api/profile/photos', {
+      const res = await fetch('/api/profile/photos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url, category }),
       });
+      if (res.ok) {
+        const data = await res.json();
+        return data.photo?.id ?? null;
+      }
+      return null;
     } catch (err) {
       console.error('Failed to save photo:', err);
+      return null;
     }
   };
 
-  const handlePhotoChange = (url: string) => {
+  const handlePhotoChange = async (url: string) => {
+    // Optimistically show the image while saving
     onUpdateAction({ avatarUrl: url });
-    savePhoto(url, 'PROFILE');
+
+    const photoId = await savePhoto(url, 'PROFILE');
+
+    // For data URLs (uploaded/cropped photos), serve via the photos endpoint
+    // so Profile.avatarUrl stays lightweight and the original is preserved.
+    if (photoId && url.startsWith('data:')) {
+      const servingUrl = `/api/photos/${photoId}`;
+      onUpdateAction({ avatarUrl: servingUrl });
+    }
   };
 
   const handlePhotoRemove = () => {

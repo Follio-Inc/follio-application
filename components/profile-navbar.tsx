@@ -5,9 +5,8 @@ import {
   Check,
   ChevronDown,
   Copy,
-  Edit,
-  FileText,
   Globe,
+  LayoutDashboard,
   Lock,
   LogOut,
   Settings,
@@ -26,14 +25,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  getDisplayHost,
-  getLinksUrl,
-  getPortfolioPath,
-  getPortfolioUrl,
-  getResumePath,
-  getResumeUrl,
-} from '@/lib/url';
+import { getDisplayHost, getLinksUrl, getPortfolioUrl, getResumeUrl } from '@/lib/url';
 
 type AuthState = 'owner' | 'authenticated' | 'anonymous';
 
@@ -61,10 +53,10 @@ export function ProfileNavbar({ authState, profileHandle }: ProfileNavbarProps) 
 function OwnerControls({ profileHandle }: { profileHandle?: string }) {
   return (
     <>
-      <Link href="/builder">
+      <Link href="/dashboard">
         <Button variant="outline" size="sm" className="gap-2">
-          <Edit className="h-4 w-4" />
-          <span className="hidden sm:inline">Resume Builder</span>
+          <LayoutDashboard className="h-4 w-4" />
+          <span className="hidden sm:inline">Dashboard</span>
         </Button>
       </Link>
       <ProfileMenu profileHandle={profileHandle} />
@@ -315,51 +307,17 @@ function ProfileMenu({ profileHandle }: { profileHandle?: string } = {}) {
 
         {/* Navigation */}
         <DropdownMenuGroup className="p-2">
-          {handle && (
-            <>
-              <DropdownMenuItem asChild>
-                <Link
-                  href={getPortfolioPath(handle)}
-                  className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 transition-colors"
-                >
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/50">
-                    <Globe className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-sm font-medium">Portfolio</span>
-                    <span className="text-[11px] text-muted-foreground">View your portfolio</span>
-                  </div>
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link
-                  href={getResumePath(handle)}
-                  className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 transition-colors"
-                >
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/50">
-                    <FileText className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-sm font-medium">Resume</span>
-                    <span className="text-[11px] text-muted-foreground">View your resume</span>
-                  </div>
-                </Link>
-              </DropdownMenuItem>
-            </>
-          )}
           <DropdownMenuItem asChild>
             <Link
-              href="/builder"
+              href="/dashboard"
               className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 transition-colors"
             >
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/50">
-                <Edit className="h-4 w-4 text-muted-foreground" />
+                <LayoutDashboard className="h-4 w-4 text-muted-foreground" />
               </div>
               <div className="flex flex-col">
-                <span className="text-sm font-medium">Resume Builder</span>
-                <span className="text-[11px] text-muted-foreground">
-                  Edit data & preview resume
-                </span>
+                <span className="text-sm font-medium">Dashboard</span>
+                <span className="text-[11px] text-muted-foreground">Manage resumes & settings</span>
               </div>
             </Link>
           </DropdownMenuItem>

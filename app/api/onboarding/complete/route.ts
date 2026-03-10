@@ -239,6 +239,7 @@ export async function POST(request: NextRequest) {
       manualLinks,
       resumeFileName,
       galleryPhotos,
+      originalAvatarDataUrl,
       targetProfileId,
     } = body as {
       importedData?: Record<string, NormalizedImportResult | undefined>;
@@ -249,6 +250,8 @@ export async function POST(request: NextRequest) {
       manualLinks?: ManualLinkInput[];
       resumeFileName?: string;
       galleryPhotos?: string[];
+      /** Original full-resolution avatar data URL from the client upload */
+      originalAvatarDataUrl?: string;
       /** When creating a new resume from the builder, this targets the specific blank profile */
       targetProfileId?: string;
     };
@@ -348,7 +351,8 @@ export async function POST(request: NextRequest) {
         providedFirstName,
         providedLastName,
         clerkUserForReview?.imageUrl,
-        galleryPhotos
+        galleryPhotos,
+        originalAvatarDataUrl
       );
 
       // Create ImportLog so this import appears in the builder's Import History timeline
@@ -757,12 +761,27 @@ export async function POST(request: NextRequest) {
     //   },
     // });
 
-    // Sync avatar to Clerk (fire and forget - don't block the response)
+    // Sync avatar to Clerk (fire and forget - don't block the response).
+    // Skip sync for Clerk URLs and local serving URLs (/api/photos/).
     const avatarToSync = mergedProfile.avatarUrl || user.profile?.avatarUrl;
-    if (avatarToSync) {
+    const isAlreadyOnClerk = avatarToSync?.includes('img.clerk.com');
+    const isLocalUrl = avatarToSync?.startsWith('/api/photos/');
+    if (avatarToSync && !isAlreadyOnClerk && !isLocalUrl) {
       syncAvatarToClerk(userId, avatarToSync).catch((err) => {
         console.error('[Onboarding Complete] Failed to sync avatar to Clerk:', err);
       });
+    }
+
+    // Generate template portfolio (fire and forget - don't block the response)
+    if (profile?.id) {
+      import('@/services/portfolio/template-generation.service')
+        .then(({ generateTemplatePortfolio }) => generateTemplatePortfolio(profile.id))
+        .then((result) => {
+          console.log('[Onboarding Complete] Portfolio generated:', result.portfolioId);
+        })
+        .catch((err) => {
+          console.error('[Onboarding Complete] Failed to generate portfolio:', err);
+        });
     }
 
     return NextResponse.json({
@@ -787,7 +806,8 @@ async function handleReviewedData(
   providedFirstName?: string,
   providedLastName?: string,
   clerkAvatarUrl?: string | null,
-  galleryPhotos?: string[]
+  galleryPhotos?: string[],
+  originalAvatarDataUrl?: string
 ) {
   console.log('[handleReviewedData] Starting with reviewed data');
   console.log('[handleReviewedData] Experiences count:', reviewedData.experiences?.length || 0);
@@ -1147,28 +1167,44 @@ async function handleReviewedData(
   }
 
   // ── Save profile photo as ProfilePhoto record ───────────────────────
-  // This ensures the avatar appears in the Builder's Photos section
-  const savedAvatarUrl = avatarUrlForDb;
-  if (savedAvatarUrl) {
+  // If the client uploaded a photo, save the original full-resolution
+  // version as a PROFILE photo.  The serving endpoint /api/photos/[id]
+  // will stream the image bytes with proper caching.  Profile.avatarUrl
+  // is then pointed at this serving URL so the portfolio renders the
+  // full-quality image instead of Clerk’s 512×512 compressed copy.
+  const photoToStore = originalAvatarDataUrl || avatarUrlForDb;
+  if (photoToStore) {
     try {
-      // Check if a PROFILE photo already exists with this URL to avoid duplicates
-      const existingProfilePhoto = await db.profilePhoto.findFirst({
-        where: { profileId, category: 'PROFILE', url: savedAvatarUrl },
+      // Remove any previous PROFILE photo for this profile to avoid duplicates
+      await db.profilePhoto.deleteMany({
+        where: { profileId, category: 'PROFILE' },
       });
-      if (!existingProfilePhoto) {
-        await db.profilePhoto.create({
-          data: {
-            profileId,
-            url: savedAvatarUrl,
-            category: 'PROFILE',
-            source: 'MANUAL',
-            sortOrder: 0,
-          },
-        });
-        console.log('[handleReviewedData] Created ProfilePhoto record for avatar');
-      }
+
+      const profilePhoto = await db.profilePhoto.create({
+        data: {
+          profileId,
+          url: photoToStore,
+          category: 'PROFILE',
+          source: 'MANUAL',
+          sortOrder: 0,
+        },
+      });
+
+      // Update Profile.avatarUrl to serve the full-resolution photo.
+      // For data URLs (uploaded photos), use the serving endpoint.
+      // For HTTP URLs (GitHub/LinkedIn), store directly.
+      const servingUrl = photoToStore.startsWith('data:')
+        ? `/api/photos/${profilePhoto.id}`
+        : photoToStore;
+
+      await db.profile.update({
+        where: { id: profileId },
+        data: { avatarUrl: servingUrl },
+      });
+
+      console.log('[handleReviewedData] Saved original-quality ProfilePhoto and updated avatarUrl');
     } catch (err) {
-      console.error('[handleReviewedData] Failed to create ProfilePhoto record:', err);
+      console.error('[handleReviewedData] Failed to save original ProfilePhoto:', err);
     }
   }
 
@@ -1202,14 +1238,20 @@ async function handleReviewedData(
 
   console.log('[handleReviewedData] Complete! Profile handle:', handle);
 
-  // Sync avatar to Clerk (fire and forget - don't block the response)
+  // Sync avatar to Clerk (fire and forget - don't block the response).
+  // Skip sync for Clerk URLs (client already uploaded) and local serving
+  // URLs (/api/photos/) which are not accessible from Clerk's servers.
   const avatarToSync = reviewedData.profile.avatarUrl || user.profile?.avatarUrl;
+  const isAlreadyOnClerk = avatarToSync?.includes('img.clerk.com');
+  const isLocalPhotoUrl = avatarToSync?.startsWith('/api/photos/');
   console.log(
     '[handleReviewedData] Avatar to sync:',
-    avatarToSync ? `${avatarToSync.substring(0, 50)}... (length: ${avatarToSync.length})` : 'none'
+    avatarToSync ? `${avatarToSync.substring(0, 50)}... (length: ${avatarToSync.length})` : 'none',
+    isAlreadyOnClerk ? '(already on Clerk, skipping sync)' : '',
+    isLocalPhotoUrl ? '(local serving URL, skipping sync)' : ''
   );
 
-  if (avatarToSync) {
+  if (avatarToSync && !isAlreadyOnClerk && !isLocalPhotoUrl) {
     // Check if it's still an indexeddb reference (shouldn't be, but just in case)
     if (avatarToSync.startsWith('indexeddb:')) {
       console.error(
@@ -1228,6 +1270,18 @@ async function handleReviewedData(
           console.error('[handleReviewedData] Error syncing avatar to Clerk:', err);
         });
     }
+  }
+
+  // Generate template portfolio (fire and forget - don't block the response)
+  if (profileId) {
+    import('@/services/portfolio/template-generation.service')
+      .then(({ generateTemplatePortfolio }) => generateTemplatePortfolio(profileId))
+      .then((result) => {
+        console.log('[handleReviewedData] Portfolio generated:', result.portfolioId);
+      })
+      .catch((err) => {
+        console.error('[handleReviewedData] Failed to generate portfolio:', err);
+      });
   }
 
   return NextResponse.json({

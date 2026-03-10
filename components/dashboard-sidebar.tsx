@@ -1,6 +1,6 @@
 'use client';
 
-import { Home, LayoutGrid, Menu, Palette, Settings, X } from 'lucide-react';
+import { Home, LayoutGrid, Menu, Settings, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -32,12 +32,6 @@ const leftItems: NavItemConfig[] = [
     label: 'My Resumes',
     icon: LayoutGrid,
     match: (path) => path.startsWith('/resumes') || path.startsWith('/builder'),
-  },
-  {
-    href: '/portfolio',
-    label: 'Portfolio',
-    icon: Palette,
-    match: (path) => path.startsWith('/portfolio'),
   },
 ];
 

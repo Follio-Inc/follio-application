@@ -298,8 +298,19 @@ export async function PATCH(request: NextRequest) {
       },
     });
 
-    // Sync avatar to Clerk if it was updated and caller has not opted out
-    if (shouldSyncAvatarToClerk && body.avatarUrl && body.avatarUrl !== existingProfile.avatarUrl) {
+    // Sync avatar to Clerk if it was updated and caller has not opted out.
+    // Skip sync for:
+    // - Clerk URLs — already on Clerk's CDN, re-syncing would invalidate the stored URL
+    // - Local serving URLs (/api/photos/) — not downloadable by Clerk's server
+    const isClerkUrl = body.avatarUrl?.includes('img.clerk.com');
+    const isLocalPhotoUrl = body.avatarUrl?.startsWith('/api/photos/');
+    if (
+      shouldSyncAvatarToClerk &&
+      body.avatarUrl &&
+      body.avatarUrl !== existingProfile.avatarUrl &&
+      !isClerkUrl &&
+      !isLocalPhotoUrl
+    ) {
       syncAvatarToClerk(userId, body.avatarUrl).catch((err) => {
         console.error('[PATCH /api/profile] Failed to sync avatar to Clerk:', err);
       });

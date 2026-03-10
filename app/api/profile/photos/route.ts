@@ -61,6 +61,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
+    // For PROFILE photos, replace the existing one (a profile has one avatar).
+    // Gallery photos accumulate.
+    if (validCategory === 'PROFILE') {
+      await db.profilePhoto.deleteMany({
+        where: { profileId, category: 'PROFILE' },
+      });
+    }
+
     // Get the highest sortOrder for the category
     const lastPhoto = await db.profilePhoto.findFirst({
       where: { profileId, category: validCategory },

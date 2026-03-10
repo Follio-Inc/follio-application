@@ -1,0 +1,593 @@
+/**
+ * Portfolio Theme CSS — Modern Design System
+ *
+ * Scoped to [data-portfolio-root] to avoid conflicts with the main app.
+ * Every portfolio variable is prefixed with --p-.
+ *
+ * Design philosophy: glass-morphism, layered depth, generous whitespace,
+ * smooth motion, and polished micro-interactions. Squarespace-level quality.
+ */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BASE SCOPE
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+[data-portfolio-root] {
+  /* Map portfolio tokens to local scope */
+  --background: var(--p-background);
+  --foreground: var(--p-foreground);
+  --primary: var(--p-primary);
+  --primary-foreground: var(--p-primary-foreground);
+  --secondary: var(--p-secondary);
+  --secondary-foreground: var(--p-secondary-foreground);
+  --muted: var(--p-muted);
+  --muted-foreground: var(--p-muted-foreground);
+  --card: var(--p-card);
+  --card-foreground: var(--p-card-foreground);
+  --border: var(--p-border);
+  --accent: var(--p-accent);
+  --accent-foreground: var(--p-accent-foreground);
+  --ring: var(--p-ring);
+
+  /* Typography base */
+  font-size: var(--p-body-size, 1rem);
+  line-height: var(--p-body-line-height, 1.65);
+  font-weight: var(--p-body-weight, 400);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+
+  color: hsl(var(--p-foreground));
+  background-color: hsl(var(--p-background));
+
+  /* Selection color */
+  --p-selection-bg: var(--p-accent);
+}
+
+[data-portfolio-root] ::selection {
+  background-color: hsl(var(--p-selection-bg) / 0.2);
+  color: hsl(var(--p-foreground));
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TYPOGRAPHY
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+[data-portfolio-root] .p-hero-text {
+  font-size: var(--p-hero-size, 3.5rem);
+  font-weight: var(--p-heading-weight, 700);
+  line-height: var(--p-heading-line-height, 1.08);
+  letter-spacing: var(--p-heading-letter-spacing, -0.025em);
+  color: hsl(var(--p-foreground));
+  text-wrap: balance;
+}
+
+[data-portfolio-root] .p-h2 {
+  font-size: var(--p-h2-size, 2rem);
+  font-weight: var(--p-heading-weight, 700);
+  line-height: var(--p-heading-line-height, 1.15);
+  letter-spacing: var(--p-heading-letter-spacing, -0.02em);
+  color: hsl(var(--p-foreground));
+  text-wrap: balance;
+}
+
+[data-portfolio-root] .p-h3 {
+  font-size: var(--p-h3-size, 1.25rem);
+  font-weight: 600;
+  line-height: 1.3;
+  color: hsl(var(--p-foreground));
+}
+
+[data-portfolio-root] .p-body {
+  font-size: var(--p-body-size, 1rem);
+  font-weight: var(--p-body-weight, 400);
+  line-height: var(--p-body-line-height, 1.65);
+  color: hsl(var(--p-foreground));
+}
+
+[data-portfolio-root] .p-body-lg {
+  font-size: calc(var(--p-body-size, 1rem) * 1.15);
+  font-weight: var(--p-body-weight, 400);
+  line-height: 1.7;
+  color: hsl(var(--p-foreground));
+}
+
+[data-portfolio-root] .p-small {
+  font-size: var(--p-small-size, 0.8125rem);
+  color: hsl(var(--p-muted-foreground));
+}
+
+[data-portfolio-root] .p-overline {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: hsl(var(--p-accent));
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   COLOR UTILITIES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+[data-portfolio-root] .p-bg {
+  background-color: hsl(var(--p-background));
+}
+[data-portfolio-root] .p-bg-card {
+  background-color: hsl(var(--p-card));
+}
+[data-portfolio-root] .p-bg-muted {
+  background-color: hsl(var(--p-muted));
+}
+[data-portfolio-root] .p-bg-primary {
+  background-color: hsl(var(--p-primary));
+}
+[data-portfolio-root] .p-bg-accent {
+  background-color: hsl(var(--p-accent));
+}
+[data-portfolio-root] .p-bg-accent-soft {
+  background-color: hsl(var(--p-accent) / 0.08);
+}
+[data-portfolio-root] .p-text-primary {
+  color: hsl(var(--p-primary));
+}
+[data-portfolio-root] .p-text-muted {
+  color: hsl(var(--p-muted-foreground));
+}
+[data-portfolio-root] .p-text-accent {
+  color: hsl(var(--p-accent));
+}
+[data-portfolio-root] .p-border {
+  border-color: hsl(var(--p-border));
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LAYOUT
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+[data-portfolio-root] .p-section {
+  padding: var(--p-section-padding-y, 5rem) var(--p-section-padding-x, 2rem);
+  max-width: var(--p-max-content-width, 72rem);
+  margin-left: auto;
+  margin-right: auto;
+  width: 100%;
+}
+
+[data-portfolio-root] .p-section-full {
+  padding: var(--p-section-padding-y, 5rem) var(--p-section-padding-x, 2rem);
+  width: 100%;
+}
+
+[data-portfolio-root] .p-section-gap {
+  gap: var(--p-section-gap, 2.5rem);
+}
+[data-portfolio-root] .p-content-gap {
+  gap: var(--p-content-gap, 1.5rem);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CARD — Modern glass card with layered depth
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+[data-portfolio-root] .p-card {
+  background-color: hsl(var(--p-card));
+  color: hsl(var(--p-card-foreground));
+  padding: var(--p-card-padding, 1.5rem);
+  border-radius: 1rem;
+  border: 1px solid hsl(var(--p-border) / 0.6);
+  box-shadow:
+    0 1px 2px hsl(var(--p-foreground) / 0.04),
+    0 4px 12px hsl(var(--p-foreground) / 0.03);
+  transition:
+    transform 300ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 300ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 300ms ease;
+}
+
+[data-portfolio-root] .p-card:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 2px 4px hsl(var(--p-foreground) / 0.04),
+    0 8px 24px hsl(var(--p-foreground) / 0.06);
+  border-color: hsl(var(--p-border));
+}
+
+[data-portfolio-root] .p-card-flat {
+  background-color: hsl(var(--p-card));
+  color: hsl(var(--p-card-foreground));
+  padding: var(--p-card-padding, 1.5rem);
+  border-radius: 1rem;
+  border: 1px solid hsl(var(--p-border) / 0.5);
+}
+
+[data-portfolio-root] .p-card-glass {
+  background: hsl(var(--p-card) / 0.6);
+  backdrop-filter: blur(16px) saturate(1.5);
+  -webkit-backdrop-filter: blur(16px) saturate(1.5);
+  color: hsl(var(--p-card-foreground));
+  padding: var(--p-card-padding, 1.5rem);
+  border-radius: 1rem;
+  border: 1px solid hsl(var(--p-border) / 0.3);
+  box-shadow: 0 4px 16px hsl(var(--p-foreground) / 0.04);
+}
+
+[data-portfolio-root] .p-card-interactive {
+  background-color: hsl(var(--p-card));
+  color: hsl(var(--p-card-foreground));
+  padding: var(--p-card-padding, 1.5rem);
+  border-radius: 1rem;
+  border: 1px solid hsl(var(--p-border) / 0.5);
+  box-shadow: 0 1px 3px hsl(var(--p-foreground) / 0.03);
+  transition: all 350ms cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+}
+
+[data-portfolio-root] .p-card-interactive:hover {
+  transform: translateY(-3px);
+  box-shadow:
+    0 4px 8px hsl(var(--p-foreground) / 0.04),
+    0 12px 32px hsl(var(--p-foreground) / 0.08);
+  border-color: hsl(var(--p-accent) / 0.3);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BADGES / PILLS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+[data-portfolio-root] .p-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  border-radius: 9999px;
+  background-color: hsl(var(--p-secondary));
+  color: hsl(var(--p-secondary-foreground));
+  transition:
+    background-color 200ms ease,
+    color 200ms ease;
+}
+
+[data-portfolio-root] .p-badge:hover {
+  background-color: hsl(var(--p-secondary-foreground) / 0.08);
+}
+
+[data-portfolio-root] .p-badge-accent {
+  background-color: hsl(var(--p-accent) / 0.1);
+  color: hsl(var(--p-accent));
+  border: 1px solid hsl(var(--p-accent) / 0.15);
+}
+
+[data-portfolio-root] .p-badge-outline {
+  background-color: transparent;
+  color: hsl(var(--p-muted-foreground));
+  border: 1px solid hsl(var(--p-border));
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BUTTONS — Modern with micro-interactions
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+[data-portfolio-root] .p-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.75rem;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  border-radius: 0.75rem;
+  background-color: hsl(var(--p-primary));
+  color: hsl(var(--p-primary-foreground));
+  border: none;
+  cursor: pointer;
+  transition: all 250ms cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 1px 3px hsl(var(--p-primary) / 0.3);
+}
+
+[data-portfolio-root] .p-btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px hsl(var(--p-primary) / 0.35);
+}
+
+[data-portfolio-root] .p-btn-primary:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px hsl(var(--p-primary) / 0.25);
+}
+
+[data-portfolio-root] .p-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.75rem;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  border-radius: 0.75rem;
+  background-color: hsl(var(--p-secondary));
+  color: hsl(var(--p-secondary-foreground));
+  border: 1px solid hsl(var(--p-border));
+  cursor: pointer;
+  transition: all 250ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+[data-portfolio-root] .p-btn-secondary:hover {
+  background-color: hsl(var(--p-muted));
+  border-color: hsl(var(--p-accent) / 0.3);
+  transform: translateY(-1px);
+}
+
+[data-portfolio-root] .p-btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  border-radius: 0.75rem;
+  background-color: transparent;
+  color: hsl(var(--p-foreground));
+  border: none;
+  cursor: pointer;
+  transition: all 200ms ease;
+}
+
+[data-portfolio-root] .p-btn-ghost:hover {
+  background-color: hsl(var(--p-muted));
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LINKS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+[data-portfolio-root] .p-link {
+  color: hsl(var(--p-accent));
+  text-decoration: none;
+  background-image: linear-gradient(hsl(var(--p-accent) / 0.3), hsl(var(--p-accent) / 0.3));
+  background-size: 0% 1px;
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  transition: background-size 350ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+[data-portfolio-root] .p-link:hover {
+  background-size: 100% 1px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DECORATIVE
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+[data-portfolio-root] .p-divider {
+  height: 1px;
+  width: 100%;
+  background: linear-gradient(to right, transparent, hsl(var(--p-border)), transparent);
+}
+
+[data-portfolio-root] .p-glow {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(80px);
+  opacity: 0.15;
+  pointer-events: none;
+  background-color: hsl(var(--p-accent));
+}
+
+[data-portfolio-root] .p-gradient-text {
+  background: linear-gradient(135deg, hsl(var(--p-foreground)), hsl(var(--p-accent)));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+[data-portfolio-root] .p-accent-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background-color: hsl(var(--p-accent));
+  flex-shrink: 0;
+}
+
+[data-portfolio-root] .p-accent-line {
+  width: 3rem;
+  height: 3px;
+  border-radius: 9999px;
+  background: linear-gradient(to right, hsl(var(--p-accent)), hsl(var(--p-accent) / 0.3));
+}
+
+/* Ambient gradient backgrounds for hero/sections */
+[data-portfolio-root] .p-ambient-bg {
+  position: relative;
+  overflow: hidden;
+}
+
+[data-portfolio-root] .p-ambient-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 60% 50% at 20% 10%, hsl(var(--p-accent) / 0.07), transparent),
+    radial-gradient(ellipse 40% 60% at 80% 80%, hsl(var(--p-primary) / 0.05), transparent);
+  pointer-events: none;
+}
+
+/* Grid pattern background */
+[data-portfolio-root] .p-grid-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(hsl(var(--p-border) / 0.15) 1px, transparent 1px),
+    linear-gradient(to right, hsl(var(--p-border) / 0.15) 1px, transparent 1px);
+  background-size: 4rem 4rem;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 50%, black 20%, transparent 70%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 50%, black 20%, transparent 70%);
+  pointer-events: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   AVATAR
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+[data-portfolio-root] .p-avatar {
+  border-radius: 1rem;
+  object-fit: cover;
+  border: 3px solid hsl(var(--p-background));
+  box-shadow:
+    0 0 0 1px hsl(var(--p-border) / 0.5),
+    0 4px 16px hsl(var(--p-foreground) / 0.08);
+}
+
+[data-portfolio-root] .p-avatar-round {
+  border-radius: 9999px;
+  object-fit: cover;
+  border: 3px solid hsl(var(--p-background));
+  box-shadow:
+    0 0 0 1px hsl(var(--p-border) / 0.5),
+    0 4px 16px hsl(var(--p-foreground) / 0.08);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   FOCUS RING
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+[data-portfolio-root] :focus-visible {
+  outline: 2px solid hsl(var(--p-ring));
+  outline-offset: 2px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   IMAGE TREATMENTS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+[data-portfolio-root] .p-img-cover {
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+
+[data-portfolio-root] .p-img-cover img {
+  transition: transform 500ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+[data-portfolio-root] .p-img-cover:hover img {
+  transform: scale(1.03);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TIMELINE LINE
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+[data-portfolio-root] .p-timeline-line {
+  position: absolute;
+  left: 1.5rem;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    hsl(var(--p-border)) 2rem,
+    hsl(var(--p-border)) calc(100% - 2rem),
+    transparent
+  );
+}
+
+[data-portfolio-root] .p-timeline-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 9999px;
+  background-color: hsl(var(--p-accent));
+  border: 2px solid hsl(var(--p-background));
+  box-shadow: 0 0 0 3px hsl(var(--p-accent) / 0.15);
+  position: relative;
+  z-index: 1;
+}
+
+[data-portfolio-root] .p-timeline-dot-muted {
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background-color: hsl(var(--p-muted-foreground) / 0.3);
+  border: 2px solid hsl(var(--p-background));
+  position: relative;
+  z-index: 1;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LANGUAGE BAR (GitHub)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+[data-portfolio-root] .p-lang-bar {
+  display: flex;
+  height: 8px;
+  border-radius: 9999px;
+  overflow: hidden;
+  background-color: hsl(var(--p-muted));
+}
+
+[data-portfolio-root] .p-lang-bar > div {
+  transition: width 600ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SECTION DIVIDER
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+[data-portfolio-root] .p-section-divider {
+  max-width: var(--p-max-content-width, 72rem);
+  margin: 0 auto;
+  padding: 0 var(--p-section-padding-x, 2rem);
+}
+
+[data-portfolio-root] .p-section-divider > div {
+  height: 1px;
+  background: linear-gradient(to right, transparent, hsl(var(--p-border) / 0.5), transparent);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   RESPONSIVE
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 640px) {
+  [data-portfolio-root] .p-hero-text {
+    font-size: clamp(2rem, 8vw, calc(var(--p-hero-size, 3.5rem) * 0.65));
+  }
+
+  [data-portfolio-root] .p-h2 {
+    font-size: calc(var(--p-h2-size, 2rem) * 0.8);
+  }
+
+  [data-portfolio-root] .p-section {
+    padding: calc(var(--p-section-padding-y, 5rem) * 0.55)
+      calc(var(--p-section-padding-x, 2rem) * 0.6);
+  }
+
+  [data-portfolio-root] .p-card,
+  [data-portfolio-root] .p-card-glass,
+  [data-portfolio-root] .p-card-interactive {
+    padding: 1.25rem;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  [data-portfolio-root] .p-hero-text {
+    font-size: calc(var(--p-hero-size, 3.5rem) * 0.8);
+  }
+
+  [data-portfolio-root] .p-section {
+    padding: calc(var(--p-section-padding-y, 5rem) * 0.8)
+      calc(var(--p-section-padding-x, 2rem) * 0.85);
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  [data-portfolio-root] .p-card,
+  [data-portfolio-root] .p-card-interactive,
+  [data-portfolio-root] .p-btn-primary,
+  [data-portfolio-root] .p-btn-secondary {
+    transition: none !important;
+    transform: none !important;
+  }
+}

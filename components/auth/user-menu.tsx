@@ -1,22 +1,10 @@
 'use client';
 
 import { useClerk, useUser } from '@clerk/nextjs';
-import {
-  Check,
-  ChevronDown,
-  Copy,
-  Edit,
-  Eye,
-  Globe,
-  Lock,
-  LogOut,
-  Settings,
-  User,
-} from 'lucide-react';
+import { Check, ChevronDown, Copy, Globe, Lock, LogOut, Settings, User } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
-import { Button } from '@/components/ui/button';
 import { getDisplayHost, getPortfolioPath, getPortfolioUrl } from '@/lib/url';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -105,14 +93,6 @@ export function UserMenu() {
 
   return (
     <div className="flex items-center gap-2">
-      {handle && (
-        <Link href={getPortfolioPath(handle)}>
-          <Button variant="outline" size="sm" className="gap-2">
-            <Eye className="h-4 w-4" />
-            <span className="hidden sm:inline">Your Profile</span>
-          </Button>
-        </Link>
-      )}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
@@ -226,28 +206,12 @@ export function UserMenu() {
                     <User className="h-4 w-4 text-muted-foreground" />
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-sm font-medium">Your Follio</span>
-                    <span className="text-[11px] text-muted-foreground">View your profile</span>
+                    <span className="text-sm font-medium">View Profile</span>
+                    <span className="text-[11px] text-muted-foreground">See your public page</span>
                   </div>
                 </Link>
               </DropdownMenuItem>
             )}
-            <DropdownMenuItem asChild>
-              <Link
-                href="/builder"
-                className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 transition-colors"
-              >
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/50">
-                  <Edit className="h-4 w-4 text-muted-foreground" />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-sm font-medium">Resume Builder</span>
-                  <span className="text-[11px] text-muted-foreground">
-                    Edit data & preview resume
-                  </span>
-                </div>
-              </Link>
-            </DropdownMenuItem>
             <DropdownMenuItem asChild>
               <Link
                 href="/settings"
