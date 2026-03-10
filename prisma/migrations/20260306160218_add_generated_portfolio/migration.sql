@@ -1,11 +1,17 @@
--- CreateEnum
-CREATE TYPE "PortfolioStatus" AS ENUM ('GENERATING', 'DRAFT', 'PUBLISHED', 'FAILED', 'ARCHIVED');
+-- CreateEnum (idempotent)
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'PortfolioStatus') THEN
+    CREATE TYPE "PortfolioStatus" AS ENUM ('GENERATING', 'DRAFT', 'PUBLISHED', 'FAILED', 'ARCHIVED');
+  END IF;
+END
+$$;
 
 -- AlterTable
 ALTER TABLE "Profile" ALTER COLUMN "resumeVisibility" SET DEFAULT 'PRIVATE';
 
--- CreateTable
-CREATE TABLE "GeneratedPortfolio" (
+-- CreateTable (idempotent)
+CREATE TABLE IF NOT EXISTS "GeneratedPortfolio" (
     "id" TEXT NOT NULL,
     "profileId" TEXT NOT NULL,
     "version" INTEGER NOT NULL DEFAULT 1,
@@ -25,17 +31,23 @@ CREATE TABLE "GeneratedPortfolio" (
     CONSTRAINT "GeneratedPortfolio_pkey" PRIMARY KEY ("id")
 );
 
--- CreateIndex
-CREATE INDEX "GeneratedPortfolio_profileId_idx" ON "GeneratedPortfolio"("profileId");
+-- CreateIndex (idempotent)
+CREATE INDEX IF NOT EXISTS "GeneratedPortfolio_profileId_idx" ON "GeneratedPortfolio"("profileId");
 
--- CreateIndex
-CREATE INDEX "GeneratedPortfolio_status_idx" ON "GeneratedPortfolio"("status");
+-- CreateIndex (idempotent)
+CREATE INDEX IF NOT EXISTS "GeneratedPortfolio_status_idx" ON "GeneratedPortfolio"("status");
 
--- CreateIndex
-CREATE INDEX "GeneratedPortfolio_isActive_idx" ON "GeneratedPortfolio"("isActive");
+-- CreateIndex (idempotent)
+CREATE INDEX IF NOT EXISTS "GeneratedPortfolio_isActive_idx" ON "GeneratedPortfolio"("isActive");
 
--- CreateIndex
-CREATE UNIQUE INDEX "GeneratedPortfolio_profileId_version_key" ON "GeneratedPortfolio"("profileId", "version");
+-- CreateIndex (idempotent)
+CREATE UNIQUE INDEX IF NOT EXISTS "GeneratedPortfolio_profileId_version_key" ON "GeneratedPortfolio"("profileId", "version");
 
--- AddForeignKey
-ALTER TABLE "GeneratedPortfolio" ADD CONSTRAINT "GeneratedPortfolio_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "Profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+-- AddForeignKey (idempotent)
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'GeneratedPortfolio_profileId_fkey') THEN
+    ALTER TABLE "GeneratedPortfolio" ADD CONSTRAINT "GeneratedPortfolio_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "Profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END
+$$;
