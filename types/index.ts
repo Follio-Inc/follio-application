@@ -141,7 +141,7 @@ export interface FullProfile extends Profile {
   photos: ProfilePhoto[];
   sections: ProfileSection[];
   /** Resume design settings (JSON column, may be null) */
-  resumeDesign?: ResumeDesign | null;
+  resumeDesign: ResumeDesign | null;
 }
 
 /**
@@ -162,7 +162,7 @@ export interface PublicProfile extends Omit<Profile, 'userId'> {
   photos: ProfilePhoto[];
   sections: ProfileSection[];
   /** Resume design settings (JSON column, may be null) */
-  resumeDesign?: ResumeDesign | null;
+  resumeDesign: ResumeDesign | null;
 }
 
 /**
