@@ -22,7 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 import { getPortfolioUrl, getResumeUrl } from '@/lib/url';
-import type { Profile } from '@/types';
+import type { FullProfile } from '@/types';
 
 type ProfileStatus = 'DRAFT' | 'PUBLIC' | 'PRIVATE';
 
@@ -34,8 +34,8 @@ interface ShareTokenData {
 }
 
 interface ShareSectionProps {
-  profile: Profile;
-  onUpdateAction: (updates: Partial<Profile>) => void;
+  profile: FullProfile;
+  onUpdateAction: (updates: Partial<FullProfile>) => void;
 }
 
 const STATUS_OPTIONS: {

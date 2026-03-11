@@ -39,7 +39,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 
-import type { Profile } from '@/types';
+import type { FullProfile } from '@/types';
 
 type ThemeMode = 'light' | 'dark' | 'system';
 
@@ -66,8 +66,8 @@ interface AccountDataSummary {
 }
 
 interface SettingsSectionProps {
-  profile: Profile;
-  onUpdate: (updates: Partial<Profile>) => void;
+  profile: FullProfile;
+  onUpdate: (updates: Partial<FullProfile>) => void;
 }
 
 const THEME_OPTIONS: {
