@@ -149,13 +149,13 @@ export default async function BuilderLayout({ children }: { children: React.Reac
     });
 
     if (refreshed) {
-      const serializedProfile = serializeForClient(refreshed);
+      const serializedProfile = serializeForClient(refreshed) as unknown as FullProfile;
       return <BuilderLayoutClient profile={serializedProfile}>{children}</BuilderLayoutClient>;
     }
   }
 
   // Serialize the profile data to convert Date objects to strings for client component
-  const serializedProfile = serializeForClient(profile);
+  const serializedProfile = serializeForClient(profile) as unknown as FullProfile;
 
   return <BuilderLayoutClient profile={serializedProfile}>{children}</BuilderLayoutClient>;
 }
