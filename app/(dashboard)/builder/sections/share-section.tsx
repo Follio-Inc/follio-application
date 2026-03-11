@@ -80,14 +80,10 @@ export function ShareSection({ profile, onUpdateAction }: ShareSectionProps) {
   const [copiedResume, setCopiedResume] = useState(false);
   const [isExporting, setIsExporting] = useState<string | null>(null);
   const [resumeVisibility, setResumeVisibility] = useState<'PUBLIC' | 'UNLISTED' | 'PRIVATE'>(
-    ((profile as Record<string, unknown>).resumeVisibility as 'PUBLIC' | 'UNLISTED' | 'PRIVATE') ||
-      'UNLISTED'
+    profile.resumeVisibility || 'UNLISTED'
   );
   const [portfolioVisibility, setPortfolioVisibility] = useState<'PUBLIC' | 'UNLISTED' | 'PRIVATE'>(
-    ((profile as Record<string, unknown>).portfolioVisibility as
-      | 'PUBLIC'
-      | 'UNLISTED'
-      | 'PRIVATE') || 'PUBLIC'
+    profile.portfolioVisibility || 'PUBLIC'
   );
   const [savingVisibility, setSavingVisibility] = useState(false);
   const [shareToken, setShareToken] = useState<ShareTokenData | null>(null);
@@ -354,32 +350,18 @@ export function ShareSection({ profile, onUpdateAction }: ShareSectionProps) {
         : publicUrl;
 
   const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(' ');
-  const topSkills =
-    'skills' in profile && Array.isArray((profile as Record<string, unknown>).skills)
-      ? (profile as Record<string, unknown[]>).skills
-          .slice(0, 4)
-          .map((s: unknown) => (s as { name: string }).name)
-      : [];
+  const topSkills = profile.skills.slice(0, 4).map((s) => s.name);
 
   // Portfolio summary data
-  const profileAny = profile as Record<string, unknown>;
-  const projects = Array.isArray(profileAny.projects)
-    ? (profileAny.projects as { name: string; techStack?: string[] }[])
-    : [];
+  const projects = profile.projects;
   const projectCount = projects.length;
   const topProjects = projects.slice(0, 3);
 
   // Resume summary data
-  const workExperiences = Array.isArray(profileAny.workExperiences)
-    ? (profileAny.workExperiences as { company: string; title: string }[])
-    : [];
-  const educations = Array.isArray(profileAny.educations)
-    ? (profileAny.educations as { institution: string; degree?: string | null }[])
-    : [];
-  const certifications = Array.isArray(profileAny.certifications)
-    ? (profileAny.certifications as { name: string }[])
-    : [];
-  const skillCount = Array.isArray(profileAny.skills) ? (profileAny.skills as unknown[]).length : 0;
+  const workExperiences = profile.workExperiences;
+  const educations = profile.educations;
+  const certifications = profile.certifications;
+  const skillCount = profile.skills.length;
 
   return (
     <div className="space-y-6 rounded-xl bg-muted/40 p-4">

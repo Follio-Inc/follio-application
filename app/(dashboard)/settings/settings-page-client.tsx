@@ -3,7 +3,7 @@
 import { useSearchParams } from 'next/navigation';
 import { useCallback, useState } from 'react';
 
-import type { ContactInfo, Profile } from '@prisma/client';
+import type { ContactInfo } from '@prisma/client';
 
 import DataSourcesPageClient from '@/app/(dashboard)/builder/data-sources/data-sources-client';
 import type { FullProfile } from '@/types';
@@ -44,7 +44,7 @@ export function SettingsPageClient({ profile }: SettingsPageClientProps) {
     resolveInitialTab(searchParams.get('tab'))
   );
 
-  const handleProfileUpdate = useCallback((updates: Partial<Profile>) => {
+  const handleProfileUpdate = useCallback((updates: Partial<FullProfile>) => {
     setCurrentProfile((prev) => ({ ...prev, ...updates }));
   }, []);
 
@@ -53,7 +53,7 @@ export function SettingsPageClient({ profile }: SettingsPageClientProps) {
       ...prev,
       contactInfo: prev.contactInfo
         ? { ...prev.contactInfo, ...updates }
-        : ({ ...updates } as ContactInfo),
+        : ({ ...updates } as unknown as ContactInfo),
     }));
   }, []);
 

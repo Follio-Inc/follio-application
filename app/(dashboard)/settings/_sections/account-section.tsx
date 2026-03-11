@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { ContactData } from '@/lib/hooks/use-contact-manager';
-import type { ContactInfo, Profile } from '@prisma/client';
+import type { FullProfile } from '@/types';
 
 const NAME_SAVE_DEBOUNCE_MS = 700;
 const CONTACT_SAVE_DEBOUNCE_MS = 800;
@@ -26,14 +26,12 @@ export interface AccountContactUpdatePayload {
 }
 
 interface AccountSectionProps {
-  profile: Profile & { contactInfo: ContactInfo | null };
-  onProfileUpdateAction: (updates: Partial<Profile>) => void;
+  profile: FullProfile;
+  onProfileUpdateAction: (updates: Partial<FullProfile>) => void;
   onContactUpdateAction: (updates: AccountContactUpdatePayload) => void;
 }
 
-function buildInitialContactData(
-  profile: Profile & { contactInfo: ContactInfo | null }
-): ContactData {
+function buildInitialContactData(profile: FullProfile): ContactData {
   const contactInfo = profile.contactInfo as Record<string, unknown> | null;
 
   const allEmails: ContactData['allEmails'] = (() => {

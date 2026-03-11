@@ -5,6 +5,8 @@ import { resolveActiveProfileContextOrNull } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { SettingsPageClient } from './settings-page-client';
 
+import type { FullProfile } from '@/types';
+
 // Helper to serialize data for client components (converts Date objects to ISO strings)
 function serializeForClient<T>(data: T): T {
   return JSON.parse(JSON.stringify(data));
@@ -53,7 +55,7 @@ export default async function SettingsPage() {
     redirect('/onboarding');
   }
 
-  const serializedProfile = serializeForClient(profile);
+  const serializedProfile = serializeForClient(profile) as unknown as FullProfile;
 
   return <SettingsPageClient profile={serializedProfile} />;
 }

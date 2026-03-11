@@ -124,9 +124,14 @@ export const RESUME_FONT_LABELS: Record<ResumeFontFamily, string> = {
 // ===========================================
 
 /**
+ * Portfolio display view mode
+ */
+export type PortfolioView = 'portfolio' | 'timeline' | 'snapshot';
+
+/**
  * Full profile with all relations loaded
  */
-export interface FullProfile extends Profile {
+export interface FullProfile extends Omit<Profile, 'resumeDesign'> {
   contactInfo: ContactInfo | null;
   links: Link[];
   workExperiences: WorkExperience[];
@@ -147,7 +152,7 @@ export interface FullProfile extends Profile {
 /**
  * Profile for public viewing (excludes sensitive data)
  */
-export interface PublicProfile extends Omit<Profile, 'userId'> {
+export interface PublicProfile extends Omit<Profile, 'userId' | 'resumeDesign'> {
   contactInfo: PublicContactInfo | null;
   links: Link[];
   workExperiences: WorkExperience[];

@@ -19,7 +19,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 
-import type { Profile } from '@/types';
+import type { FullProfile } from '@/types';
 
 // ============================================================================
 // Types
@@ -48,7 +48,7 @@ interface AccountDataSummary {
 }
 
 interface PrivacySectionProps {
-  profile: Profile;
+  profile: FullProfile;
 }
 
 // ============================================================================

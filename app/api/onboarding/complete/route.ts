@@ -773,9 +773,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate template portfolio (fire and forget - don't block the response)
-    if (profile?.id) {
+    const profileId = user.profile?.id;
+    if (profileId) {
       import('@/services/portfolio/template-generation.service')
-        .then(({ generateTemplatePortfolio }) => generateTemplatePortfolio(profile.id))
+        .then(({ generateTemplatePortfolio }) => generateTemplatePortfolio(profileId))
         .then((result) => {
           console.log('[Onboarding Complete] Portfolio generated:', result.portfolioId);
         })

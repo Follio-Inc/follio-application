@@ -7,6 +7,8 @@ import { BuilderLayoutClient } from './builder-layout-client';
 
 import type { SectionType } from '@prisma/client';
 
+import type { FullProfile } from '@/types';
+
 // Default sections that every profile should have
 const DEFAULT_SECTION_CONFIGS: { type: SectionType; title: string }[] = [
   { type: 'BASIC_INFO', title: 'Header' },
