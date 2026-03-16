@@ -24,6 +24,7 @@ export function getTextWithHighestFeatureScore(
     let score = 0;
     let hasMatch = false;
     let matchedText = item.text;
+    let bestMatchScore = -Infinity;
 
     for (const featureSet of featureSets) {
       const [featureFunc, featureScore, returnMatchOnly] = featureSet;
@@ -34,8 +35,10 @@ export function getTextWithHighestFeatureScore(
         hasMatch = true;
 
         // If the feature returns a regex match, use the matched text
-        if (returnMatchOnly && Array.isArray(result)) {
+        // from the highest-scoring returnMatchOnly feature
+        if (returnMatchOnly && Array.isArray(result) && featureScore > bestMatchScore) {
           matchedText = result[0];
+          bestMatchScore = featureScore;
         }
       }
     }
