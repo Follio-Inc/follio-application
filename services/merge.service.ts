@@ -1,6 +1,6 @@
 /**
  * Data Merge Service
- * 
+ *
  * Implements conflict resolution strategies for merging data from multiple sources.
  * Supports manual, resume import, GitHub, LinkedIn, and API sources with configurable
  * priority rules.
@@ -8,20 +8,37 @@
 
 import type { DataSource } from '@prisma/client';
 
+import { logger } from '@/lib/logger';
+
+const mergeLogger = logger.child({ source: 'merge-service' });
+
 // Priority order for data sources (higher = more authoritative)
+// NOTE: Must match SOURCE_PRIORITY in multi-source-merger.service.ts
 const SOURCE_PRIORITY: Record<DataSource, number> = {
   MANUAL: 100, // User edits always win
   RESUME: 80,
+  GOOGLE: 75, // Google provides reliable data
   LINKEDIN: 70,
   GITHUB: 60,
   GENERATED: 50,
+  MEDIUM: 45,
+  YOUTUBE: 45,
+  BLOG: 45,
 };
 
 // Fields that should never be auto-overwritten
 const PROTECTED_FIELDS = ['handle', 'userId', 'id', 'createdAt'];
 
 // Fields where we prefer to append rather than replace
-const APPENDABLE_FIELDS = ['skills', 'workExperiences', 'educations', 'projects', 'links', 'certifications', 'awards'];
+const APPENDABLE_FIELDS = [
+  'skills',
+  'workExperiences',
+  'educations',
+  'projects',
+  'links',
+  'certifications',
+  'awards',
+];
 
 export type MergeStrategy = 'replace' | 'skip' | 'append' | 'manual';
 
@@ -73,7 +90,7 @@ function isDuplicate<T extends Record<string, unknown>>(
   return keys.every((key) => {
     const v1 = item1[key];
     const v2 = item2[key];
-    
+
     if (typeof v1 === 'string' && typeof v2 === 'string') {
       return v1.toLowerCase().trim() === v2.toLowerCase().trim();
     }
@@ -84,13 +101,16 @@ function isDuplicate<T extends Record<string, unknown>>(
 /**
  * Deduplicate an array of items based on key fields
  */
-function deduplicateArray<T extends Record<string, unknown>>(
-  items: T[],
-  keys: (keyof T)[]
-): T[] {
+function deduplicateArray<T extends Record<string, unknown>>(items: T[], keys: (keyof T)[]): T[] {
   const seen = new Set<string>();
   return items.filter((item) => {
-    const key = keys.map((k) => String(item[k] || '').toLowerCase().trim()).join('|');
+    const key = keys
+      .map((k) =>
+        String(item[k] || '')
+          .toLowerCase()
+          .trim()
+      )
+      .join('|');
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -198,19 +218,25 @@ export function mergeProfileData<T extends Record<string, unknown>>(
     if (APPENDABLE_FIELDS.includes(key) && Array.isArray(incomingValue)) {
       if (options.strategy === 'append' && Array.isArray(existingValue)) {
         let combined = [...existingValue, ...incomingValue];
-        
+
         // Deduplicate based on field type
         if (options.deduplicateEntries) {
           if (key === 'skills') {
             combined = deduplicateArray(combined as Record<string, unknown>[], ['name']);
           } else if (key === 'workExperiences') {
-            combined = deduplicateArray(combined as Record<string, unknown>[], ['company', 'title']);
+            combined = deduplicateArray(combined as Record<string, unknown>[], ['company', 'role']);
           } else if (key === 'educations') {
-            combined = deduplicateArray(combined as Record<string, unknown>[], ['institution', 'degree']);
+            combined = deduplicateArray(combined as Record<string, unknown>[], [
+              'institution',
+              'degree',
+            ]);
           } else if (key === 'links') {
             combined = deduplicateArray(combined as Record<string, unknown>[], ['url']);
           } else if (key === 'projects') {
-            combined = deduplicateArray(combined as Record<string, unknown>[], ['title', 'repoUrl']);
+            combined = deduplicateArray(combined as Record<string, unknown>[], [
+              'title',
+              'repoUrl',
+            ]);
           }
         }
 
@@ -242,11 +268,11 @@ export function mergeProfileData<T extends Record<string, unknown>>(
     );
 
     (merged as Record<string, unknown>)[key] = result.value;
-    
+
     if (result.conflict) {
       result.conflict.field = key;
       conflicts.push(result.conflict);
-      
+
       if (result.conflict.resolution === 'kept_existing') {
         skipped++;
       } else {
@@ -261,25 +287,24 @@ export function mergeProfileData<T extends Record<string, unknown>>(
 }
 
 /**
- * Merge work experiences with smart deduplication
+ * Merge work experiences with smart deduplication.
+ * Uses 'company' and 'role' fields (matching the Prisma WorkExperience model).
  */
-export function mergeWorkExperiences<T extends { company: string; title: string; startDate?: Date | null }>(
-  existing: T[],
-  incoming: T[],
-  options: { deduplicateByCompanyTitle?: boolean } = {}
-): T[] {
-  const { deduplicateByCompanyTitle = true } = options;
+export function mergeWorkExperiences<
+  T extends { company: string; role: string; startDate?: Date | null },
+>(existing: T[], incoming: T[], options: { deduplicateByCompanyRole?: boolean } = {}): T[] {
+  const { deduplicateByCompanyRole = true } = options;
 
-  if (!deduplicateByCompanyTitle) {
+  if (!deduplicateByCompanyRole) {
     return [...existing, ...incoming];
   }
 
   const existingKeys = new Set(
-    existing.map((e) => `${e.company.toLowerCase()}-${e.title.toLowerCase()}`)
+    existing.map((e) => `${e.company.toLowerCase()}-${e.role.toLowerCase()}`)
   );
 
   const newItems = incoming.filter((item) => {
-    const key = `${item.company.toLowerCase()}-${item.title.toLowerCase()}`;
+    const key = `${item.company.toLowerCase()}-${item.role.toLowerCase()}`;
     return !existingKeys.has(key);
   });
 
@@ -289,10 +314,7 @@ export function mergeWorkExperiences<T extends { company: string; title: string;
 /**
  * Merge skills with smart deduplication
  */
-export function mergeSkills<T extends { name: string }>(
-  existing: T[],
-  incoming: T[]
-): T[] {
+export function mergeSkills<T extends { name: string }>(existing: T[], incoming: T[]): T[] {
   const existingNames = new Set(existing.map((s) => s.name.toLowerCase()));
   const newSkills = incoming.filter((s) => !existingNames.has(s.name.toLowerCase()));
   return [...existing, ...newSkills];
@@ -312,7 +334,7 @@ export function previewMerge<T extends Record<string, unknown>>(
     if (PROTECTED_FIELDS.includes(key)) continue;
 
     const existingValue = existing[key as keyof T];
-    
+
     if (existingValue === incomingValue) continue;
     if (incomingValue === null || incomingValue === undefined) continue;
 

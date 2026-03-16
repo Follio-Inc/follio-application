@@ -1,4 +1,3 @@
-import { describe, it, expect } from 'vitest';
 import {
   compareSourcePriority,
   mergeProfileData,
@@ -6,6 +5,7 @@ import {
   mergeWorkExperiences,
   previewMerge,
 } from '@/services/merge.service';
+import { describe, expect, it } from 'vitest';
 
 describe('Merge Service', () => {
   describe('compareSourcePriority', () => {
@@ -145,14 +145,12 @@ describe('Merge Service', () => {
   });
 
   describe('mergeWorkExperiences', () => {
-    it('should deduplicate by company and title', () => {
-      const existing = [
-        { company: 'Google', title: 'Software Engineer', startDate: new Date() },
-      ];
+    it('should deduplicate by company and role', () => {
+      const existing = [{ company: 'Google', role: 'Software Engineer', startDate: new Date() }];
 
       const incoming = [
-        { company: 'google', title: 'software engineer', startDate: new Date() }, // duplicate
-        { company: 'Meta', title: 'Engineer', startDate: new Date() },
+        { company: 'google', role: 'software engineer', startDate: new Date() }, // duplicate
+        { company: 'Meta', role: 'Engineer', startDate: new Date() },
       ];
 
       const result = mergeWorkExperiences(existing, incoming);
@@ -163,16 +161,12 @@ describe('Merge Service', () => {
     });
 
     it('should not deduplicate when option is disabled', () => {
-      const existing = [
-        { company: 'Google', title: 'Software Engineer', startDate: new Date() },
-      ];
+      const existing = [{ company: 'Google', role: 'Software Engineer', startDate: new Date() }];
 
-      const incoming = [
-        { company: 'Google', title: 'Software Engineer', startDate: new Date() },
-      ];
+      const incoming = [{ company: 'Google', role: 'Software Engineer', startDate: new Date() }];
 
       const result = mergeWorkExperiences(existing, incoming, {
-        deduplicateByCompanyTitle: false,
+        deduplicateByCompanyRole: false,
       });
 
       expect(result).toHaveLength(2);

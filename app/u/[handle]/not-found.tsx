@@ -1,5 +1,5 @@
-import Link from 'next/link';
 import { FileQuestion } from 'lucide-react';
+import Link from 'next/link';
 
 import { Button } from '@/components/ui/button';
 
@@ -12,7 +12,7 @@ export default function ProfileNotFound() {
         </div>
         <h1 className="text-3xl font-bold">Profile Not Found</h1>
         <p className="mt-2 text-muted-foreground">
-          This profile doesn't exist or may be set to private.
+          This profile doesn&apos;t exist or may be set to private.
         </p>
         <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
           <Button asChild>

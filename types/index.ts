@@ -4,29 +4,134 @@
  */
 
 import type {
-  Profile,
+  Award,
+  BlogPost,
+  Certification,
   ContactInfo,
-  Link,
-  WorkExperience,
+  CustomContentType,
+  DataSource,
+  DataSourceConnection,
   Education,
+  ImportJob,
+  ImportSessionStatus,
+  Link,
+  Profile,
+  ProfilePhoto,
+  ProfileSection,
+  ProfileStatus,
+  Project,
+  SectionType,
   Skill,
   SkillGroup,
-  Project,
-  Award,
-  Certification,
   User,
-  DataSource,
-  ProfileStatus,
+  WorkExperience,
+  YouTubeVideo,
 } from '@prisma/client';
+
+export type { ContentVisibility } from '@prisma/client';
+
+// ===========================================
+// RESUME DESIGN TYPES
+// ===========================================
+
+/** Font families available for resume rendering */
+export type ResumeFontFamily =
+  | 'georgia'
+  | 'times'
+  | 'garamond'
+  | 'inter'
+  | 'roboto'
+  | 'lato'
+  | 'merriweather'
+  | 'source-sans'
+  | 'open-sans'
+  | 'raleway';
+
+/** Header alignment options */
+export type ResumeHeaderAlignment = 'left' | 'center' | 'right';
+
+/** Section divider style */
+export type ResumeDividerStyle = 'line' | 'double' | 'dotted' | 'dashed' | 'thick' | 'none';
+
+/** Paper density / spacing */
+export type ResumeDensity = 'compact' | 'normal' | 'relaxed';
+
+/**
+ * Resume design settings — stored as JSON on the Profile model.
+ * All fields are optional; missing values fall back to defaults.
+ */
+export interface ResumeDesign {
+  /** Color for section headings (CSS color, e.g. '#1a1a1a' or '#2563eb') */
+  headingColor?: string;
+  /** Accent color for divider lines, bullets, etc. */
+  accentColor?: string;
+  /** Font family applied to the entire resume */
+  fontFamily?: ResumeFontFamily;
+  /** Header block alignment: left / center / right */
+  headerAlignment?: ResumeHeaderAlignment;
+  /** Style of the divider line below section headings */
+  dividerStyle?: ResumeDividerStyle;
+  /** Base font size in px (default 13) */
+  fontSize?: number;
+  /** Content density / spacing */
+  density?: ResumeDensity;
+  /** Name font size in px (default 28) */
+  nameFontSize?: number;
+}
+
+/** Default design settings applied when no custom design is configured */
+export const RESUME_DESIGN_DEFAULTS: Required<ResumeDesign> = {
+  headingColor: '#000000',
+  accentColor: '#000000',
+  fontFamily: 'georgia',
+  headerAlignment: 'center',
+  dividerStyle: 'line',
+  fontSize: 13,
+  density: 'normal',
+  nameFontSize: 28,
+};
+
+/** Maps font family identifiers to CSS font-family values */
+export const RESUME_FONT_MAP: Record<ResumeFontFamily, string> = {
+  georgia: "'Georgia', 'Times New Roman', Times, serif",
+  times: "'Times New Roman', Times, serif",
+  garamond: "'EB Garamond', 'Garamond', 'Georgia', serif",
+  inter: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+  roboto: "'Roboto', -apple-system, 'Segoe UI', sans-serif",
+  lato: "'Lato', -apple-system, 'Segoe UI', sans-serif",
+  merriweather: "'Merriweather', 'Georgia', serif",
+  'source-sans': "'Source Sans 3', -apple-system, 'Segoe UI', sans-serif",
+  'open-sans': "'Open Sans', -apple-system, 'Segoe UI', sans-serif",
+  raleway: "'Raleway', -apple-system, 'Segoe UI', sans-serif",
+};
+
+/** Human-readable labels for font families */
+export const RESUME_FONT_LABELS: Record<ResumeFontFamily, string> = {
+  georgia: 'Georgia',
+  times: 'Times New Roman',
+  garamond: 'EB Garamond',
+  inter: 'Inter',
+  roboto: 'Roboto',
+  lato: 'Lato',
+  merriweather: 'Merriweather',
+  'source-sans': 'Source Sans',
+  'open-sans': 'Open Sans',
+  raleway: 'Raleway',
+};
 
 // ===========================================
 // PROFILE TYPES
 // ===========================================
 
 /**
+ * Portfolio display view mode
+ */
+export type PortfolioView = 'portfolio' | 'timeline' | 'snapshot';
+
+/**
  * Full profile with all relations loaded
  */
-export interface FullProfile extends Profile {
+export interface FullProfile extends Omit<Profile, 'resumeDesign'> {
   contactInfo: ContactInfo | null;
   links: Link[];
   workExperiences: WorkExperience[];
@@ -36,12 +141,18 @@ export interface FullProfile extends Profile {
   projects: Project[];
   awards: Award[];
   certifications: Certification[];
+  blogPosts: BlogPost[];
+  youtubeVideos: YouTubeVideo[];
+  photos: ProfilePhoto[];
+  sections: ProfileSection[];
+  /** Resume design settings (JSON column, may be null) */
+  resumeDesign: ResumeDesign | null;
 }
 
 /**
  * Profile for public viewing (excludes sensitive data)
  */
-export interface PublicProfile extends Omit<Profile, 'userId'> {
+export interface PublicProfile extends Omit<Profile, 'userId' | 'resumeDesign'> {
   contactInfo: PublicContactInfo | null;
   links: Link[];
   workExperiences: WorkExperience[];
@@ -51,6 +162,12 @@ export interface PublicProfile extends Omit<Profile, 'userId'> {
   projects: Project[];
   awards: Award[];
   certifications: Certification[];
+  blogPosts: BlogPost[];
+  youtubeVideos: YouTubeVideo[];
+  photos: ProfilePhoto[];
+  sections: ProfileSection[];
+  /** Resume design settings (JSON column, may be null) */
+  resumeDesign: ResumeDesign | null;
 }
 
 /**
@@ -58,82 +175,52 @@ export interface PublicProfile extends Omit<Profile, 'userId'> {
  */
 export interface PublicContactInfo {
   email: string | null;
+  phone: string | null;
   website: string | null;
-  // phone is excluded from public view
+  headerFieldsOrder?: string[] | null;
 }
-
-// ===========================================
-// VIEW TYPES
-// ===========================================
-
-/**
- * Available profile view types
- */
-export type ProfileView = 'resume' | 'portfolio' | 'timeline' | 'recruiter';
-
-/**
- * View configuration
- */
-export interface ViewConfig {
-  id: ProfileView;
-  name: string;
-  description: string;
-  icon: string;
-}
-
-export const PROFILE_VIEWS: ViewConfig[] = [
-  {
-    id: 'resume',
-    name: 'Resume',
-    description: 'Traditional resume format',
-    icon: 'FileText',
-  },
-  {
-    id: 'portfolio',
-    name: 'Portfolio',
-    description: 'Project-focused showcase',
-    icon: 'Briefcase',
-  },
-  {
-    id: 'timeline',
-    name: 'Timeline',
-    description: 'Chronological journey',
-    icon: 'Clock',
-  },
-  {
-    id: 'recruiter',
-    name: 'Recruiter',
-    description: 'Quick facts & metrics',
-    icon: 'Users',
-  },
-];
 
 // ===========================================
 // IMPORT TYPES
 // ===========================================
 
 /**
- * GitHub repository data from API
+ * GitHub repository data from API.
+ * Canonical definition — import from '@/types' everywhere.
  */
 export interface GitHubRepo {
   id: number;
   name: string;
   full_name: string;
+  owner?: {
+    login: string;
+    avatar_url: string;
+  };
   description: string | null;
   html_url: string;
   homepage: string | null;
   language: string | null;
+  languages_url?: string;
   stargazers_count: number;
   forks_count: number;
+  watchers_count?: number;
   topics: string[];
   created_at: string;
   updated_at: string;
   pushed_at: string;
-  private: boolean;
+  private?: boolean;
+  fork?: boolean;
+  archived?: boolean;
+  license?: {
+    key: string;
+    name: string;
+    spdx_id: string;
+  } | null;
 }
 
 /**
- * GitHub user data from API
+ * GitHub user data from API.
+ * Canonical definition — import from '@/types' everywhere.
  */
 export interface GitHubUser {
   login: string;
@@ -147,8 +234,11 @@ export interface GitHubUser {
   email: string | null;
   bio: string | null;
   public_repos: number;
+  public_gists?: number;
   followers: number;
   following: number;
+  created_at?: string;
+  hireable?: boolean | null;
 }
 
 /**
@@ -184,6 +274,58 @@ export interface MergeConflict {
   importedValue: unknown;
   source: DataSource;
 }
+
+// ===========================================
+// IMPORT SESSION TYPES
+// ===========================================
+
+/**
+ * Import session — persists proposed changes from a re-import
+ * so users can review at their own pace.
+ *
+ * Philosophy: "Imports are helpers, not authorities. The Builder is sovereign."
+ */
+export interface ImportSessionData {
+  id: string;
+  source: DataSource;
+  status: ImportSessionStatus;
+  sourceLabel: string | null;
+  proposedCount: number;
+  parsedData: Record<string, unknown>;
+  previewData: Record<string, unknown> | null;
+  selections: ImportSelectionState | null;
+  edits: ImportEditsState | null;
+  appliedCount: number | null;
+  appliedAt: string | null;
+  createdAt: string;
+  expiresAt: string;
+}
+
+/**
+ * Tracks which proposed items the user has toggled on/off
+ */
+export interface ImportSelectionState {
+  profileFields: Record<string, boolean>;
+  experiences: Record<number, boolean>;
+  educations: Record<number, boolean>;
+  skills: Record<number, boolean>;
+  projects: Record<number, boolean>;
+  links: Record<number, boolean>;
+}
+
+/**
+ * Tracks inline edits the user made before applying
+ */
+export interface ImportEditsState {
+  experiences: Record<number, Record<string, unknown>>;
+  educations: Record<number, Record<string, unknown>>;
+  projects: Record<number, Record<string, unknown>>;
+}
+
+/**
+ * Proposed change item with action classification
+ */
+export type ImportAction = 'add' | 'update' | 'skip' | 'fill';
 
 // ===========================================
 // EXPORT TYPES
@@ -297,17 +439,287 @@ export interface SessionUser {
 
 // Re-export Prisma types for convenience
 export type {
-  Profile,
+  Award,
+  BlogPost,
+  Certification,
   ContactInfo,
-  Link,
-  WorkExperience,
+  CustomContentType,
+  DataSource,
+  DataSourceConnection,
   Education,
+  ImportJob,
+  ImportSessionStatus,
+  Link,
+  Profile,
+  ProfileSection,
+  ProfileStatus,
+  Project,
+  SectionType,
   Skill,
   SkillGroup,
-  Project,
-  Award,
-  Certification,
   User,
-  DataSource,
-  ProfileStatus,
+  WorkExperience,
+  YouTubeVideo,
 };
+
+// Note: SectionType, CustomContentType, ProfileSection are defined locally above
+
+// ===========================================
+// SECTION UI TYPES
+// ===========================================
+
+/**
+ * Section configuration for UI
+ */
+export type SectionCategory = 'header' | 'body';
+
+export interface SectionConfig {
+  type: SectionType;
+  defaultTitle: string;
+  icon: string;
+  description: string;
+  isRemovable: boolean;
+  hasItems: boolean; // Does this section have a list of items (experiences, projects) or just fields (basic info)
+  category: SectionCategory; // Whether this section belongs to the Header or Body group
+}
+
+/**
+ * All available section types with their configurations
+ */
+export const SECTION_CONFIGS: SectionConfig[] = [
+  {
+    type: 'BASIC_INFO',
+    defaultTitle: 'Header',
+    icon: 'User',
+    description: 'Name, headline, contact details',
+    isRemovable: false,
+    hasItems: false,
+    category: 'header',
+  },
+  {
+    type: 'SUMMARY',
+    defaultTitle: 'Summary',
+    icon: 'FileText',
+    description: 'Professional summary or about section',
+    isRemovable: true,
+    hasItems: false,
+    category: 'body',
+  },
+  {
+    type: 'EXPERIENCE',
+    defaultTitle: 'Experience',
+    icon: 'Briefcase',
+    description: 'Work history',
+    isRemovable: true,
+    hasItems: true,
+    category: 'body',
+  },
+  {
+    type: 'EDUCATION',
+    defaultTitle: 'Education',
+    icon: 'GraduationCap',
+    description: 'Schools and degrees',
+    isRemovable: true,
+    hasItems: true,
+    category: 'body',
+  },
+  {
+    type: 'SKILLS',
+    defaultTitle: 'Skills',
+    icon: 'Code',
+    description: 'Technical and soft skills',
+    isRemovable: true,
+    hasItems: true,
+    category: 'body',
+  },
+  {
+    type: 'PROJECTS',
+    defaultTitle: 'Projects',
+    icon: 'FolderKanban',
+    description: 'Portfolio projects',
+    isRemovable: true,
+    hasItems: true,
+    category: 'body',
+  },
+  {
+    type: 'LINKS',
+    defaultTitle: 'Links',
+    icon: 'Link',
+    description: 'Social profiles and websites',
+    isRemovable: true,
+    hasItems: true,
+    category: 'header',
+  },
+  {
+    type: 'AWARDS',
+    defaultTitle: 'Awards',
+    icon: 'Award',
+    description: 'Recognition and achievements',
+    isRemovable: true,
+    hasItems: true,
+    category: 'body',
+  },
+  {
+    type: 'CERTIFICATIONS',
+    defaultTitle: 'Certifications',
+    icon: 'BadgeCheck',
+    description: 'Professional certifications',
+    isRemovable: true,
+    hasItems: true,
+    category: 'body',
+  },
+  {
+    type: 'PUBLICATIONS',
+    defaultTitle: 'Publications',
+    icon: 'BookOpen',
+    description: 'Papers, articles, books',
+    isRemovable: true,
+    hasItems: true,
+    category: 'body',
+  },
+  {
+    type: 'VOLUNTEERING',
+    defaultTitle: 'Volunteering',
+    icon: 'Heart',
+    description: 'Community involvement',
+    isRemovable: true,
+    hasItems: true,
+    category: 'body',
+  },
+  {
+    type: 'LANGUAGES',
+    defaultTitle: 'Languages',
+    icon: 'Globe',
+    description: 'Languages you speak',
+    isRemovable: true,
+    hasItems: true,
+    category: 'body',
+  },
+  {
+    type: 'INTERESTS',
+    defaultTitle: 'Interests',
+    icon: 'Sparkles',
+    description: 'Hobbies and interests',
+    isRemovable: true,
+    hasItems: true,
+    category: 'body',
+  },
+  {
+    type: 'CUSTOM',
+    defaultTitle: 'Custom Section',
+    icon: 'LayoutGrid',
+    description: 'Create your own section',
+    isRemovable: true,
+    hasItems: true,
+    category: 'body',
+  },
+];
+
+/**
+ * Section types that belong to the "Header" category in the builder sidebar.
+ * Everything else is considered "Body".
+ */
+export const HEADER_SECTION_TYPES: SectionType[] = ['BASIC_INFO', 'LINKS'];
+
+/**
+ * Custom section content item (for structured custom sections)
+ */
+export interface CustomSectionItem {
+  id: string;
+  title: string;
+  subtitle?: string;
+  description?: string;
+  startDate?: string;
+  endDate?: string;
+  isCurrent?: boolean;
+  url?: string;
+  tags?: string[];
+  isVisible?: boolean;
+}
+
+/**
+ * Custom section content structure
+ */
+export interface CustomSectionContent {
+  items?: CustomSectionItem[];
+  content?: string; // For freeform content
+}
+
+/**
+ * Volunteering experience item
+ */
+export interface VolunteeringItem {
+  id: string;
+  organization: string;
+  role: string;
+  cause?: string;
+  description?: string;
+  startDate?: string;
+  endDate?: string;
+  isCurrent?: boolean;
+  url?: string;
+  isVisible?: boolean;
+}
+
+/**
+ * Volunteering section content
+ */
+export interface VolunteeringSectionContent {
+  items: VolunteeringItem[];
+}
+
+/**
+ * Language proficiency item
+ */
+export interface LanguageItem {
+  id: string;
+  language: string;
+  proficiency: 'NATIVE' | 'FLUENT' | 'ADVANCED' | 'INTERMEDIATE' | 'BASIC';
+  isVisible?: boolean;
+}
+
+/**
+ * Languages section content
+ */
+export interface LanguagesSectionContent {
+  items: LanguageItem[];
+}
+
+/**
+ * Publication item
+ */
+export interface PublicationItem {
+  id: string;
+  title: string;
+  publisher?: string;
+  authors?: string;
+  date?: string;
+  description?: string;
+  url?: string;
+  doi?: string;
+  isVisible?: boolean;
+}
+
+/**
+ * Publications section content
+ */
+export interface PublicationsSectionContent {
+  items: PublicationItem[];
+}
+
+/**
+ * Interest item
+ */
+export interface InterestItem {
+  id: string;
+  name: string;
+  category?: string;
+  isVisible?: boolean;
+}
+
+/**
+ * Interests section content
+ */
+export interface InterestsSectionContent {
+  items: InterestItem[];
+}

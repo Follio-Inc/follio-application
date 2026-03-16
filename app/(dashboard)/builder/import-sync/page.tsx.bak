@@ -1,0 +1,1328 @@
+'use client';
+
+import { useUser } from '@clerk/nextjs';
+import { AnimatePresence, motion } from 'framer-motion';
+import {
+  AlertCircle,
+  ArrowRight,
+  CheckCircle2,
+  Clock,
+  FileText,
+  Github,
+  HelpCircle,
+  Info,
+  Linkedin,
+  Link as LinkIcon,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Shield,
+  ShieldAlert,
+  Upload,
+  X,
+} from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Spinner } from '@/components/ui/spinner';
+
+// ─── Types ───────────────────────────────────────────────────────────
+
+interface SyncStatus {
+  sources: {
+    github: {
+      connected: boolean;
+      oauthUsername: string | null;
+      profileUsername: string | null;
+      lastImportedAt: string | null;
+      itemsImported: number;
+      connectionStatus: string | null;
+      projectCount: number;
+      skillCount: number;
+    };
+    linkedin: {
+      connected: boolean;
+      oauthName: string | null;
+      lastImportedAt: string | null;
+      itemsImported: number;
+      connectionStatus: string | null;
+    };
+    resume: {
+      hasBeenImported: boolean;
+      lastImportedAt: string | null;
+      itemsImported: number;
+    };
+  };
+  manualEdits: {
+    profileFields: string[];
+    profileFieldCount: number;
+    experiences: { total: number; manual: number; fromResume: number; fromLinkedIn: number };
+    educations: { total: number; manual: number; fromResume: number };
+    skills: { total: number; manual: number; fromResume: number; fromGitHub: number };
+    projects: { total: number; manual: number; fromResume: number; fromGitHub: number };
+    links: { total: number; manual: number };
+  };
+  hasManualEdits: boolean;
+}
+
+type SyncSource = 'resume' | 'github' | 'linkedin' | 'links';
+
+interface SourceStatus {
+  source: SyncSource;
+  status: 'idle' | 'importing' | 'applying' | 'success' | 'error';
+  message?: string;
+  details?: SyncResultDetails;
+}
+
+interface SyncResultDetails {
+  profileFieldsUpdated?: string[];
+  profileFieldsSkipped?: string[];
+  experiencesAdded?: number;
+  experiencesSkipped?: number;
+  educationsAdded?: number;
+  educationsSkipped?: number;
+  skillsAdded?: number;
+  skillsSkipped?: number;
+  projectsAdded?: number;
+  projectsUpdated?: number;
+  projectsSkipped?: number;
+  linksAdded?: number;
+  linksSkipped?: number;
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────
+
+function formatDate(dateStr: string | null): string {
+  if (!dateStr) return 'Never';
+  const d = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return `${diffDays} days ago`;
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function getManualEditWarning(syncStatus: SyncStatus): string[] {
+  const warnings: string[] = [];
+  const edits = syncStatus.manualEdits;
+
+  if (edits.profileFieldCount > 0) {
+    const fields = edits.profileFields.map((f) => {
+      switch (f) {
+        case 'firstName':
+          return 'first name';
+        case 'lastName':
+          return 'last name';
+        case 'headline':
+          return 'headline';
+        case 'summary':
+          return 'summary';
+        case 'location':
+          return 'location';
+        default:
+          return f;
+      }
+    });
+    warnings.push(
+      `Your ${fields.join(', ')} ${fields.length === 1 ? 'was' : 'were'} manually edited and won't be overwritten.`
+    );
+  }
+
+  if (edits.experiences.manual > 0) {
+    warnings.push(
+      `${edits.experiences.manual} manually added experience${edits.experiences.manual > 1 ? 's' : ''} will be kept.`
+    );
+  }
+
+  if (edits.skills.manual > 0) {
+    warnings.push(
+      `${edits.skills.manual} manually added skill${edits.skills.manual > 1 ? 's' : ''} will be kept.`
+    );
+  }
+
+  if (edits.projects.manual > 0) {
+    warnings.push(
+      `${edits.projects.manual} manually added project${edits.projects.manual > 1 ? 's' : ''} will be kept.`
+    );
+  }
+
+  return warnings;
+}
+
+// ─── Component ───────────────────────────────────────────────────────
+
+export default function ImportSyncPage() {
+  const { user, isLoaded: isUserLoaded } = useUser();
+
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Source import states
+  const [sourceStates, setSourceStates] = useState<Record<SyncSource, SourceStatus>>({
+    resume: { source: 'resume', status: 'idle' },
+    github: { source: 'github', status: 'idle' },
+    linkedin: { source: 'linkedin', status: 'idle' },
+    links: { source: 'links', status: 'idle' },
+  });
+
+  // Resume
+  const [resumeFileName, setResumeFileName] = useState<string | null>(null);
+  const [showResumeWarning, setShowResumeWarning] = useState(false);
+
+  // GitHub
+  const [githubUsername, setGithubUsername] = useState('');
+  const [githubConnecting, setGithubConnecting] = useState(false);
+  const [githubError, setGithubError] = useState<string | null>(null);
+
+  // LinkedIn
+  const [linkedinConnecting, setLinkedinConnecting] = useState(false);
+  const [linkedinError, setLinkedinError] = useState<string | null>(null);
+
+  // Links
+  const [showLinksForm, setShowLinksForm] = useState(false);
+  const [manualLinks, setManualLinks] = useState<Array<{ url: string }>>([{ url: '' }]);
+
+  // Clerk accounts
+  const connectedGithub = user?.externalAccounts?.find(
+    (a) => a.provider === 'github' || (a.provider as string) === 'oauth_github'
+  );
+  const connectedLinkedin = user?.externalAccounts?.find((a) => {
+    const p = a.provider as string;
+    return (
+      p === 'linkedin_oidc' ||
+      p === 'linkedin' ||
+      p === 'oauth_linkedin_oidc' ||
+      p === 'oauth_linkedin'
+    );
+  });
+
+  // ─── Fetch sync status ──────────────────────────────────────
+
+  const fetchSyncStatus = useCallback(async () => {
+    try {
+      const response = await fetch('/api/import/sync-status');
+      if (!response.ok) throw new Error('Failed to load sync status');
+      const data: SyncStatus = await response.json();
+      setSyncStatus(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load sync status');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchSyncStatus();
+  }, [fetchSyncStatus]);
+
+  // Pre-fill GitHub username from sync status
+  useEffect(() => {
+    if (syncStatus?.sources.github.oauthUsername) {
+      setGithubUsername(syncStatus.sources.github.oauthUsername);
+    } else if (syncStatus?.sources.github.profileUsername) {
+      setGithubUsername(syncStatus.sources.github.profileUsername);
+    }
+  }, [syncStatus]);
+
+  // ─── Update helpers ──────────────────────────────────────────
+
+  const updateSource = (source: SyncSource, update: Partial<SourceStatus>) => {
+    setSourceStates((prev) => ({
+      ...prev,
+      [source]: { ...prev[source], ...update },
+    }));
+  };
+
+  // ─── Resume handlers ────────────────────────────────────────
+
+  const handleResumeClick = () => {
+    if (syncStatus?.hasManualEdits && syncStatus.sources.resume.hasBeenImported) {
+      setShowResumeWarning(true);
+    } else {
+      document.getElementById('sync-resume-upload')?.click();
+    }
+  };
+
+  const handleResumeWarningConfirm = () => {
+    setShowResumeWarning(false);
+    document.getElementById('sync-resume-upload')?.click();
+  };
+
+  const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'application/pdf') {
+      updateSource('resume', { status: 'error', message: 'Only PDF files are supported.' });
+      return;
+    }
+
+    setResumeFileName(file.name);
+    updateSource('resume', { status: 'importing', message: 'Parsing resume...' });
+
+    try {
+      // Step 1: Parse the resume
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('saveToProfile', 'false');
+
+      const parseRes = await fetch('/api/import/resume', { method: 'POST', body: formData });
+      const parseData = await parseRes.json();
+
+      if (!parseRes.ok) throw new Error(parseData.error || 'Failed to parse resume');
+
+      // Step 2: Apply with merge strategy
+      updateSource('resume', { status: 'applying', message: 'Merging data into profile...' });
+
+      const resumeResult = parseData.data;
+      const syncBody = {
+        source: 'RESUME' as const,
+        profile: resumeResult.profile || {},
+        experiences: resumeResult.experiences || [],
+        educations: resumeResult.educations || [],
+        skills: (resumeResult.skills || []).map((s: string | { name: string }) =>
+          typeof s === 'string' ? s : s.name
+        ),
+        projects: resumeResult.projects || [],
+        links: resumeResult.links || [],
+        contactInfo: resumeResult.contactInfo || {},
+      };
+
+      const applyRes = await fetch('/api/import/sync-apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(syncBody),
+      });
+
+      const applyData = await applyRes.json();
+
+      if (!applyRes.ok) throw new Error(applyData.error || 'Failed to merge resume data');
+
+      updateSource('resume', {
+        status: 'success',
+        message: applyData.message || 'Resume data merged successfully',
+        details: applyData.results,
+      });
+
+      // Refresh sync status
+      fetchSyncStatus();
+    } catch (err) {
+      updateSource('resume', {
+        status: 'error',
+        message: err instanceof Error ? err.message : 'Failed to import resume',
+      });
+    }
+
+    // Reset file input
+    e.target.value = '';
+  };
+
+  // ─── GitHub handlers ─────────────────────────────────────────
+
+  const handleGitHubConnect = async () => {
+    setGithubConnecting(true);
+    setGithubError(null);
+    try {
+      const externalAccount = await user?.createExternalAccount({
+        strategy: 'oauth_github',
+        redirectUrl: window.location.href,
+      });
+      const url = externalAccount?.verification?.externalVerificationRedirectURL;
+      if (url) window.location.href = url.toString();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('already connected')) {
+        await user?.reload();
+      } else {
+        setGithubError(`Connection failed: ${msg}`);
+      }
+      setGithubConnecting(false);
+    }
+  };
+
+  const handleGitHubSync = async () => {
+    const username = connectedGithub?.username || githubUsername.trim();
+    if (!username) {
+      updateSource('github', {
+        status: 'error',
+        message: 'Enter a GitHub username or connect your account.',
+      });
+      return;
+    }
+
+    updateSource('github', { status: 'importing', message: 'Fetching GitHub data...' });
+
+    try {
+      // Step 1: Fetch from GitHub
+      const importRes = await fetch('/api/import/github', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username }),
+      });
+      const importData = await importRes.json();
+
+      if (!importRes.ok) throw new Error(importData.error || 'Failed to fetch GitHub data');
+
+      // Step 2: Apply with merge
+      updateSource('github', { status: 'applying', message: 'Merging projects & skills...' });
+
+      const ghData = importData.data;
+      const syncBody = {
+        source: 'GITHUB' as const,
+        profile: ghData.profile || {},
+        skills: (ghData.skills || []).map((s: string | { name: string }) =>
+          typeof s === 'string' ? s : s.name
+        ),
+        projects: ghData.projects || [],
+        links: ghData.links || [],
+      };
+
+      const applyRes = await fetch('/api/import/sync-apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(syncBody),
+      });
+
+      const applyData = await applyRes.json();
+
+      if (!applyRes.ok) throw new Error(applyData.error || 'Failed to merge GitHub data');
+
+      updateSource('github', {
+        status: 'success',
+        message: applyData.message || 'GitHub data synced',
+        details: applyData.results,
+      });
+
+      setGithubUsername(username);
+      fetchSyncStatus();
+    } catch (err) {
+      updateSource('github', {
+        status: 'error',
+        message: err instanceof Error ? err.message : 'Failed to sync GitHub',
+      });
+    }
+  };
+
+  // ─── LinkedIn handlers ───────────────────────────────────────
+
+  const handleLinkedInConnect = async () => {
+    setLinkedinConnecting(true);
+    setLinkedinError(null);
+    try {
+      const externalAccount = await user?.createExternalAccount({
+        strategy: 'oauth_linkedin_oidc',
+        redirectUrl: window.location.href,
+      });
+      const url = externalAccount?.verification?.externalVerificationRedirectURL;
+      if (url) window.location.href = url.toString();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('already connected')) {
+        await user?.reload();
+      } else {
+        setLinkedinError(`Connection failed: ${msg}`);
+      }
+      setLinkedinConnecting(false);
+    }
+  };
+
+  const handleLinkedInSync = async () => {
+    updateSource('linkedin', { status: 'importing', message: 'Fetching LinkedIn data...' });
+
+    try {
+      const importRes = await fetch('/api/import/linkedin/oauth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const importData = await importRes.json();
+
+      if (!importRes.ok) throw new Error(importData.error || 'Failed to fetch LinkedIn data');
+
+      updateSource('linkedin', { status: 'applying', message: 'Merging profile data...' });
+
+      const liData = importData.data;
+      const syncBody = {
+        source: 'LINKEDIN' as const,
+        profile: liData.profile || {},
+        experiences: liData.experiences || [],
+        educations: liData.educations || [],
+        skills: (liData.skills || []).map((s: string | { name: string }) =>
+          typeof s === 'string' ? s : s.name
+        ),
+        links: liData.links || [],
+      };
+
+      const applyRes = await fetch('/api/import/sync-apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(syncBody),
+      });
+
+      const applyData = await applyRes.json();
+      if (!applyRes.ok) throw new Error(applyData.error || 'Failed to merge LinkedIn data');
+
+      updateSource('linkedin', {
+        status: 'success',
+        message: applyData.message || 'LinkedIn data synced',
+        details: applyData.results,
+      });
+
+      fetchSyncStatus();
+    } catch (err) {
+      updateSource('linkedin', {
+        status: 'error',
+        message: err instanceof Error ? err.message : 'Failed to sync LinkedIn',
+      });
+    }
+  };
+
+  // ─── Links handler ───────────────────────────────────────────
+
+  const handleSaveLinks = async () => {
+    const validLinks = manualLinks.filter((l) => l.url.trim());
+    if (validLinks.length === 0) {
+      setShowLinksForm(false);
+      return;
+    }
+
+    updateSource('links', { status: 'importing', message: 'Processing links...' });
+
+    try {
+      const response = await fetch('/api/import/links', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ links: validLinks }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to process links');
+
+      updateSource('links', {
+        status: 'success',
+        message: `Added ${data.data?.summary?.links || validLinks.length} links`,
+      });
+
+      setShowLinksForm(false);
+      setManualLinks([{ url: '' }]);
+      fetchSyncStatus();
+    } catch (err) {
+      updateSource('links', {
+        status: 'error',
+        message: err instanceof Error ? err.message : 'Failed to process links',
+      });
+    }
+  };
+
+  // ─── Render helpers ──────────────────────────────────────────
+
+  const renderSourceStatusBadge = (source: SyncSource) => {
+    const state = sourceStates[source];
+    switch (state.status) {
+      case 'importing':
+        return (
+          <Badge variant="secondary" className="gap-1">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            Importing...
+          </Badge>
+        );
+      case 'applying':
+        return (
+          <Badge variant="secondary" className="gap-1">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            Merging...
+          </Badge>
+        );
+      case 'success':
+        return (
+          <Badge variant="secondary" className="gap-1 bg-green-500/10 text-green-600">
+            <CheckCircle2 className="h-3 w-3" />
+            Synced
+          </Badge>
+        );
+      case 'error':
+        return (
+          <Badge variant="destructive" className="gap-1">
+            <AlertCircle className="h-3 w-3" />
+            Error
+          </Badge>
+        );
+      default:
+        return null;
+    }
+  };
+
+  // ─── Loading/Error states ────────────────────────────────────
+
+  if (isLoading || !isUserLoaded) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Spinner size="lg" />
+          <p className="text-muted-foreground">Loading sync status...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !syncStatus) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <AlertCircle className="h-8 w-8 text-destructive" />
+          <p className="text-destructive">{error || 'Failed to load'}</p>
+          <Button onClick={fetchSyncStatus}>Retry</Button>
+        </div>
+      </div>
+    );
+  }
+
+  const manualWarnings = getManualEditWarning(syncStatus);
+
+  // ─── Main Render ─────────────────────────────────────────────
+
+  return (
+    <div className="space-y-8">
+      {/* Header */}
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+        <h1 className="text-2xl font-bold">Import & Sync</h1>
+        <p className="mt-1 text-muted-foreground">
+          Pull in data from external sources. New items are added alongside your existing data.
+        </p>
+      </motion.div>
+
+      {/* Manual Edits Protection Banner */}
+      {syncStatus.hasManualEdits && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05 }}
+        >
+          <Card className="border-blue-200 bg-blue-50/50 dark:border-blue-900 dark:bg-blue-950/30">
+            <CardContent className="flex gap-3 p-4">
+              <Shield className="mt-0.5 h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-blue-900 dark:text-blue-200">
+                  Your manual edits are protected
+                </p>
+                <ul className="space-y-0.5 text-xs text-blue-800/80 dark:text-blue-300/80">
+                  {manualWarnings.map((w, i) => (
+                    <li key={i} className="flex items-start gap-1.5">
+                      <CheckCircle2 className="mt-0.5 h-3 w-3 shrink-0" />
+                      {w}
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-xs text-blue-700/70 dark:text-blue-400/70">
+                  Imported data will only fill empty fields or update fields that came from the same
+                  source. New experiences, skills, and projects are appended — never replaced.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
+
+      {/* Source Cards */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        {/* ── Resume Card ────────────────────────────────────── */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+        >
+          <Card className="h-full">
+            <CardContent className="flex h-full flex-col p-5">
+              <div className="mb-4 flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-orange-500/10 to-red-500/10 ring-1 ring-orange-500/20">
+                    <FileText className="h-5 w-5 text-orange-500" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold">Resume</h3>
+                    <p className="text-xs text-muted-foreground">
+                      {syncStatus.sources.resume.hasBeenImported
+                        ? `Last imported ${formatDate(syncStatus.sources.resume.lastImportedAt)}`
+                        : 'Not imported yet'}
+                    </p>
+                  </div>
+                </div>
+                {renderSourceStatusBadge('resume')}
+              </div>
+
+              {/* Current resume data summary */}
+              {syncStatus.sources.resume.hasBeenImported && (
+                <div className="mb-3 flex flex-wrap gap-1.5 text-xs">
+                  {syncStatus.manualEdits.experiences.fromResume > 0 && (
+                    <Badge variant="outline" className="text-xs">
+                      {syncStatus.manualEdits.experiences.fromResume} experiences
+                    </Badge>
+                  )}
+                  {syncStatus.manualEdits.educations.fromResume > 0 && (
+                    <Badge variant="outline" className="text-xs">
+                      {syncStatus.manualEdits.educations.fromResume} educations
+                    </Badge>
+                  )}
+                  {syncStatus.manualEdits.skills.fromResume > 0 && (
+                    <Badge variant="outline" className="text-xs">
+                      {syncStatus.manualEdits.skills.fromResume} skills
+                    </Badge>
+                  )}
+                  {syncStatus.manualEdits.projects.fromResume > 0 && (
+                    <Badge variant="outline" className="text-xs">
+                      {syncStatus.manualEdits.projects.fromResume} projects
+                    </Badge>
+                  )}
+                </div>
+              )}
+
+              <div className="mt-auto space-y-2">
+                {/* Success/Error message */}
+                {sourceStates.resume.status === 'success' && sourceStates.resume.message && (
+                  <div className="rounded-md bg-green-50 p-2.5 text-xs text-green-700 dark:bg-green-950/30 dark:text-green-400">
+                    <CheckCircle2 className="mb-1 inline h-3.5 w-3.5" />{' '}
+                    {sourceStates.resume.message}
+                  </div>
+                )}
+                {sourceStates.resume.status === 'error' && sourceStates.resume.message && (
+                  <div className="rounded-md bg-destructive/10 p-2.5 text-xs text-destructive">
+                    {sourceStates.resume.message}
+                  </div>
+                )}
+
+                {resumeFileName && sourceStates.resume.status === 'success' && (
+                  <div className="flex items-center gap-2">
+                    <Badge
+                      variant="secondary"
+                      className="max-w-[180px] truncate text-xs"
+                      title={resumeFileName}
+                    >
+                      {resumeFileName}
+                    </Badge>
+                  </div>
+                )}
+
+                <Button
+                  variant={syncStatus.sources.resume.hasBeenImported ? 'outline' : 'secondary'}
+                  size="sm"
+                  className="w-full gap-2"
+                  onClick={handleResumeClick}
+                  disabled={
+                    sourceStates.resume.status === 'importing' ||
+                    sourceStates.resume.status === 'applying'
+                  }
+                >
+                  {sourceStates.resume.status === 'importing' ||
+                  sourceStates.resume.status === 'applying' ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : syncStatus.sources.resume.hasBeenImported ? (
+                    <RefreshCw className="h-4 w-4" />
+                  ) : (
+                    <Upload className="h-4 w-4" />
+                  )}
+                  {sourceStates.resume.status === 'importing'
+                    ? 'Parsing...'
+                    : sourceStates.resume.status === 'applying'
+                      ? 'Merging...'
+                      : syncStatus.sources.resume.hasBeenImported
+                        ? 'Upload New Resume'
+                        : 'Upload Resume'}
+                </Button>
+
+                <input
+                  id="sync-resume-upload"
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  className="hidden"
+                  onChange={handleResumeUpload}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* ── GitHub Card ─────────────────────────────────────── */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+        >
+          <Card className="h-full">
+            <CardContent className="flex h-full flex-col p-5">
+              <div className="mb-4 flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-gray-500/10 to-slate-500/10 ring-1 ring-gray-500/20 dark:from-white/10 dark:to-gray-400/10 dark:ring-white/20">
+                    <Github className="h-5 w-5 text-gray-700 dark:text-white" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold">GitHub</h3>
+                    <p className="text-xs text-muted-foreground">
+                      {connectedGithub
+                        ? `Connected as @${connectedGithub.username}`
+                        : syncStatus.sources.github.profileUsername
+                          ? `Imported from @${syncStatus.sources.github.profileUsername}`
+                          : 'Not connected'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {(connectedGithub || syncStatus.sources.github.connected) && (
+                    <Badge variant="secondary" className="bg-green-500/10 text-green-600">
+                      <CheckCircle2 className="mr-1 h-3 w-3" />
+                      Connected
+                    </Badge>
+                  )}
+                  {renderSourceStatusBadge('github')}
+                </div>
+              </div>
+
+              {/* Connected account badge */}
+              {(connectedGithub?.username || syncStatus.sources.github.profileUsername) && (
+                <div className="mb-3">
+                  <Badge
+                    variant="secondary"
+                    className={
+                      syncStatus.sources.github.lastImportedAt
+                        ? 'bg-green-500/10 text-green-600'
+                        : ''
+                    }
+                  >
+                    @{connectedGithub?.username || syncStatus.sources.github.profileUsername}
+                  </Badge>
+                  {connectedGithub?.emailAddress && (
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      {connectedGithub.emailAddress}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Current GitHub data summary */}
+              {(syncStatus.sources.github.projectCount > 0 ||
+                syncStatus.sources.github.skillCount > 0) && (
+                <div className="mb-3 flex flex-wrap gap-1.5 text-xs">
+                  {syncStatus.sources.github.projectCount > 0 && (
+                    <Badge variant="outline" className="text-xs">
+                      {syncStatus.sources.github.projectCount} projects
+                    </Badge>
+                  )}
+                  {syncStatus.sources.github.skillCount > 0 && (
+                    <Badge variant="outline" className="text-xs">
+                      {syncStatus.sources.github.skillCount} skills
+                    </Badge>
+                  )}
+                  {syncStatus.sources.github.lastImportedAt && (
+                    <span className="flex items-center gap-1 text-muted-foreground">
+                      <Clock className="h-3 w-3" />
+                      {formatDate(syncStatus.sources.github.lastImportedAt)}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              <div className="mt-auto space-y-2">
+                {sourceStates.github.status === 'success' && sourceStates.github.message && (
+                  <div className="rounded-md bg-green-50 p-2.5 text-xs text-green-700 dark:bg-green-950/30 dark:text-green-400">
+                    <CheckCircle2 className="mb-1 inline h-3.5 w-3.5" />{' '}
+                    {sourceStates.github.message}
+                  </div>
+                )}
+                {(githubError ||
+                  (sourceStates.github.status === 'error' && sourceStates.github.message)) && (
+                  <div className="rounded-md bg-destructive/10 p-2.5 text-xs text-destructive">
+                    {githubError || sourceStates.github.message}
+                  </div>
+                )}
+
+                {/* GitHub username input for manual entry */}
+                {!connectedGithub && (
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="GitHub username"
+                      value={githubUsername}
+                      onChange={(e) => setGithubUsername(e.target.value)}
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  {!connectedGithub ? (
+                    <>
+                      <Button
+                        size="sm"
+                        className="flex-1 bg-[#24292e] text-white hover:bg-[#1b1f23]"
+                        onClick={handleGitHubConnect}
+                        disabled={githubConnecting}
+                      >
+                        {githubConnecting ? (
+                          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                        ) : (
+                          <Github className="mr-1 h-3 w-3" />
+                        )}
+                        Connect
+                      </Button>
+                      {githubUsername.trim() && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleGitHubSync()}
+                          disabled={
+                            sourceStates.github.status === 'importing' ||
+                            sourceStates.github.status === 'applying'
+                          }
+                        >
+                          {sourceStates.github.status === 'importing' ||
+                          sourceStates.github.status === 'applying' ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <ArrowRight className="h-3 w-3" />
+                          )}
+                        </Button>
+                      )}
+                    </>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full gap-2"
+                      onClick={handleGitHubSync}
+                      disabled={
+                        sourceStates.github.status === 'importing' ||
+                        sourceStates.github.status === 'applying'
+                      }
+                    >
+                      {sourceStates.github.status === 'importing' ||
+                      sourceStates.github.status === 'applying' ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-4 w-4" />
+                      )}
+                      {sourceStates.github.status === 'importing'
+                        ? 'Fetching...'
+                        : sourceStates.github.status === 'applying'
+                          ? 'Merging...'
+                          : syncStatus.sources.github.lastImportedAt
+                            ? 'Refresh Data'
+                            : 'Import'}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* ── LinkedIn Card ───────────────────────────────────── */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <Card className="h-full">
+            <CardContent className="flex h-full flex-col p-5">
+              <div className="mb-4 flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500/10 to-sky-500/10 ring-1 ring-blue-500/20">
+                    <Linkedin className="h-5 w-5 text-[#0A66C2]" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold">LinkedIn</h3>
+                    <p className="text-xs text-muted-foreground">
+                      {connectedLinkedin
+                        ? `Connected as ${connectedLinkedin.firstName || connectedLinkedin.username || 'User'}`
+                        : syncStatus.sources.linkedin.oauthName
+                          ? `Previously connected (${syncStatus.sources.linkedin.oauthName})`
+                          : 'Not connected'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {connectedLinkedin && (
+                    <Badge variant="secondary" className="bg-green-500/10 text-green-600">
+                      <CheckCircle2 className="mr-1 h-3 w-3" />
+                      Connected
+                    </Badge>
+                  )}
+                  {renderSourceStatusBadge('linkedin')}
+                </div>
+              </div>
+
+              {/* Connected account badge */}
+              {connectedLinkedin && (
+                <div className="mb-3">
+                  <Badge
+                    variant="secondary"
+                    className={
+                      syncStatus.sources.linkedin.lastImportedAt
+                        ? 'bg-green-500/10 text-green-600'
+                        : ''
+                    }
+                  >
+                    {connectedLinkedin.username ||
+                      (connectedLinkedin.firstName && connectedLinkedin.lastName
+                        ? `${connectedLinkedin.firstName} ${connectedLinkedin.lastName}`
+                        : connectedLinkedin.firstName || 'Account Linked')}
+                  </Badge>
+                  {connectedLinkedin.emailAddress && (
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      {connectedLinkedin.emailAddress}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {syncStatus.sources.linkedin.lastImportedAt && (
+                <div className="mb-3 flex items-center gap-1 text-xs text-muted-foreground">
+                  <Clock className="h-3 w-3" />
+                  Last synced {formatDate(syncStatus.sources.linkedin.lastImportedAt)}
+                </div>
+              )}
+
+              <div className="mt-auto space-y-2">
+                {sourceStates.linkedin.status === 'success' && sourceStates.linkedin.message && (
+                  <div className="rounded-md bg-green-50 p-2.5 text-xs text-green-700 dark:bg-green-950/30 dark:text-green-400">
+                    <CheckCircle2 className="mb-1 inline h-3.5 w-3.5" />{' '}
+                    {sourceStates.linkedin.message}
+                  </div>
+                )}
+                {(linkedinError ||
+                  (sourceStates.linkedin.status === 'error' && sourceStates.linkedin.message)) && (
+                  <div className="rounded-md bg-destructive/10 p-2.5 text-xs text-destructive">
+                    {linkedinError || sourceStates.linkedin.message}
+                  </div>
+                )}
+
+                {!connectedLinkedin ? (
+                  <Button
+                    size="sm"
+                    className="w-full bg-[#0A66C2] text-white hover:bg-[#004182]"
+                    onClick={handleLinkedInConnect}
+                    disabled={linkedinConnecting}
+                  >
+                    {linkedinConnecting ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Linkedin className="mr-2 h-4 w-4" />
+                    )}
+                    {linkedinConnecting ? 'Connecting...' : 'Connect LinkedIn'}
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full gap-2"
+                    onClick={handleLinkedInSync}
+                    disabled={
+                      sourceStates.linkedin.status === 'importing' ||
+                      sourceStates.linkedin.status === 'applying'
+                    }
+                  >
+                    {sourceStates.linkedin.status === 'importing' ||
+                    sourceStates.linkedin.status === 'applying' ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4" />
+                    )}
+                    {sourceStates.linkedin.status === 'importing'
+                      ? 'Fetching...'
+                      : sourceStates.linkedin.status === 'applying'
+                        ? 'Merging...'
+                        : syncStatus.sources.linkedin.lastImportedAt
+                          ? 'Refresh Data'
+                          : 'Import'}
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* ── Links Card ──────────────────────────────────────── */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25 }}
+        >
+          <Card className="h-full">
+            <CardContent className="flex h-full flex-col p-5">
+              <div className="mb-4 flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500/10 to-teal-500/10 ring-1 ring-emerald-500/20">
+                    <LinkIcon className="h-5 w-5 text-emerald-500" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold">Links</h3>
+                    <p className="text-xs text-muted-foreground">
+                      {syncStatus.manualEdits.links.total > 0
+                        ? `${syncStatus.manualEdits.links.total} links on profile`
+                        : 'No links added yet'}
+                    </p>
+                  </div>
+                </div>
+                {renderSourceStatusBadge('links')}
+              </div>
+
+              <div className="mt-auto space-y-2">
+                {sourceStates.links.status === 'success' && sourceStates.links.message && (
+                  <div className="rounded-md bg-green-50 p-2.5 text-xs text-green-700 dark:bg-green-950/30 dark:text-green-400">
+                    <CheckCircle2 className="mb-1 inline h-3.5 w-3.5" />{' '}
+                    {sourceStates.links.message}
+                  </div>
+                )}
+                {sourceStates.links.status === 'error' && sourceStates.links.message && (
+                  <div className="rounded-md bg-destructive/10 p-2.5 text-xs text-destructive">
+                    {sourceStates.links.message}
+                  </div>
+                )}
+
+                {!showLinksForm ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full gap-2"
+                    onClick={() => setShowLinksForm(true)}
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Links
+                  </Button>
+                ) : (
+                  <div className="space-y-2">
+                    {manualLinks.map((link, index) => (
+                      <div key={index} className="flex gap-2">
+                        <Input
+                          placeholder="https://..."
+                          value={link.url}
+                          onChange={(e) =>
+                            setManualLinks((prev) =>
+                              prev.map((l, i) => (i === index ? { ...l, url: e.target.value } : l))
+                            )
+                          }
+                          className="h-8 text-sm"
+                        />
+                        {manualLinks.length > 1 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0"
+                            onClick={() =>
+                              setManualLinks((prev) => prev.filter((_, i) => i !== index))
+                            }
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                    <div className="flex gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setManualLinks((prev) => [...prev, { url: '' }])}
+                        className="h-7 text-xs"
+                      >
+                        <Plus className="mr-1 h-3 w-3" /> Add
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={handleSaveLinks}
+                        disabled={sourceStates.links.status === 'importing'}
+                        className="h-7 text-xs"
+                      >
+                        {sourceStates.links.status === 'importing' ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          'Save'
+                        )}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setShowLinksForm(false);
+                          setManualLinks([{ url: '' }]);
+                        }}
+                        className="h-7 text-xs"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
+
+      {/* Resume Re-import Warning Dialog (inline) */}
+      <AnimatePresence>
+        {showResumeWarning && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+            onClick={() => setShowResumeWarning(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="mx-4 w-full max-w-md rounded-xl border bg-background p-6 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="mb-4 flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30">
+                  <ShieldAlert className="h-5 w-5 text-amber-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold">Re-import Resume</h3>
+                  <p className="text-sm text-muted-foreground">Review what will happen</p>
+                </div>
+              </div>
+
+              <div className="space-y-3 text-sm">
+                <div className="space-y-2 rounded-lg bg-muted/50 p-3">
+                  <div className="flex items-start gap-2">
+                    <Shield className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" />
+                    <p>
+                      <strong>Your manual edits are safe.</strong> Anything you&apos;ve edited by
+                      hand (marked as &quot;manual&quot;) won&apos;t be touched.
+                    </p>
+                  </div>
+
+                  <div className="flex items-start gap-2">
+                    <RefreshCw className="mt-0.5 h-4 w-4 shrink-0 text-orange-500" />
+                    <p>
+                      <strong>Resume-sourced fields may update.</strong> Profile fields that still
+                      have &quot;resume&quot; as their source will be updated with the new
+                      resume&apos;s data.
+                    </p>
+                  </div>
+
+                  <div className="flex items-start gap-2">
+                    <Plus className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
+                    <p>
+                      <strong>New items get added.</strong> Any new experiences, skills, or projects
+                      in the resume will be appended to your profile.
+                    </p>
+                  </div>
+
+                  <div className="flex items-start gap-2">
+                    <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                    <p className="text-muted-foreground">
+                      We don&apos;t store the original resume file. This will parse the new file
+                      fresh and merge it with your current data.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Show specific counts */}
+                {(syncStatus.manualEdits.profileFieldCount > 0 ||
+                  syncStatus.manualEdits.experiences.manual > 0 ||
+                  syncStatus.manualEdits.skills.manual > 0) && (
+                  <div className="rounded-lg border p-3">
+                    <p className="mb-2 text-xs font-medium uppercase text-muted-foreground">
+                      Protected items
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {syncStatus.manualEdits.profileFieldCount > 0 && (
+                        <Badge variant="outline" className="text-xs">
+                          {syncStatus.manualEdits.profileFieldCount} profile fields
+                        </Badge>
+                      )}
+                      {syncStatus.manualEdits.experiences.manual > 0 && (
+                        <Badge variant="outline" className="text-xs">
+                          {syncStatus.manualEdits.experiences.manual} experiences
+                        </Badge>
+                      )}
+                      {syncStatus.manualEdits.educations.manual > 0 && (
+                        <Badge variant="outline" className="text-xs">
+                          {syncStatus.manualEdits.educations.manual} educations
+                        </Badge>
+                      )}
+                      {syncStatus.manualEdits.skills.manual > 0 && (
+                        <Badge variant="outline" className="text-xs">
+                          {syncStatus.manualEdits.skills.manual} skills
+                        </Badge>
+                      )}
+                      {syncStatus.manualEdits.projects.manual > 0 && (
+                        <Badge variant="outline" className="text-xs">
+                          {syncStatus.manualEdits.projects.manual} projects
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-5 flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setShowResumeWarning(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleResumeWarningConfirm}>
+                  <Upload className="mr-2 h-4 w-4" />
+                  Upload Resume
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* How It Works accordion */}
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}>
+        <Card className="border-dashed">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+              <HelpCircle className="h-4 w-4" />
+              How importing works
+            </div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              <div className="flex items-start gap-2">
+                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                  1
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Fetch</p>
+                  <p className="text-xs text-muted-foreground">
+                    Data is pulled from the source (resume PDF, GitHub API, LinkedIn)
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                  2
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Smart Merge</p>
+                  <p className="text-xs text-muted-foreground">
+                    New items are added. Duplicates are skipped. Manual edits are never overwritten.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                  3
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Review</p>
+                  <p className="text-xs text-muted-foreground">
+                    You&apos;ll see exactly what was added or updated. Nothing is hidden.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+    </div>
+  );
+}

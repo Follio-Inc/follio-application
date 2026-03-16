@@ -1,22 +1,46 @@
 'use client';
 
-import { useState } from 'react';
-import { Plus, Trash2, GripVertical, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, GraduationCap, Loader2, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { useCallback, useState } from 'react';
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { Switch } from '@/components/ui/switch';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import { notifyProfileUpdated } from '@/lib/events';
+import { useReorderPersist } from '@/lib/hooks/use-reorder-persist';
+import { cn } from '@/lib/utils';
+
+import { SortableCardList } from '../components/sortable-card-list';
 
 import type { Education } from '@/types';
+import type { DateExtractor } from '../components/sortable-card-list';
+
+const educationDateExtractor: DateExtractor<Education> = (edu) => ({
+  start: edu.startDate ? new Date(edu.startDate) : null,
+  end: edu.endDate ? new Date(edu.endDate) : null,
+});
 
 interface EducationSectionProps {
   educations: Education[];
   profileId: string;
   onUpdate: (educations: Education[]) => void;
+  /** When provided, auto-opens the edit dialog for this entry. */
+  autoEditId?: string | 'new';
+  /** Called when editing completes (save/cancel/close) in auto-edit mode. */
+  onEditComplete?: () => void;
+  /** When true, renders without Card wrapper for use inside accordion sections */
+  embedded?: boolean;
 }
 
 const emptyEducation: Partial<Education> = {
@@ -33,12 +57,43 @@ const emptyEducation: Partial<Education> = {
   honors: [],
 };
 
-export function EducationSection({ educations, profileId, onUpdate }: EducationSectionProps) {
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingEducation, setEditingEducation] = useState<Education | null>(null);
-  const [formData, setFormData] = useState<Partial<Education>>(emptyEducation);
+export function EducationSection({
+  educations,
+  onUpdate,
+  autoEditId,
+  onEditComplete,
+  embedded,
+}: EducationSectionProps) {
+  const [isDialogOpen, setIsDialogOpen] = useState(!!autoEditId);
+  const [editingEducation, setEditingEducation] = useState<Education | null>(() => {
+    if (autoEditId && autoEditId !== 'new') {
+      return educations.find((e) => e.id === autoEditId) ?? null;
+    }
+    return null;
+  });
+  const [formData, setFormData] = useState<Partial<Education>>(() => {
+    if (autoEditId && autoEditId !== 'new') {
+      const edu = educations.find((e) => e.id === autoEditId);
+      return edu ? { ...edu } : { ...emptyEducation };
+    }
+    return { ...emptyEducation };
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const persistOrder = useReorderPersist<Education>('education', onUpdate);
+
+  const handleReorder = useCallback(
+    (reordered: Education[]) => {
+      persistOrder(reordered);
+    },
+    [persistOrder]
+  );
+
+  const handleDialogOpenChange = (open: boolean) => {
+    setIsDialogOpen(open);
+    if (!open && autoEditId) onEditComplete?.();
+  };
 
   const handleOpenDialog = (education?: Education) => {
     if (education) {
@@ -109,6 +164,8 @@ export function EducationSection({ educations, profileId, onUpdate }: EducationS
       setIsDialogOpen(false);
       setFormData(emptyEducation);
       setEditingEducation(null);
+      notifyProfileUpdated();
+      if (autoEditId) onEditComplete?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -131,6 +188,7 @@ export function EducationSection({ educations, profileId, onUpdate }: EducationS
       }
 
       onUpdate(educations.filter((edu) => edu.id !== educationId));
+      notifyProfileUpdated();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -138,174 +196,422 @@ export function EducationSection({ educations, profileId, onUpdate }: EducationS
     }
   };
 
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <div>
-          <CardTitle>Education</CardTitle>
-          <CardDescription>Add your educational background</CardDescription>
+  // ── Inline form (auto-edit mode) ──
+
+  const renderInlineForm = () => (
+    <div className="space-y-4 rounded-lg border-2 border-primary/30 bg-muted/30 p-4 shadow-md ring-2 ring-primary/10">
+      <div className="flex items-center gap-2 rounded-md bg-primary/10 px-3 py-2 text-sm font-medium text-primary">
+        <div className="h-2 w-2 animate-pulse rounded-full bg-primary" />
+        {editingEducation ? 'Editing education' : 'Adding new education'} — save or discard to
+        continue
+      </div>
+
+      {error && (
+        <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
+      )}
+
+      <div className="space-y-2">
+        <Label>Institution *</Label>
+        <Input
+          value={formData.institution || ''}
+          onChange={(e) => setFormData((prev) => ({ ...prev, institution: e.target.value }))}
+          placeholder="Stanford University"
+        />
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label>Degree</Label>
+          <Input
+            value={formData.degree || ''}
+            onChange={(e) => setFormData((prev) => ({ ...prev, degree: e.target.value }))}
+            placeholder="Bachelor of Science"
+          />
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={() => handleOpenDialog()} className="gap-2">
-              <Plus className="h-4 w-4" />
-              Add Education
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-xl">
-            <DialogHeader>
-              <DialogTitle>{editingEducation ? 'Edit' : 'Add'} Education</DialogTitle>
-            </DialogHeader>
-            
-            {error && (
-              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-                {error}
+        <div className="space-y-2">
+          <Label>Field of Study</Label>
+          <Input
+            value={formData.fieldOfStudy || ''}
+            onChange={(e) => setFormData((prev) => ({ ...prev, fieldOfStudy: e.target.value }))}
+            placeholder="Computer Science"
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label>Location</Label>
+          <Input
+            value={formData.location || ''}
+            onChange={(e) => setFormData((prev) => ({ ...prev, location: e.target.value }))}
+            placeholder="Stanford, CA"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>GPA</Label>
+          <Input
+            value={formData.gpa || ''}
+            onChange={(e) => setFormData((prev) => ({ ...prev, gpa: e.target.value }))}
+            placeholder="3.9"
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <Switch
+          checked={formData.isCurrent || false}
+          onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, isCurrent: checked }))}
+        />
+        <Label>Currently studying here</Label>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label>Start Date</Label>
+          <Input
+            type="month"
+            value={formData.startDate ? new Date(formData.startDate).toISOString().slice(0, 7) : ''}
+            onChange={(e) =>
+              setFormData((prev) => ({
+                ...prev,
+                startDate: e.target.value ? new Date(e.target.value) : null,
+              }))
+            }
+          />
+        </div>
+        {!formData.isCurrent && (
+          <div className="space-y-2">
+            <Label>End Date</Label>
+            <Input
+              type="month"
+              value={formData.endDate ? new Date(formData.endDate).toISOString().slice(0, 7) : ''}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  endDate: e.target.value ? new Date(e.target.value) : null,
+                }))
+              }
+            />
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <Label>Description / Activities</Label>
+        <RichTextEditor
+          value={formData.description || ''}
+          onChange={(html) => setFormData((prev) => ({ ...prev, description: html }))}
+          placeholder="Relevant coursework, clubs, activities..."
+          minHeight="120px"
+        />
+      </div>
+
+      <div className="flex items-center gap-2 border-t pt-4">
+        <Button
+          onClick={handleSave}
+          disabled={!formData.institution || isLoading}
+          size="sm"
+          className="gap-2"
+        >
+          {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {isLoading ? 'Saving...' : 'Save'}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onEditComplete?.()}
+          disabled={isLoading}
+          className="gap-2"
+        >
+          <X className="mr-1 h-4 w-4" />
+          Discard
+        </Button>
+      </div>
+    </div>
+  );
+
+  // Auto-edit mode: render only the inline form
+  if (autoEditId) {
+    return renderInlineForm();
+  }
+
+  const toggleVisibility = async (education: Education) => {
+    const newValue = !(education.isVisible ?? true);
+    // Optimistic update
+    onUpdate(educations.map((e) => (e.id === education.id ? { ...e, isVisible: newValue } : e)));
+    try {
+      const response = await fetch(`/api/profile/education/${education.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isVisible: newValue }),
+      });
+      if (!response.ok) throw new Error('Failed to update visibility');
+      notifyProfileUpdated();
+    } catch {
+      // Revert on error
+      onUpdate(educations.map((e) => (e.id === education.id ? { ...e, isVisible: !newValue } : e)));
+    }
+  };
+
+  const addButton = (
+    <Dialog open={isDialogOpen} onOpenChange={handleDialogOpenChange}>
+      <DialogTrigger asChild>
+        <Button
+          onClick={() => handleOpenDialog()}
+          className="gap-2"
+          size={embedded ? 'sm' : 'default'}
+        >
+          <Plus className="h-4 w-4" />
+          Add Education
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>{editingEducation ? 'Edit' : 'Add'} Education</DialogTitle>
+        </DialogHeader>
+
+        {error && (
+          <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
+        )}
+
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label>Institution *</Label>
+            <Input
+              value={formData.institution || ''}
+              onChange={(e) => setFormData((prev) => ({ ...prev, institution: e.target.value }))}
+              placeholder="Stanford University"
+            />
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Degree</Label>
+              <Input
+                value={formData.degree || ''}
+                onChange={(e) => setFormData((prev) => ({ ...prev, degree: e.target.value }))}
+                placeholder="Bachelor of Science"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Field of Study</Label>
+              <Input
+                value={formData.fieldOfStudy || ''}
+                onChange={(e) => setFormData((prev) => ({ ...prev, fieldOfStudy: e.target.value }))}
+                placeholder="Computer Science"
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Location</Label>
+              <Input
+                value={formData.location || ''}
+                onChange={(e) => setFormData((prev) => ({ ...prev, location: e.target.value }))}
+                placeholder="Stanford, CA"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>GPA</Label>
+              <Input
+                value={formData.gpa || ''}
+                onChange={(e) => setFormData((prev) => ({ ...prev, gpa: e.target.value }))}
+                placeholder="3.9"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={formData.isCurrent || false}
+              onCheckedChange={(checked) =>
+                setFormData((prev) => ({ ...prev, isCurrent: checked }))
+              }
+            />
+            <Label>Currently studying here</Label>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Start Date</Label>
+              <Input
+                type="month"
+                value={
+                  formData.startDate ? new Date(formData.startDate).toISOString().slice(0, 7) : ''
+                }
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    startDate: e.target.value ? new Date(e.target.value) : null,
+                  }))
+                }
+              />
+            </div>
+            {!formData.isCurrent && (
+              <div className="space-y-2">
+                <Label>End Date</Label>
+                <Input
+                  type="month"
+                  value={
+                    formData.endDate ? new Date(formData.endDate).toISOString().slice(0, 7) : ''
+                  }
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      endDate: e.target.value ? new Date(e.target.value) : null,
+                    }))
+                  }
+                />
               </div>
             )}
-
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label>Institution *</Label>
-                <Input
-                  value={formData.institution || ''}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, institution: e.target.value }))}
-                  placeholder="Stanford University"
-                />
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Degree</Label>
-                  <Input
-                    value={formData.degree || ''}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, degree: e.target.value }))}
-                    placeholder="Bachelor of Science"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Field of Study</Label>
-                  <Input
-                    value={formData.fieldOfStudy || ''}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, fieldOfStudy: e.target.value }))}
-                    placeholder="Computer Science"
-                  />
-                </div>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Location</Label>
-                  <Input
-                    value={formData.location || ''}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, location: e.target.value }))}
-                    placeholder="Stanford, CA"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>GPA</Label>
-                  <Input
-                    value={formData.gpa || ''}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, gpa: e.target.value }))}
-                    placeholder="3.9"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Switch
-                  checked={formData.isCurrent || false}
-                  onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, isCurrent: checked }))}
-                />
-                <Label>Currently studying here</Label>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Start Date</Label>
-                  <Input
-                    type="month"
-                    value={formData.startDate ? new Date(formData.startDate).toISOString().slice(0, 7) : ''}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, startDate: e.target.value ? new Date(e.target.value) : null }))}
-                  />
-                </div>
-                {!formData.isCurrent && (
-                  <div className="space-y-2">
-                    <Label>End Date</Label>
-                    <Input
-                      type="month"
-                      value={formData.endDate ? new Date(formData.endDate).toISOString().slice(0, 7) : ''}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, endDate: e.target.value ? new Date(e.target.value) : null }))}
-                    />
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label>Description / Activities</Label>
-                <Textarea
-                  value={formData.description || ''}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
-                  placeholder="Relevant coursework, clubs, activities..."
-                  rows={3}
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isLoading}>
-                Cancel
-              </Button>
-              <Button onClick={handleSave} disabled={!formData.institution || isLoading}>
-                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {isLoading ? 'Saving...' : 'Save'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </CardHeader>
-      <CardContent>
-        {educations.length === 0 ? (
-          <div className="py-8 text-center text-muted-foreground">
-            No education added yet. Click "Add Education" to get started.
           </div>
-        ) : (
-          <div className="space-y-4">
-            {educations.map((edu) => (
+
+          <div className="space-y-2">
+            <Label>Description / Activities</Label>
+            <RichTextEditor
+              value={formData.description || ''}
+              onChange={(html) => setFormData((prev) => ({ ...prev, description: html }))}
+              placeholder="Relevant coursework, clubs, activities..."
+              minHeight="120px"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isLoading}>
+            Cancel
+          </Button>
+          <Button onClick={handleSave} disabled={!formData.institution || isLoading}>
+            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {isLoading ? 'Saving...' : 'Save'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
+  const educationList = (
+    <div className={cn(!embedded && 'rounded-xl bg-muted/40 p-4')}>
+      {educations.length === 0 ? (
+        <div className="rounded-lg border border-dashed p-8 text-center">
+          <GraduationCap className="mx-auto h-12 w-12 text-muted-foreground/50" />
+          <h3 className="mt-4 font-medium">No education added yet</h3>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Add your educational background to showcase your qualifications
+          </p>
+          <Button onClick={() => handleOpenDialog()} className="mt-4 gap-2">
+            <Plus className="h-4 w-4" />
+            Add Education
+          </Button>
+        </div>
+      ) : (
+        <div>
+          <SortableCardList
+            items={educations}
+            onReorder={handleReorder}
+            dateExtractor={educationDateExtractor}
+            disabled={isLoading}
+            renderItem={(edu) => (
               <div
-                key={edu.id}
-                className="flex items-start gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50"
+                className={cn(
+                  'group flex items-start gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50',
+                  edu.isVisible === false && 'opacity-50'
+                )}
               >
-                <div className="cursor-move text-muted-foreground">
-                  <GripVertical className="h-5 w-5" />
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                  <GraduationCap className="h-5 w-5 text-primary" />
                 </div>
-                <div className="flex-1">
-                  <div className="flex items-start justify-between">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-2">
                     <div>
                       <h4 className="font-medium">
                         {edu.degree} {edu.fieldOfStudy && `in ${edu.fieldOfStudy}`}
                       </h4>
                       <p className="text-sm text-muted-foreground">{edu.institution}</p>
                       <p className="text-xs text-muted-foreground">
-                        {edu.startDate && new Date(edu.startDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                        {edu.startDate &&
+                          new Date(edu.startDate).toLocaleDateString('en-US', {
+                            month: 'short',
+                            year: 'numeric',
+                          })}
                         {edu.startDate && ' - '}
-                        {edu.isCurrent ? 'Present' : edu.endDate ? new Date(edu.endDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : ''}
+                        {edu.isCurrent
+                          ? 'Present'
+                          : edu.endDate
+                            ? new Date(edu.endDate).toLocaleDateString('en-US', {
+                                month: 'short',
+                                year: 'numeric',
+                              })
+                            : ''}
                         {edu.gpa && ` • GPA: ${edu.gpa}`}
                       </p>
                     </div>
-                    <div className="flex gap-2">
-                      <Button variant="ghost" size="sm" onClick={() => handleOpenDialog(edu)} disabled={isLoading}>
-                        Edit
+                    <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => toggleVisibility(edu)}
+                        title={edu.isVisible === false ? 'Show on resume' : 'Hide from resume'}
+                      >
+                        {edu.isVisible === false ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDelete(edu.id)} disabled={isLoading}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => handleOpenDialog(edu)}
+                        disabled={isLoading}
+                        title="Edit"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive"
+                        onClick={() => handleDelete(edu.id)}
+                        disabled={isLoading}
+                        title="Delete"
+                      >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
+            )}
+          />
+        </div>
+      )}
+    </div>
+  );
+
+  if (embedded) {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">Add your educational background</p>
+          {addButton}
+        </div>
+        {educationList}
+      </div>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardDescription>Add your educational background</CardDescription>
+          {addButton}
+        </div>
+      </CardHeader>
+      <CardContent>{educationList}</CardContent>
     </Card>
   );
 }

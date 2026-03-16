@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
+import { NextRequest, NextResponse } from 'next/server';
 
+import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { ContactInfoSchema } from '@/lib/validations';
 
@@ -16,22 +17,12 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: {
-        profile: {
-          include: {
-            contactInfo: true,
-          },
-        },
-      },
+    const context = await resolveActiveProfileContext(userId);
+    const contactInfo = await db.contactInfo.findUnique({
+      where: { profileId: context.profileId },
     });
 
-    if (!user || !user.profile) {
-      return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
-    }
-
-    return NextResponse.json({ contactInfo: user.profile.contactInfo });
+    return NextResponse.json({ contactInfo });
   } catch (error) {
     console.error('Error fetching contact info:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -60,25 +51,19 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: {
-        profile: {
-          include: { contactInfo: true },
-        },
-      },
-    });
+    const context = await resolveActiveProfileContext(userId);
 
-    if (!user || !user.profile) {
-      return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
-    }
+    const existingContactInfo = await db.contactInfo.findUnique({
+      where: { profileId: context.profileId },
+      select: { id: true },
+    });
 
     let contactInfo;
 
-    if (user.profile.contactInfo) {
+    if (existingContactInfo) {
       // Update existing contact info
       contactInfo = await db.contactInfo.update({
-        where: { id: user.profile.contactInfo.id },
+        where: { id: existingContactInfo.id },
         data: {
           ...validatedData.data,
           updatedAt: new Date(),
@@ -88,7 +73,7 @@ export async function PATCH(request: NextRequest) {
       // Create contact info if it doesn't exist
       contactInfo = await db.contactInfo.create({
         data: {
-          profileId: user.profile.id,
+          profileId: context.profileId,
           ...validatedData.data,
         },
       });

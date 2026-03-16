@@ -1,0 +1,2706 @@
+'use client';
+
+import { useUser } from '@clerk/nextjs';
+import { AnimatePresence, motion } from 'framer-motion';
+import {
+  AlertCircle,
+  ArrowRight,
+  Camera,
+  CheckCircle2,
+  FileText,
+  Github,
+  Images,
+  Link2,
+  Linkedin,
+  Loader2,
+  Plus,
+  Upload,
+  User,
+  X,
+} from 'lucide-react';
+import Image from 'next/image';
+import { useRouter } from 'next/navigation';
+import * as pdfjsLib from 'pdfjs-dist';
+import { useCallback, useEffect, useRef, useState } from 'react';
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Spinner } from '@/components/ui/spinner';
+import { fileToBase64, getBestResolutionImage, parsePhoneWithCountryCode } from '@/lib/utils';
+
+// ─── Storage Constants ────────────────────────────────────────────
+const ONBOARDING_IMPORT_STATE_KEY_PREFIX = 'follio_onboarding_import_state_';
+const UPLOADED_PHOTO_DB_NAME = 'follio_onboarding';
+const UPLOADED_PHOTO_STORE_NAME = 'uploaded_photos';
+
+const getStorageKey = (userId: string | undefined) =>
+  userId ? `${ONBOARDING_IMPORT_STATE_KEY_PREFIX}${userId}` : null;
+
+// ─── IndexedDB Helpers ────────────────────────────────────────────
+const openPhotoDatabase = (): Promise<IDBDatabase> =>
+  new Promise((resolve, reject) => {
+    const request = indexedDB.open(UPLOADED_PHOTO_DB_NAME, 1);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+    request.onupgradeneeded = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result;
+      if (!db.objectStoreNames.contains(UPLOADED_PHOTO_STORE_NAME)) {
+        db.createObjectStore(UPLOADED_PHOTO_STORE_NAME, { keyPath: 'key' });
+      }
+    };
+  });
+
+const savePhotoToIndexedDB = async (key: string, photoBase64: string): Promise<void> => {
+  const db = await openPhotoDatabase();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(UPLOADED_PHOTO_STORE_NAME, 'readwrite');
+    const store = tx.objectStore(UPLOADED_PHOTO_STORE_NAME);
+    const req = store.put({ key, data: photoBase64 });
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => resolve();
+  });
+};
+
+const getPhotoFromIndexedDB = async (key: string): Promise<string | null> => {
+  try {
+    const db = await openPhotoDatabase();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(UPLOADED_PHOTO_STORE_NAME, 'readonly');
+      const store = tx.objectStore(UPLOADED_PHOTO_STORE_NAME);
+      const req = store.get(key);
+      req.onerror = () => reject(req.error);
+      req.onsuccess = () => resolve(req.result?.data || null);
+    });
+  } catch {
+    return null;
+  }
+};
+
+// ─── SVG Brand Icons ──────────────────────────────────────────────
+function GoogleIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
+        fill="#4285F4"
+      />
+      <path
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+        fill="#34A853"
+      />
+      <path
+        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18A10.96 10.96 0 001 12c0 1.77.42 3.45 1.18 4.93l2.85-2.22.81-.62z"
+        fill="#FBBC05"
+      />
+      <path
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+        fill="#EA4335"
+      />
+    </svg>
+  );
+}
+
+function MediumIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M13.54 12a6.8 6.8 0 01-6.77 6.82A6.8 6.8 0 010 12a6.8 6.8 0 016.77-6.82A6.8 6.8 0 0113.54 12zm7.42 0c0 3.54-1.51 6.42-3.38 6.42-1.87 0-3.39-2.88-3.39-6.42s1.52-6.42 3.39-6.42 3.38 2.88 3.38 6.42zm2.94 0c0 3.17-.53 5.75-1.19 5.75-.66 0-1.19-2.58-1.19-5.75s.53-5.75 1.19-5.75c.66 0 1.19 2.58 1.19 5.75z" />
+    </svg>
+  );
+}
+
+function YouTubeIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path
+        d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.016 3.016 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.016 3.016 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"
+        fill="#FF0000"
+      />
+    </svg>
+  );
+}
+
+function SubstackIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path
+        d="M22.539 8.242H1.46V5.406h21.08v2.836zM1.46 10.812V24L12 18.11 22.54 24V10.812H1.46zM22.54 0H1.46v2.836h21.08V0z"
+        fill="#FF6719"
+      />
+    </svg>
+  );
+}
+
+// ─── Types ────────────────────────────────────────────────────────
+type ImportSource =
+  | 'resume'
+  | 'github'
+  | 'linkedin'
+  | 'google'
+  | 'medium'
+  | 'youtube'
+  | 'substack'
+  | 'links';
+
+interface ImportStatus {
+  source: ImportSource;
+  status: 'idle' | 'added' | 'importing' | 'success' | 'error';
+  message?: string;
+  itemsImported?: number;
+}
+
+interface PersistedImportState {
+  imports: Record<ImportSource, ImportStatus>;
+  importedData: Record<string, unknown>;
+  githubUsername: string;
+  resumeFileName?: string | null;
+  uploadedPhotoKey?: string | null;
+  galleryPhotoKeys?: string[] | null;
+  mediumUsername?: string;
+  youtubeChannel?: string;
+  substackUsername?: string;
+  linkUrls?: string[];
+}
+
+// ─── Pool Layout Helpers ──────────────────────────────────────────
+// Stagger delay for each card entrance
+const getCardDelay = (index: number) => 0.06 + index * 0.04;
+
+// Word-cloud card order: hand-crafted so each row
+// mixes big + small for an organic look.
+const CLOUD_ORDER: { id: string; tier: number }[] = [
+  { id: 'resume', tier: 4 }, // row 1: big
+  { id: 'google', tier: 2 }, // row 1: small
+  { id: 'linkedin', tier: 3 }, // row 1: mid
+  { id: 'github', tier: 3 }, // row 2: mid
+  { id: 'photo', tier: 4 }, // row 2: big
+  { id: 'youtube', tier: 2 }, // row 2: small
+  { id: 'links', tier: 2 }, // row 3: small
+  { id: 'medium', tier: 2 }, // row 3: small
+  { id: 'gallery', tier: 3 }, // row 3: mid
+  { id: 'substack', tier: 2 }, // row 3: small
+];
+
+// ─── Component ────────────────────────────────────────────────────
+export default function OnboardingImportPage() {
+  const router = useRouter();
+  const { user, isLoaded: isUserLoaded } = useUser();
+  const [isCreatingProfile, _setIsCreatingProfile] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [hasRestoredPersistedState, setHasRestoredPersistedState] = useState(false);
+  const [isCheckingProfile, setIsCheckingProfile] = useState(true);
+
+  // Fallback: if loading takes too long, just show the page anyway
+  useEffect(() => {
+    const fallbackTimeout = setTimeout(() => setIsCheckingProfile(false), 3000);
+    return () => clearTimeout(fallbackTimeout);
+  }, []);
+
+  // Check if user already has a profile
+  useEffect(() => {
+    if (!isUserLoaded) return;
+    if (!user) {
+      setIsCheckingProfile(false);
+      return;
+    }
+
+    let timeoutId: NodeJS.Timeout;
+    const checkExistingProfile = async () => {
+      try {
+        const controller = new AbortController();
+        timeoutId = setTimeout(() => controller.abort(), 5000);
+        const response = await fetch('/api/profile', { signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (response.ok) {
+          const data = await response.json();
+          if (data?.profile?.handle) {
+            router.replace('/');
+            return;
+          }
+        }
+      } catch (err) {
+        if (err instanceof Error && err.name !== 'AbortError') {
+          console.error('Error checking for existing profile:', err);
+        }
+      }
+      setIsCheckingProfile(false);
+    };
+    checkExistingProfile();
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [isUserLoaded, user, router]);
+
+  // ─── OAuth states ───────────────────────────────────────────────
+  const [githubConnecting, setGithubConnecting] = useState(false);
+  const [githubDisconnecting, setGithubDisconnecting] = useState(false);
+  const [githubError, setGithubError] = useState<string | null>(null);
+
+  const [linkedinConnecting, setLinkedinConnecting] = useState(false);
+  const [linkedinDisconnecting, setLinkedinDisconnecting] = useState(false);
+  const [linkedinError, setLinkedinError] = useState<string | null>(null);
+
+  const [googleConnecting, setGoogleConnecting] = useState(false);
+  const [googleDisconnecting, setGoogleDisconnecting] = useState(false);
+  const [googleError, setGoogleError] = useState<string | null>(null);
+
+  // ─── Import states ──────────────────────────────────────────────
+  const [imports, setImports] = useState<Record<ImportSource, ImportStatus>>({
+    resume: { source: 'resume', status: 'idle' },
+    github: { source: 'github', status: 'idle' },
+    linkedin: { source: 'linkedin', status: 'idle' },
+    google: { source: 'google', status: 'idle' },
+    medium: { source: 'medium', status: 'idle' },
+    youtube: { source: 'youtube', status: 'idle' },
+    substack: { source: 'substack', status: 'idle' },
+    links: { source: 'links', status: 'idle' },
+  });
+
+  // ─── Form states ───────────────────────────────────────────────
+  const [githubUsername, setGithubUsername] = useState('');
+
+  // Medium / YouTube / Substack
+  const [mediumUsername, setMediumUsername] = useState('');
+  const [youtubeChannel, setYoutubeChannel] = useState('');
+  const [substackUsername, setSubstackUsername] = useState('');
+  const [linkUrls, setLinkUrls] = useState<string[]>([]);
+  const [linkInput, setLinkInput] = useState('');
+  const [expandedCard, setExpandedCard] = useState<string | null>(null);
+
+  // Photo states
+  const [uploadedPhoto, setUploadedPhoto] = useState<string | null>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+
+  // Gallery states
+  const [galleryPhotos, setGalleryPhotos] = useState<string[]>([]);
+  const [isUploadingGallery, setIsUploadingGallery] = useState(false);
+
+  // Resume
+  const [resumeFileName, setResumeFileName] = useState<string | null>(null);
+  const [resumeFileUrl, setResumeFileUrl] = useState<string | null>(null);
+  const [resumeThumbnail, setResumeThumbnail] = useState<string | null>(null);
+  const [resumeParsingPromise, setResumeParsingPromise] = useState<Promise<void> | null>(null);
+  const [isWaitingForParsing, setIsWaitingForParsing] = useState(false);
+
+  // Imported data
+  const [importedData, setImportedData] = useState<Record<string, unknown>>({});
+
+  // Refs for expanded card click-outside
+  const expandedCardRef = useRef<HTMLDivElement | null>(null);
+
+  // ─── External accounts from Clerk ──────────────────────────────
+  const connectedGithub = user?.externalAccounts?.find((a) => a.provider === 'github');
+  const githubUsernameFromAccount = connectedGithub?.username ?? null;
+
+  const connectedLinkedin = user?.externalAccounts?.find((a) => {
+    const p = a.provider as string;
+    return (
+      p === 'linkedin_oidc' ||
+      p === 'linkedin' ||
+      p === 'oauth_linkedin_oidc' ||
+      p === 'oauth_linkedin'
+    );
+  });
+
+  const linkedinName = (() => {
+    const li = importedData.linkedin as Record<string, unknown> | undefined;
+    const liProfile = li?.profile as Record<string, unknown> | undefined;
+    const fromLI = li?.fromLinkedIn as Record<string, unknown> | undefined;
+    if (fromLI?.username) return fromLI.username as string;
+    if (connectedLinkedin?.username) return connectedLinkedin.username;
+    if (liProfile?.firstName && liProfile?.lastName)
+      return `${liProfile.firstName} ${liProfile.lastName}`;
+    if (liProfile?.firstName || liProfile?.lastName)
+      return (liProfile.firstName || liProfile.lastName) as string;
+    if (connectedLinkedin?.firstName && connectedLinkedin?.lastName)
+      return `${connectedLinkedin.firstName} ${connectedLinkedin.lastName}`;
+    if (connectedLinkedin?.firstName || connectedLinkedin?.lastName)
+      return connectedLinkedin.firstName || connectedLinkedin.lastName;
+    return null;
+  })();
+
+  const connectedGoogle = user?.externalAccounts?.find((a) => {
+    const p = a.provider as string;
+    return p === 'google' || p === 'oauth_google' || p === 'google_oidc';
+  });
+
+  const googleName = (() => {
+    const gi = importedData.google as Record<string, unknown> | undefined;
+    const fromG = gi?.fromGoogle as Record<string, unknown> | undefined;
+    if (fromG?.firstName || fromG?.lastName)
+      return `${fromG?.firstName || ''} ${fromG?.lastName || ''}`.trim();
+    if (connectedGoogle?.firstName || connectedGoogle?.lastName)
+      return `${connectedGoogle?.firstName || ''} ${connectedGoogle?.lastName || ''}`.trim();
+    if (fromG?.email) return fromG.email as string;
+    if (connectedGoogle?.emailAddress) return connectedGoogle.emailAddress;
+    return null;
+  })();
+
+  // ─── State persistence ─────────────────────────────────────────
+  const saveImportState = useCallback(async () => {
+    const storageKey = getStorageKey(user?.id);
+    if (!storageKey) return;
+
+    try {
+      let uploadedPhotoKey: string | null = null;
+      if (uploadedPhoto) {
+        uploadedPhotoKey = `onboarding_photo_${user?.id || 'anon'}`;
+        await savePhotoToIndexedDB(uploadedPhotoKey, uploadedPhoto);
+      }
+
+      const galleryPhotoKeys: string[] = [];
+      for (let i = 0; i < galleryPhotos.length; i++) {
+        const key = `onboarding_gallery_${user?.id || 'anon'}_${i}`;
+        await savePhotoToIndexedDB(key, galleryPhotos[i]);
+        galleryPhotoKeys.push(key);
+      }
+
+      const stateToSave: PersistedImportState = {
+        imports,
+        importedData,
+        githubUsername,
+        resumeFileName,
+        uploadedPhotoKey,
+        galleryPhotoKeys: galleryPhotoKeys.length > 0 ? galleryPhotoKeys : null,
+        mediumUsername,
+        youtubeChannel,
+        substackUsername,
+        linkUrls: linkUrls.length > 0 ? linkUrls : undefined,
+      };
+      sessionStorage.setItem(storageKey, JSON.stringify(stateToSave));
+    } catch (err) {
+      console.error('Failed to save import state:', err);
+    }
+  }, [
+    imports,
+    importedData,
+    githubUsername,
+    uploadedPhoto,
+    galleryPhotos,
+    resumeFileName,
+    user?.id,
+    mediumUsername,
+    youtubeChannel,
+    substackUsername,
+    linkUrls,
+  ]);
+
+  // Restore state on mount
+  useEffect(() => {
+    if (hasRestoredPersistedState || !isUserLoaded || !user?.id) return;
+
+    const storageKey = getStorageKey(user.id);
+    if (!storageKey) {
+      setHasRestoredPersistedState(true);
+      return;
+    }
+
+    const restoreState = async () => {
+      try {
+        const savedState = sessionStorage.getItem(storageKey);
+        if (savedState) {
+          const parsed: PersistedImportState = JSON.parse(savedState);
+          if (parsed.imports) setImports(parsed.imports);
+          if (parsed.importedData) setImportedData(parsed.importedData);
+          if (parsed.githubUsername) setGithubUsername(parsed.githubUsername);
+          if (parsed.resumeFileName) setResumeFileName(parsed.resumeFileName);
+          if (parsed.mediumUsername) setMediumUsername(parsed.mediumUsername);
+          if (parsed.youtubeChannel) setYoutubeChannel(parsed.youtubeChannel);
+          if (parsed.substackUsername) setSubstackUsername(parsed.substackUsername);
+          if (parsed.linkUrls?.length) setLinkUrls(parsed.linkUrls);
+
+          if (parsed.uploadedPhotoKey) {
+            const photoData = await getPhotoFromIndexedDB(parsed.uploadedPhotoKey);
+            if (photoData) setUploadedPhoto(photoData);
+          }
+
+          if (parsed.galleryPhotoKeys?.length) {
+            const restoredGallery: string[] = [];
+            for (const key of parsed.galleryPhotoKeys) {
+              const photoData = await getPhotoFromIndexedDB(key);
+              if (photoData) restoredGallery.push(photoData);
+            }
+            if (restoredGallery.length > 0) setGalleryPhotos(restoredGallery);
+          }
+
+          sessionStorage.removeItem(storageKey);
+          user.reload().catch(console.error);
+        }
+      } catch (err) {
+        console.error('Failed to restore import state:', err);
+      }
+      setHasRestoredPersistedState(true);
+    };
+
+    restoreState();
+  }, [hasRestoredPersistedState, isUserLoaded, user]);
+
+  // ─── Auto-import after OAuth ────────────────────────────────────
+  useEffect(() => {
+    if (!isUserLoaded || !hasRestoredPersistedState) return;
+    if (githubUsernameFromAccount && imports.github.status === 'idle') {
+      updateImportStatus('github', { status: 'importing', message: 'Fetching GitHub data...' });
+      fetch('/api/import/github', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: githubUsernameFromAccount }),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.error) {
+            updateImportStatus('github', { status: 'error', message: data.error });
+          } else {
+            setImportedData((prev) => ({ ...prev, github: data.data }));
+            updateImportStatus('github', {
+              status: 'success',
+              message: data.message || `Imported ${data.data?.summary?.projects || 0} projects`,
+              itemsImported:
+                (data.data?.summary?.projects || 0) + (data.data?.summary?.skills || 0),
+            });
+            setGithubUsername(githubUsernameFromAccount);
+          }
+        })
+        .catch((err) => {
+          updateImportStatus('github', {
+            status: 'error',
+            message: err instanceof Error ? err.message : 'Failed',
+          });
+        });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isUserLoaded, hasRestoredPersistedState, githubUsernameFromAccount, imports.github.status]);
+
+  useEffect(() => {
+    if (!isUserLoaded || !hasRestoredPersistedState) return;
+    if (connectedLinkedin && imports.linkedin.status === 'idle') {
+      updateImportStatus('linkedin', { status: 'importing', message: 'Fetching LinkedIn data...' });
+      fetch('/api/import/linkedin/oauth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.error) {
+            updateImportStatus('linkedin', { status: 'error', message: data.error });
+          } else {
+            setImportedData((prev) => ({ ...prev, linkedin: data.data }));
+            updateImportStatus('linkedin', {
+              status: 'success',
+              message: data.message || 'Imported profile',
+              itemsImported: data.data?.summary?.total || 1,
+            });
+          }
+        })
+        .catch((err) =>
+          updateImportStatus('linkedin', {
+            status: 'error',
+            message: err instanceof Error ? err.message : 'Failed',
+          })
+        );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isUserLoaded, hasRestoredPersistedState, connectedLinkedin, imports.linkedin.status]);
+
+  useEffect(() => {
+    if (!isUserLoaded || !hasRestoredPersistedState) return;
+    if (connectedGoogle && imports.google.status === 'idle') {
+      updateImportStatus('google', { status: 'importing', message: 'Fetching Google data...' });
+      fetch('/api/import/google/oauth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.error) {
+            updateImportStatus('google', { status: 'error', message: data.error });
+          } else {
+            setImportedData((prev) => ({ ...prev, google: data.data }));
+            updateImportStatus('google', {
+              status: 'success',
+              message: data.message || 'Imported profile',
+              itemsImported: data.data?.summary?.total || 1,
+            });
+          }
+        })
+        .catch((err) =>
+          updateImportStatus('google', {
+            status: 'error',
+            message: err instanceof Error ? err.message : 'Failed',
+          })
+        );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isUserLoaded, hasRestoredPersistedState, connectedGoogle, imports.google.status]);
+
+  // ─── Helpers ────────────────────────────────────────────────────
+  const updateImportStatus = (source: ImportSource, update: Partial<ImportStatus>) => {
+    setImports((prev) => ({ ...prev, [source]: { ...prev[source], ...update } }));
+  };
+
+  const countResumeItems = (data: Record<string, unknown> | undefined): number => {
+    if (!data) return 0;
+    let count = 0;
+    if (data.profile && Object.keys(data.profile as object).length > 0) count += 1;
+    if (Array.isArray(data.experiences)) count += (data.experiences as unknown[]).length;
+    if (Array.isArray(data.educations)) count += (data.educations as unknown[]).length;
+    if (Array.isArray(data.projects)) count += (data.projects as unknown[]).length;
+    if (Array.isArray(data.skills)) count += (data.skills as unknown[]).length;
+    if (Array.isArray(data.links)) count += (data.links as unknown[]).length;
+    return count;
+  };
+
+  // ─── Handlers ───────────────────────────────────────────────────
+
+  // GitHub
+  const handleGitHubConnect = async () => {
+    setGithubConnecting(true);
+    setGithubError(null);
+    const primaryEmail = user?.primaryEmailAddress;
+    if (!primaryEmail?.verification?.status || primaryEmail.verification.status !== 'verified') {
+      setGithubError('Please verify your email first to connect GitHub.');
+      setGithubConnecting(false);
+      return;
+    }
+    try {
+      await saveImportState();
+      const externalAccount = await user?.createExternalAccount({
+        strategy: 'oauth_github',
+        redirectUrl: window.location.href,
+      });
+      const url = externalAccount?.verification?.externalVerificationRedirectURL;
+      if (url) window.location.href = url.toString();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('already connected')) {
+        await user?.reload();
+        setGithubError(null);
+      } else setGithubError(`Connection failed: ${msg}`);
+      setGithubConnecting(false);
+    }
+  };
+
+  const handleGitHubDisconnect = async () => {
+    if (!connectedGithub) return;
+    setGithubDisconnecting(true);
+    setGithubError(null);
+    try {
+      await connectedGithub.destroy();
+      await user?.reload();
+      updateImportStatus('github', {
+        status: 'idle',
+        message: undefined,
+        itemsImported: undefined,
+      });
+      setGithubUsername('');
+    } catch (err: unknown) {
+      setGithubError(`Failed to disconnect: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setGithubDisconnecting(false);
+    }
+  };
+
+  const handleGitHubImport = async (overrideUsername?: string) => {
+    const resolved = (overrideUsername ?? githubUsername).trim();
+    if (!resolved) {
+      updateImportStatus('github', { status: 'error', message: 'Please enter a GitHub username' });
+      return;
+    }
+    updateImportStatus('github', { status: 'importing', message: 'Fetching GitHub data...' });
+    try {
+      const response = await fetch('/api/import/github', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: resolved }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed');
+      setImportedData((prev) => ({ ...prev, github: data.data }));
+      updateImportStatus('github', {
+        status: 'success',
+        message: data.message || `Imported ${data.data?.summary?.projects || 0} projects`,
+        itemsImported: (data.data?.summary?.projects || 0) + (data.data?.summary?.skills || 0),
+      });
+      setGithubUsername(resolved);
+    } catch (err) {
+      updateImportStatus('github', {
+        status: 'error',
+        message: err instanceof Error ? err.message : 'Failed',
+      });
+    }
+  };
+
+  // LinkedIn
+  const handleLinkedInConnect = async () => {
+    setLinkedinConnecting(true);
+    setLinkedinError(null);
+    const primaryEmail = user?.primaryEmailAddress;
+    if (!primaryEmail?.verification?.status || primaryEmail.verification.status !== 'verified') {
+      setLinkedinError('Please verify your email first.');
+      setLinkedinConnecting(false);
+      return;
+    }
+    try {
+      await saveImportState();
+      const externalAccount = await user?.createExternalAccount({
+        strategy: 'oauth_linkedin_oidc',
+        redirectUrl: window.location.href,
+      });
+      const url = externalAccount?.verification?.externalVerificationRedirectURL;
+      if (url) window.location.href = url.toString();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('already connected')) {
+        await user?.reload();
+        setLinkedinError(null);
+      } else setLinkedinError(`Connection failed: ${msg}`);
+      setLinkedinConnecting(false);
+    }
+  };
+
+  const handleLinkedInDisconnect = async () => {
+    if (!connectedLinkedin) return;
+    setLinkedinDisconnecting(true);
+    setLinkedinError(null);
+    try {
+      await connectedLinkedin.destroy();
+      await user?.reload();
+      updateImportStatus('linkedin', {
+        status: 'idle',
+        message: undefined,
+        itemsImported: undefined,
+      });
+    } catch (err: unknown) {
+      setLinkedinError(`Failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setLinkedinDisconnecting(false);
+    }
+  };
+
+  const handleLinkedInImport = async () => {
+    updateImportStatus('linkedin', { status: 'importing', message: 'Fetching LinkedIn data...' });
+    try {
+      const response = await fetch('/api/import/linkedin/oauth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed');
+      setImportedData((prev) => ({ ...prev, linkedin: data.data }));
+      updateImportStatus('linkedin', {
+        status: 'success',
+        message: data.message || 'Imported profile',
+        itemsImported: data.data?.summary?.total || 1,
+      });
+    } catch (err) {
+      updateImportStatus('linkedin', {
+        status: 'error',
+        message: err instanceof Error ? err.message : 'Failed',
+      });
+    }
+  };
+
+  // Google
+  const handleGoogleConnect = async () => {
+    setGoogleConnecting(true);
+    setGoogleError(null);
+    const primaryEmail = user?.primaryEmailAddress;
+    if (!primaryEmail?.verification?.status || primaryEmail.verification.status !== 'verified') {
+      setGoogleError('Please verify your email first.');
+      setGoogleConnecting(false);
+      return;
+    }
+    try {
+      await saveImportState();
+      const externalAccount = await user?.createExternalAccount({
+        strategy: 'oauth_google',
+        redirectUrl: window.location.href,
+      });
+      const url = externalAccount?.verification?.externalVerificationRedirectURL;
+      if (url) window.location.href = url.toString();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('already connected')) {
+        await user?.reload();
+        setGoogleError(null);
+      } else setGoogleError(`Connection failed: ${msg}`);
+      setGoogleConnecting(false);
+    }
+  };
+
+  const handleGoogleDisconnect = async () => {
+    if (!connectedGoogle) return;
+    setGoogleDisconnecting(true);
+    setGoogleError(null);
+    try {
+      await connectedGoogle.destroy();
+      await user?.reload();
+      updateImportStatus('google', {
+        status: 'idle',
+        message: undefined,
+        itemsImported: undefined,
+      });
+    } catch (err: unknown) {
+      setGoogleError(`Failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setGoogleDisconnecting(false);
+    }
+  };
+
+  const handleGoogleImport = async () => {
+    updateImportStatus('google', { status: 'importing', message: 'Fetching Google data...' });
+    try {
+      const response = await fetch('/api/import/google/oauth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed');
+      setImportedData((prev) => ({ ...prev, google: data.data }));
+      updateImportStatus('google', {
+        status: 'success',
+        message: data.message || 'Imported profile',
+        itemsImported: data.data?.summary?.total || 1,
+      });
+    } catch (err) {
+      updateImportStatus('google', {
+        status: 'error',
+        message: err instanceof Error ? err.message : 'Failed',
+      });
+    }
+  };
+
+  // Resume
+  const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.type !== 'application/pdf') {
+      updateImportStatus('resume', { status: 'error', message: 'Only PDF files are supported.' });
+      return;
+    }
+    setResumeFileName(file.name);
+    setResumeFileUrl(URL.createObjectURL(file));
+
+    // Generate PDF thumbnail from first page
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const page = await pdf.getPage(1);
+      const viewport = page.getViewport({ scale: 1 });
+      const scale = 300 / viewport.width;
+      const scaledViewport = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = scaledViewport.width;
+      canvas.height = scaledViewport.height;
+      const ctx = canvas.getContext('2d')!;
+      await page.render({ canvasContext: ctx, viewport: scaledViewport }).promise;
+      setResumeThumbnail(canvas.toDataURL('image/png'));
+    } catch (err) {
+      console.warn('Could not generate PDF thumbnail:', err);
+    }
+
+    updateImportStatus('resume', {
+      status: 'added',
+      message: 'Resume added! Parsing in background...',
+    });
+
+    const parsingPromise = (async () => {
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('saveToProfile', 'false');
+        const response = await fetch('/api/import/resume', { method: 'POST', body: formData });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to parse resume');
+        setImportedData((prev) => ({ ...prev, resume: data.data }));
+        const itemCount = countResumeItems(data.data);
+        updateImportStatus('resume', {
+          status: 'success',
+          message: `Found ${itemCount} items (${Math.round((data.confidence || 0.5) * 100)}% confidence)`,
+          itemsImported: itemCount,
+        });
+      } catch (err) {
+        updateImportStatus('resume', {
+          status: 'error',
+          message: err instanceof Error ? err.message : 'Failed',
+        });
+      } finally {
+        setResumeParsingPromise(null);
+      }
+    })();
+
+    setResumeParsingPromise(parsingPromise);
+  };
+
+  // Medium
+  const handleMediumImport = async () => {
+    const username = mediumUsername.trim();
+    if (!username) {
+      updateImportStatus('medium', {
+        status: 'error',
+        message: 'Please enter your Medium username',
+      });
+      return;
+    }
+    updateImportStatus('medium', { status: 'importing', message: 'Fetching Medium posts...' });
+    try {
+      const response = await fetch('/api/import/medium', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed');
+      setImportedData((prev) => ({ ...prev, medium: data.data }));
+      const postCount = data.data?.posts?.length || data.data?.summary?.posts || 0;
+      updateImportStatus('medium', {
+        status: 'success',
+        message: `Imported ${postCount} posts`,
+        itemsImported: postCount,
+      });
+      setExpandedCard(null);
+    } catch (err) {
+      updateImportStatus('medium', {
+        status: 'error',
+        message: err instanceof Error ? err.message : 'Failed',
+      });
+    }
+  };
+
+  // YouTube
+  const handleYouTubeImport = async () => {
+    const channel = youtubeChannel.trim();
+    if (!channel) {
+      updateImportStatus('youtube', {
+        status: 'error',
+        message: 'Please enter your YouTube channel',
+      });
+      return;
+    }
+    updateImportStatus('youtube', { status: 'importing', message: 'Fetching YouTube videos...' });
+    try {
+      const response = await fetch('/api/import/youtube', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed');
+      setImportedData((prev) => ({ ...prev, youtube: data.data }));
+      const videoCount = data.data?.videos?.length || data.data?.summary?.videos || 0;
+      updateImportStatus('youtube', {
+        status: 'success',
+        message: `Imported ${videoCount} videos`,
+        itemsImported: videoCount,
+      });
+      setExpandedCard(null);
+    } catch (err) {
+      updateImportStatus('youtube', {
+        status: 'error',
+        message: err instanceof Error ? err.message : 'Failed',
+      });
+    }
+  };
+
+  // Substack
+  const handleSubstackImport = async () => {
+    const identifier = substackUsername.trim();
+    if (!identifier) {
+      updateImportStatus('substack', {
+        status: 'error',
+        message: 'Please enter your Substack name',
+      });
+      return;
+    }
+    updateImportStatus('substack', { status: 'importing', message: 'Fetching Substack posts...' });
+    try {
+      const response = await fetch('/api/import/medium', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platform: 'substack', identifier }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed');
+      setImportedData((prev) => ({ ...prev, substack: data.data }));
+      const postCount = data.data?.posts?.length || data.data?.summary?.posts || 0;
+      updateImportStatus('substack', {
+        status: 'success',
+        message: `Imported ${postCount} posts`,
+        itemsImported: postCount,
+      });
+      setExpandedCard(null);
+    } catch (err) {
+      updateImportStatus('substack', {
+        status: 'error',
+        message: err instanceof Error ? err.message : 'Failed',
+      });
+    }
+  };
+
+  // Links
+  const handleAddLink = () => {
+    const url = linkInput.trim();
+    if (!url) return;
+    try {
+      new URL(url);
+    } catch {
+      updateImportStatus('links', { status: 'error', message: 'Please enter a valid URL' });
+      return;
+    }
+    if (linkUrls.includes(url)) {
+      updateImportStatus('links', { status: 'error', message: 'Link already added' });
+      return;
+    }
+    setLinkUrls((prev) => [...prev, url]);
+    setLinkInput('');
+    updateImportStatus('links', { status: 'idle', message: undefined });
+  };
+
+  const handleRemoveLink = (url: string) => {
+    setLinkUrls((prev) => prev.filter((l) => l !== url));
+  };
+
+  const handleLinksImport = async () => {
+    if (linkUrls.length === 0) {
+      updateImportStatus('links', { status: 'error', message: 'Add at least one link' });
+      return;
+    }
+    updateImportStatus('links', { status: 'importing', message: 'Importing links...' });
+    try {
+      const response = await fetch('/api/import/links', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ links: linkUrls, saveToProfile: true }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed');
+      setImportedData((prev) => ({ ...prev, links: data.data }));
+      const linkCount = data.data?.links?.length || linkUrls.length;
+      updateImportStatus('links', {
+        status: 'success',
+        message: `Imported ${linkCount} links`,
+        itemsImported: linkCount,
+      });
+      setExpandedCard(null);
+    } catch (err) {
+      updateImportStatus('links', {
+        status: 'error',
+        message: err instanceof Error ? err.message : 'Failed',
+      });
+    }
+  };
+
+  // Photo upload
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setError('Please upload an image file');
+      return;
+    }
+    if (file.size > 40 * 1024 * 1024) {
+      setError('Image must be less than 40MB');
+      return;
+    }
+    setIsUploadingPhoto(true);
+    setError(null);
+    try {
+      const base64 = await fileToBase64(file);
+      setUploadedPhoto(base64);
+    } catch {
+      setError('Failed to process image');
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
+
+  const handleRemoveUploadedPhoto = () => setUploadedPhoto(null);
+
+  // Gallery upload
+  const handleGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setIsUploadingGallery(true);
+    setError(null);
+    try {
+      const newPhotos: string[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (!file.type.startsWith('image/') || file.size > 40 * 1024 * 1024) continue;
+        const base64 = await fileToBase64(file);
+        newPhotos.push(base64);
+      }
+      if (newPhotos.length === 0) setError('No valid image files selected');
+      else setGalleryPhotos((prev) => [...prev, ...newPhotos]);
+    } catch {
+      setError('Failed to process gallery images');
+    } finally {
+      setIsUploadingGallery(false);
+      e.target.value = '';
+    }
+  };
+
+  // ─── Photo resolution helpers ──────────────────────────────────
+  interface PhotoOption {
+    id: string;
+    url: string;
+    source: string;
+    label: string;
+  }
+
+  const getPrimaryAuthProvider = (): { id: string; label: string } | null => {
+    if (!user) return null;
+    const verified =
+      user.externalAccounts?.filter((a) => a.verification?.status === 'verified') || [];
+    if (verified.find((a) => (a.provider as string) === 'oauth_google' || a.provider === 'google'))
+      return { id: 'google', label: 'Google' };
+    if (
+      verified.find((a) =>
+        ['linkedin_oidc', 'linkedin', 'oauth_linkedin_oidc', 'oauth_linkedin'].includes(
+          a.provider as string
+        )
+      )
+    )
+      return { id: 'linkedin-sso', label: 'LinkedIn' };
+    if (verified.find((a) => a.provider === 'github' || (a.provider as string) === 'oauth_github'))
+      return { id: 'github-sso', label: 'GitHub' };
+    if (verified.length > 0) {
+      const p = verified[0].provider || 'sso';
+      const label = p.replace('oauth_', '').replace('_oidc', '').replace(/_/g, ' ');
+      return { id: 'sso', label: label.charAt(0).toUpperCase() + label.slice(1) };
+    }
+    return null;
+  };
+
+  const getAvailablePhotos = (): PhotoOption[] => {
+    const photos: PhotoOption[] = [];
+    const seenUrls = new Set<string>();
+    const addPhoto = (photo: PhotoOption) => {
+      const norm = photo.url.split('?')[0].toLowerCase();
+      if (!seenUrls.has(norm)) {
+        seenUrls.add(norm);
+        photos.push(photo);
+      }
+    };
+
+    const gd = importedData.google as Record<string, unknown> | undefined;
+    const gp = gd?.profile as Record<string, unknown> | undefined;
+    if (gp?.avatarUrl)
+      addPhoto({ id: 'google', url: gp.avatarUrl as string, source: 'google', label: 'Google' });
+
+    const ld = importedData.linkedin as Record<string, unknown> | undefined;
+    const lp = ld?.profile as Record<string, unknown> | undefined;
+    if (lp?.avatarUrl)
+      addPhoto({
+        id: 'linkedin',
+        url: lp.avatarUrl as string,
+        source: 'linkedin',
+        label: 'LinkedIn',
+      });
+
+    const ghd = importedData.github as Record<string, unknown> | undefined;
+    const ghp = ghd?.profile as Record<string, unknown> | undefined;
+    if (ghp?.avatarUrl)
+      addPhoto({ id: 'github', url: ghp.avatarUrl as string, source: 'github', label: 'GitHub' });
+
+    const primaryAuth = getPrimaryAuthProvider();
+    const hasMatchingImport =
+      primaryAuth &&
+      ((primaryAuth.id === 'google' && gp?.avatarUrl) ||
+        (primaryAuth.id === 'linkedin-sso' && lp?.avatarUrl) ||
+        (primaryAuth.id === 'github-sso' && ghp?.avatarUrl));
+    if (user?.imageUrl && user?.hasImage && primaryAuth && !hasMatchingImport) {
+      addPhoto({
+        id: primaryAuth.id,
+        url: user.imageUrl,
+        source: primaryAuth.id,
+        label: primaryAuth.label,
+      });
+    }
+    if (uploadedPhoto)
+      photos.unshift({ id: 'upload', url: uploadedPhoto, source: 'upload', label: 'Upload' });
+    return photos;
+  };
+
+  const getUploadedPhotoUrl = (): string | null => uploadedPhoto;
+
+  // ─── Continue handler ──────────────────────────────────────────
+  const handleContinue = async () => {
+    if (resumeParsingPromise) {
+      setIsWaitingForParsing(true);
+      try {
+        await resumeParsingPromise;
+      } finally {
+        setIsWaitingForParsing(false);
+      }
+    }
+
+    let bestAvatarUrl: string | null = getUploadedPhotoUrl();
+    if (!bestAvatarUrl) {
+      const photos = getAvailablePhotos();
+      if (photos.length > 0) bestAvatarUrl = await getBestResolutionImage(photos.map((p) => p.url));
+    }
+
+    const resumeData = importedData.resume as Record<string, unknown> | undefined;
+    const linkedinData = importedData.linkedin as Record<string, unknown> | undefined;
+    const githubData = importedData.github as Record<string, unknown> | undefined;
+
+    const resumeProfile = (resumeData?.profile as Record<string, unknown>) || {};
+    const linkedinProfile = (linkedinData?.profile as Record<string, unknown>) || {};
+    const githubProfile = (githubData?.profile as Record<string, unknown>) || {};
+    const resumeContactInfo = resumeData?.contactInfo as Record<string, unknown> | undefined;
+
+    const allNames: Array<{ firstName?: string; lastName?: string; source: string }> = [];
+    if (user?.firstName || user?.lastName)
+      allNames.push({
+        firstName: user.firstName || undefined,
+        lastName: user.lastName || undefined,
+        source: 'SIGNUP',
+      });
+    if (resumeProfile.firstName || resumeProfile.lastName)
+      allNames.push({
+        firstName: resumeProfile.firstName as string | undefined,
+        lastName: resumeProfile.lastName as string | undefined,
+        source: 'RESUME',
+      });
+    if (linkedinProfile.firstName || linkedinProfile.lastName)
+      allNames.push({
+        firstName: linkedinProfile.firstName as string | undefined,
+        lastName: linkedinProfile.lastName as string | undefined,
+        source: 'LINKEDIN',
+      });
+    if (githubProfile.firstName || githubProfile.lastName)
+      allNames.push({
+        firstName: githubProfile.firstName as string | undefined,
+        lastName: githubProfile.lastName as string | undefined,
+        source: 'GITHUB',
+      });
+
+    const mergedProfile: Record<string, unknown> = {
+      firstName:
+        resumeProfile.firstName ||
+        linkedinProfile.firstName ||
+        githubProfile.firstName ||
+        user?.firstName,
+      lastName:
+        resumeProfile.lastName ||
+        linkedinProfile.lastName ||
+        githubProfile.lastName ||
+        user?.lastName,
+      headline: resumeProfile.headline || linkedinProfile.headline || githubProfile.headline,
+      summary: resumeProfile.summary || linkedinProfile.summary || githubProfile.bio,
+      location: resumeProfile.location || linkedinProfile.location || githubProfile.location,
+      avatarUrl: bestAvatarUrl,
+    };
+
+    const allEmails: Array<{ email: string; source: string }> = [];
+    const signupEmail = user?.primaryEmailAddress?.emailAddress;
+    if (signupEmail) allEmails.push({ email: signupEmail, source: 'SIGNUP' });
+    if (resumeContactInfo?.email)
+      allEmails.push({ email: resumeContactInfo.email as string, source: 'RESUME' });
+    if (linkedinData) {
+      const lci = linkedinData.contactInfo as Record<string, unknown> | undefined;
+      if (lci?.email) allEmails.push({ email: lci.email as string, source: 'LINKEDIN' });
+      if (linkedinData.email && typeof linkedinData.email === 'string')
+        allEmails.push({ email: linkedinData.email, source: 'LINKEDIN' });
+    }
+    if (githubData) {
+      const gci = githubData.contactInfo as Record<string, unknown> | undefined;
+      if (gci?.email) allEmails.push({ email: gci.email as string, source: 'GITHUB' });
+    }
+    const seenEmails = new Set<string>();
+    const uniqueEmails = allEmails.filter((e) => {
+      const n = e.email.toLowerCase().trim();
+      if (seenEmails.has(n)) return false;
+      seenEmails.add(n);
+      return true;
+    });
+
+    const allPhones: Array<{
+      phone?: string;
+      countryCode?: string | null;
+      number?: string;
+      source: string;
+    }> = [];
+    if (resumeContactInfo?.phone) {
+      const parsed = parsePhoneWithCountryCode(resumeContactInfo.phone as string);
+      allPhones.push({
+        phone: resumeContactInfo.phone as string,
+        countryCode: parsed.countryCode,
+        number: parsed.number || (resumeContactInfo.phone as string),
+        source: 'RESUME',
+      });
+    }
+    if (linkedinData) {
+      const lci = linkedinData.contactInfo as Record<string, unknown> | undefined;
+      if (lci?.phone) {
+        const parsed = parsePhoneWithCountryCode(lci.phone as string);
+        allPhones.push({
+          phone: lci.phone as string,
+          countryCode: parsed.countryCode,
+          number: parsed.number || (lci.phone as string),
+          source: 'LINKEDIN',
+        });
+      }
+    }
+    const seenPhones = new Set<string>();
+    const uniquePhones = allPhones.filter((p) => {
+      const n = (p.number || p.phone || '').replace(/\D/g, '');
+      if (seenPhones.has(n)) return false;
+      seenPhones.add(n);
+      return true;
+    });
+
+    const contactInfo = {
+      ...(resumeContactInfo || {}),
+      allEmails: uniqueEmails,
+      allPhones: uniquePhones,
+    };
+
+    const avatarUrlForStorage = mergedProfile.avatarUrl as string | undefined;
+    if (avatarUrlForStorage?.startsWith('data:')) {
+      try {
+        const photoKey = `uploaded_avatar_${Date.now()}`;
+        await savePhotoToIndexedDB(photoKey, avatarUrlForStorage);
+        mergedProfile.avatarUrl = `indexeddb:${photoKey}`;
+      } catch (err) {
+        console.error('Failed to store photo in IndexedDB:', err);
+        delete mergedProfile.avatarUrl;
+      }
+    }
+
+    const allLinks = [
+      ...((resumeData?.links as Array<Record<string, unknown>>) || []),
+      ...((linkedinData?.links as Array<Record<string, unknown>>) || []),
+      ...((githubData?.links as Array<Record<string, unknown>>) || []),
+    ];
+    const seenUrls = new Set<string>();
+    const uniqueLinks = allLinks.filter((link) => {
+      const url = (link.url as string)?.toLowerCase().trim();
+      if (!url || seenUrls.has(url)) return false;
+      seenUrls.add(url);
+      return true;
+    });
+
+    const galleryPhotoRefs: string[] = [];
+    for (let i = 0; i < galleryPhotos.length; i++) {
+      const photo = galleryPhotos[i];
+      if (photo.startsWith('data:')) {
+        try {
+          const galleryKey = `gallery_photo_${Date.now()}_${i}`;
+          await savePhotoToIndexedDB(galleryKey, photo);
+          galleryPhotoRefs.push(`indexeddb:${galleryKey}`);
+        } catch (err) {
+          console.error('Failed to store gallery photo:', err);
+        }
+      } else {
+        galleryPhotoRefs.push(photo);
+      }
+    }
+
+    const dataForReview = {
+      profile: mergedProfile,
+      contactInfo,
+      allNames,
+      experiences: resumeData?.experiences || [],
+      educations: resumeData?.educations || [],
+      skills: [
+        ...((resumeData?.skills as string[]) || []),
+        ...((githubData?.skills as string[]) || []),
+      ].filter((s, i, arr) => arr.indexOf(s) === i),
+      links: uniqueLinks,
+      certifications: resumeData?.certifications || [],
+      projects: [
+        ...((resumeData?.projects as Array<Record<string, unknown>>) || []),
+        ...((githubData?.projects as Array<Record<string, unknown>>) || []),
+      ],
+      galleryPhotos: galleryPhotoRefs,
+      _sources: { hasResume: !!resumeData, hasLinkedIn: !!linkedinData, hasGitHub: !!githubData },
+      _resumeFileName: resumeFileName || null,
+    };
+
+    sessionStorage.setItem('onboarding_parsed_resume', JSON.stringify(dataForReview));
+    router.push('/onboarding/review');
+  };
+
+  // ─── Derived stats ─────────────────────────────────────────────
+  const getTotalImported = () =>
+    Object.values(imports).reduce((acc, imp) => acc + (imp.itemsImported || 0), 0);
+  const hasAnyImport = Object.values(imports).some(
+    (i) => i.status === 'success' || i.status === 'added'
+  );
+
+  // ─── Status badge helper ───────────────────────────────────────
+  const StatusIndicator = ({ status }: { status: ImportStatus['status'] }) => {
+    if (status === 'success' || status === 'added') {
+      return (
+        <motion.div
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/30"
+        >
+          <CheckCircle2 className="h-3 w-3 text-white" />
+        </motion.div>
+      );
+    }
+    if (status === 'importing') return <Loader2 className="h-5 w-5 animate-spin text-primary" />;
+    if (status === 'error') return <AlertCircle className="h-5 w-5 text-red-400" />;
+    return null;
+  };
+
+  // ─── Click outside to close expanded ───────────────────────────
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        expandedCard &&
+        expandedCardRef.current &&
+        !expandedCardRef.current.contains(e.target as Node)
+      ) {
+        setExpandedCard(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [expandedCard]);
+
+  // ─── Word-cloud card order constant ────────────────────────────
+  const cloudOrder = CLOUD_ORDER;
+
+  // ─── Loading state ─────────────────────────────────────────────
+  if (isCheckingProfile) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Spinner size="lg" />
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Card styles (4 tiers – size 4 ≈ 2× size 1) ──────────────
+  const cardBase =
+    'relative overflow-hidden rounded-2xl border border-border/40 bg-card/80 shadow-sm backdrop-blur-sm transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/[0.08] cursor-pointer';
+  // Tier 4 (largest): Resume, Profile Photo  — 192→208px
+  const card4 = `${cardBase} w-48 h-48 sm:w-52 sm:h-52 p-5`;
+  // Tier 3: LinkedIn, GitHub, Gallery        — 160→176px
+  const card3 = `${cardBase} w-40 h-40 sm:w-44 sm:h-44 p-4`;
+  // Tier 2: Google, Medium                   — 128→140px
+  const card2 = `${cardBase} w-32 h-32 sm:w-[140px] sm:h-[140px] p-3`;
+  // Tier 1 (smallest): YouTube, Substack     — 96→104px (half of tier 4)
+  const card1 = `${cardBase} w-24 h-24 sm:w-[104px] sm:h-[104px] p-2`;
+
+  // ─── Render ─────────────────────────────────────────────────────
+  return (
+    <>
+      {/* Progress bar */}
+      <div className="fixed left-0 right-0 top-16 z-40 h-px bg-border/30">
+        <motion.div
+          className="h-full bg-gradient-to-r from-primary to-primary/60"
+          initial={{ width: '33%' }}
+          animate={{ width: '66%' }}
+          transition={{ duration: 0.8, ease: 'easeOut' }}
+        />
+      </div>
+
+      <div className="relative mx-auto max-w-5xl px-6 pb-24 pt-12">
+        {/* Background decorations */}
+        <div className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div className="absolute -left-40 top-10 h-80 w-80 rounded-full bg-primary/[0.04] blur-3xl" />
+          <div className="absolute -right-40 top-48 h-96 w-96 rounded-full bg-violet-500/[0.04] blur-3xl" />
+        </div>
+
+        {/* Header */}
+        <motion.div
+          className="relative mb-14 text-center"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+            Import your{' '}
+            <span className="bg-gradient-to-r from-primary to-violet-500 bg-clip-text text-transparent">
+              data
+            </span>
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Connect sources to build your profile
+          </p>
+        </motion.div>
+
+        {/* ─── Word Cloud Layout ──────────────────────────────── */}
+        {(() => {
+          const tierClass = (t: number) =>
+            t === 4 ? card4 : t === 3 ? card3 : t === 2 ? card2 : card1;
+
+          return (
+            <div className="relative mx-auto flex max-w-[380px] flex-wrap items-center justify-center gap-3 sm:max-w-[580px] sm:gap-4">
+              {cloudOrder.map((card, visualIdx) => {
+                // ─── RESUME ─────────────────────────
+                if (card.id === 'resume') {
+                  return (
+                    <motion.div
+                      key="resume"
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{
+                        type: 'spring',
+                        stiffness: 120,
+                        damping: 18,
+                        delay: getCardDelay(visualIdx),
+                      }}
+                      whileHover={{ y: -4, scale: 1.03, transition: { duration: 0.2 } }}
+                    >
+                      <div className={tierClass(card.tier)}>
+                        <div className="absolute right-3 top-3 z-10">
+                          <StatusIndicator status={imports.resume.status} />
+                        </div>
+                        <div className="flex h-full flex-col items-center justify-center text-center">
+                          <AnimatePresence mode="wait">
+                            {(imports.resume.status === 'success' ||
+                              imports.resume.status === 'added') &&
+                            resumeThumbnail ? (
+                              <motion.div
+                                key="snapshot"
+                                initial={{ scale: 0.8, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0.8, opacity: 0 }}
+                                className="group/resume relative mb-1"
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => document.getElementById('resume-upload')?.click()}
+                                  className="relative h-[130px] w-[100px] overflow-hidden rounded-md border border-border/40 bg-white shadow-sm"
+                                >
+                                  <Image
+                                    src={resumeThumbnail}
+                                    alt="Resume preview"
+                                    fill
+                                    className="object-cover object-top"
+                                    unoptimized
+                                  />
+                                  <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition-opacity group-hover/resume:opacity-100">
+                                    <Upload className="h-4 w-4 text-white" />
+                                  </div>
+                                </button>
+                              </motion.div>
+                            ) : (
+                              <motion.div
+                                key="placeholder"
+                                initial={{ scale: 0.8, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0.8, opacity: 0 }}
+                                className="mb-1"
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => document.getElementById('resume-upload')?.click()}
+                                  disabled={imports.resume.status === 'importing'}
+                                  className="flex h-32 w-32 items-center justify-center rounded-2xl bg-muted/40 transition-all hover:bg-primary/10 sm:h-36 sm:w-36"
+                                >
+                                  {imports.resume.status === 'importing' ? (
+                                    <Loader2 className="h-10 w-10 animate-spin text-muted-foreground" />
+                                  ) : (
+                                    <FileText className="h-16 w-16 text-orange-500/50" />
+                                  )}
+                                </button>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                          <span className="text-xs font-semibold">Resume</span>
+                          {imports.resume.status === 'success' && (
+                            <p className="text-[9px] text-muted-foreground">
+                              {resumeFileName || 'Imported'}
+                            </p>
+                          )}
+                          {imports.resume.status === 'added' && (
+                            <p className="text-[9px] text-muted-foreground">
+                              <span className="flex items-center justify-center gap-1">
+                                <Loader2 className="h-2.5 w-2.5 animate-spin" /> Parsing...
+                              </span>
+                            </p>
+                          )}
+                          {imports.resume.status === 'idle' && (
+                            <p className="mt-0.5 text-[9px] text-muted-foreground/70">Upload PDF</p>
+                          )}
+                          {imports.resume.status === 'error' && imports.resume.message && (
+                            <p className="mt-0.5 text-[9px] text-red-400">
+                              {imports.resume.message}
+                            </p>
+                          )}
+                        </div>
+                        <input
+                          id="resume-upload"
+                          type="file"
+                          accept=".pdf,application/pdf"
+                          className="hidden"
+                          onChange={handleResumeUpload}
+                        />
+                      </div>
+                    </motion.div>
+                  );
+                }
+
+                // ─── GITHUB ─────────────────────────
+                if (card.id === 'github') {
+                  return (
+                    <motion.div
+                      key="github"
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{
+                        type: 'spring',
+                        stiffness: 120,
+                        damping: 18,
+                        delay: getCardDelay(visualIdx),
+                      }}
+                      whileHover={{ y: -4, scale: 1.03, transition: { duration: 0.2 } }}
+                    >
+                      <div className={tierClass(card.tier)}>
+                        <div className="absolute right-3 top-3">
+                          {connectedGithub ? (
+                            <StatusIndicator
+                              status={
+                                imports.github.status === 'idle' ? 'success' : imports.github.status
+                              }
+                            />
+                          ) : (
+                            <StatusIndicator status={imports.github.status} />
+                          )}
+                        </div>
+                        <div className="flex h-full flex-col items-center justify-center text-center">
+                          <AnimatePresence mode="wait">
+                            {connectedGithub?.imageUrl ? (
+                              <motion.div
+                                key="avatar"
+                                initial={{ scale: 0.8, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0.8, opacity: 0 }}
+                                className="relative mb-2"
+                              >
+                                <div className="relative h-11 w-11 overflow-hidden rounded-full ring-2 ring-border/50">
+                                  <Image
+                                    src={connectedGithub.imageUrl}
+                                    alt={githubUsernameFromAccount || 'GitHub'}
+                                    fill
+                                    className="object-cover"
+                                    unoptimized
+                                  />
+                                </div>
+                                <div className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full border-2 border-background bg-background shadow-sm">
+                                  <Github className="h-2 w-2 text-[#24292e] dark:text-white" />
+                                </div>
+                              </motion.div>
+                            ) : (
+                              <motion.div
+                                key="logo"
+                                initial={{ scale: 0.8, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0.8, opacity: 0 }}
+                                className="mb-2 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700"
+                              >
+                                <Github className="h-5.5 w-5.5 text-[#24292e] dark:text-white" />
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                          <h3 className="text-sm font-semibold">GitHub</h3>
+                          {connectedGithub && githubUsernameFromAccount && (
+                            <p className="text-[10px] text-muted-foreground">
+                              @{githubUsernameFromAccount}
+                            </p>
+                          )}
+                          <div className="mt-2 w-full space-y-0.5">
+                            {connectedGithub ? (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-full gap-1 text-[10px]"
+                                  onClick={() =>
+                                    githubUsernameFromAccount &&
+                                    handleGitHubImport(githubUsernameFromAccount)
+                                  }
+                                  disabled={imports.github.status === 'importing'}
+                                >
+                                  {imports.github.status === 'importing' ? (
+                                    <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                                  ) : (
+                                    <Upload className="h-2.5 w-2.5" />
+                                  )}
+                                  {imports.github.status === 'importing'
+                                    ? 'Importing...'
+                                    : imports.github.status === 'success'
+                                      ? 'Refresh'
+                                      : 'Import'}
+                                </Button>
+                                <button
+                                  type="button"
+                                  className="mx-auto flex items-center gap-0.5 text-[9px] text-muted-foreground/50 transition-colors hover:text-destructive"
+                                  onClick={handleGitHubDisconnect}
+                                  disabled={githubDisconnecting}
+                                >
+                                  {githubDisconnecting ? (
+                                    <Loader2 className="h-2 w-2 animate-spin" />
+                                  ) : (
+                                    <X className="h-2 w-2" />
+                                  )}{' '}
+                                  Disconnect
+                                </button>
+                              </>
+                            ) : (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 w-full gap-1.5 text-[11px] font-medium"
+                                onClick={handleGitHubConnect}
+                                disabled={githubConnecting}
+                              >
+                                {githubConnecting ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <Github className="h-3 w-3" />
+                                )}
+                                {githubConnecting ? 'Connecting...' : 'Connect'}
+                              </Button>
+                            )}
+                          </div>
+                          {(githubError ||
+                            (imports.github.message && imports.github.status === 'error')) && (
+                            <p className="mt-1 text-[10px] text-red-400">
+                              {githubError || imports.github.message}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                }
+
+                // ─── LINKEDIN ─────────────────────────
+                if (card.id === 'linkedin') {
+                  return (
+                    <motion.div
+                      key="linkedin"
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{
+                        type: 'spring',
+                        stiffness: 120,
+                        damping: 18,
+                        delay: getCardDelay(visualIdx),
+                      }}
+                      whileHover={{ y: -4, scale: 1.03, transition: { duration: 0.2 } }}
+                    >
+                      <div className={tierClass(card.tier)}>
+                        <div className="absolute right-3 top-3">
+                          {connectedLinkedin ? (
+                            <StatusIndicator
+                              status={
+                                imports.linkedin.status === 'idle'
+                                  ? 'success'
+                                  : imports.linkedin.status
+                              }
+                            />
+                          ) : (
+                            <StatusIndicator status={imports.linkedin.status} />
+                          )}
+                        </div>
+                        <div className="flex h-full flex-col items-center justify-center text-center">
+                          <AnimatePresence mode="wait">
+                            {connectedLinkedin?.imageUrl ? (
+                              <motion.div
+                                key="avatar"
+                                initial={{ scale: 0.8, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0.8, opacity: 0 }}
+                                className="relative mb-2"
+                              >
+                                <div className="relative h-11 w-11 overflow-hidden rounded-full ring-2 ring-border/50">
+                                  <Image
+                                    src={connectedLinkedin.imageUrl}
+                                    alt={linkedinName || 'LinkedIn'}
+                                    fill
+                                    className="object-cover"
+                                    unoptimized
+                                  />
+                                </div>
+                                <div className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full border-2 border-background bg-background shadow-sm">
+                                  <Linkedin className="h-2 w-2 text-[#0A66C2]" />
+                                </div>
+                              </motion.div>
+                            ) : (
+                              <motion.div
+                                key="logo"
+                                initial={{ scale: 0.8, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0.8, opacity: 0 }}
+                                className="mb-2 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-[#0A66C2]/15 to-[#0A66C2]/25"
+                              >
+                                <Linkedin className="h-5.5 w-5.5 text-[#0A66C2]" />
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                          <h3 className="text-sm font-semibold">LinkedIn</h3>
+                          {connectedLinkedin && linkedinName && (
+                            <p className="text-[10px] text-muted-foreground">{linkedinName}</p>
+                          )}
+                          <div className="mt-2 w-full space-y-0.5">
+                            {connectedLinkedin ? (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-full gap-1 text-[10px]"
+                                  onClick={handleLinkedInImport}
+                                  disabled={imports.linkedin.status === 'importing'}
+                                >
+                                  {imports.linkedin.status === 'importing' ? (
+                                    <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                                  ) : (
+                                    <Upload className="h-2.5 w-2.5" />
+                                  )}
+                                  {imports.linkedin.status === 'importing'
+                                    ? 'Importing...'
+                                    : imports.linkedin.status === 'success'
+                                      ? 'Refresh'
+                                      : 'Import'}
+                                </Button>
+                                <button
+                                  type="button"
+                                  className="mx-auto flex items-center gap-0.5 text-[9px] text-muted-foreground/50 transition-colors hover:text-destructive"
+                                  onClick={handleLinkedInDisconnect}
+                                  disabled={linkedinDisconnecting}
+                                >
+                                  {linkedinDisconnecting ? (
+                                    <Loader2 className="h-2 w-2 animate-spin" />
+                                  ) : (
+                                    <X className="h-2 w-2" />
+                                  )}{' '}
+                                  Disconnect
+                                </button>
+                              </>
+                            ) : (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 w-full gap-1.5 text-[11px] font-medium"
+                                onClick={handleLinkedInConnect}
+                                disabled={linkedinConnecting}
+                              >
+                                {linkedinConnecting ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <Linkedin className="h-3 w-3 text-[#0A66C2]" />
+                                )}
+                                {linkedinConnecting ? 'Connecting...' : 'Connect'}
+                              </Button>
+                            )}
+                          </div>
+                          {(linkedinError ||
+                            (imports.linkedin.message && imports.linkedin.status === 'error')) && (
+                            <p className="mt-1 text-[10px] text-red-400">
+                              {linkedinError || imports.linkedin.message}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                }
+
+                // ─── GOOGLE ─────────────────────────
+                if (card.id === 'google') {
+                  return (
+                    <motion.div
+                      key="google"
+                      initial={{ opacity: 0, y: 16 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{
+                        type: 'spring',
+                        stiffness: 120,
+                        damping: 18,
+                        delay: getCardDelay(visualIdx),
+                      }}
+                      whileHover={{ y: -3, scale: 1.04, transition: { duration: 0.2 } }}
+                    >
+                      <div className={tierClass(card.tier)}>
+                        <div className="absolute right-2.5 top-2.5">
+                          {connectedGoogle ? (
+                            <StatusIndicator
+                              status={
+                                imports.google.status === 'idle' ? 'success' : imports.google.status
+                              }
+                            />
+                          ) : (
+                            <StatusIndicator status={imports.google.status} />
+                          )}
+                        </div>
+                        <div className="flex h-full flex-col items-center justify-center text-center">
+                          <AnimatePresence mode="wait">
+                            {connectedGoogle?.imageUrl ? (
+                              <motion.div
+                                key="avatar"
+                                initial={{ scale: 0.8, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                className="relative mb-1.5"
+                              >
+                                <div className="relative h-9 w-9 overflow-hidden rounded-full ring-2 ring-border/50">
+                                  <Image
+                                    src={connectedGoogle.imageUrl}
+                                    alt={googleName || 'Google'}
+                                    fill
+                                    className="object-cover"
+                                    unoptimized
+                                  />
+                                </div>
+                                <div className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full border border-background bg-background">
+                                  <GoogleIcon className="h-2 w-2" />
+                                </div>
+                              </motion.div>
+                            ) : (
+                              <motion.div
+                                key="logo"
+                                initial={{ scale: 0.8, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                className="mb-1.5 flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-blue-50 to-red-50 dark:from-gray-800 dark:to-gray-700"
+                              >
+                                <GoogleIcon className="h-4.5 w-4.5" />
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                          <span className="text-xs font-semibold">Google</span>
+                          {connectedGoogle && googleName && (
+                            <p className="mt-0.5 max-w-full truncate text-[9px] text-muted-foreground">
+                              {googleName}
+                            </p>
+                          )}
+                          <div className="mt-1.5">
+                            {connectedGoogle ? (
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-5 px-1.5 text-[9px]"
+                                  onClick={handleGoogleImport}
+                                  disabled={imports.google.status === 'importing'}
+                                >
+                                  {imports.google.status === 'importing' ? (
+                                    <Loader2 className="h-2 w-2 animate-spin" />
+                                  ) : imports.google.status === 'success' ? (
+                                    'Refresh'
+                                  ) : (
+                                    'Import'
+                                  )}
+                                </Button>
+                                <button
+                                  type="button"
+                                  className="text-muted-foreground/40 transition-colors hover:text-destructive"
+                                  onClick={handleGoogleDisconnect}
+                                  disabled={googleDisconnecting}
+                                >
+                                  {googleDisconnecting ? (
+                                    <Loader2 className="h-2 w-2 animate-spin" />
+                                  ) : (
+                                    <X className="h-2 w-2" />
+                                  )}
+                                </button>
+                              </div>
+                            ) : (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-6 gap-1 px-2 text-[10px] font-medium"
+                                onClick={handleGoogleConnect}
+                                disabled={googleConnecting}
+                              >
+                                {googleConnecting ? (
+                                  <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                                ) : (
+                                  'Connect'
+                                )}
+                              </Button>
+                            )}
+                          </div>
+                          {(googleError ||
+                            (imports.google.message && imports.google.status === 'error')) && (
+                            <p className="mt-1 text-[9px] text-red-400">
+                              {googleError || imports.google.message}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                }
+
+                // ─── PHOTO (Medium size) ─────────────────────────
+                if (card.id === 'photo') {
+                  return (
+                    <motion.div
+                      key="photo"
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{
+                        type: 'spring',
+                        stiffness: 120,
+                        damping: 18,
+                        delay: getCardDelay(visualIdx),
+                      }}
+                      whileHover={{ y: -4, scale: 1.03, transition: { duration: 0.2 } }}
+                    >
+                      <div className={tierClass(card.tier)}>
+                        <AnimatePresence>
+                          {uploadedPhoto && !isUploadingPhoto && (
+                            <motion.div
+                              initial={{ scale: 0 }}
+                              animate={{ scale: 1 }}
+                              exit={{ scale: 0 }}
+                              className="absolute right-2.5 top-2.5"
+                            >
+                              <div className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/30">
+                                <CheckCircle2 className="h-2.5 w-2.5 text-white" />
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                        <div className="flex h-full flex-col items-center justify-center text-center">
+                          <AnimatePresence mode="wait">
+                            {uploadedPhoto ? (
+                              <motion.div
+                                key="avatar"
+                                initial={{ scale: 0.8, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0.8, opacity: 0 }}
+                                className="group/photo relative mb-1.5"
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => document.getElementById('photo-upload')?.click()}
+                                  disabled={isUploadingPhoto}
+                                  className="relative h-32 w-32 overflow-hidden rounded-full ring-2 ring-border/50 transition-all hover:ring-primary/50 sm:h-36 sm:w-36"
+                                >
+                                  <Image
+                                    src={uploadedPhoto}
+                                    alt="Profile"
+                                    fill
+                                    className="object-cover"
+                                    unoptimized
+                                  />
+                                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover/photo:opacity-100">
+                                    <Camera className="h-4 w-4 text-white" />
+                                  </div>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRemoveUploadedPhoto();
+                                  }}
+                                  className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-destructive-foreground opacity-0 shadow-sm transition-opacity hover:bg-destructive/90 group-hover/photo:opacity-100"
+                                >
+                                  <X className="h-2.5 w-2.5" />
+                                </button>
+                              </motion.div>
+                            ) : (
+                              <motion.div
+                                key="placeholder"
+                                initial={{ scale: 0.8, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0.8, opacity: 0 }}
+                                className="mb-1.5"
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => document.getElementById('photo-upload')?.click()}
+                                  disabled={isUploadingPhoto}
+                                  className="flex h-32 w-32 items-center justify-center rounded-full bg-muted/40 transition-all hover:bg-primary/10 sm:h-36 sm:w-36"
+                                >
+                                  {isUploadingPhoto ? (
+                                    <Loader2 className="h-10 w-10 animate-spin text-muted-foreground" />
+                                  ) : (
+                                    <User className="h-16 w-16 text-muted-foreground/50" />
+                                  )}
+                                </button>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                          <span className="text-xs font-semibold">Profile Photo</span>
+                          {!uploadedPhoto && (
+                            <p className="mt-0.5 text-[9px] text-muted-foreground/70">Upload</p>
+                          )}
+                        </div>
+                        <input
+                          id="photo-upload"
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handlePhotoUpload}
+                        />
+                      </div>
+                    </motion.div>
+                  );
+                }
+
+                // ─── MEDIUM ─────────────────────────
+                if (card.id === 'medium') {
+                  return (
+                    <motion.div
+                      key="medium"
+                      initial={{ opacity: 0, y: 14 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{
+                        type: 'spring',
+                        stiffness: 120,
+                        damping: 18,
+                        delay: getCardDelay(visualIdx),
+                      }}
+                      whileHover={{ y: -3, scale: 1.05, transition: { duration: 0.2 } }}
+                    >
+                      <div
+                        className={tierClass(card.tier)}
+                        ref={expandedCard === 'medium' ? expandedCardRef : null}
+                      >
+                        <div className="absolute right-2 top-2">
+                          <StatusIndicator status={imports.medium.status} />
+                        </div>
+                        <AnimatePresence mode="wait">
+                          {expandedCard === 'medium' ? (
+                            <motion.div
+                              key="expanded"
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              exit={{ opacity: 0 }}
+                              className="flex h-full flex-col justify-center"
+                            >
+                              <div className="mb-1.5 flex items-center gap-1">
+                                <MediumIcon className="h-3.5 w-3.5" />
+                                <span className="text-[10px] font-semibold">Medium</span>
+                                <button
+                                  onClick={() => setExpandedCard(null)}
+                                  className="ml-auto text-muted-foreground hover:text-foreground"
+                                >
+                                  <X className="h-2.5 w-2.5" />
+                                </button>
+                              </div>
+                              <Input
+                                placeholder="@username"
+                                value={mediumUsername}
+                                onChange={(e) => setMediumUsername(e.target.value)}
+                                className="mb-1 h-6 text-[10px]"
+                                onKeyDown={(e) => e.key === 'Enter' && handleMediumImport()}
+                              />
+                              <Button
+                                size="sm"
+                                className="h-5 w-full text-[9px]"
+                                onClick={handleMediumImport}
+                                disabled={imports.medium.status === 'importing'}
+                              >
+                                {imports.medium.status === 'importing' ? (
+                                  <Loader2 className="h-2 w-2 animate-spin" />
+                                ) : (
+                                  'Import'
+                                )}
+                              </Button>
+                              {imports.medium.status === 'error' && (
+                                <p className="mt-0.5 text-[9px] text-red-400">
+                                  {imports.medium.message}
+                                </p>
+                              )}
+                            </motion.div>
+                          ) : (
+                            <motion.div
+                              key="collapsed"
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              exit={{ opacity: 0 }}
+                              className="flex h-full items-center justify-center"
+                            >
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  imports.medium.status !== 'success'
+                                    ? setExpandedCard('medium')
+                                    : null
+                                }
+                                className="flex flex-col items-center gap-1.5"
+                              >
+                                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-foreground/[0.08] ring-1 ring-foreground/[0.08]">
+                                  <MediumIcon className="h-5 w-5" />
+                                </div>
+                                <span className="text-[11px] font-semibold">Medium</span>
+                                {imports.medium.status === 'success' && (
+                                  <p className="text-[9px] text-muted-foreground">
+                                    {imports.medium.message}
+                                  </p>
+                                )}
+                                {imports.medium.status === 'idle' && (
+                                  <p className="text-[9px] text-primary/70">Add username</p>
+                                )}
+                              </button>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    </motion.div>
+                  );
+                }
+
+                // ─── YOUTUBE ─────────────────────────
+                if (card.id === 'youtube') {
+                  return (
+                    <motion.div
+                      key="youtube"
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{
+                        type: 'spring',
+                        stiffness: 120,
+                        damping: 18,
+                        delay: getCardDelay(visualIdx),
+                      }}
+                      whileHover={{ y: -2, scale: 1.06, transition: { duration: 0.2 } }}
+                    >
+                      <div
+                        className={tierClass(card.tier)}
+                        ref={expandedCard === 'youtube' ? expandedCardRef : null}
+                      >
+                        <div className="absolute right-2 top-2">
+                          <StatusIndicator status={imports.youtube.status} />
+                        </div>
+                        <AnimatePresence mode="wait">
+                          {expandedCard === 'youtube' ? (
+                            <motion.div
+                              key="expanded"
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              exit={{ opacity: 0 }}
+                              className="flex h-full flex-col justify-center"
+                            >
+                              <div className="mb-1.5 flex items-center gap-1">
+                                <YouTubeIcon className="h-3.5 w-3.5" />
+                                <span className="text-[10px] font-semibold">YouTube</span>
+                                <button
+                                  onClick={() => setExpandedCard(null)}
+                                  className="ml-auto text-muted-foreground hover:text-foreground"
+                                >
+                                  <X className="h-2.5 w-2.5" />
+                                </button>
+                              </div>
+                              <Input
+                                placeholder="@channel"
+                                value={youtubeChannel}
+                                onChange={(e) => setYoutubeChannel(e.target.value)}
+                                className="mb-1 h-6 text-[10px]"
+                                onKeyDown={(e) => e.key === 'Enter' && handleYouTubeImport()}
+                              />
+                              <Button
+                                size="sm"
+                                className="h-5 w-full text-[9px]"
+                                onClick={handleYouTubeImport}
+                                disabled={imports.youtube.status === 'importing'}
+                              >
+                                {imports.youtube.status === 'importing' ? (
+                                  <Loader2 className="h-2 w-2 animate-spin" />
+                                ) : (
+                                  'Import'
+                                )}
+                              </Button>
+                              {imports.youtube.status === 'error' && (
+                                <p className="mt-0.5 text-[9px] text-red-400">
+                                  {imports.youtube.message}
+                                </p>
+                              )}
+                            </motion.div>
+                          ) : (
+                            <motion.div
+                              key="collapsed"
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              exit={{ opacity: 0 }}
+                              className="flex h-full items-center justify-center"
+                            >
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  imports.youtube.status !== 'success'
+                                    ? setExpandedCard('youtube')
+                                    : null
+                                }
+                                className="flex flex-col items-center gap-1.5"
+                              >
+                                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-500/15 ring-1 ring-red-500/20">
+                                  <YouTubeIcon className="h-5 w-5" />
+                                </div>
+                                <span className="text-[11px] font-semibold">YouTube</span>
+                                {imports.youtube.status === 'success' && (
+                                  <p className="text-[9px] text-muted-foreground">
+                                    {imports.youtube.message}
+                                  </p>
+                                )}
+                                {imports.youtube.status === 'idle' && (
+                                  <p className="text-[9px] text-primary/70">Add channel</p>
+                                )}
+                              </button>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    </motion.div>
+                  );
+                }
+
+                // ─── SUBSTACK ─────────────────────────
+                if (card.id === 'substack') {
+                  return (
+                    <motion.div
+                      key="substack"
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{
+                        type: 'spring',
+                        stiffness: 120,
+                        damping: 18,
+                        delay: getCardDelay(visualIdx),
+                      }}
+                      whileHover={{ y: -2, scale: 1.06, transition: { duration: 0.2 } }}
+                    >
+                      <div
+                        className={tierClass(card.tier)}
+                        ref={expandedCard === 'substack' ? expandedCardRef : null}
+                      >
+                        <div className="absolute right-2 top-2">
+                          <StatusIndicator status={imports.substack.status} />
+                        </div>
+                        <AnimatePresence mode="wait">
+                          {expandedCard === 'substack' ? (
+                            <motion.div
+                              key="expanded"
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              exit={{ opacity: 0 }}
+                              className="flex h-full flex-col justify-center"
+                            >
+                              <div className="mb-1.5 flex items-center gap-1">
+                                <SubstackIcon className="h-3.5 w-3.5" />
+                                <span className="text-[10px] font-semibold">Substack</span>
+                                <button
+                                  onClick={() => setExpandedCard(null)}
+                                  className="ml-auto text-muted-foreground hover:text-foreground"
+                                >
+                                  <X className="h-2.5 w-2.5" />
+                                </button>
+                              </div>
+                              <Input
+                                placeholder="your-blog"
+                                value={substackUsername}
+                                onChange={(e) => setSubstackUsername(e.target.value)}
+                                className="mb-1 h-6 text-[10px]"
+                                onKeyDown={(e) => e.key === 'Enter' && handleSubstackImport()}
+                              />
+                              <Button
+                                size="sm"
+                                className="h-5 w-full text-[9px]"
+                                onClick={handleSubstackImport}
+                                disabled={imports.substack.status === 'importing'}
+                              >
+                                {imports.substack.status === 'importing' ? (
+                                  <Loader2 className="h-2 w-2 animate-spin" />
+                                ) : (
+                                  'Import'
+                                )}
+                              </Button>
+                              {imports.substack.status === 'error' && (
+                                <p className="mt-0.5 text-[9px] text-red-400">
+                                  {imports.substack.message}
+                                </p>
+                              )}
+                            </motion.div>
+                          ) : (
+                            <motion.div
+                              key="collapsed"
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              exit={{ opacity: 0 }}
+                              className="flex h-full items-center justify-center"
+                            >
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  imports.substack.status !== 'success'
+                                    ? setExpandedCard('substack')
+                                    : null
+                                }
+                                className="flex flex-col items-center gap-1.5"
+                              >
+                                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#FF6719]/15 ring-1 ring-[#FF6719]/20">
+                                  <SubstackIcon className="h-5 w-5" />
+                                </div>
+                                <span className="text-[11px] font-semibold">Substack</span>
+                                {imports.substack.status === 'success' && (
+                                  <p className="text-[9px] text-muted-foreground">
+                                    {imports.substack.message}
+                                  </p>
+                                )}
+                                {imports.substack.status === 'idle' && (
+                                  <p className="text-[9px] text-primary/70">Add blog</p>
+                                )}
+                              </button>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    </motion.div>
+                  );
+                }
+
+                // ─── LINKS ─────────────────────────
+                if (card.id === 'links') {
+                  return (
+                    <motion.div
+                      key="links"
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{
+                        type: 'spring',
+                        stiffness: 120,
+                        damping: 18,
+                        delay: getCardDelay(visualIdx),
+                      }}
+                      whileHover={{ y: -2, scale: 1.06, transition: { duration: 0.2 } }}
+                    >
+                      <div
+                        className={tierClass(card.tier)}
+                        ref={expandedCard === 'links' ? expandedCardRef : null}
+                      >
+                        <div className="absolute right-2 top-2">
+                          <StatusIndicator status={imports.links.status} />
+                        </div>
+                        <AnimatePresence mode="wait">
+                          {expandedCard === 'links' ? (
+                            <motion.div
+                              key="expanded"
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              exit={{ opacity: 0 }}
+                              className="flex h-full flex-col justify-center"
+                            >
+                              <div className="mb-1 flex items-center gap-1">
+                                <Link2 className="h-3.5 w-3.5 text-blue-400" />
+                                <span className="text-[10px] font-semibold">Links</span>
+                                <button
+                                  onClick={() => setExpandedCard(null)}
+                                  className="ml-auto text-muted-foreground hover:text-foreground"
+                                >
+                                  <X className="h-2.5 w-2.5" />
+                                </button>
+                              </div>
+                              <div className="flex gap-1">
+                                <Input
+                                  placeholder="https://..."
+                                  value={linkInput}
+                                  onChange={(e) => setLinkInput(e.target.value)}
+                                  className="h-6 flex-1 text-[10px]"
+                                  onKeyDown={(e) => e.key === 'Enter' && handleAddLink()}
+                                />
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-6 px-1.5 text-[9px]"
+                                  onClick={handleAddLink}
+                                >
+                                  +
+                                </Button>
+                              </div>
+                              {linkUrls.length > 0 && (
+                                <div className="mt-1 max-h-[40px] space-y-0.5 overflow-y-auto">
+                                  {linkUrls.map((url) => (
+                                    <div
+                                      key={url}
+                                      className="flex items-center gap-1 text-[8px] text-muted-foreground"
+                                    >
+                                      <span className="flex-1 truncate">{url}</span>
+                                      <button
+                                        onClick={() => handleRemoveLink(url)}
+                                        className="shrink-0 text-red-400 hover:text-red-300"
+                                      >
+                                        <X className="h-2 w-2" />
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              <Button
+                                size="sm"
+                                className="mt-1 h-5 w-full text-[9px]"
+                                onClick={handleLinksImport}
+                                disabled={
+                                  imports.links.status === 'importing' || linkUrls.length === 0
+                                }
+                              >
+                                {imports.links.status === 'importing' ? (
+                                  <Loader2 className="h-2 w-2 animate-spin" />
+                                ) : (
+                                  `Import ${linkUrls.length} link${linkUrls.length !== 1 ? 's' : ''}`
+                                )}
+                              </Button>
+                              {imports.links.status === 'error' && (
+                                <p className="mt-0.5 text-[9px] text-red-400">
+                                  {imports.links.message}
+                                </p>
+                              )}
+                            </motion.div>
+                          ) : (
+                            <motion.div
+                              key="collapsed"
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              exit={{ opacity: 0 }}
+                              className="flex h-full items-center justify-center"
+                            >
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  imports.links.status !== 'success'
+                                    ? setExpandedCard('links')
+                                    : null
+                                }
+                                className="flex flex-col items-center gap-1.5"
+                              >
+                                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-500/15 ring-1 ring-blue-500/20">
+                                  <Link2 className="h-5 w-5 text-blue-400" />
+                                </div>
+                                <span className="text-[11px] font-semibold">Links</span>
+                                {imports.links.status === 'success' && (
+                                  <p className="text-[9px] text-muted-foreground">
+                                    {imports.links.message}
+                                  </p>
+                                )}
+                                {imports.links.status === 'idle' && (
+                                  <p className="text-[9px] text-primary/70">Add URLs</p>
+                                )}
+                              </button>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    </motion.div>
+                  );
+                }
+
+                // ─── GALLERY ─────────────────────────
+                if (card.id === 'gallery') {
+                  return (
+                    <motion.div
+                      key="gallery"
+                      initial={{ opacity: 0, y: 16 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{
+                        type: 'spring',
+                        stiffness: 120,
+                        damping: 18,
+                        delay: getCardDelay(visualIdx),
+                      }}
+                      whileHover={{ y: -3, scale: 1.04, transition: { duration: 0.2 } }}
+                    >
+                      <div className={tierClass(card.tier)}>
+                        <AnimatePresence>
+                          {galleryPhotos.length > 0 && !isUploadingGallery && (
+                            <motion.div
+                              initial={{ scale: 0 }}
+                              animate={{ scale: 1 }}
+                              exit={{ scale: 0 }}
+                              className="absolute right-2 top-2"
+                            >
+                              <div className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/30">
+                                <CheckCircle2 className="h-2 w-2 text-white" />
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                        <div className="flex h-full flex-col items-center justify-center text-center">
+                          <AnimatePresence mode="wait">
+                            {galleryPhotos.length > 0 ? (
+                              <motion.div
+                                key="preview"
+                                initial={{ scale: 0.8, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                className="mb-1.5 flex -space-x-1"
+                              >
+                                {galleryPhotos.slice(0, 3).map((photo, i) => (
+                                  <div
+                                    key={i}
+                                    className="relative h-7 w-7 overflow-hidden rounded-md border-2 border-background shadow-sm"
+                                    style={{ zIndex: 3 - i }}
+                                  >
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                      src={photo}
+                                      alt={`Gallery ${i + 1}`}
+                                      className="h-full w-full object-cover"
+                                    />
+                                  </div>
+                                ))}
+                                {galleryPhotos.length > 3 && (
+                                  <div className="flex h-7 w-7 items-center justify-center rounded-md border-2 border-background bg-muted text-[8px] font-medium text-muted-foreground shadow-sm">
+                                    +{galleryPhotos.length - 3}
+                                  </div>
+                                )}
+                              </motion.div>
+                            ) : (
+                              <motion.div
+                                key="placeholder"
+                                initial={{ scale: 0.8, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                className="mb-1.5"
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => document.getElementById('gallery-upload')?.click()}
+                                  disabled={isUploadingGallery}
+                                  className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-purple-500/15 to-pink-500/15 ring-1 ring-purple-500/25 transition-all hover:ring-primary/40"
+                                >
+                                  {isUploadingGallery ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                                  ) : (
+                                    <Images className="h-4 w-4 text-purple-500" />
+                                  )}
+                                </button>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                          <span className="text-[11px] font-semibold">Gallery</span>
+                          {galleryPhotos.length > 0 ? (
+                            <p className="text-[9px] text-muted-foreground">
+                              {galleryPhotos.length} photo{galleryPhotos.length !== 1 ? 's' : ''}
+                            </p>
+                          ) : (
+                            <p className="mt-0.5 text-[9px] text-primary/70">Add photos</p>
+                          )}
+                          <div className="mt-1 flex gap-0.5">
+                            <Button
+                              variant={galleryPhotos.length > 0 ? 'ghost' : 'outline'}
+                              size="sm"
+                              className="h-4.5 gap-0.5 px-1.5 text-[8px]"
+                              onClick={() => document.getElementById('gallery-upload')?.click()}
+                              disabled={isUploadingGallery}
+                            >
+                              {isUploadingGallery ? (
+                                <Loader2 className="h-2 w-2 animate-spin" />
+                              ) : (
+                                <Plus className="h-2 w-2" />
+                              )}
+                              {galleryPhotos.length > 0 ? 'More' : 'Add'}
+                            </Button>
+                            {galleryPhotos.length > 0 && (
+                              <button
+                                type="button"
+                                className="text-[8px] text-muted-foreground/40 transition-colors hover:text-destructive"
+                                onClick={() => setGalleryPhotos([])}
+                              >
+                                Clear
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        <input
+                          id="gallery-upload"
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          className="hidden"
+                          onChange={handleGalleryUpload}
+                        />
+                      </div>
+                    </motion.div>
+                  );
+                }
+
+                return null;
+              })}
+            </div>
+          );
+        })()}
+
+        {/* Summary */}
+        <AnimatePresence>
+          {hasAnyImport && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="mt-8 rounded-2xl border border-primary/10 bg-primary/[0.03] p-4 text-center backdrop-blur-sm"
+            >
+              <div className="flex items-center justify-center gap-2">
+                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
+                </div>
+                <p className="text-sm">
+                  <span className="font-bold">{getTotalImported()}</span>{' '}
+                  <span className="text-muted-foreground">items ready</span>
+                </p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Error */}
+        {error && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="mt-4 rounded-lg bg-destructive/10 p-3 text-sm text-destructive"
+          >
+            {error}
+          </motion.div>
+        )}
+
+        {/* Actions */}
+        <motion.div
+          className="mt-10 flex flex-col items-center gap-3"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.6 }}
+        >
+          <Button
+            onClick={handleContinue}
+            disabled={isCreatingProfile || isWaitingForParsing}
+            className="gap-2 px-8"
+            size="lg"
+          >
+            {isCreatingProfile ? (
+              <>
+                <Spinner size="sm" />
+                Creating profile...
+              </>
+            ) : isWaitingForParsing ? (
+              <>
+                <Spinner size="sm" />
+                Parsing resume...
+              </>
+            ) : (
+              <>
+                Continue
+                <ArrowRight className="h-4 w-4" />
+              </>
+            )}
+          </Button>
+
+          <button
+            type="button"
+            onClick={handleContinue}
+            disabled={isCreatingProfile}
+            className="text-xs text-muted-foreground/50 transition-colors hover:text-foreground"
+          >
+            Skip for now
+          </button>
+        </motion.div>
+
+        {/* Step indicator */}
+        <div className="mt-6 flex justify-center gap-1.5">
+          <div className="h-1 w-6 rounded-full bg-primary" />
+          <div className="h-1 w-6 rounded-full bg-primary" />
+        </div>
+      </div>
+    </>
+  );
+}

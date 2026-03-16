@@ -1,0 +1,51 @@
+John Smith
+Software Engineer | Full Stack Developer
+john.smith@email.com | (555) 123-4567 | San Francisco, CA
+linkedin.com/in/johnsmith | github.com/johnsmith
+
+SUMMARY
+Experienced software engineer with 5+ years of expertise in building scalable web applications. Passionate about clean code, user experience, and modern development practices.
+
+EXPERIENCE
+
+Senior Software Engineer
+Tech Company Inc.
+January 2022 - Present
+• Led development of microservices architecture serving 1M+ users
+• Reduced API response time by 40% through optimization
+• Mentored team of 3 junior developers
+
+Software Engineer
+StartupXYZ
+June 2019 - December 2021
+• Built React-based dashboard used by 500+ enterprise clients
+• Implemented CI/CD pipeline reducing deployment time by 60%
+• Collaborated with product team on feature prioritization
+
+Junior Developer
+WebAgency LLC
+March 2018 - May 2019
+• Developed responsive websites for 20+ clients
+• Maintained WordPress sites and custom plugins
+
+EDUCATION
+
+Master of Science in Computer Science
+Stanford University
+2016 - 2018
+GPA: 3.8
+
+Bachelor of Science in Computer Science
+UC Berkeley
+2012 - 2016
+
+SKILLS
+JavaScript, TypeScript, React, Node.js, Python, PostgreSQL, MongoDB, AWS, Docker, Kubernetes, Git, GraphQL, REST APIs, Agile/Scrum
+
+CERTIFICATIONS
+AWS Solutions Architect Associate - Amazon Web Services - 2023
+Google Cloud Professional - Google - 2022
+
+PROJECTS
+Personal Portfolio - Built with Next.js and Tailwind CSS
+Open Source CLI Tool - 500+ GitHub stars

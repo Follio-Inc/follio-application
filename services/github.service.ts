@@ -1,46 +1,19 @@
 /**
  * GitHub Integration Service
- * 
+ *
  * Fetches user data, repositories, and contribution data from GitHub.
  * Normalizes data for profile merging.
  */
 
+import { logger } from '@/lib/logger';
+import type { GitHubRepo, GitHubUser } from '@/types';
+
+const githubLogger = logger.child({ source: 'github-service' });
+
 const GITHUB_API_BASE = 'https://api.github.com';
 
-export interface GitHubUser {
-  login: string;
-  name: string | null;
-  email: string | null;
-  bio: string | null;
-  location: string | null;
-  company: string | null;
-  blog: string | null;
-  avatar_url: string;
-  html_url: string;
-  public_repos: number;
-  followers: number;
-  following: number;
-  created_at: string;
-}
-
-export interface GitHubRepo {
-  id: number;
-  name: string;
-  full_name: string;
-  description: string | null;
-  html_url: string;
-  homepage: string | null;
-  language: string | null;
-  languages_url: string;
-  stargazers_count: number;
-  forks_count: number;
-  topics: string[];
-  created_at: string;
-  updated_at: string;
-  pushed_at: string;
-  fork: boolean;
-  archived: boolean;
-}
+// Re-export types for backward compatibility
+export type { GitHubRepo, GitHubUser };
 
 export interface GitHubLanguages {
   [language: string]: number; // bytes of code
@@ -94,10 +67,7 @@ export interface NormalizedGitHubData {
 /**
  * Fetch GitHub user profile
  */
-export async function fetchGitHubUser(
-  username: string,
-  accessToken?: string
-): Promise<GitHubUser> {
+export async function fetchGitHubUser(username: string, accessToken?: string): Promise<GitHubUser> {
   const headers: HeadersInit = {
     Accept: 'application/vnd.github.v3+json',
     'User-Agent': 'Follio-App',
@@ -144,10 +114,7 @@ export async function fetchGitHubRepos(
     direction: 'desc',
   });
 
-  const response = await fetch(
-    `${GITHUB_API_BASE}/users/${username}/repos?${params}`,
-    { headers }
-  );
+  const response = await fetch(`${GITHUB_API_BASE}/users/${username}/repos?${params}`, { headers });
 
   if (!response.ok) {
     throw new Error(`GitHub API error: ${response.status}`);
@@ -159,34 +126,6 @@ export async function fetchGitHubRepos(
   return repos
     .filter((repo) => !repo.fork && !repo.archived)
     .sort((a, b) => b.stargazers_count - a.stargazers_count);
-}
-
-/**
- * Fetch languages for a repository
- */
-export async function fetchRepoLanguages(
-  fullName: string,
-  accessToken?: string
-): Promise<GitHubLanguages> {
-  const headers: HeadersInit = {
-    Accept: 'application/vnd.github.v3+json',
-    'User-Agent': 'Follio-App',
-  };
-
-  if (accessToken) {
-    headers.Authorization = `Bearer ${accessToken}`;
-  }
-
-  const response = await fetch(
-    `${GITHUB_API_BASE}/repos/${fullName}/languages`,
-    { headers }
-  );
-
-  if (!response.ok) {
-    return {};
-  }
-
-  return response.json();
 }
 
 /**

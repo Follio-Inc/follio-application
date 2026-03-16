@@ -1,13 +1,24 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Briefcase, GraduationCap, Award, FileCheck, FolderKanban, Calendar } from 'lucide-react';
+import {
+  Award,
+  Briefcase,
+  Calendar,
+  FileCheck,
+  FolderKanban,
+  GraduationCap,
+  LayoutGrid,
+  Mail,
+  MapPin,
+} from 'lucide-react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 
+import { stripHtmlTags } from '@/lib/html-utils';
 import { formatDate } from '@/lib/utils';
-import type { PublicProfile, WorkExperience, Education, Award as AwardType, Certification, Project } from '@/types';
+import type { CustomSectionContent, CustomSectionItem, PublicProfile } from '@/types';
 
 interface TimelineViewProps {
   profile: PublicProfile;
@@ -15,7 +26,7 @@ interface TimelineViewProps {
 
 type TimelineItem = {
   id: string;
-  type: 'work' | 'education' | 'award' | 'certification' | 'project';
+  type: 'work' | 'education' | 'award' | 'certification' | 'project' | 'custom';
   date: Date | null;
   endDate?: Date | null;
   isCurrent?: boolean;
@@ -40,7 +51,7 @@ function buildTimeline(profile: PublicProfile): TimelineItem[] {
       isCurrent: exp.isCurrent,
       title: exp.role,
       subtitle: `${exp.company}${exp.location ? ` · ${exp.location}` : ''}`,
-      description: exp.description,
+      description: exp.bullets?.map((b) => stripHtmlTags(b)).join(' · ') || undefined,
       tags: exp.tags || [],
       icon: Briefcase,
       color: 'bg-blue-500',
@@ -63,21 +74,23 @@ function buildTimeline(profile: PublicProfile): TimelineItem[] {
   });
 
   // Projects (with dates)
-  profile.projects?.filter((p) => p.startDate).forEach((project) => {
-    items.push({
-      id: `project-${project.id}`,
-      type: 'project',
-      date: project.startDate,
-      endDate: project.endDate,
-      isCurrent: project.isCurrent,
-      title: project.title,
-      subtitle: project.shortDesc || 'Project',
-      description: project.description,
-      tags: project.techStack || [],
-      icon: FolderKanban,
-      color: 'bg-purple-500',
+  profile.projects
+    ?.filter((p) => p.startDate)
+    .forEach((project) => {
+      items.push({
+        id: `project-${project.id}`,
+        type: 'project',
+        date: project.startDate,
+        endDate: project.endDate,
+        isCurrent: project.isCurrent,
+        title: project.title,
+        subtitle: project.shortDesc || 'Project',
+        description: project.description,
+        tags: project.techStack || [],
+        icon: FolderKanban,
+        color: 'bg-purple-500',
+      });
     });
-  });
 
   // Awards
   profile.awards?.forEach((award) => {
@@ -106,6 +119,39 @@ function buildTimeline(profile: PublicProfile): TimelineItem[] {
     });
   });
 
+  // Custom sections with date items
+  profile.sections
+    ?.filter((s) => s.type === 'CUSTOM' && s.isVisible)
+    .forEach((section) => {
+      const content = section.customContent as CustomSectionContent | null;
+      const sectionItems = content?.items || [];
+
+      sectionItems
+        .filter((item: CustomSectionItem) => item.startDate)
+        .forEach((item: CustomSectionItem) => {
+          // Try to parse the date string (could be "Jan 2023" format)
+          let parsedDate: Date | null = null;
+          if (item.startDate) {
+            const parsed = new Date(item.startDate);
+            parsedDate = isNaN(parsed.getTime()) ? null : parsed;
+          }
+
+          items.push({
+            id: `custom-${section.id}-${item.id}`,
+            type: 'custom',
+            date: parsedDate,
+            endDate: item.endDate ? new Date(item.endDate) : null,
+            isCurrent: item.isCurrent,
+            title: item.title,
+            subtitle: section.title,
+            description: item.description || null,
+            tags: item.tags || [],
+            icon: LayoutGrid,
+            color: 'bg-pink-500',
+          });
+        });
+    });
+
   // Sort by date (most recent first), null dates at the end
   return items.sort((a, b) => {
     if (!a.date && !b.date) return 0;
@@ -133,6 +179,26 @@ export function TimelineView({ profile }: TimelineViewProps) {
         {profile.headline && (
           <p className="mt-1 text-lg text-muted-foreground">{profile.headline}</p>
         )}
+        {/* Contact Info */}
+        {(profile.location || profile.contactInfo?.email) && (
+          <div className="mt-3 flex flex-wrap justify-center gap-4 text-sm text-muted-foreground">
+            {profile.location && (
+              <span className="flex items-center gap-1">
+                <MapPin className="h-4 w-4" />
+                {profile.location}
+              </span>
+            )}
+            {profile.contactInfo?.email && (
+              <a
+                href={`mailto:${profile.contactInfo.email}`}
+                className="flex items-center gap-1 hover:text-primary"
+              >
+                <Mail className="h-4 w-4" />
+                {profile.contactInfo.email}
+              </a>
+            )}
+          </div>
+        )}
         <p className="mt-2 text-sm text-muted-foreground">Career Timeline</p>
       </header>
 
@@ -157,6 +223,10 @@ export function TimelineView({ profile }: TimelineViewProps) {
         <span className="flex items-center gap-2">
           <span className="h-3 w-3 rounded-full bg-orange-500" />
           Certifications
+        </span>
+        <span className="flex items-center gap-2">
+          <span className="h-3 w-3 rounded-full bg-pink-500" />
+          Custom
         </span>
       </div>
 
@@ -197,12 +267,14 @@ export function TimelineView({ profile }: TimelineViewProps) {
                       <h3 className="mt-1 font-semibold">{item.title}</h3>
                       <p className="text-sm text-muted-foreground">{item.subtitle}</p>
                       {item.description && (
-                        <p className="mt-2 text-sm text-muted-foreground line-clamp-3">
+                        <p className="mt-2 line-clamp-3 text-sm text-muted-foreground">
                           {item.description}
                         </p>
                       )}
                       {item.tags && item.tags.length > 0 && (
-                        <div className={`mt-2 flex flex-wrap gap-1 ${isLeft ? 'md:justify-end' : ''}`}>
+                        <div
+                          className={`mt-2 flex flex-wrap gap-1 ${isLeft ? 'md:justify-end' : ''}`}
+                        >
                           {item.tags.slice(0, 4).map((tag) => (
                             <Badge key={tag} variant="outline" className="text-xs">
                               {tag}
@@ -215,7 +287,9 @@ export function TimelineView({ profile }: TimelineViewProps) {
 
                   {/* Icon on the line */}
                   <div className="absolute left-0 flex h-12 w-12 items-center justify-center rounded-full border-4 border-background bg-muted md:left-1/2 md:-translate-x-1/2">
-                    <div className={`flex h-8 w-8 items-center justify-center rounded-full ${item.color}`}>
+                    <div
+                      className={`flex h-8 w-8 items-center justify-center rounded-full ${item.color}`}
+                    >
                       <Icon className="h-4 w-4 text-white" />
                     </div>
                   </div>

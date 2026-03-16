@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
+import { NextRequest, NextResponse } from 'next/server';
 
+import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { ProjectSchema } from '@/lib/validations';
 
@@ -8,10 +9,7 @@ import { ProjectSchema } from '@/lib/validations';
  * PATCH /api/profile/projects/[id]
  * Update a project
  */
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { userId } = await auth();
 
@@ -30,12 +28,9 @@ export async function PATCH(
       );
     }
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: { profile: true },
-    });
+    const { profileId } = await resolveActiveProfileContext(userId);
 
-    if (!user || !user.profile) {
+    if (!profileId) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
@@ -43,7 +38,7 @@ export async function PATCH(
     const existingProject = await db.project.findFirst({
       where: {
         id,
-        profileId: user.profile.id,
+        profileId,
       },
     });
 
@@ -83,12 +78,9 @@ export async function DELETE(
 
     const { id } = await params;
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: { profile: true },
-    });
+    const { profileId } = await resolveActiveProfileContext(userId);
 
-    if (!user || !user.profile) {
+    if (!profileId) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
@@ -96,7 +88,7 @@ export async function DELETE(
     const existingProject = await db.project.findFirst({
       where: {
         id,
-        profileId: user.profile.id,
+        profileId,
       },
     });
 

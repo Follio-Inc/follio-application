@@ -1,61 +1,125 @@
 'use client';
 
-import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { MotionConfig } from 'framer-motion';
+import Link from 'next/link';
 
-import { ViewSwitcher } from './view-switcher';
-import { ResumeView } from './views/resume-view';
+import { ProfileNavbar } from '@/components/profile-navbar';
+import { getTemplateMeta } from '@/lib/portfolio/templates/registry';
+
+import { AIPortfolioView } from './views/ai-portfolio-view';
 import { PortfolioView } from './views/portfolio-view';
-import { TimelineView } from './views/timeline-view';
-import { RecruiterView } from './views/recruiter-view';
+import { TemplatePortfolioView } from './views/template-portfolio-view';
 
-import type { PublicProfile, ProfileView } from '@/types';
+import type { TemplatePortfolio } from '@/lib/portfolio/templates/types';
+import type { PublicProfile } from '@/types';
+import type { PortfolioPlan, PortfolioUserOverrides } from '@/types/portfolio';
 
 interface ProfileViewerProps {
   profile: PublicProfile;
-  initialView: ProfileView;
+  authState: 'owner' | 'authenticated' | 'anonymous';
+  profileHandle: string;
+  resumeVisibility: 'PUBLIC' | 'UNLISTED' | 'PRIVATE';
+  /** When true, hides navbar and footer (used for dashboard thumbnail). */
+  embed?: boolean;
+  /** AI-generated portfolio plan (null if not generated yet). */
+  generatedPlan?: PortfolioPlan | null;
+  /** User overrides for the AI portfolio. */
+  generatedOverrides?: PortfolioUserOverrides | null;
+  /** Template-based portfolio data (null if not using template system). */
+  templatePortfolio?: TemplatePortfolio | null;
+  /** GitHub profile data for template rendering. */
+  githubProfile?: {
+    username: string;
+    avatarUrl: string | null;
+    bio: string | null;
+    publicRepos: number;
+    followers: number;
+    totalStars: number;
+    primaryLanguages: string[];
+  } | null;
 }
 
-export function ProfileViewer({ profile, initialView }: ProfileViewerProps) {
-  const [currentView, setCurrentView] = useState<ProfileView>(initialView);
-
-  const handleViewChange = (view: ProfileView) => {
-    setCurrentView(view);
-    // Update URL without navigation
-    window.history.replaceState(null, '', `?view=${view}`);
+export function ProfileViewer({
+  profile,
+  authState,
+  profileHandle,
+  resumeVisibility,
+  embed = false,
+  generatedPlan = null,
+  generatedOverrides = null,
+  templatePortfolio = null,
+  githubProfile = null,
+}: ProfileViewerProps) {
+  /** Render the portfolio view — uses template, AI-generated, or default. */
+  const renderPortfolioView = () => {
+    // Priority 1: Template-based portfolio
+    if (templatePortfolio) {
+      return (
+        <TemplatePortfolioView
+          profile={profile}
+          templateData={templatePortfolio}
+          githubProfile={githubProfile}
+        />
+      );
+    }
+    // Priority 2: Legacy AI-generated portfolio
+    if (generatedPlan) {
+      return (
+        <AIPortfolioView
+          plan={generatedPlan}
+          overrides={generatedOverrides}
+          isPreview={embed}
+          isOwner={authState === 'owner'}
+        />
+      );
+    }
+    // Fallback: Default portfolio view
+    return (
+      <PortfolioView
+        profile={profile}
+        profileHandle={profileHandle}
+        resumeVisibility={resumeVisibility}
+        authState={authState}
+      />
+    );
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-b from-muted/30 to-background">
-      <ViewSwitcher currentView={currentView} onViewChange={handleViewChange} />
-      
-      <AnimatePresence mode="wait">
-        <motion.main
-          key={currentView}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -20 }}
-          transition={{ duration: 0.3 }}
-          className="container max-w-5xl py-8 pb-24"
-        >
-          {currentView === 'resume' && <ResumeView profile={profile} />}
-          {currentView === 'portfolio' && <PortfolioView profile={profile} />}
-          {currentView === 'timeline' && <TimelineView profile={profile} />}
-          {currentView === 'recruiter' && <RecruiterView profile={profile} />}
-        </motion.main>
-      </AnimatePresence>
+  const hasFullPagePortfolio = !!(templatePortfolio || generatedPlan);
 
-      <footer className="border-t bg-background py-6">
-        <div className="container text-center text-sm text-muted-foreground">
-          <p>
-            Built with{' '}
-            <a href="/" className="font-medium text-primary hover:underline">
-              Follio
-            </a>
-            {' '}— Your professional identity, everywhere.
-          </p>
-        </div>
-      </footer>
-    </div>
+  // Look up the template's navbar theme so the top bar blends with the portfolio
+  const navbarTheme = templatePortfolio
+    ? (getTemplateMeta(templatePortfolio.templateId)?.navbarTheme ?? null)
+    : null;
+
+  return (
+    <MotionConfig reducedMotion={embed ? 'always' : 'never'}>
+      <div className="min-h-screen bg-gradient-to-b from-muted/30 to-background">
+        {!embed && (
+          <ProfileNavbar
+            authState={authState}
+            profileHandle={profileHandle}
+            navbarTheme={navbarTheme}
+          />
+        )}
+
+        <main className={hasFullPagePortfolio ? '' : 'container max-w-5xl py-8 pb-24'}>
+          {renderPortfolioView()}
+        </main>
+
+        {!embed && !hasFullPagePortfolio && (
+          <footer className="border-t bg-background py-6">
+            <div className="container text-center text-sm text-muted-foreground">
+              <p>
+                Built with{' '}
+                <Link href="/" className="font-medium text-primary hover:underline">
+                  Follio
+                </Link>{' '}
+                — Your professional identity, everywhere.
+              </p>
+            </div>
+          </footer>
+        )}
+      </div>
+    </MotionConfig>
   );
 }

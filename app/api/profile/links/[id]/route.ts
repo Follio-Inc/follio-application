@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
+import { NextRequest, NextResponse } from 'next/server';
 
+import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { LinkSchema } from '@/lib/validations';
 
@@ -8,10 +9,7 @@ import { LinkSchema } from '@/lib/validations';
  * PATCH /api/profile/links/[id]
  * Update a link
  */
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { userId } = await auth();
 
@@ -30,12 +28,9 @@ export async function PATCH(
       );
     }
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: { profile: true },
-    });
+    const { profileId } = await resolveActiveProfileContext(userId);
 
-    if (!user || !user.profile) {
+    if (!profileId) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
@@ -43,12 +38,30 @@ export async function PATCH(
     const existingLink = await db.link.findFirst({
       where: {
         id,
-        profileId: user.profile.id,
+        profileId,
       },
     });
 
     if (!existingLink) {
       return NextResponse.json({ error: 'Link not found' }, { status: 404 });
+    }
+
+    // Check for duplicate URL (if URL is being updated)
+    if (validatedData.data.url) {
+      const duplicateLink = await db.link.findFirst({
+        where: {
+          profileId,
+          url: { equals: validatedData.data.url, mode: 'insensitive' },
+          id: { not: id }, // Exclude the current link being updated
+        },
+      });
+
+      if (duplicateLink) {
+        return NextResponse.json(
+          { error: 'This URL already exists in your links' },
+          { status: 400 }
+        );
+      }
     }
 
     const link = await db.link.update({
@@ -83,12 +96,9 @@ export async function DELETE(
 
     const { id } = await params;
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: { profile: true },
-    });
+    const { profileId } = await resolveActiveProfileContext(userId);
 
-    if (!user || !user.profile) {
+    if (!profileId) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
@@ -96,7 +106,7 @@ export async function DELETE(
     const existingLink = await db.link.findFirst({
       where: {
         id,
-        profileId: user.profile.id,
+        profileId,
       },
     });
 

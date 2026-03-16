@@ -1,0 +1,1093 @@
+/*
+ * Developer Dark Template — Complete CSS
+ *
+ * Design language:
+ * - Deep dark navy background (#0b0f19)
+ * - White headings, muted gray body text
+ * - Accent dash above major headings
+ * - Clean sans-serif typography (Inter)
+ * - Arrow suffix on CTAs
+ * - Subtle card backgrounds (slightly lighter dark)
+ * - Generous whitespace
+ *
+ * Scoped to [data-template="developer-dark"] to avoid conflicts.
+ */
+
+/* ============================================================================
+   BASE
+   ============================================================================ */
+
+[data-template='developer-dark'] {
+  --dd-bg: #0b0f19;
+  --dd-bg-card: #111827;
+  --dd-bg-card-hover: #1a2235;
+  --dd-bg-input: #111827;
+  --dd-bg-input-focus: #1a2235;
+  --dd-text-primary: #ffffff;
+  --dd-text-secondary: #94a3b8;
+  --dd-text-muted: #64748b;
+  --dd-accent: #3b82f6;
+  --dd-accent-hover: #60a5fa;
+  --dd-border: #1e293b;
+  --dd-border-hover: #334155;
+  --dd-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  font-family: var(--dd-font-family);
+  background-color: var(--dd-bg);
+  color: var(--dd-text-secondary);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ============================================================================
+   TYPOGRAPHY
+   ============================================================================ */
+
+[data-template='developer-dark'] h1,
+[data-template='developer-dark'] h2,
+[data-template='developer-dark'] h3,
+[data-template='developer-dark'] h4 {
+  color: var(--dd-text-primary);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+/* Hero headline — handled by .dd-hero-headline */
+
+[data-template='developer-dark'] .dd-section-title {
+  font-size: clamp(1.75rem, 3vw, 2.5rem);
+  font-weight: 700;
+  margin-bottom: 1rem;
+}
+
+[data-template='developer-dark'] .dd-section-subtitle {
+  font-size: 1rem;
+  color: var(--dd-text-secondary);
+  max-width: 36rem;
+}
+
+[data-template='developer-dark'] .dd-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dd-text-muted);
+}
+
+[data-template='developer-dark'] .dd-body {
+  font-size: 0.9375rem;
+  line-height: 1.7;
+  color: var(--dd-text-secondary);
+}
+
+/* ============================================================================
+   ACCENT DASH — signature element above headings
+   ============================================================================ */
+
+[data-template='developer-dark'] .dd-accent-dash {
+  display: block;
+  width: 2rem;
+  height: 3px;
+  background-color: var(--dd-accent);
+  margin-bottom: 1.25rem;
+  border-radius: 1px;
+}
+
+/* ============================================================================
+   LAYOUT
+   ============================================================================ */
+
+[data-template='developer-dark'] .dd-page {
+  min-height: 100vh;
+  width: 100%;
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
+}
+
+[data-template='developer-dark'] .dd-section {
+  padding: 5rem 0;
+  width: 100%;
+}
+
+[data-template='developer-dark'] .dd-container {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+@media (min-width: 640px) {
+  [data-template='developer-dark'] .dd-container {
+    padding: 0 2rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  [data-template='developer-dark'] .dd-container {
+    padding: 0 3rem;
+  }
+}
+
+/* ============================================================================
+   NAVIGATION
+   ============================================================================ */
+
+/*
+ * The Follio ProfileNavbar (sticky, h-14 = 3.5rem) sits above the template.
+ * The template nav must sit below it, so we offset by --dd-nav-top.
+ * The hero also gets extra top padding to clear both bars.
+ */
+[data-template='developer-dark'] {
+  --dd-nav-top: 3.5rem;
+}
+
+[data-template='developer-dark'] .dd-nav {
+  position: fixed;
+  top: var(--dd-nav-top);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  padding: 1rem 0;
+  background-color: rgba(11, 15, 25, 0.85);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.3s ease;
+}
+
+[data-template='developer-dark'] .dd-nav.dd-nav--scrolled {
+  border-bottom-color: var(--dd-border);
+}
+
+[data-template='developer-dark'] .dd-nav-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+@media (min-width: 1024px) {
+  [data-template='developer-dark'] .dd-nav-inner {
+    padding: 0 3rem;
+  }
+}
+
+[data-template='developer-dark'] .dd-nav-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--dd-text-primary);
+  text-decoration: none;
+}
+
+[data-template='developer-dark'] .dd-nav-logo-icon {
+  color: var(--dd-accent);
+  font-weight: 800;
+}
+
+[data-template='developer-dark'] .dd-nav-links {
+  display: none;
+  align-items: center;
+  gap: 2rem;
+}
+
+@media (min-width: 768px) {
+  [data-template='developer-dark'] .dd-nav-links {
+    display: flex;
+  }
+}
+
+[data-template='developer-dark'] .dd-nav-link {
+  font-size: 0.875rem;
+  color: var(--dd-text-muted);
+  text-decoration: none;
+  transition: color 0.2s ease;
+  cursor: pointer;
+}
+
+[data-template='developer-dark'] .dd-nav-link:hover,
+[data-template='developer-dark'] .dd-nav-link.active {
+  color: var(--dd-text-primary);
+}
+
+[data-template='developer-dark'] .dd-nav-menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  background: none;
+  border: none;
+  color: var(--dd-text-secondary);
+  cursor: pointer;
+}
+
+@media (min-width: 768px) {
+  [data-template='developer-dark'] .dd-nav-menu-btn {
+    display: none;
+  }
+}
+
+/* Mobile nav overlay */
+[data-template='developer-dark'] .dd-nav-mobile {
+  position: fixed;
+  top: var(--dd-nav-top);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 39;
+  background-color: rgba(11, 15, 25, 0.98);
+  backdrop-filter: blur(12px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+}
+
+[data-template='developer-dark'] .dd-nav-mobile-link {
+  font-size: 1.25rem;
+  color: var(--dd-text-secondary);
+  text-decoration: none;
+  transition: color 0.2s ease;
+  cursor: pointer;
+}
+
+[data-template='developer-dark'] .dd-nav-mobile-link:hover {
+  color: var(--dd-text-primary);
+}
+
+/* ============================================================================
+   HERO SECTION — Centered, clean, no photo
+   ============================================================================ */
+
+[data-template='developer-dark'] .dd-hero {
+  padding-top: 10.5rem;
+  padding-bottom: 4rem;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+}
+
+[data-template='developer-dark'] .dd-hero-centered {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1.25rem;
+  max-width: 42rem;
+}
+
+[data-template='developer-dark'] .dd-hero-greeting {
+  font-size: 1.125rem;
+  font-weight: 500;
+  color: var(--dd-accent);
+  letter-spacing: -0.01em;
+}
+
+[data-template='developer-dark'] .dd-hero-headline {
+  font-size: clamp(2.5rem, 5vw, 4rem);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  color: var(--dd-text-primary);
+}
+
+[data-template='developer-dark'] .dd-hero-subtext {
+  font-size: 1.0625rem;
+  line-height: 1.7;
+  color: var(--dd-text-secondary);
+  max-width: 32rem;
+}
+
+[data-template='developer-dark'] .dd-hero-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Link styling for cards */
+
+[data-template='developer-dark'] .dd-scroll-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  background-color: var(--dd-accent);
+  color: white;
+  border: none;
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    transform 0.2s ease;
+  margin-top: 1rem;
+}
+
+[data-template='developer-dark'] .dd-scroll-cta:hover {
+  background-color: var(--dd-accent-hover);
+  transform: translateY(2px);
+}
+
+/* ============================================================================
+   SOCIAL ICONS
+   ============================================================================ */
+
+[data-template='developer-dark'] .dd-social-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+[data-template='developer-dark'] .dd-social-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  color: var(--dd-text-muted);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+[data-template='developer-dark'] .dd-social-icon:hover {
+  color: var(--dd-text-primary);
+}
+
+[data-template='developer-dark'] .dd-social-icon svg {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+/* ============================================================================
+   ABOUT SECTION — Photo on one side, content on other
+   ============================================================================ */
+
+[data-template='developer-dark'] .dd-about-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 3rem;
+  align-items: start;
+}
+
+@media (min-width: 1024px) {
+  [data-template='developer-dark'] .dd-about-layout {
+    grid-template-columns: 1.2fr 0.8fr;
+    gap: 4rem;
+  }
+}
+
+[data-template='developer-dark'] .dd-about-content {
+  display: flex;
+  flex-direction: column;
+}
+
+[data-template='developer-dark'] .dd-about-photo {
+  position: relative;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  aspect-ratio: 4/5;
+}
+
+[data-template='developer-dark'] .dd-about-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+[data-template='developer-dark'] .dd-about-text {
+  font-size: 0.9375rem;
+  line-height: 1.8;
+  color: var(--dd-text-secondary);
+  margin-bottom: 2rem;
+}
+
+/* Pull quote */
+[data-template='developer-dark'] .dd-pull-quote {
+  font-size: 1.0625rem;
+  font-style: italic;
+  line-height: 1.7;
+  color: var(--dd-text-primary);
+  border-left: 3px solid var(--dd-accent);
+  padding-left: 1.25rem;
+  margin: 0 0 2rem 0;
+  opacity: 0.9;
+}
+
+/* Highlight facts / badges */
+[data-template='developer-dark'] .dd-highlight-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+}
+
+[data-template='developer-dark'] .dd-highlight-fact {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.375rem 0.75rem;
+  border-radius: 9999px;
+  background-color: rgba(59, 130, 246, 0.1);
+  color: var(--dd-accent);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+/* Stats row */
+[data-template='developer-dark'] .dd-stats-row {
+  display: flex;
+  gap: 3rem;
+  flex-wrap: wrap;
+  margin-top: 2rem;
+}
+
+[data-template='developer-dark'] .dd-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+}
+
+[data-template='developer-dark'] .dd-stat-value {
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: var(--dd-accent);
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+[data-template='developer-dark'] .dd-stat-suffix {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--dd-accent);
+}
+
+[data-template='developer-dark'] .dd-stat-label {
+  font-size: 0.8125rem;
+  color: var(--dd-text-muted);
+  margin-top: 0.25rem;
+}
+
+/* ============================================================================
+   EXPERIENCE SECTION — Clean timeline, no bullet points
+   ============================================================================ */
+
+[data-template='developer-dark'] .dd-section-intro {
+  font-size: 0.9375rem;
+  line-height: 1.8;
+  color: var(--dd-text-secondary);
+  max-width: 40rem;
+  margin-bottom: 2.5rem;
+}
+
+[data-template='developer-dark'] .dd-timeline {
+  position: relative;
+  padding-left: 2rem;
+}
+
+[data-template='developer-dark'] .dd-timeline::before {
+  content: '';
+  position: absolute;
+  left: 0.3125rem;
+  top: 0.5rem;
+  bottom: 0.5rem;
+  width: 1px;
+  background-color: var(--dd-border);
+}
+
+[data-template='developer-dark'] .dd-timeline-item {
+  position: relative;
+  padding-bottom: 2.5rem;
+}
+
+[data-template='developer-dark'] .dd-timeline-item:last-child {
+  padding-bottom: 0;
+}
+
+[data-template='developer-dark'] .dd-timeline-marker {
+  position: absolute;
+  left: -1.6875rem;
+  top: 0.375rem;
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+  background-color: var(--dd-accent);
+  border: 2px solid var(--dd-bg);
+  z-index: 1;
+}
+
+[data-template='developer-dark'] .dd-timeline-content {
+  padding-top: 0;
+}
+
+[data-template='developer-dark'] .dd-timeline-date {
+  font-size: 0.8125rem;
+  color: var(--dd-text-muted);
+  margin-bottom: 0.375rem;
+}
+
+[data-template='developer-dark'] .dd-timeline-role {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--dd-text-primary);
+  margin-bottom: 0.25rem;
+}
+
+[data-template='developer-dark'] .dd-timeline-company {
+  font-size: 0.9375rem;
+  color: var(--dd-accent);
+}
+
+[data-template='developer-dark'] .dd-timeline-location {
+  color: var(--dd-text-muted);
+}
+
+[data-template='developer-dark'] .dd-timeline-desc {
+  font-size: 0.875rem;
+  color: var(--dd-text-secondary);
+  line-height: 1.6;
+  margin-top: 0.5rem;
+  max-width: 36rem;
+}
+
+/* ============================================================================
+   PROJECTS SECTION
+   ============================================================================ */
+
+[data-template='developer-dark'] .dd-projects-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+}
+
+@media (min-width: 768px) {
+  [data-template='developer-dark'] .dd-projects-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+[data-template='developer-dark'] .dd-project-card {
+  background-color: var(--dd-bg-card);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  transition:
+    background-color 0.2s ease,
+    transform 0.2s ease;
+  border: 1px solid transparent;
+  text-decoration: none;
+  color: inherit;
+}
+
+[data-template='developer-dark'] .dd-project-card:hover {
+  background-color: var(--dd-bg-card-hover);
+  transform: translateY(-2px);
+  border-color: var(--dd-border);
+}
+
+[data-template='developer-dark'] .dd-project-image {
+  width: 100%;
+  aspect-ratio: 16/10;
+  background-color: var(--dd-bg);
+  overflow: hidden;
+}
+
+[data-template='developer-dark'] .dd-project-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+[data-template='developer-dark'] .dd-project-card:hover .dd-project-image img {
+  transform: scale(1.03);
+}
+
+[data-template='developer-dark'] .dd-project-body {
+  padding: 1.25rem;
+}
+
+[data-template='developer-dark'] .dd-project-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+[data-template='developer-dark'] .dd-project-tag {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.25rem 0.625rem;
+  border-radius: 9999px;
+  background-color: rgba(59, 130, 246, 0.15);
+  color: var(--dd-accent);
+}
+
+[data-template='developer-dark'] .dd-project-title {
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: var(--dd-text-primary);
+  margin-bottom: 0.5rem;
+}
+
+[data-template='developer-dark'] .dd-project-desc {
+  font-size: 0.8125rem;
+  color: var(--dd-text-secondary);
+  line-height: 1.6;
+  margin-bottom: 1rem;
+}
+
+[data-template='developer-dark'] .dd-project-image-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--dd-text-muted);
+  opacity: 0.3;
+}
+
+[data-template='developer-dark'] .dd-project-lang-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--dd-accent);
+}
+
+[data-template='developer-dark'] .dd-project-meta {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  font-size: 0.75rem;
+  color: var(--dd-text-muted);
+}
+
+[data-template='developer-dark'] .dd-project-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* ============================================================================
+   SKILLS SECTION
+   ============================================================================ */
+
+[data-template='developer-dark'] .dd-skills-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+}
+
+@media (min-width: 768px) {
+  [data-template='developer-dark'] .dd-skills-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  [data-template='developer-dark'] .dd-skills-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+[data-template='developer-dark'] .dd-skill-group-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dd-text-muted);
+  margin-bottom: 1rem;
+}
+
+[data-template='developer-dark'] .dd-skill-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+[data-template='developer-dark'] .dd-skill-pill {
+  font-size: 0.8125rem;
+  padding: 0.375rem 0.875rem;
+  border-radius: 9999px;
+  background-color: var(--dd-bg-card);
+  color: var(--dd-text-secondary);
+  border: 1px solid var(--dd-border);
+  transition:
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+[data-template='developer-dark'] .dd-skill-pill:hover {
+  border-color: var(--dd-accent);
+  color: var(--dd-text-primary);
+}
+
+/* ============================================================================
+   EDUCATION SECTION
+   ============================================================================ */
+
+[data-template='developer-dark'] .dd-education-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+[data-template='developer-dark'] .dd-education-item {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+  padding: 1.5rem 0;
+  border-bottom: 1px solid var(--dd-border);
+}
+
+@media (min-width: 768px) {
+  [data-template='developer-dark'] .dd-education-item {
+    grid-template-columns: 12rem 1fr;
+    gap: 2rem;
+  }
+}
+
+[data-template='developer-dark'] .dd-education-item:first-child {
+  padding-top: 0;
+}
+
+[data-template='developer-dark'] .dd-education-item:last-child {
+  border-bottom: none;
+}
+
+[data-template='developer-dark'] .dd-education-degree {
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: var(--dd-text-primary);
+  margin-bottom: 0.25rem;
+}
+
+[data-template='developer-dark'] .dd-education-school {
+  font-size: 0.9375rem;
+  color: var(--dd-accent);
+}
+
+[data-template='developer-dark'] .dd-education-field {
+  font-size: 0.875rem;
+  color: var(--dd-text-secondary);
+  margin-top: 0.25rem;
+}
+
+/* ============================================================================
+   CONTACT SECTION — Centered, direct, no fake form
+   ============================================================================ */
+
+[data-template='developer-dark'] .dd-contact-centered {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 36rem;
+  margin: 0 auto;
+  gap: 1.25rem;
+}
+
+[data-template='developer-dark'] .dd-contact-subtext {
+  font-size: 0.9375rem;
+  color: var(--dd-text-secondary);
+  line-height: 1.7;
+  margin-bottom: 0.5rem;
+}
+
+[data-template='developer-dark'] .dd-contact-email-btn {
+  margin-bottom: 1rem;
+  text-decoration: none;
+}
+
+[data-template='developer-dark'] .dd-contact-details {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+[data-template='developer-dark'] .dd-contact-detail {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.9375rem;
+  color: var(--dd-text-secondary);
+  margin-bottom: 0.75rem;
+}
+
+[data-template='developer-dark'] .dd-contact-detail svg {
+  width: 1.125rem;
+  height: 1.125rem;
+  color: var(--dd-accent);
+  flex-shrink: 0;
+}
+
+/* Contact form removed — using direct email button instead */
+
+[data-template='developer-dark'] .dd-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-family: var(--dd-font-family);
+  background-color: var(--dd-accent);
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    transform 0.1s ease;
+}
+
+[data-template='developer-dark'] .dd-btn-primary:hover {
+  background-color: var(--dd-accent-hover);
+}
+
+[data-template='developer-dark'] .dd-btn-primary:active {
+  transform: scale(0.98);
+}
+
+/* ============================================================================
+   FOOTER
+   ============================================================================ */
+
+[data-template='developer-dark'] .dd-footer {
+  padding: 2rem 0;
+  border-top: 1px solid var(--dd-border);
+}
+
+[data-template='developer-dark'] .dd-footer-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+[data-template='developer-dark'] .dd-footer-text {
+  font-size: 0.8125rem;
+  color: var(--dd-text-muted);
+}
+
+[data-template='developer-dark'] .dd-footer-link {
+  font-size: 0.8125rem;
+  color: var(--dd-text-muted);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+[data-template='developer-dark'] .dd-footer-link:hover {
+  color: var(--dd-text-primary);
+}
+
+/* ============================================================================
+   CERTIFICATIONS
+   ============================================================================ */
+
+[data-template='developer-dark'] .dd-cert-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+@media (min-width: 768px) {
+  [data-template='developer-dark'] .dd-cert-list {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+[data-template='developer-dark'] .dd-cert-card {
+  display: flex;
+  align-items: start;
+  gap: 1rem;
+  padding: 1.25rem;
+  background-color: var(--dd-bg-card);
+  border-radius: 0.75rem;
+  border: 1px solid var(--dd-border);
+  transition: border-color 0.2s ease;
+}
+
+[data-template='developer-dark'] .dd-cert-card:hover {
+  border-color: var(--dd-border-hover);
+}
+
+[data-template='developer-dark'] .dd-cert-icon {
+  flex-shrink: 0;
+  width: 2.5rem;
+  height: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  background-color: rgba(59, 130, 246, 0.1);
+  color: var(--dd-accent);
+}
+
+[data-template='developer-dark'] .dd-cert-name {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--dd-text-primary);
+  margin-bottom: 0.25rem;
+}
+
+[data-template='developer-dark'] .dd-cert-issuer {
+  font-size: 0.8125rem;
+  color: var(--dd-text-secondary);
+}
+
+[data-template='developer-dark'] .dd-cert-date {
+  font-size: 0.75rem;
+  color: var(--dd-text-muted);
+  margin-top: 0.25rem;
+}
+
+/* ============================================================================
+   GITHUB SECTION
+   ============================================================================ */
+
+[data-template='developer-dark'] .dd-github-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+@media (min-width: 768px) {
+  [data-template='developer-dark'] .dd-github-stats {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+[data-template='developer-dark'] .dd-github-stat-card {
+  padding: 1.25rem;
+  background-color: var(--dd-bg-card);
+  border-radius: 0.75rem;
+  border: 1px solid var(--dd-border);
+  text-align: center;
+}
+
+[data-template='developer-dark'] .dd-github-stat-value {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: var(--dd-text-primary);
+  letter-spacing: -0.02em;
+}
+
+[data-template='developer-dark'] .dd-github-stat-label {
+  font-size: 0.75rem;
+  color: var(--dd-text-muted);
+  margin-top: 0.25rem;
+}
+
+[data-template='developer-dark'] .dd-github-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--dd-text-primary);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+[data-template='developer-dark'] .dd-github-link:hover {
+  color: var(--dd-accent);
+}
+
+/* ============================================================================
+   ANIMATIONS
+   ============================================================================ */
+
+@keyframes dd-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(1.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+[data-template='developer-dark'] .dd-animate-in {
+  animation: dd-fade-up 0.6s ease-out both;
+}
+
+[data-template='developer-dark'] .dd-animate-delay-1 {
+  animation-delay: 0.1s;
+}
+[data-template='developer-dark'] .dd-animate-delay-2 {
+  animation-delay: 0.2s;
+}
+[data-template='developer-dark'] .dd-animate-delay-3 {
+  animation-delay: 0.3s;
+}
+[data-template='developer-dark'] .dd-animate-delay-4 {
+  animation-delay: 0.4s;
+}
+[data-template='developer-dark'] .dd-animate-delay-5 {
+  animation-delay: 0.5s;
+}
+
+/* ============================================================================
+   RESPONSIVE TWEAKS
+   ============================================================================ */
+
+@media (max-width: 639px) {
+  [data-template='developer-dark'] .dd-section {
+    padding: 3rem 0;
+  }
+
+  [data-template='developer-dark'] .dd-hero {
+    min-height: auto;
+    padding-top: 8.5rem;
+    padding-bottom: 2rem;
+  }
+
+  [data-template='developer-dark'] .dd-stat-value {
+    font-size: 2rem;
+  }
+
+  [data-template='developer-dark'] .dd-stats-row {
+    gap: 2rem;
+  }
+}
+
+/* ============================================================================
+   SCROLL BEHAVIOR
+   ============================================================================ */
+
+[data-template='developer-dark'] {
+  scroll-behavior: smooth;
+}
+
+/* Section divider — optional subtle line between sections */
+[data-template='developer-dark'] .dd-section-divider {
+  width: 100%;
+  height: 1px;
+  background-color: var(--dd-border);
+  max-width: 72rem;
+  margin: 0 auto;
+}
+
+/* ============================================================================
+   REDUCED MOTION
+   ============================================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  [data-template='developer-dark'] .dd-animate-in {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}

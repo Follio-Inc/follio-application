@@ -1,8 +1,14 @@
+import { ClerkProvider } from '@clerk/nextjs';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
-import { ClerkProvider } from '@clerk/nextjs';
+
+import { ThemeProvider } from '@/components/theme-provider';
 
 import './globals.css';
+
+// Force dynamic rendering to avoid static generation issues with Clerk in CI
+// This prevents build failures when using placeholder Clerk keys
+export const dynamic = 'force-dynamic';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -21,12 +27,8 @@ export const metadata: Metadata = {
   creator: 'Follio',
   manifest: '/site.webmanifest',
   icons: {
-    icon: [
-      { url: '/favicon.ico' },
-    ],
-    apple: [
-      { url: '/apple-touch-icon.png' },
-    ],
+    icon: [{ url: '/favicon.ico' }],
+    apple: [{ url: '/apple-touch-icon.png' }],
   },
   openGraph: {
     type: 'website',
@@ -57,7 +59,16 @@ export default function RootLayout({
   return (
     <ClerkProvider>
       <html lang="en" suppressHydrationWarning>
-        <body className={`${inter.variable} font-sans antialiased`}>{children}</body>
+        <body className={`${inter.variable} font-sans antialiased`} suppressHydrationWarning>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+          >
+            {children}
+          </ThemeProvider>
+        </body>
       </html>
     </ClerkProvider>
   );

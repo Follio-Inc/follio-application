@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
+import { NextRequest, NextResponse } from 'next/server';
 
+import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { LinkSchema } from '@/lib/validations';
 
@@ -16,22 +17,13 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: {
-        profile: {
-          include: {
-            links: { orderBy: { sortOrder: 'asc' } },
-          },
-        },
-      },
+    const context = await resolveActiveProfileContext(userId);
+    const links = await db.link.findMany({
+      where: { profileId: context.profileId },
+      orderBy: { sortOrder: 'asc' },
     });
 
-    if (!user || !user.profile) {
-      return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
-    }
-
-    return NextResponse.json({ links: user.profile.links });
+    return NextResponse.json({ links });
   } catch (error) {
     console.error('Error fetching links:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -60,24 +52,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: { profile: true },
+    const context = await resolveActiveProfileContext(userId);
+
+    // Check for duplicate URL
+    const existingLink = await db.link.findFirst({
+      where: {
+        profileId: context.profileId,
+        url: { equals: validatedData.data.url, mode: 'insensitive' },
+      },
     });
 
-    if (!user || !user.profile) {
-      return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
+    if (existingLink) {
+      return NextResponse.json({ error: 'This URL already exists in your links' }, { status: 400 });
     }
 
     // Get the highest sortOrder
     const lastLink = await db.link.findFirst({
-      where: { profileId: user.profile.id },
+      where: { profileId: context.profileId },
       orderBy: { sortOrder: 'desc' },
     });
 
     const link = await db.link.create({
       data: {
-        profileId: user.profile.id,
+        profileId: context.profileId,
         ...validatedData.data,
         sortOrder: (lastLink?.sortOrder ?? -1) + 1,
         source: 'MANUAL',
