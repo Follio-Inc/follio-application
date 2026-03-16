@@ -242,12 +242,6 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
     setSaveStatus('idle'); // Reset status when new changes are made
   };
 
-  const handleContactUpdate = (updates: Partial<typeof contactInfo>) => {
-    setContactInfo((prev) => ({ ...prev, ...updates }));
-    setHasContactChanges(true);
-    setSaveStatus('idle');
-  };
-
   const handleSave = async () => {
     // Cancel any pending auto-save
     if (autoSaveTimerRef.current) {

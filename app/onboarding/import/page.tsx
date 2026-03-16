@@ -1409,7 +1409,6 @@ export default function OnboardingImportPage() {
 
   // ─── Navigation ─────────────────────────────────────────────────
   const isLastDataStep = STEPS[STEPS.indexOf(currentStep) + 1] === 'review';
-  const isAnyImportRunning = resumeParsingPromise !== null || imports.resume.status === 'added';
 
   const goNext = () => {
     const idx = STEPS.indexOf(currentStep);

@@ -25,7 +25,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { getDisplayHost, getLinksUrl, getPortfolioUrl, getResumeUrl } from '@/lib/url';
+import { getDisplayHost, getPortfolioUrl, getResumeUrl } from '@/lib/url';
 
 import type { TemplateNavbarTheme } from '@/lib/portfolio/templates/types';
 
@@ -106,10 +106,8 @@ function ProfileMenu({ profileHandle }: { profileHandle?: string } = {}) {
   const { signOut } = useClerk();
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [handle, setHandle] = useState<string | null>(profileHandle ?? null);
-  const [profileStatus, setProfileStatus] = useState<string | null>(null);
   const [resumeVisibility, setResumeVisibility] = useState<string | null>(null);
   const [portfolioVisibility, setPortfolioVisibility] = useState<string | null>(null);
-  const [linksVisibility, setLinksVisibility] = useState<string | null>(null);
   const [copiedType, setCopiedType] = useState<'portfolio' | 'resume' | 'links' | null>(null);
 
   const fetchHandle = useCallback(async () => {
@@ -118,10 +116,8 @@ function ProfileMenu({ profileHandle }: { profileHandle?: string } = {}) {
       if (res.ok) {
         const data = await res.json();
         setHandle(data.profile?.handle || null);
-        setProfileStatus(data.profile?.status || null);
         setResumeVisibility(data.profile?.resumeVisibility || 'PRIVATE');
         setPortfolioVisibility(data.profile?.portfolioVisibility || 'PUBLIC');
-        setLinksVisibility(data.profile?.linksVisibility || 'PUBLIC');
       }
     } catch {
       // silent
@@ -149,8 +145,6 @@ function ProfileMenu({ profileHandle }: { profileHandle?: string } = {}) {
   const follioUrl = handle ? getPortfolioUrl(handle) : null;
 
   const resumeUrl = handle ? getResumeUrl(handle) : null;
-
-  const linksUrl = handle ? getLinksUrl(handle) : null;
 
   const handleCopyLink = async (url: string, type: 'portfolio' | 'resume' | 'links') => {
     try {

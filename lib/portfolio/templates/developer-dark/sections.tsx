@@ -295,6 +295,7 @@ export function DDAbout({ profile, copy, enrichment }: AboutProps) {
           {/* Photo — the single place the avatar appears */}
           {profile.avatarUrl && (
             <div className="dd-about-photo">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={profile.avatarUrl} alt={displayName} />
             </div>
           )}
@@ -389,6 +390,7 @@ export function DDProjects({ profile, copy }: ProjectsProps) {
               >
                 <div className="dd-project-image">
                   {project.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
                     <img src={project.imageUrl} alt={project.title} />
                   ) : (
                     <div className="dd-project-image-placeholder">

@@ -66,7 +66,6 @@ export function ExperienceSection({
   onEditingStateChange,
   autoEditId,
   onEditComplete,
-  embedded,
 }: ExperienceSectionProps) {
   /** The id of the item being edited, or 'new' for a new item, or null when idle. */
   const [editingId, setEditingId] = useState<string | null>(autoEditId ?? null);

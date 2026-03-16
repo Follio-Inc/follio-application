@@ -298,10 +298,6 @@ export function ResumeDashboardClient({
 
       if (!response.ok) throw new Error('Failed to create resume');
 
-      const data = (await response.json()) as {
-        resume: { id: string; handle: string; resumeTitle: string };
-      };
-
       // Navigate to builder with ?new=1 to trigger the import suggestion popup
       router.push('/builder?new=1');
     } catch (err) {

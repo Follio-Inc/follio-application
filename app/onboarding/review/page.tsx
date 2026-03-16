@@ -104,7 +104,7 @@ const base64ToFile = async (base64: string, filename: string): Promise<File> => 
 /**
  * Compress an image file to a target size (for Clerk's 5MB limit)
  */
-const compressImageForClerk = async (file: File, _maxSizeKB = 500): Promise<File> => {
+const compressImageForClerk = async (file: File): Promise<File> => {
   return new Promise((resolve, reject) => {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
@@ -514,9 +514,6 @@ function ReviewPageContent() {
   const [verificationCode, setVerificationCode] = useState('');
   const [verifyingEmailId, setVerifyingEmailId] = useState<string | null>(null);
 
-  // Get signup email from Clerk (always primary)
-  const signupEmail = user?.primaryEmailAddress?.emailAddress;
-
   // Load parsed data from sessionStorage or URL
   useEffect(() => {
     const loadData = async () => {
@@ -705,6 +702,7 @@ function ReviewPageContent() {
         email: combinedEmails[primaryIndex >= 0 ? primaryIndex : 0]?.email,
       },
     }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, isLoading]);
 
   const currentStepIndex = STEPS.indexOf(currentStep);
@@ -892,14 +890,6 @@ function ReviewPageContent() {
     setData((prev) => ({
       ...prev,
       profile: { ...prev.profile, [field]: value },
-    }));
-  };
-
-  // Contact info update handlers
-  const _updateContactInfo = (field: 'email' | 'phone', value: string) => {
-    setData((prev) => ({
-      ...prev,
-      contactInfo: { ...prev.contactInfo, [field]: value },
     }));
   };
 

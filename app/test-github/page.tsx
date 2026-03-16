@@ -1,6 +1,7 @@
 'use client';
 
 import { useClerk, useSignIn, useUser } from '@clerk/nextjs';
+import Link from 'next/link';
 import { useState } from 'react';
 
 interface GitHubData {
@@ -332,24 +333,24 @@ export default function TestGitHubPage() {
                 Builder.
               </p>
               <div className="flex flex-wrap gap-3">
-                <a
+                <Link
                   href="/builder/projects"
                   className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 font-medium transition-colors hover:bg-blue-700"
                 >
                   📁 View Projects in Builder
-                </a>
-                <a
+                </Link>
+                <Link
                   href="/builder/skills"
                   className="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 font-medium transition-colors hover:bg-purple-700"
                 >
                   🛠️ View Skills
-                </a>
-                <a
+                </Link>
+                <Link
                   href="/builder/links"
                   className="inline-flex items-center gap-2 rounded-lg bg-gray-600 px-4 py-2 font-medium transition-colors hover:bg-gray-500"
                 >
                   🔗 View Links
-                </a>
+                </Link>
               </div>
             </div>
 

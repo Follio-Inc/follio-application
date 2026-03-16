@@ -126,7 +126,6 @@ export async function POST(request: NextRequest) {
       skills,
       projects,
       links,
-      contactInfo,
       forceFields,
     } = body;
 

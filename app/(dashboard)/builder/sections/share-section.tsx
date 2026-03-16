@@ -11,7 +11,6 @@ import {
   FileText,
   Globe,
   Grid3X3,
-  Link2,
   Lock,
   QrCode,
 } from 'lucide-react';
@@ -23,8 +22,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 
 import { getPortfolioUrl, getResumeUrl } from '@/lib/url';
 import type { FullProfile } from '@/types';
-
-type ProfileStatus = 'DRAFT' | 'PUBLIC' | 'PRIVATE';
 
 interface ShareTokenData {
   token: string | null;
@@ -38,44 +35,7 @@ interface ShareSectionProps {
   onUpdateAction: (updates: Partial<FullProfile>) => void;
 }
 
-const STATUS_OPTIONS: {
-  value: ProfileStatus;
-  label: string;
-  description: string;
-  icon: typeof Globe;
-  color: string;
-}[] = [
-  {
-    value: 'PUBLIC',
-    label: 'Public',
-    description: 'Anyone with the link can view',
-    icon: Globe,
-    color: 'text-green-600',
-  },
-  {
-    value: 'PRIVATE',
-    label: 'Unlisted',
-    description: 'Requires a share link with token',
-    icon: Link2,
-    color: 'text-yellow-600',
-  },
-  {
-    value: 'DRAFT',
-    label: 'Draft',
-    description: 'Only you can see this',
-    icon: Lock,
-    color: 'text-muted-foreground',
-  },
-];
-
-export function ShareSection({ profile, onUpdateAction }: ShareSectionProps) {
-  const [handle, setHandle] = useState(profile.handle);
-  const [isEditingHandle, setIsEditingHandle] = useState(false);
-  const [isCheckingHandle, setIsCheckingHandle] = useState(false);
-  const [handleError, setHandleError] = useState<string | null>(null);
-  const [handleSuccess, setHandleSuccess] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [copiedToken, setCopiedToken] = useState(false);
+export function ShareSection({ profile }: ShareSectionProps) {
   const [copiedPortfolio, setCopiedPortfolio] = useState(false);
   const [copiedResume, setCopiedResume] = useState(false);
   const [isExporting, setIsExporting] = useState<string | null>(null);
@@ -87,8 +47,6 @@ export function ShareSection({ profile, onUpdateAction }: ShareSectionProps) {
   );
   const [savingVisibility, setSavingVisibility] = useState(false);
   const [shareToken, setShareToken] = useState<ShareTokenData | null>(null);
-  const [isLoadingToken, setIsLoadingToken] = useState(false);
-  const [isGeneratingToken, setIsGeneratingToken] = useState(false);
   const [origin, setOrigin] = useState('');
   const [unlistedKey, setUnlistedKey] = useState<string | null>(null);
   const qrRef = useRef<HTMLDivElement>(null);
@@ -136,7 +94,6 @@ export function ShareSection({ profile, onUpdateAction }: ShareSectionProps) {
   }, [profile.status]);
 
   const fetchShareToken = async () => {
-    setIsLoadingToken(true);
     try {
       const res = await fetch('/api/profile/share-token');
       if (res.ok) {
@@ -145,127 +102,6 @@ export function ShareSection({ profile, onUpdateAction }: ShareSectionProps) {
       }
     } catch (error) {
       console.error('Failed to fetch share token:', error);
-    } finally {
-      setIsLoadingToken(false);
-    }
-  };
-
-  const generateShareToken = async () => {
-    setIsGeneratingToken(true);
-    try {
-      const res = await fetch('/api/profile/share-token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setShareToken(data);
-      }
-    } catch (error) {
-      console.error('Failed to generate share token:', error);
-    } finally {
-      setIsGeneratingToken(false);
-    }
-  };
-
-  const revokeShareToken = async () => {
-    if (!shareToken?.token) return;
-
-    try {
-      await fetch(`/api/profile/share-token?token=${shareToken.token}`, {
-        method: 'DELETE',
-      });
-      setShareToken(null);
-    } catch (error) {
-      console.error('Failed to revoke share token:', error);
-    }
-  };
-
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(publicUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleCopyTokenUrl = async () => {
-    if (!shareToken?.token || !origin) return;
-    const tokenUrl = `${getPortfolioUrl(profile.handle)}?token=${shareToken.token}`;
-    await navigator.clipboard.writeText(tokenUrl);
-    setCopiedToken(true);
-    setTimeout(() => setCopiedToken(false), 2000);
-  };
-
-  const validateHandle = (value: string) => {
-    if (!value) return 'Handle is required';
-    if (value.length < 3) return 'Handle must be at least 3 characters';
-    if (value.length > 30) return 'Handle must be less than 30 characters';
-    if (!/^[a-z0-9-]+$/.test(value))
-      return 'Handle can only contain lowercase letters, numbers, and hyphens';
-    if (value.startsWith('-') || value.endsWith('-'))
-      return 'Handle cannot start or end with a hyphen';
-    return null;
-  };
-
-  const checkHandleAvailability = async () => {
-    const error = validateHandle(handle);
-    if (error) {
-      setHandleError(error);
-      return;
-    }
-
-    if (handle === profile.handle) {
-      setHandleSuccess(true);
-      setIsEditingHandle(false);
-      return;
-    }
-
-    setIsCheckingHandle(true);
-    setHandleError(null);
-    setHandleSuccess(false);
-
-    try {
-      const res = await fetch(`/api/profile/check-handle?handle=${handle}`);
-      const data = await res.json();
-
-      if (data.available) {
-        // Persist the handle change immediately via PATCH
-        const patchRes = await fetch('/api/profile', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ handle }),
-        });
-
-        if (patchRes.ok) {
-          setHandleSuccess(true);
-          onUpdateAction({ handle });
-          setIsEditingHandle(false);
-        } else {
-          const patchData = await patchRes.json();
-          setHandleError(patchData.error || 'Failed to update handle');
-        }
-      } else {
-        setHandleError('This handle is already taken');
-      }
-    } catch {
-      setHandleError('Failed to check handle availability');
-    } finally {
-      setIsCheckingHandle(false);
-    }
-  };
-
-  const handleStatusChange = async (status: ProfileStatus) => {
-    onUpdateAction({ status });
-
-    // Save immediately
-    try {
-      await fetch('/api/profile', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
-      });
-    } catch (error) {
-      console.error('Failed to update status:', error);
     }
   };
 
@@ -333,9 +169,6 @@ export function ShareSection({ profile, onUpdateAction }: ShareSectionProps) {
     }
   };
 
-  const currentStatus = STATUS_OPTIONS.find((s) => s.value === profile.status) || STATUS_OPTIONS[2];
-  const StatusIcon = currentStatus.icon;
-
   // Determine which URL to show based on status
   const tokenUrl =
     shareToken?.token && origin
@@ -348,20 +181,6 @@ export function ShareSection({ profile, onUpdateAction }: ShareSectionProps) {
       : portfolioVisibility === 'UNLISTED' && unlistedKey
         ? portfolioUrl
         : publicUrl;
-
-  const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(' ');
-  const topSkills = profile.skills.slice(0, 4).map((s) => s.name);
-
-  // Portfolio summary data
-  const projects = profile.projects;
-  const projectCount = projects.length;
-  const topProjects = projects.slice(0, 3);
-
-  // Resume summary data
-  const workExperiences = profile.workExperiences;
-  const educations = profile.educations;
-  const certifications = profile.certifications;
-  const skillCount = profile.skills.length;
 
   return (
     <div className="space-y-6 rounded-xl bg-muted/40 p-4">

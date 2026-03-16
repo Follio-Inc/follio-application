@@ -225,20 +225,6 @@ export function SettingsSection({ profile }: SettingsSectionProps) {
     }
   };
 
-  const getTotalDataCount = () => {
-    if (!accountData) return 0;
-    const { dataSummary } = accountData;
-    return (
-      dataSummary.workExperiences +
-      dataSummary.educations +
-      dataSummary.skills +
-      dataSummary.projects +
-      dataSummary.awards +
-      dataSummary.certifications +
-      dataSummary.links
-    );
-  };
-
   return (
     <div className="space-y-6 rounded-xl bg-muted/40 p-4">
       {/* Appearance */}
