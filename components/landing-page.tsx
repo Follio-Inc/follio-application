@@ -1,7 +1,18 @@
 'use client';
 
 import { motion, useInView } from 'framer-motion';
-import { ArrowRight, BarChart3, Briefcase, Check, Clock, FileText } from 'lucide-react';
+import {
+  ArrowRight,
+  BarChart3,
+  Briefcase,
+  Check,
+  Clock,
+  Eye,
+  FileText,
+  Layers,
+  Link2,
+  RefreshCw,
+} from 'lucide-react';
 import Link from 'next/link';
 import { type ReactNode, useRef } from 'react';
 
@@ -12,6 +23,29 @@ import { Button } from '@/components/ui/button';
 /* ═══════════════════════════════════════════════════════════════════════════
    Constants
    ═══════════════════════════════════════════════════════════════════════════ */
+
+const VALUE_PROPS = [
+  {
+    icon: Link2,
+    title: 'Share Links, Not PDFs',
+    desc: 'One link replaces every copy. Control access centrally from your dashboard.',
+  },
+  {
+    icon: Layers,
+    title: 'Zero Parsing Issues',
+    desc: 'Data stays structured. Recruiters get perfectly parsed info — every time.',
+  },
+  {
+    icon: Eye,
+    title: 'Viewer Picks the View',
+    desc: 'Resume, portfolio, timeline, or snapshot — your audience chooses their lens.',
+  },
+  {
+    icon: RefreshCw,
+    title: 'Always Up to Date',
+    desc: 'Auto-syncs with GitHub, blogs, and projects as you ship new work.',
+  },
+] as const;
 
 const SKILL_BARS = [
   { label: 'React', width: 'w-[85%]' },
@@ -136,7 +170,7 @@ export function LandingPage() {
         <div className="pointer-events-none absolute -right-32 -top-32 h-[500px] w-[500px] rounded-full bg-primary/[0.04] blur-3xl" />
         <div className="pointer-events-none absolute -bottom-32 -left-32 h-[400px] w-[400px] rounded-full bg-primary/[0.03] blur-3xl" />
 
-        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-24 lg:px-8 lg:py-32">
+        <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8 lg:py-20">
           <div className="grid items-center gap-12 lg:grid-cols-[1fr,auto] lg:gap-20">
             {/* Left: Copy */}
             <div className="max-w-xl">
@@ -197,6 +231,27 @@ export function LandingPage() {
           <div className="mt-12 flex justify-center lg:hidden">
             <HeroShowcase />
           </div>
+
+          {/* ─── Value propositions ───────────────────────────────────── */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.45 }}
+            className="mt-14 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4"
+          >
+            {VALUE_PROPS.map((prop) => (
+              <div
+                key={prop.title}
+                className="group rounded-xl border border-border/60 bg-card/50 p-4 transition-colors hover:border-primary/20 hover:bg-card"
+              >
+                <div className="mb-2.5 flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors group-hover:bg-primary/15">
+                  <prop.icon className="h-[18px] w-[18px]" />
+                </div>
+                <h3 className="mb-1 text-sm font-semibold leading-tight">{prop.title}</h3>
+                <p className="text-xs leading-relaxed text-muted-foreground">{prop.desc}</p>
+              </div>
+            ))}
+          </motion.div>
         </div>
       </section>
 
