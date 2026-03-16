@@ -1,18 +1,7 @@
 'use client';
 
-import { motion, useInView } from 'framer-motion';
-import {
-  ArrowRight,
-  BarChart3,
-  Briefcase,
-  Check,
-  Clock,
-  Eye,
-  FileText,
-  Layers,
-  Link2,
-  RefreshCw,
-} from 'lucide-react';
+import { type Variants, motion, useInView } from 'framer-motion';
+import { ArrowRight, BarChart3, Briefcase, Check, Clock, FileText } from 'lucide-react';
 import Link from 'next/link';
 import { type ReactNode, useRef } from 'react';
 
@@ -23,29 +12,6 @@ import { Button } from '@/components/ui/button';
 /* ═══════════════════════════════════════════════════════════════════════════
    Constants
    ═══════════════════════════════════════════════════════════════════════════ */
-
-const VALUE_PROPS = [
-  {
-    icon: Link2,
-    title: 'Share Links, Not PDFs',
-    desc: 'One link replaces every copy. Control access centrally from your dashboard.',
-  },
-  {
-    icon: Layers,
-    title: 'Zero Parsing Issues',
-    desc: 'Data stays structured. Recruiters get perfectly parsed info — every time.',
-  },
-  {
-    icon: Eye,
-    title: 'Viewer Picks the View',
-    desc: 'Resume, portfolio, timeline, or snapshot — your audience chooses their lens.',
-  },
-  {
-    icon: RefreshCw,
-    title: 'Always Up to Date',
-    desc: 'Auto-syncs with GitHub, blogs, and projects as you ship new work.',
-  },
-] as const;
 
 const SKILL_BARS = [
   { label: 'React', width: 'w-[85%]' },
@@ -83,6 +49,366 @@ const EXPORT_CHECKLIST = [
   'ATS-optimized PDF',
   'Plain text for copy / paste',
   'Perfectly formatted, every time',
+] as const;
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Value-prop SVG illustrations (inline vectors with animated sub-elements)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const DRAW: Variants = {
+  hidden: { pathLength: 0, opacity: 0 },
+  visible: (i: number) => ({
+    pathLength: 1,
+    opacity: 1,
+    transition: {
+      pathLength: { duration: 0.8, delay: i * 0.15, ease: 'easeInOut' },
+      opacity: { duration: 0.3, delay: i * 0.15 },
+    },
+  }),
+};
+
+const FLOAT: Variants = {
+  idle: (i: number) => ({
+    y: [0, -3, 0],
+    transition: { duration: 2.4 + i * 0.3, repeat: Infinity, ease: 'easeInOut' },
+  }),
+};
+
+/** Share Links, Not PDFs — chain link with radiating signal arcs */
+function IllustrationShareLink() {
+  return (
+    <motion.svg
+      viewBox="0 0 80 80"
+      fill="none"
+      className="h-full w-full"
+      initial="hidden"
+      whileInView="visible"
+      viewport={{ once: true }}
+    >
+      {/* Central chain link */}
+      <motion.path
+        d="M34 44l-4 4a6 6 0 008.49 8.49l4-4"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        custom={0}
+        variants={DRAW}
+      />
+      <motion.path
+        d="M46 36l4-4a6 6 0 00-8.49-8.49l-4 4"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        custom={1}
+        variants={DRAW}
+      />
+      <motion.path
+        d="M36 44l8-8"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        custom={2}
+        variants={DRAW}
+      />
+      {/* Signal arcs */}
+      <motion.path
+        d="M54 26c4 4 4 10 0 14"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        opacity="0.4"
+        custom={3}
+        variants={DRAW}
+      />
+      <motion.path
+        d="M58 22c6 6 6 16 0 22"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        opacity="0.25"
+        custom={4}
+        variants={DRAW}
+      />
+      {/* Floating dot */}
+      <motion.circle
+        cx="64"
+        cy="33"
+        r="2"
+        fill="currentColor"
+        opacity="0.5"
+        custom={0}
+        variants={FLOAT}
+        animate="idle"
+      />
+    </motion.svg>
+  );
+}
+
+/** Zero Parsing Issues — structured data blocks snapping into place */
+function IllustrationStructured() {
+  return (
+    <motion.svg
+      viewBox="0 0 80 80"
+      fill="none"
+      className="h-full w-full"
+      initial="hidden"
+      whileInView="visible"
+      viewport={{ once: true }}
+    >
+      {/* Document outline */}
+      <motion.rect
+        x="18"
+        y="12"
+        width="44"
+        height="56"
+        rx="4"
+        stroke="currentColor"
+        strokeWidth="2"
+        opacity="0.25"
+        custom={0}
+        variants={DRAW}
+      />
+      {/* Structured rows sliding in */}
+      {[0, 1, 2, 3].map((i) => (
+        <motion.g key={i}>
+          <motion.rect
+            x="26"
+            y={24 + i * 11}
+            width="8"
+            height="6"
+            rx="1.5"
+            fill="currentColor"
+            initial={{ opacity: 0, x: -12 }}
+            whileInView={{ opacity: 0.55, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.4, delay: 0.3 + i * 0.12, ease: 'easeOut' }}
+          />
+          <motion.rect
+            x="38"
+            y={25 + i * 11}
+            width={20 - i * 2}
+            height="4"
+            rx="1"
+            fill="currentColor"
+            initial={{ opacity: 0, x: 12 }}
+            whileInView={{ opacity: 0.3, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.4, delay: 0.36 + i * 0.12, ease: 'easeOut' }}
+          />
+        </motion.g>
+      ))}
+      {/* Checkmark */}
+      <motion.path
+        d="M52 58l3 3 6-6"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        custom={5}
+        variants={DRAW}
+      />
+    </motion.svg>
+  );
+}
+
+/** Viewer Picks the View — eye with lens/window panels fanning out */
+function IllustrationViewerChoice() {
+  return (
+    <motion.svg
+      viewBox="0 0 80 80"
+      fill="none"
+      className="h-full w-full"
+      initial="hidden"
+      whileInView="visible"
+      viewport={{ once: true }}
+    >
+      {/* Eye outline */}
+      <motion.path
+        d="M12 40s12-18 28-18 28 18 28 18-12 18-28 18S12 40 12 40z"
+        stroke="currentColor"
+        strokeWidth="2"
+        opacity="0.3"
+        custom={0}
+        variants={DRAW}
+      />
+      {/* Iris */}
+      <motion.circle
+        cx="40"
+        cy="40"
+        r="8"
+        stroke="currentColor"
+        strokeWidth="2"
+        custom={1}
+        variants={DRAW}
+      />
+      {/* Pupil */}
+      <motion.circle
+        cx="40"
+        cy="40"
+        r="3"
+        fill="currentColor"
+        initial={{ scale: 0, opacity: 0 }}
+        whileInView={{ scale: 1, opacity: 0.7 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.4, delay: 0.5, ease: 'backOut' }}
+      />
+      {/* Mini view panels fanning out from eye */}
+      {[-1, 0, 1].map((offset, i) => (
+        <motion.rect
+          key={i}
+          x={30 + offset * 14}
+          y="10"
+          width="10"
+          height="7"
+          rx="1.5"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          opacity="0.45"
+          initial={{ y: 30, opacity: 0, scale: 0.5 }}
+          whileInView={{ y: 10, opacity: 0.45, scale: 1 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5, delay: 0.6 + i * 0.1, ease: 'backOut' }}
+        />
+      ))}
+    </motion.svg>
+  );
+}
+
+/** Always Up to Date — circular sync arrows with orbiting source icons */
+function IllustrationAutoSync() {
+  return (
+    <motion.svg
+      viewBox="0 0 80 80"
+      fill="none"
+      className="h-full w-full"
+      initial="hidden"
+      whileInView="visible"
+      viewport={{ once: true }}
+    >
+      {/* Circular arrows */}
+      <motion.path
+        d="M40 16a24 24 0 0122.6 16"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        custom={0}
+        variants={DRAW}
+      />
+      <motion.path
+        d="M62.6 32a24 24 0 01-6 22"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        custom={1}
+        variants={DRAW}
+      />
+      <motion.path
+        d="M56.6 54A24 24 0 0118 44"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        custom={2}
+        variants={DRAW}
+      />
+      <motion.path
+        d="M18 44a24 24 0 0122-28"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        custom={3}
+        variants={DRAW}
+      />
+      {/* Arrowheads */}
+      <motion.path
+        d="M60 28l3 4 4-2"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        custom={4}
+        variants={DRAW}
+      />
+      <motion.path
+        d="M20 48l-3-4-4 2"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        custom={4}
+        variants={DRAW}
+      />
+      {/* Orbiting source dots */}
+      {[0, 1, 2].map((i) => (
+        <motion.circle
+          key={i}
+          cx={[24, 56, 40][i]}
+          cy={[26, 26, 60][i]}
+          r="4"
+          fill="currentColor"
+          initial={{ scale: 0, opacity: 0 }}
+          whileInView={{ scale: 1, opacity: 0.5 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.3, delay: 0.7 + i * 0.12, ease: 'backOut' }}
+        />
+      ))}
+      {/* Source icons inside dots (GitHub-ish, blog, project) */}
+      <motion.path
+        d="M23 26h2"
+        stroke="white"
+        strokeWidth="1"
+        strokeLinecap="round"
+        custom={6}
+        variants={DRAW}
+      />
+      <motion.path
+        d="M55 25v2"
+        stroke="white"
+        strokeWidth="1"
+        strokeLinecap="round"
+        custom={6}
+        variants={DRAW}
+      />
+      <motion.path
+        d="M39 60h2"
+        stroke="white"
+        strokeWidth="1"
+        strokeLinecap="round"
+        custom={6}
+        variants={DRAW}
+      />
+    </motion.svg>
+  );
+}
+
+const VALUE_PROPS = [
+  {
+    Illustration: IllustrationShareLink,
+    title: 'Share Links, Not PDFs',
+    desc: 'One link replaces every copy. Control access centrally from your dashboard.',
+    gradient: 'from-blue-500/20 to-cyan-500/20 dark:from-blue-500/10 dark:to-cyan-500/10',
+    accent: 'text-blue-600 dark:text-blue-400',
+  },
+  {
+    Illustration: IllustrationStructured,
+    title: 'Zero Parsing Issues',
+    desc: 'Data stays structured. Recruiters get perfectly parsed info — every time.',
+    gradient: 'from-emerald-500/20 to-teal-500/20 dark:from-emerald-500/10 dark:to-teal-500/10',
+    accent: 'text-emerald-600 dark:text-emerald-400',
+  },
+  {
+    Illustration: IllustrationViewerChoice,
+    title: 'Viewer Picks the View',
+    desc: 'Resume, portfolio, timeline, or snapshot — your audience chooses their lens.',
+    gradient: 'from-violet-500/20 to-purple-500/20 dark:from-violet-500/10 dark:to-purple-500/10',
+    accent: 'text-violet-600 dark:text-violet-400',
+  },
+  {
+    Illustration: IllustrationAutoSync,
+    title: 'Always Up to Date',
+    desc: 'Auto-syncs with GitHub, blogs, and projects as you ship new work.',
+    gradient: 'from-amber-500/20 to-orange-500/20 dark:from-amber-500/10 dark:to-orange-500/10',
+    accent: 'text-amber-600 dark:text-amber-400',
+  },
 ] as const;
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -233,25 +559,37 @@ export function LandingPage() {
           </div>
 
           {/* ─── Value propositions ───────────────────────────────────── */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.45 }}
-            className="mt-14 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4"
-          >
-            {VALUE_PROPS.map((prop) => (
-              <div
+          <div className="mt-14 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+            {VALUE_PROPS.map((prop, i) => (
+              <motion.div
                 key={prop.title}
-                className="group rounded-xl border border-border/60 bg-card/50 p-4 transition-colors hover:border-primary/20 hover:bg-card"
+                initial={{ opacity: 0, y: 24, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{
+                  duration: 0.5,
+                  delay: 0.4 + i * 0.1,
+                  ease: [0.25, 0.1, 0.25, 1],
+                }}
+                whileHover={{ y: -4, transition: { duration: 0.25, ease: 'easeOut' } }}
+                className="group relative overflow-hidden rounded-xl border border-border/60 bg-card/60 backdrop-blur-sm"
               >
-                <div className="mb-2.5 flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors group-hover:bg-primary/15">
-                  <prop.icon className="h-[18px] w-[18px]" />
+                {/* Gradient glow on hover */}
+                <div
+                  className={`absolute inset-0 bg-gradient-to-br ${prop.gradient} opacity-0 transition-opacity duration-300 group-hover:opacity-100`}
+                />
+
+                <div className="relative p-4">
+                  {/* Illustration */}
+                  <div className={`mb-3 h-14 w-14 ${prop.accent}`}>
+                    <prop.Illustration />
+                  </div>
+
+                  <h3 className="mb-1 text-sm font-semibold leading-tight">{prop.title}</h3>
+                  <p className="text-xs leading-relaxed text-muted-foreground">{prop.desc}</p>
                 </div>
-                <h3 className="mb-1 text-sm font-semibold leading-tight">{prop.title}</h3>
-                <p className="text-xs leading-relaxed text-muted-foreground">{prop.desc}</p>
-              </div>
+              </motion.div>
             ))}
-          </motion.div>
+          </div>
         </div>
       </section>
 
