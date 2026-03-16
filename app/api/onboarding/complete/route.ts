@@ -9,7 +9,7 @@ import {
   type NameEntry,
 } from '@/services/multi-source-merger.service';
 import { auth, currentUser } from '@clerk/nextjs/server';
-import type { DataSource, Profile, User } from '@prisma/client';
+import type { DataSource, Profile, SectionType, User } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
 
 // Helper to safely cast string to DataSource enum
@@ -772,11 +772,11 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Generate template portfolio (fire and forget - don't block the response)
+    // Generate AI-enriched portfolio (fire and forget - don't block the response)
     const profileId = user.profile?.id;
     if (profileId) {
-      import('@/services/portfolio/template-generation.service')
-        .then(({ generateTemplatePortfolio }) => generateTemplatePortfolio(profileId))
+      import('@/services/portfolio/enhanced-generation.service')
+        .then(({ generateEnhancedPortfolio }) => generateEnhancedPortfolio(profileId))
         .then((result) => {
           console.log('[Onboarding Complete] Portfolio generated:', result.portfolioId);
         })
@@ -1237,6 +1237,51 @@ async function handleReviewedData(
     }
   }
 
+  // ── Create default ProfileSections ──────────────────────────────
+  // These are required for the resume/portfolio view to render body sections.
+  // Without them, only the header appears.
+  const DEFAULT_SECTIONS: { type: SectionType; title: string }[] = [
+    { type: 'BASIC_INFO', title: 'Header' },
+    { type: 'PHOTOS', title: 'Photos' },
+    { type: 'SUMMARY', title: 'Summary' },
+    { type: 'EXPERIENCE', title: 'Experience' },
+    { type: 'EDUCATION', title: 'Education' },
+    { type: 'SKILLS', title: 'Skills' },
+    { type: 'PROJECTS', title: 'Projects' },
+    { type: 'LINKS', title: 'Links' },
+    { type: 'AWARDS', title: 'Awards' },
+    { type: 'CERTIFICATIONS', title: 'Certifications' },
+  ];
+
+  try {
+    const existingSections = await db.profileSection.findMany({
+      where: { profileId },
+      select: { type: true },
+    });
+    const existingTypes = new Set(existingSections.map((s) => s.type));
+    const missingSections = DEFAULT_SECTIONS.filter((s) => !existingTypes.has(s.type));
+
+    if (missingSections.length > 0) {
+      const baseOrder = existingSections.length;
+      await db.profileSection.createMany({
+        data: missingSections.map((config, index) => ({
+          profileId,
+          type: config.type,
+          title: config.title,
+          sortOrder: baseOrder + index,
+          isVisible: true,
+        })),
+      });
+      console.log(
+        '[handleReviewedData] Created',
+        missingSections.length,
+        'default ProfileSections'
+      );
+    }
+  } catch (err) {
+    console.error('[handleReviewedData] Failed to create ProfileSections:', err);
+  }
+
   console.log('[handleReviewedData] Complete! Profile handle:', handle);
 
   // Sync avatar to Clerk (fire and forget - don't block the response).
@@ -1273,16 +1318,18 @@ async function handleReviewedData(
     }
   }
 
-  // Generate template portfolio (fire and forget - don't block the response)
+  // Generate AI-enriched portfolio (awaited so the template portfolio is ready
+  // before the user lands on their profile page after onboarding)
   if (profileId) {
-    import('@/services/portfolio/template-generation.service')
-      .then(({ generateTemplatePortfolio }) => generateTemplatePortfolio(profileId))
-      .then((result) => {
-        console.log('[handleReviewedData] Portfolio generated:', result.portfolioId);
-      })
-      .catch((err) => {
-        console.error('[handleReviewedData] Failed to generate portfolio:', err);
-      });
+    try {
+      const { generateEnhancedPortfolio } =
+        await import('@/services/portfolio/enhanced-generation.service');
+      const result = await generateEnhancedPortfolio(profileId);
+      console.log('[handleReviewedData] Portfolio generated:', result.portfolioId);
+    } catch (err) {
+      // Don't fail onboarding if portfolio generation fails — user can regenerate later
+      console.error('[handleReviewedData] Failed to generate portfolio:', err);
+    }
   }
 
   return NextResponse.json({

@@ -4,6 +4,7 @@ import { MotionConfig } from 'framer-motion';
 import Link from 'next/link';
 
 import { ProfileNavbar } from '@/components/profile-navbar';
+import { getTemplateMeta } from '@/lib/portfolio/templates/registry';
 
 import { AIPortfolioView } from './views/ai-portfolio-view';
 import { PortfolioView } from './views/portfolio-view';
@@ -85,10 +86,21 @@ export function ProfileViewer({
 
   const hasFullPagePortfolio = !!(templatePortfolio || generatedPlan);
 
+  // Look up the template's navbar theme so the top bar blends with the portfolio
+  const navbarTheme = templatePortfolio
+    ? (getTemplateMeta(templatePortfolio.templateId)?.navbarTheme ?? null)
+    : null;
+
   return (
     <MotionConfig reducedMotion={embed ? 'always' : 'never'}>
       <div className="min-h-screen bg-gradient-to-b from-muted/30 to-background">
-        {!embed && <ProfileNavbar authState={authState} profileHandle={profileHandle} />}
+        {!embed && (
+          <ProfileNavbar
+            authState={authState}
+            profileHandle={profileHandle}
+            navbarTheme={navbarTheme}
+          />
+        )}
 
         <main className={hasFullPagePortfolio ? '' : 'container max-w-5xl py-8 pb-24'}>
           {renderPortfolioView()}

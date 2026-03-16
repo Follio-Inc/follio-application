@@ -78,13 +78,13 @@ async function main() {
     console.log('No existing active portfolio found');
   }
 
-  // Dynamically import the generation service (needs full module resolution)
-  console.log('Generating template portfolio...');
+  // Dynamically import the enhanced generation service
+  console.log('Generating AI-enriched portfolio...');
 
-  const { generateTemplatePortfolio } =
-    await import('../services/portfolio/template-generation.service');
+  const { generateEnhancedPortfolio } =
+    await import('../services/portfolio/enhanced-generation.service');
 
-  const result = await generateTemplatePortfolio(profile.id, {
+  const result = await generateEnhancedPortfolio(profile.id, {
     templateId: 'developer-dark',
   });
 
@@ -93,6 +93,7 @@ async function main() {
   console.log(`  Template: ${result.templateId}`);
   console.log(`  AI Generated: ${result.isAIGenerated}`);
   console.log(`  Time: ${result.generationTimeMs}ms`);
+  console.log(`  Pipeline stages: ${result.pipelineStagesRun.join(' → ')}`);
 
   await db.$disconnect();
 }

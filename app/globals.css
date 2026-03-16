@@ -63,6 +63,66 @@
   }
 }
 
+/*
+ * Navbar theme scoping — forces the Follio top bar into a specific color mode
+ * regardless of the user's system dark/light preference. This ensures the navbar
+ * visually blends with the active portfolio template.
+ *
+ * Templates declare `navbarTheme: { mode: 'dark' | 'light' }` in their meta.
+ * The ProfileNavbar sets `data-navbar-theme` on its root element.
+ * All shadcn/Tailwind components inside automatically adapt via CSS variable cascade.
+ *
+ * To add a new template, just set `navbarTheme.mode` in the template meta.
+ * No changes needed here unless the app's base palette changes.
+ */
+@layer base {
+  [data-navbar-theme='dark'] {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 170 70% 55%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 170 30% 15%;
+    --secondary-foreground: 170 70% 65%;
+    --muted: 170 4% 16%;
+    --muted-foreground: 170 5% 65%;
+    --accent: 170 30% 20%;
+    --accent-foreground: 170 70% 65%;
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 170 4% 16%;
+    --input: 170 4% 16%;
+    --ring: 170 70% 55%;
+    color-scheme: dark;
+  }
+
+  [data-navbar-theme='light'] {
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 170 70% 50%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 170 30% 96%;
+    --secondary-foreground: 170 70% 50%;
+    --muted: 170 5% 96%;
+    --muted-foreground: 170 4% 46%;
+    --accent: 170 30% 96%;
+    --accent-foreground: 170 70% 50%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 170 6% 90%;
+    --input: 170 6% 90%;
+    --ring: 170 70% 50%;
+    color-scheme: light;
+  }
+}
+
 @layer base {
   * {
     @apply border-border;

@@ -88,7 +88,9 @@ export async function PATCH(request: NextRequest) {
     // Update copy (partial merge)
     if (body.copy && typeof body.copy === 'object') {
       const copyUpdates = body.copy as Partial<TemplateCopy>;
-      const validCopyFields: (keyof TemplateCopy)[] = [
+
+      // Core string fields — always string type
+      const coreFields = [
         'heroHeadline',
         'heroSubtext',
         'aboutTitle',
@@ -98,11 +100,25 @@ export async function PATCH(request: NextRequest) {
         'primaryCtaLabel',
         'seoTitle',
         'seoDescription',
-      ];
+      ] as const;
 
-      for (const field of validCopyFields) {
+      for (const field of coreFields) {
         if (field in copyUpdates && typeof copyUpdates[field] === 'string') {
-          plan.copy[field] = copyUpdates[field]!;
+          plan.copy[field] = copyUpdates[field];
+        }
+      }
+
+      // Extended nullable string fields from AI pipeline
+      const extendedFields = [
+        'experienceNarrative',
+        'githubNarrative',
+        'writingNarrative',
+        'pullQuote',
+      ] as const;
+
+      for (const field of extendedFields) {
+        if (field in copyUpdates && typeof copyUpdates[field] === 'string') {
+          plan.copy[field] = copyUpdates[field];
         }
       }
       updated = true;

@@ -5,21 +5,24 @@ import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { AppError, ErrorCode, handleApiError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { generateTemplatePortfolio } from '@/services/portfolio/template-generation.service';
+import { generateEnhancedPortfolio } from '@/services/portfolio/enhanced-generation.service';
 
 const portfolioLogger = logger.child({ source: 'api-portfolio-generate' });
 
 /**
  * POST /api/portfolio/generate
  *
- * Generate a template-based portfolio for the authenticated user's active profile.
- * Called automatically after onboarding and manually from the portfolio builder.
+ * Generate a portfolio for the authenticated user's active profile.
+ * Uses the AI pipeline (understand → extract evidence → narrate → validate)
+ * to produce deeply enriched portfolio data.
+ *
+ * Falls back to simple defaults if AI is unavailable.
  *
  * Request body (all optional):
  *   templateId?: string    — Override template (defaults to "developer-dark")
  *   accentColor?: string   — Override accent color
  *   fontFamily?: string    — Override font
- *   skipAI?: boolean       — Skip AI copy generation, use defaults
+ *   skipAI?: boolean       — Skip AI pipeline, use default copy only
  *   regenerate?: boolean   — Force regeneration even if one exists
  */
 export async function POST(request: NextRequest) {
@@ -45,8 +48,7 @@ export async function POST(request: NextRequest) {
     const skipAI = body.skipAI === true;
     const regenerate = body.regenerate === true;
 
-    // Check if a template-based portfolio already exists (unless regenerating).
-    // Old-style (non-template) portfolios are NOT counted — they'll be replaced.
+    // Check if a portfolio already exists (unless regenerating)
     if (!regenerate) {
       const existing = await db.generatedPortfolio.findFirst({
         where: {
@@ -54,14 +56,16 @@ export async function POST(request: NextRequest) {
           isActive: true,
           status: { in: ['PUBLISHED', 'DRAFT'] },
         },
-        select: { id: true, plan: true },
+        select: { id: true, plan: true, pipelineVersion: true },
       });
 
       if (existing) {
-        const existingPlan = existing.plan as Record<string, unknown> | null;
-        const isTemplateBased = existingPlan && typeof existingPlan.templateId === 'string';
+        const isEnhanced = existing.pipelineVersion === 'enhanced-v1';
+        const isTemplateBased =
+          existing.pipelineVersion === 'template-v1' ||
+          (existing.plan as Record<string, unknown> | null)?.templateId;
 
-        if (isTemplateBased) {
+        if (isEnhanced || isTemplateBased) {
           return NextResponse.json({
             success: true,
             portfolioId: existing.id,
@@ -69,8 +73,9 @@ export async function POST(request: NextRequest) {
             alreadyExists: true,
           });
         }
-        // Old-style portfolio detected — proceed to generate a template replacement
-        portfolioLogger.info('Upgrading legacy portfolio to template-based', {
+
+        // Legacy portfolio — proceed to generate a replacement
+        portfolioLogger.info('Upgrading legacy portfolio to enhanced', {
           userId,
           profileId: context.profileId,
           oldPortfolioId: existing.id,
@@ -78,27 +83,29 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    portfolioLogger.info('Portfolio generation requested', {
+    portfolioLogger.info('Enhanced portfolio generation requested', {
       userId,
       profileId: context.profileId,
       templateId,
+      skipAI,
       regenerate,
     });
 
-    const result = await generateTemplatePortfolio(context.profileId, {
+    const result = await generateEnhancedPortfolio(context.profileId, {
       templateId,
       accentColor,
       fontFamily,
       skipAI,
     });
 
-    portfolioLogger.info('Portfolio generation completed', {
+    portfolioLogger.info('Enhanced portfolio generation completed', {
       userId,
       profileId: context.profileId,
       portfolioId: result.portfolioId,
       templateId: result.templateId,
       generationTimeMs: result.generationTimeMs,
       isAIGenerated: result.isAIGenerated,
+      pipelineStagesRun: result.pipelineStagesRun,
     });
 
     return NextResponse.json({
@@ -107,6 +114,7 @@ export async function POST(request: NextRequest) {
       templateId: result.templateId,
       isAIGenerated: result.isAIGenerated,
       generationTimeMs: result.generationTimeMs,
+      pipelineStagesRun: result.pipelineStagesRun,
     });
   } catch (error) {
     return handleApiError(error, { method: 'POST', path: '/api/portfolio/generate' });

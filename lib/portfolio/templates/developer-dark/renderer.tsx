@@ -36,11 +36,11 @@ function renderSection(type: string, props: TemplateRendererProps): React.ReactN
     case 'hero':
       return <DDHero profile={profile} copy={copy} />;
     case 'about':
-      return <DDAbout profile={profile} copy={copy} />;
+      return <DDAbout profile={profile} copy={copy} enrichment={portfolio.enrichment} />;
     case 'experience':
-      return <DDExperience profile={profile} />;
+      return <DDExperience profile={profile} copy={copy} />;
     case 'projects':
-      return <DDProjects profile={profile} />;
+      return <DDProjects profile={profile} copy={copy} />;
     case 'skills':
       return <DDSkills profile={profile} />;
     case 'education':

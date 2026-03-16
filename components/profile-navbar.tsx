@@ -27,16 +27,31 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { getDisplayHost, getLinksUrl, getPortfolioUrl, getResumeUrl } from '@/lib/url';
 
+import type { TemplateNavbarTheme } from '@/lib/portfolio/templates/types';
+
 type AuthState = 'owner' | 'authenticated' | 'anonymous';
 
 interface ProfileNavbarProps {
   authState: AuthState;
   profileHandle?: string;
+  /** When provided, forces the navbar into the template's color mode */
+  navbarTheme?: TemplateNavbarTheme | null;
 }
 
-export function ProfileNavbar({ authState, profileHandle }: ProfileNavbarProps) {
+export function ProfileNavbar({ authState, profileHandle, navbarTheme }: ProfileNavbarProps) {
+  // Build inline CSS variable overrides from template theme
+  const themeStyle = navbarTheme?.overrides
+    ? (Object.fromEntries(
+        Object.entries(navbarTheme.overrides).map(([key, value]) => [`--${key}`, value])
+      ) as React.CSSProperties)
+    : undefined;
+
   return (
-    <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header
+      className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60"
+      data-navbar-theme={navbarTheme?.mode}
+      style={themeStyle}
+    >
       <div className="flex h-14 items-center justify-between px-4 sm:px-6 lg:px-8">
         <Logo href="/" size="md" />
         <div className="flex items-center gap-3">

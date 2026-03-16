@@ -137,6 +137,7 @@ export async function generateTemplatePortfolio(
     copy,
     sections,
     style,
+    enrichment: null,
   };
 
   // ── Step 8: Save to database ─────────────────────────────────────────

@@ -2,12 +2,14 @@
  * Portfolio Template System — Type Definitions
  *
  * Templates are complete, pre-built, pixel-perfect portfolio designs.
- * AI doesn't generate code — it selects a template, writes copy, and
- * configures which sections to show. The template handles all rendering.
+ * The AI pipeline analyzes the user's data and writes narrative copy,
+ * then templates render with that enriched data.
  *
  * Data flow:
- *   Profile (DB) → Template Renderer → Pixel-perfect page
- *   AI only writes: headlines, about text, CTAs, SEO copy
+ *   Profile (DB) → AI Pipeline (analyze + write copy) → Template Renderer → Pixel-perfect page
+ *
+ * AI writes: headlines, about text, project narratives, section intros, CTAs, SEO copy
+ * Templates render: profile data + AI copy → polished page
  */
 
 // ============================================================================
@@ -22,7 +24,7 @@ export interface TemplatePortfolio {
   /** Which template kit to render with */
   templateId: string;
 
-  /** AI-generated copy — the only creative AI output */
+  /** AI-generated copy — narrative text for the portfolio */
   copy: TemplateCopy;
 
   /** Section visibility and ordering */
@@ -30,14 +32,24 @@ export interface TemplatePortfolio {
 
   /** Style customization within the template's bounded options */
   style: TemplateStyleConfig;
+
+  /**
+   * AI enrichment data — deep insights from the AI pipeline.
+   * Templates can progressively adopt these fields for richer rendering.
+   * Optional: portfolios generated without AI will have this as null.
+   */
+  enrichment: TemplateAIEnrichment | null;
 }
 
 /**
  * AI-generated copy for the portfolio.
- * This is the ONLY thing AI writes — everything else is data from the profile.
+ * Core fields are always present (via default fallbacks).
+ * Extended fields are populated when the AI pipeline runs.
  */
 export interface TemplateCopy {
-  /** Hero headline — bold identity statement, e.g. "I'm John, a Web Developer" */
+  // ── Core Copy (always present) ──────────────────────────────────────
+
+  /** Hero headline — bold identity statement, e.g. "I build systems that scale." */
   heroHeadline: string;
 
   /** Short intro text below the headline */
@@ -55,7 +67,7 @@ export interface TemplateCopy {
   /** Contact section subtitle, e.g. "Get in touch with me" */
   contactSubtext: string;
 
-  /** Primary CTA label, e.g. "Browse Portfolio" */
+  /** Primary CTA label, e.g. "Browse Portfolio →" */
   primaryCtaLabel: string;
 
   /** SEO page title */
@@ -63,6 +75,94 @@ export interface TemplateCopy {
 
   /** SEO meta description */
   seoDescription: string;
+
+  // ── Extended Copy (from AI pipeline, optional) ──────────────────────
+
+  /**
+   * Section-specific intro text. Templates can render these above section content.
+   * Key is the TemplateSectionType, value is 1-2 sentences.
+   */
+  sectionIntros?: Partial<Record<TemplateSectionType, string>>;
+
+  /**
+   * Per-project narrative descriptions — explains WHY the project matters.
+   * Key is the project title (exact match), value is 2-3 sentences.
+   */
+  projectNarratives?: Record<string, string>;
+
+  /**
+   * Career journey narrative — not a re-listing, but a story arc.
+   * 2-3 sentences about the trajectory of their career.
+   */
+  experienceNarrative?: string | null;
+
+  /**
+   * What their open source presence says about them.
+   * Only populated when GitHub data exists.
+   */
+  githubNarrative?: string | null;
+
+  /**
+   * What their writing/blog presence reveals about them.
+   * Only populated when blog data exists.
+   */
+  writingNarrative?: string | null;
+
+  /** A memorable pull-quote or personal motto, if inferrable from data */
+  pullQuote?: string | null;
+}
+
+// ============================================================================
+// AI ENRICHMENT (optional deep insights for templates)
+// ============================================================================
+
+/**
+ * Deep AI-derived insights that tell templates MORE about the person.
+ * Templates use these to make smarter rendering decisions without
+ * the template having to analyze raw data itself.
+ *
+ * This is the bridge between the AI pipeline and template rendering.
+ * All fields are optional — templates degrade gracefully without them.
+ */
+export interface TemplateAIEnrichment {
+  /** What kind of professional they are */
+  archetype: string;
+  /** Secondary archetypes for hybrid identities */
+  secondaryArchetypes: string[];
+  /** Career stage: student, early-career, mid-career, senior, executive, independent */
+  careerStage: string;
+  /** Key themes that define them (e.g., "distributed systems", "design thinking") */
+  definingThemes: string[];
+  /** What makes them genuinely unique */
+  uniqueAngles: string[];
+  /** Industries/domains they work in */
+  domains: string[];
+
+  /** Items that should be prominently featured (exact titles/names from data) */
+  mustFeature: string[];
+  /** Items that should be de-emphasized (exact titles/names) */
+  weakItems: string[];
+
+  /** Highlight facts for badges/pills (e.g., "8+ years experience", "15 GitHub stars") */
+  highlightFacts: string[];
+
+  /** Computed stats for optional display */
+  stats: Array<{ label: string; value: string }>;
+
+  /** Overall data richness 0-1 — helps templates decide density */
+  dataRichness: number;
+
+  /** Validation score 0-1 — confidence that all AI copy is factually grounded */
+  validationScore: number;
+
+  /** Pipeline metadata for debugging */
+  _meta: {
+    pipelineVersion: string;
+    generatedAt: string;
+    totalDurationMs: number;
+    totalTokensUsed: { input: number; output: number };
+    stagesRun: string[];
+  };
 }
 
 // ============================================================================
@@ -120,6 +220,22 @@ export interface TemplateStyleConfig {
 // TEMPLATE KIT METADATA
 // ============================================================================
 
+/**
+ * Navbar theming for seamless integration with the Follio ProfileNavbar.
+ * Templates declare a color mode so the top bar blends with the portfolio.
+ * The ProfileNavbar applies these via scoped CSS variable overrides.
+ */
+export interface TemplateNavbarTheme {
+  /** Base color mode — forces the navbar into dark or light regardless of system preference */
+  mode: 'dark' | 'light';
+
+  /**
+   * Optional CSS variable overrides for fine-tuning (key: variable name without `--`, value: HSL triple).
+   * Example: `{ background: '223 39% 7%' }` overrides `--background` to match a specific dark navy.
+   */
+  overrides?: Record<string, string>;
+}
+
 /** Metadata describing a template kit's capabilities and requirements */
 export interface TemplateKitMeta {
   /** Unique template identifier, e.g. "developer-dark" */
@@ -148,6 +264,12 @@ export interface TemplateKitMeta {
 
   /** Sections this template supports */
   supportedSections: TemplateSectionType[];
+
+  /**
+   * Navbar theme — tells the Follio top bar how to blend with this template.
+   * When omitted, the navbar uses the default system dark/light theme.
+   */
+  navbarTheme?: TemplateNavbarTheme;
 }
 
 // ============================================================================

@@ -83,25 +83,26 @@ const nextConfig: NextConfig = {
           },
         ],
       },
-      // Resume preview iframe: allow short browser cache to avoid redundant
-      // full SSR + heavy DB queries when the dashboard is revisited.
+      // Resume preview iframe: serve fresh content to prevent stale
+      // data after profile edits in the builder.
       {
         source: '/resume-preview/:id*',
         headers: [
           {
             key: 'Cache-Control',
-            value: 'private, max-age=60, stale-while-revalidate=120',
+            value: 'private, no-store',
           },
         ],
       },
-      // Portfolio preview iframe: same short browser cache for the
-      // dashboard thumbnail to avoid full SSR on every page load.
+      // Portfolio pages: always serve fresh content to prevent stale
+      // content flash after profile edits. The page uses force-dynamic
+      // so server-side rendering is already uncached.
       {
         source: '/u/:handle*',
         headers: [
           {
             key: 'Cache-Control',
-            value: 'private, max-age=60, stale-while-revalidate=120',
+            value: 'private, no-store',
           },
         ],
       },

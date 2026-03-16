@@ -10,7 +10,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
-import type { TemplateCopy, TemplateProfileData } from '../types';
+import type { TemplateAIEnrichment, TemplateCopy, TemplateProfileData } from '../types';
 
 import { SocialLinksRow } from './social-icons';
 import { computeYearsOfExperience, formatDateRange, getDisplayName } from './utils';
@@ -172,104 +172,49 @@ export function DDHero({ profile, copy }: HeroProps) {
   return (
     <section id="dd-hero" className="dd-hero">
       <div className="dd-container">
-        <div className="dd-hero-grid">
-          {/* Left: Content */}
-          <div className="dd-hero-content">
-            <div className="dd-accent-dash dd-animate-in" />
+        <div className="dd-hero-centered">
+          <div className="dd-accent-dash dd-animate-in" />
 
-            <h1 className="dd-hero-name dd-animate-in dd-animate-delay-1">
-              {copy.heroHeadline || `I'm ${displayName}`}
-            </h1>
+          <p className="dd-hero-greeting dd-animate-in dd-animate-delay-1">
+            Hi, I&apos;m {displayName}
+          </p>
 
-            <p className="dd-body dd-animate-in dd-animate-delay-2" style={{ maxWidth: '28rem' }}>
-              {copy.heroSubtext || profile.headline || ''}
-            </p>
+          <h1 className="dd-hero-headline dd-animate-in dd-animate-delay-2">
+            {copy.heroHeadline || profile.headline || 'I build things that matter.'}
+          </h1>
 
-            <div className="dd-animate-in dd-animate-delay-3">
-              <SocialLinksRow
-                links={profile.links.filter((l) =>
-                  ['GITHUB', 'LINKEDIN', 'TWITTER', 'YOUTUBE', 'DRIBBBLE', 'BEHANCE'].includes(
-                    l.type.toUpperCase()
-                  )
-                )}
-              />
-            </div>
+          {copy.heroSubtext && (
+            <p className="dd-hero-subtext dd-animate-in dd-animate-delay-3">{copy.heroSubtext}</p>
+          )}
 
-            <button
-              className="dd-scroll-cta dd-animate-in dd-animate-delay-4"
-              onClick={scrollToNext}
-              aria-label="Scroll down"
-            >
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
-            </button>
+          <div className="dd-animate-in dd-animate-delay-4">
+            <SocialLinksRow
+              links={profile.links.filter((l) =>
+                ['GITHUB', 'LINKEDIN', 'TWITTER', 'YOUTUBE', 'DRIBBBLE', 'BEHANCE'].includes(
+                  l.type.toUpperCase()
+                )
+              )}
+            />
           </div>
 
-          {/* Right: Photo + Sidebar */}
-          <div className="dd-hero-right">
-            {profile.avatarUrl && (
-              <div className="dd-hero-image-wrapper dd-animate-in dd-animate-delay-2">
-                <div className="dd-hero-image">
-                  <img src={profile.avatarUrl} alt={displayName} />
-                  <div className="dd-hero-image-overlay" />
-                </div>
-              </div>
-            )}
-
-            <div
-              className="dd-animate-in dd-animate-delay-3"
-              style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}
+          <button
+            className="dd-scroll-cta dd-animate-in dd-animate-delay-5"
+            onClick={scrollToNext}
+            aria-label="Scroll down"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
             >
-              {profile.summary && (
-                <div className="dd-hero-sidebar-block">
-                  <h3>About Me</h3>
-                  <p>
-                    {profile.summary.length > 150
-                      ? profile.summary.slice(0, 150) + '...'
-                      : profile.summary}
-                  </p>
-                  <button
-                    className="dd-cta-link"
-                    onClick={() => {
-                      const el = document.getElementById('dd-about');
-                      el?.scrollIntoView({ behavior: 'smooth' });
-                    }}
-                  >
-                    Learn More
-                  </button>
-                </div>
-              )}
-
-              {profile.projects.filter((p) => p.isVisible && p.showOnPortfolio).length > 0 && (
-                <div className="dd-hero-sidebar-block">
-                  <h3>My Work</h3>
-                  <p>
-                    {profile.projects.filter((p) => p.isVisible && p.showOnPortfolio).length}{' '}
-                    projects showcasing my skills and experience.
-                  </p>
-                  <button
-                    className="dd-cta-link"
-                    onClick={() => {
-                      const el = document.getElementById('dd-projects');
-                      el?.scrollIntoView({ behavior: 'smooth' });
-                    }}
-                  >
-                    View Projects
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
         </div>
       </div>
     </section>
@@ -283,35 +228,38 @@ export function DDHero({ profile, copy }: HeroProps) {
 interface AboutProps {
   profile: TemplateProfileData;
   copy: TemplateCopy;
+  enrichment?: TemplateAIEnrichment | null;
 }
 
-export function DDAbout({ profile, copy }: AboutProps) {
+export function DDAbout({ profile, copy, enrichment }: AboutProps) {
   const displayName = getDisplayName(profile.firstName, profile.lastName);
   const yearsExp = computeYearsOfExperience(profile.workExperiences);
-  const projectCount = profile.projects.filter((p) => p.isVisible).length;
+  const projectCount = profile.projects.filter((p) => p.isVisible && p.showOnPortfolio).length;
 
   return (
     <section id="dd-about" className="dd-section">
       <div className="dd-container">
-        <div className="dd-about-grid">
-          {/* Left: Content */}
-          <div>
+        <div className="dd-about-layout">
+          {/* Content */}
+          <div className="dd-about-content">
             <div className="dd-accent-dash" />
-            <h2 className="dd-section-title">
-              {copy.aboutTitle || `Nice to meet you, I'm ${displayName}`}
-            </h2>
+            <h2 className="dd-section-title">{copy.aboutTitle || `About Me`}</h2>
             <p className="dd-about-text">{copy.aboutText || profile.summary || ''}</p>
-            <button
-              className="dd-cta-link"
-              onClick={() => {
-                const el = document.getElementById('dd-projects');
-                el?.scrollIntoView({ behavior: 'smooth' });
-              }}
-            >
-              {copy.primaryCtaLabel || 'Browse Portfolio'}
-            </button>
 
-            {/* Stats */}
+            {copy.pullQuote && (
+              <blockquote className="dd-pull-quote">&ldquo;{copy.pullQuote}&rdquo;</blockquote>
+            )}
+
+            {enrichment?.highlightFacts && enrichment.highlightFacts.length > 0 && (
+              <div className="dd-highlight-facts">
+                {enrichment.highlightFacts.map((fact, i) => (
+                  <span key={i} className="dd-highlight-fact">
+                    {fact}
+                  </span>
+                ))}
+              </div>
+            )}
+
             {(yearsExp > 0 || projectCount > 0) && (
               <div className="dd-stats-row">
                 {yearsExp > 0 && (
@@ -334,9 +282,9 @@ export function DDAbout({ profile, copy }: AboutProps) {
                       <span className="dd-stat-suffix">+</span>
                     </div>
                     <div className="dd-stat-label">
-                      Successful
+                      Projects
                       <br />
-                      projects
+                      completed
                     </div>
                   </div>
                 )}
@@ -344,9 +292,9 @@ export function DDAbout({ profile, copy }: AboutProps) {
             )}
           </div>
 
-          {/* Right: Photo */}
+          {/* Photo — the single place the avatar appears */}
           {profile.avatarUrl && (
-            <div className="dd-about-image">
+            <div className="dd-about-photo">
               <img src={profile.avatarUrl} alt={displayName} />
             </div>
           )}
@@ -362,11 +310,14 @@ export function DDAbout({ profile, copy }: AboutProps) {
 
 interface ExperienceProps {
   profile: TemplateProfileData;
+  copy: TemplateCopy;
 }
 
-export function DDExperience({ profile }: ExperienceProps) {
+export function DDExperience({ profile, copy }: ExperienceProps) {
   const visibleExperiences = profile.workExperiences.filter((e) => e.isVisible);
   if (visibleExperiences.length === 0) return null;
+
+  const sectionIntro = copy.experienceNarrative || copy.sectionIntros?.experience;
 
   return (
     <section id="dd-experience" className="dd-section">
@@ -374,22 +325,22 @@ export function DDExperience({ profile }: ExperienceProps) {
         <div className="dd-accent-dash" />
         <h2 className="dd-section-title">Experience</h2>
 
-        <div className="dd-experience-list">
+        {sectionIntro && <p className="dd-section-intro">{sectionIntro}</p>}
+
+        <div className="dd-timeline">
           {visibleExperiences.map((exp) => (
-            <div key={exp.id} className="dd-experience-item">
-              <div className="dd-experience-date">
-                {formatDateRange(exp.startDate, exp.endDate, exp.isCurrent)}
-              </div>
-              <div>
-                <div className="dd-experience-role">{exp.role}</div>
-                <div className="dd-experience-company">{exp.company}</div>
-                {exp.bullets.length > 0 && (
-                  <ul className="dd-experience-bullets">
-                    {exp.bullets.map((bullet, i) => (
-                      <li key={i}>{bullet}</li>
-                    ))}
-                  </ul>
-                )}
+            <div key={exp.id} className="dd-timeline-item">
+              <div className="dd-timeline-marker" />
+              <div className="dd-timeline-content">
+                <div className="dd-timeline-date">
+                  {formatDateRange(exp.startDate, exp.endDate, exp.isCurrent)}
+                </div>
+                <h3 className="dd-timeline-role">{exp.role}</h3>
+                <div className="dd-timeline-company">
+                  {exp.company}
+                  {exp.location && <span className="dd-timeline-location"> · {exp.location}</span>}
+                </div>
+                {exp.bullets.length > 0 && <p className="dd-timeline-desc">{exp.bullets[0]}</p>}
               </div>
             </div>
           ))}
@@ -405,96 +356,82 @@ export function DDExperience({ profile }: ExperienceProps) {
 
 interface ProjectsProps {
   profile: TemplateProfileData;
+  copy: TemplateCopy;
 }
 
-export function DDProjects({ profile }: ProjectsProps) {
+export function DDProjects({ profile, copy }: ProjectsProps) {
   const visibleProjects = profile.projects.filter((p) => p.isVisible && p.showOnPortfolio);
   if (visibleProjects.length === 0) return null;
+
+  const sectionIntro = copy.sectionIntros?.projects;
 
   return (
     <section id="dd-projects" className="dd-section">
       <div className="dd-container">
         <div className="dd-accent-dash" />
-        <h2 className="dd-section-title">Portfolio</h2>
+        <h2 className="dd-section-title">Featured Work</h2>
+
+        {sectionIntro && <p className="dd-section-intro">{sectionIntro}</p>}
 
         <div className="dd-projects-grid">
-          {visibleProjects.map((project) => (
-            <a
-              key={project.id}
-              href={project.url || project.repoUrl || undefined}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="dd-project-card"
-              style={{ textDecoration: 'none' }}
-            >
-              {/* Project Image */}
-              <div className="dd-project-image">
-                {project.imageUrl ? (
-                  <img src={project.imageUrl} alt={project.title} />
-                ) : (
-                  <div
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '2rem',
-                      fontWeight: 700,
-                      color: 'var(--dd-text-muted)',
-                      opacity: 0.3,
-                    }}
-                  >
-                    {project.title.charAt(0).toUpperCase()}
-                  </div>
-                )}
-              </div>
+          {visibleProjects.map((project) => {
+            const narrative = copy.projectNarratives?.[project.title];
+            const description = narrative || project.description;
+            const href = project.url || project.repoUrl || undefined;
 
-              <div className="dd-project-body">
-                {/* Tech Stack Tags */}
-                {project.techStack.length > 0 && (
-                  <div className="dd-project-tags">
-                    {project.techStack.slice(0, 4).map((tech, i) => (
-                      <span key={i} className="dd-project-tag">
-                        {tech}
-                      </span>
-                    ))}
-                  </div>
-                )}
+            return (
+              <a
+                key={project.id}
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="dd-project-card"
+              >
+                <div className="dd-project-image">
+                  {project.imageUrl ? (
+                    <img src={project.imageUrl} alt={project.title} />
+                  ) : (
+                    <div className="dd-project-image-placeholder">
+                      {project.title.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                </div>
 
-                <div className="dd-project-title">{project.title}</div>
+                <div className="dd-project-body">
+                  {project.techStack.length > 0 && (
+                    <div className="dd-project-tags">
+                      {project.techStack.slice(0, 4).map((tech, i) => (
+                        <span key={i} className="dd-project-tag">
+                          {tech}
+                        </span>
+                      ))}
+                    </div>
+                  )}
 
-                {project.description && (
-                  <div className="dd-project-desc">{project.description}</div>
-                )}
+                  <div className="dd-project-title">{project.title}</div>
 
-                {/* GitHub Meta */}
-                {(project.ghStars != null || project.ghLanguage) && (
-                  <div className="dd-project-meta">
-                    {project.ghLanguage && (
-                      <span className="dd-project-meta-item">
-                        <span
-                          style={{
-                            width: 8,
-                            height: 8,
-                            borderRadius: '50%',
-                            backgroundColor: 'var(--dd-accent)',
-                          }}
-                        />
-                        {project.ghLanguage}
-                      </span>
-                    )}
-                    {project.ghStars != null && project.ghStars > 0 && (
-                      <span className="dd-project-meta-item">★ {project.ghStars}</span>
-                    )}
-                    {project.ghForks != null && project.ghForks > 0 && (
-                      <span className="dd-project-meta-item">⑂ {project.ghForks}</span>
-                    )}
-                  </div>
-                )}
-              </div>
-            </a>
-          ))}
+                  {description && <div className="dd-project-desc">{description}</div>}
+
+                  {(project.ghStars != null || project.ghLanguage) && (
+                    <div className="dd-project-meta">
+                      {project.ghLanguage && (
+                        <span className="dd-project-meta-item">
+                          <span className="dd-project-lang-dot" />
+                          {project.ghLanguage}
+                        </span>
+                      )}
+                      {project.ghStars != null && project.ghStars > 0 && (
+                        <span className="dd-project-meta-item">★ {project.ghStars}</span>
+                      )}
+                      {project.ghForks != null && project.ghForks > 0 && (
+                        <span className="dd-project-meta-item">⑂ {project.ghForks}</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </a>
+            );
+          })}
         </div>
       </div>
     </section>
@@ -711,9 +648,9 @@ export function DDGithub({ profile }: GithubProps) {
             href={`https://github.com/${github.username}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="dd-cta-link"
+            className="dd-github-link"
           >
-            View GitHub Profile
+            View GitHub Profile &rarr;
           </a>
         </div>
       </div>
@@ -734,19 +671,24 @@ export function DDContact({ profile, copy }: ContactProps) {
   return (
     <section id="dd-contact" className="dd-section">
       <div className="dd-container">
-        <div className="dd-contact-grid">
-          {/* Left: Info */}
-          <div>
-            <div className="dd-accent-dash" />
-            <h2 className="dd-section-title">{copy.contactTitle || "Let's work together"}</h2>
-            <p className="dd-contact-info-text">{copy.contactSubtext || 'Get in touch with me'}</p>
+        <div className="dd-contact-centered">
+          <div className="dd-accent-dash" style={{ margin: '0 auto 1.25rem' }} />
+          <h2 className="dd-section-title" style={{ textAlign: 'center' }}>
+            {copy.contactTitle || 'Let\u2019s work together'}
+          </h2>
+          <p className="dd-contact-subtext">{copy.contactSubtext || 'Get in touch with me'}</p>
 
-            {/* Social icons */}
-            <div style={{ marginBottom: '1.5rem' }}>
-              <SocialLinksRow links={profile.links} />
-            </div>
+          {profile.contactInfo?.email && (
+            <a
+              href={`mailto:${profile.contactInfo.email}`}
+              className="dd-btn-primary dd-contact-email-btn"
+            >
+              Send me an email
+              <span>&rarr;</span>
+            </a>
+          )}
 
-            {/* Contact details */}
+          <div className="dd-contact-details">
             {profile.contactInfo?.email && (
               <div className="dd-contact-detail">
                 <svg
@@ -786,31 +728,7 @@ export function DDContact({ profile, copy }: ContactProps) {
             )}
           </div>
 
-          {/* Right: Contact Form (visual only — mailto on submit) */}
-          <div>
-            <form
-              className="dd-contact-form"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (profile.contactInfo?.email) {
-                  window.location.href = `mailto:${profile.contactInfo.email}`;
-                }
-              }}
-            >
-              <input type="text" placeholder="Enter your name" className="dd-input" readOnly />
-              <input type="email" placeholder="Your email address" className="dd-input" readOnly />
-              <input type="text" placeholder="Subject" className="dd-input" readOnly />
-              <textarea
-                placeholder="Write me a message"
-                className="dd-input dd-textarea"
-                readOnly
-              />
-              <button type="submit" className="dd-btn-primary" style={{ alignSelf: 'flex-start' }}>
-                Contact me
-                <span>→</span>
-              </button>
-            </form>
-          </div>
+          <SocialLinksRow links={profile.links} />
         </div>
       </div>
     </section>

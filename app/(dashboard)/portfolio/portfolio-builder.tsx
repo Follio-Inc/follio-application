@@ -61,7 +61,17 @@ const SECTION_LABELS: Record<string, string> = {
   footer: 'Footer',
 };
 
-const COPY_FIELDS: { key: keyof TemplateCopy; label: string; multiline?: boolean }[] = [
+/** Core string fields editable via the builder UI */
+type EditableCopyField =
+  | 'heroHeadline'
+  | 'heroSubtext'
+  | 'aboutTitle'
+  | 'aboutText'
+  | 'contactTitle'
+  | 'contactSubtext'
+  | 'primaryCtaLabel';
+
+const COPY_FIELDS: { key: EditableCopyField; label: string; multiline?: boolean }[] = [
   { key: 'heroHeadline', label: 'Hero Headline' },
   { key: 'heroSubtext', label: 'Hero Subtext' },
   { key: 'aboutTitle', label: 'About Title' },
@@ -219,7 +229,7 @@ export function PortfolioBuilder({
   );
 
   const updateCopy = useCallback(
-    (field: keyof TemplateCopy, value: string) => {
+    (field: EditableCopyField, value: string) => {
       updatePortfolio((prev) => ({
         ...prev,
         copy: { ...prev.copy, [field]: value },
@@ -472,7 +482,7 @@ function CopyPanel({
   onUpdate,
 }: {
   copy: TemplateCopy;
-  onUpdate: (field: keyof TemplateCopy, value: string) => void;
+  onUpdate: (field: EditableCopyField, value: string) => void;
 }) {
   return (
     <div className="space-y-4">

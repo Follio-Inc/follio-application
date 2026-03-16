@@ -6,7 +6,7 @@
  * metadata without pulling in React components or CSS files.
  */
 
-import type { TemplateKitMeta, TemplateSectionConfig } from '../types';
+import type { TemplateKitMeta, TemplateNavbarTheme, TemplateSectionConfig } from '../types';
 
 // ============================================================================
 // DEFAULT SECTIONS
@@ -87,4 +87,12 @@ export const META: TemplateKitMeta = {
       css: "'JetBrains Mono', 'Fira Code', monospace",
     },
   ],
+
+  navbarTheme: {
+    mode: 'dark',
+    overrides: {
+      // Match the template's deep navy background (#0b0f19) instead of the default dark palette
+      background: '223 39% 7%',
+    },
+  } satisfies TemplateNavbarTheme,
 };
