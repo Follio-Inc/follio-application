@@ -22,7 +22,11 @@
 import { executeAICall } from '@/lib/ai-client';
 import { logger } from '@/lib/logger';
 
-import type { TemplateCopy, TemplateProfileData } from '@/lib/portfolio/templates/types';
+import type {
+  RequiredTemplateCopyField,
+  TemplateCopy,
+  TemplateProfileData,
+} from '@/lib/portfolio/templates/types';
 
 const copyLogger = logger.child({ source: 'template-copy-service' });
 
@@ -163,7 +167,7 @@ export async function generateTemplateCopy(
 
     // Validate all fields are present
     const copy = result.data;
-    const requiredFields: (keyof TemplateCopy)[] = [
+    const requiredFields: RequiredTemplateCopyField[] = [
       'heroHeadline',
       'heroSubtext',
       'aboutTitle',

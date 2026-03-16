@@ -112,6 +112,14 @@ export interface TemplateCopy {
   pullQuote?: string | null;
 }
 
+/**
+ * The keys of TemplateCopy that are always required (non-optional string fields).
+ * Useful for validation loops where indexed assignment must stay type-safe.
+ */
+export type RequiredTemplateCopyField = {
+  [K in keyof TemplateCopy]-?: TemplateCopy[K] extends string ? K : never;
+}[keyof TemplateCopy];
+
 // ============================================================================
 // AI ENRICHMENT (optional deep insights for templates)
 // ============================================================================
