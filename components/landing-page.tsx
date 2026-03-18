@@ -1,7 +1,7 @@
 'use client';
 
 import { type Variants, motion, useInView } from 'framer-motion';
-import { ArrowRight, BarChart3, Briefcase, Check, Clock, FileText } from 'lucide-react';
+import { ArrowRight, BarChart3, Briefcase, Check, Clock, FileText, Shield } from 'lucide-react';
 import Link from 'next/link';
 import { type ReactNode, useRef } from 'react';
 
@@ -839,6 +839,13 @@ export function LandingPage() {
               </Link>
               <Link href="/contact" className="transition-colors hover:text-foreground">
                 Contact
+              </Link>
+              <Link
+                href="/admin/sign-in"
+                className="transition-colors hover:text-foreground"
+                title="Admin"
+              >
+                <Shield className="h-3.5 w-3.5" />
               </Link>
             </div>
           </div>

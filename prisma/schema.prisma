@@ -12,6 +12,7 @@ model User {
   id             String          @id @default(cuid())
   clerkId        String          @unique
   email          String          @unique
+  lastSignInAt   DateTime?
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   mainPurpose    MainPurpose?
@@ -21,6 +22,20 @@ model User {
   profile        Profile?        @relation("ActiveProfile")
   profiles       Profile[]       @relation("OwnedProfiles")
   shareTokens    ShareToken[]
+
+  @@index([clerkId])
+  @@index([email])
+}
+
+/// Completely separate admin table — admins are NOT regular users.
+/// An admin has their own Clerk account and their own row here.
+model Admin {
+  id        String   @id @default(cuid())
+  clerkId   String   @unique
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([clerkId])
   @@index([email])
