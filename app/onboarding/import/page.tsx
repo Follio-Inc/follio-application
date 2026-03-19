@@ -2614,13 +2614,9 @@ export default function OnboardingImportPage() {
           <div className="flex items-center gap-3">
             {/* Skip on optional steps */}
             {currentStep !== 'review' && (
-              <button
-                type="button"
-                onClick={goNext}
-                className="text-xs text-muted-foreground/60 transition-colors hover:text-foreground"
-              >
+              <Button variant="ghost" onClick={goNext} className="text-muted-foreground">
                 Skip
-              </button>
+              </Button>
             )}
 
             {currentStep === 'review' ? (
