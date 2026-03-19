@@ -1422,12 +1422,6 @@ export default function OnboardingImportPage() {
     if (idx > 0) setCurrentStep(STEPS[idx - 1]);
   };
 
-  const canGoNext = () => {
-    if (currentStep === 'resume')
-      return imports.resume.status === 'added' || imports.resume.status === 'success';
-    return true; // All other steps are optional
-  };
-
   // ─── Status badge helper ───────────────────────────────────────
   const StatusBadge = ({
     status,
@@ -2619,7 +2613,7 @@ export default function OnboardingImportPage() {
 
           <div className="flex items-center gap-3">
             {/* Skip on optional steps */}
-            {currentStep !== 'resume' && currentStep !== 'review' && (
+            {currentStep !== 'review' && (
               <button
                 type="button"
                 onClick={goNext}
@@ -2660,25 +2654,13 @@ export default function OnboardingImportPage() {
                 <ArrowRight className="h-4 w-4" />
               </Button>
             ) : (
-              <Button
-                onClick={goNext}
-                disabled={currentStep === 'resume' && !canGoNext()}
-                className="gap-1.5"
-                size="lg"
-              >
-                {currentStep === 'resume' && !canGoNext() ? 'Upload to continue' : 'Next'}
+              <Button onClick={goNext} className="gap-1.5" size="lg">
+                Next
                 <ArrowRight className="h-4 w-4" />
               </Button>
             )}
           </div>
         </motion.div>
-
-        {/* Resume is the only required step message */}
-        {currentStep === 'resume' && !canGoNext() && (
-          <p className="mt-4 text-center text-xs text-muted-foreground">
-            Upload your resume to get started. All other steps are optional.
-          </p>
-        )}
       </div>
 
       {/* ─── Full-screen parsing progress overlay ─── */}
