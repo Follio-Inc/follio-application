@@ -41,24 +41,28 @@ export async function GET() {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
-    const profile = await db.profile.findUnique({
-      where: { id: context.profileId },
-      include: {
-        githubProfile: { select: { avatarUrl: true, username: true } },
-        photos: {
-          where: { category: 'PROFILE' },
-          orderBy: { createdAt: 'desc' },
+    // Run DB query and Clerk user lookup in parallel — they're independent
+    const [profile, clerkUser] = await Promise.all([
+      db.profile.findUnique({
+        where: { id: context.profileId },
+        include: {
+          githubProfile: { select: { avatarUrl: true, username: true } },
+          photos: {
+            where: { category: 'PROFILE' },
+            orderBy: { createdAt: 'desc' },
+          },
         },
-      },
-    });
+      }),
+      currentUser(),
+    ]);
 
     if (!profile) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
     const currentAvatarUrl = profile.avatarUrl;
+    // Strip cache-bust params for comparison (e.g., /api/photos/id?v=123 → /api/photos/id)
+    const normalizedCurrentAvatar = currentAvatarUrl?.replace(/\?v=\d+$/, '') ?? null;
 
-    // Get Clerk user for external accounts and their avatars
-    const clerkUser = await currentUser();
     const externalAccounts = clerkUser?.externalAccounts || [];
 
     const avatars: AvatarOption[] = [];
@@ -74,7 +78,7 @@ export async function GET() {
       seenUrls.add(option.url);
       avatars.push({
         ...option,
-        isActive: option.url === currentAvatarUrl,
+        isActive: option.url === currentAvatarUrl || option.url === normalizedCurrentAvatar,
       });
     };
 
@@ -136,18 +140,26 @@ export async function GET() {
 
     // 5. Uploaded / manually-set profile photos saved in the DB
     //    (these persist even after the user switches to an OAuth avatar)
+    //    Serve via /api/photos/:id so the URL matches Profile.avatarUrl
+    //    and deduplication works correctly.
     const profilePhotos = profile.photos || [];
     profilePhotos.forEach((photo, idx) => {
+      const servingUrl = photo.url.startsWith('data:') ? `/api/photos/${photo.id}` : photo.url;
       addAvatar({
         id: `uploaded-${photo.id}`,
         label: idx === 0 ? 'Uploaded' : `Uploaded (${idx + 1})`,
-        url: photo.url,
+        url: servingUrl,
         source: 'uploaded',
       });
     });
 
     // 6. Current profile avatar (if it was set via URL paste and not yet in the DB)
-    if (currentAvatarUrl && !seenUrls.has(currentAvatarUrl)) {
+    //    Normalize cache-busted URLs before dedup check
+    if (
+      currentAvatarUrl &&
+      !seenUrls.has(currentAvatarUrl) &&
+      !seenUrls.has(normalizedCurrentAvatar!)
+    ) {
       addAvatar({
         id: 'uploaded',
         label: 'Current',
@@ -156,11 +168,19 @@ export async function GET() {
       });
     }
 
-    return NextResponse.json({
-      avatars,
-      currentAvatarUrl,
-      avatarUrlSource: profile.avatarUrlSource,
-    });
+    return NextResponse.json(
+      {
+        avatars,
+        currentAvatarUrl,
+        avatarUrlSource: profile.avatarUrlSource,
+      },
+      {
+        headers: {
+          // Short client-side cache so rapid open/close doesn't re-fetch
+          'Cache-Control': 'private, max-age=30, stale-while-revalidate=60',
+        },
+      }
+    );
   } catch (error) {
     console.error('[GET /api/profile/available-avatars] Error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

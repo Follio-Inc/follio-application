@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { PORTFOLIO_THUMBNAIL_FOCUS_ATTR } from '@/lib/portfolio/templates/types';
+
 // ─── Constants ────────────────────────────────────────────────────
 
 /**
@@ -21,12 +23,22 @@ const ASPECT_RATIO = 21 / 9;
 const MAX_HEIGHT = 320;
 
 /**
+ * Delay (ms) after iframe `load` event before measuring the focus element.
+ * Gives fonts, images, and CSS a chance to settle so layout measurements
+ * are accurate.
+ */
+const FOCUS_MEASURE_DELAY_MS = 200;
+
+/**
  * PortfolioThumbnail
  *
  * Renders a miniature, non-interactive preview of the user's portfolio page
  * by embedding `/u/[handle]` inside a scaled-down iframe.
  *
- * - Wide aspect ratio (16:7) to show the hero/header area of the portfolio.
+ * - Wide aspect ratio (21:9) to show the most prominent section.
+ * - Templates mark their focal element with `data-portfolio-thumbnail-focus`.
+ *   After the iframe loads, the component measures that element and offsets
+ *   the iframe so the focal content is vertically centred in the preview.
  * - The iframe is invisible until loaded, then fades in smoothly.
  * - `pointer-events: none` prevents accidental interaction.
  * - CSS `transform: scale()` keeps the preview crisp (all text is real DOM).
@@ -41,9 +53,16 @@ interface PortfolioThumbnailProps {
 
 export function PortfolioThumbnail({ handle, className }: PortfolioThumbnailProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
   const [loaded, setLoaded] = useState(false);
   const [errored, setErrored] = useState(false);
   const [scale, setScale] = useState<number | null>(null);
+
+  /**
+   * Vertical offset (in iframe-coordinate pixels) to shift the content so
+   * the focus element is centred in the thumbnail. Zero means "show from top".
+   */
+  const [focusOffset, setFocusOffset] = useState(0);
 
   // Compute scale factor based on container width vs natural content width
   useEffect(() => {
@@ -64,7 +83,45 @@ export function PortfolioThumbnail({ handle, className }: PortfolioThumbnailProp
     return () => observer.disconnect();
   }, []);
 
-  const handleLoad = useCallback(() => setLoaded(true), []);
+  /**
+   * After the iframe loads, look for the `[data-portfolio-thumbnail-focus]`
+   * marker inside the iframe document. If found, compute the vertical offset
+   * needed to centre that element within the visible thumbnail area.
+   */
+  const handleLoad = useCallback(() => {
+    setLoaded(true);
+
+    // Allow a short delay for fonts/CSS to settle before measuring
+    setTimeout(() => {
+      try {
+        const iframe = iframeRef.current;
+        const container = containerRef.current;
+        if (!iframe?.contentDocument || !container) return;
+
+        const focusEl = iframe.contentDocument.querySelector(
+          `[${PORTFOLIO_THUMBNAIL_FOCUS_ATTR}]`
+        ) as HTMLElement | null;
+
+        if (!focusEl) return;
+
+        // Absolute top of the focus element within the iframe document
+        const focusTop = getDocumentOffsetTop(focusEl);
+        const focusHeight = focusEl.offsetHeight;
+        const focusCenter = focusTop + focusHeight / 2;
+
+        // Visible area of the iframe in its own coordinate system
+        const currentScale = container.clientWidth / PORTFOLIO_CONTENT_WIDTH;
+        const visibleIframeHeight = container.clientHeight / currentScale;
+
+        // Centre the focus element; clamp so we never scroll above the top
+        const offset = Math.max(0, focusCenter - visibleIframeHeight / 2);
+        setFocusOffset(offset);
+      } catch {
+        // Cross-origin or DOM access error — keep default (top)
+      }
+    }, FOCUS_MEASURE_DELAY_MS);
+  }, []);
+
   const handleError = useCallback(() => setErrored(true), []);
 
   const resolvedScale = scale ?? 0;
@@ -86,6 +143,7 @@ export function PortfolioThumbnail({ handle, className }: PortfolioThumbnailProp
       {/* Iframe — invisible until fully loaded, then fades in */}
       {!errored && resolvedScale > 0 && (
         <iframe
+          ref={iframeRef}
           src={`/u/${handle}?view=portfolio&preview=true`}
           title="Portfolio preview"
           loading="eager"
@@ -100,7 +158,7 @@ export function PortfolioThumbnail({ handle, className }: PortfolioThumbnailProp
             transform: `scale(${resolvedScale})`,
             transformOrigin: 'top left',
             position: 'absolute',
-            top: 0,
+            top: -(focusOffset * resolvedScale),
             left: 0,
             overflow: 'hidden',
             opacity: loaded ? 1 : 0,
@@ -116,4 +174,21 @@ export function PortfolioThumbnail({ handle, className }: PortfolioThumbnailProp
       )}
     </div>
   );
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────
+
+/**
+ * Walk the `offsetParent` chain to compute the element's absolute
+ * top position relative to the document root. This is more reliable
+ * than `getBoundingClientRect()` for non-scrolling iframe documents.
+ */
+function getDocumentOffsetTop(el: HTMLElement): number {
+  let top = 0;
+  let current: HTMLElement | null = el;
+  while (current) {
+    top += current.offsetTop;
+    current = current.offsetParent as HTMLElement | null;
+  }
+  return top;
 }

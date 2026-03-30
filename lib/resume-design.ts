@@ -144,6 +144,7 @@ export function buildResumeDesignStyles(raw: ResumeDesign | null | undefined): R
     '--rd-font-size': `${d.fontSize}px`,
     '--rd-name-font-size': `${d.nameFontSize}px`,
     '--rd-header-alignment': d.headerAlignment,
+    '--rd-justify-all': d.justifyAll ? 'justify' : 'initial',
     '--rd-section-gap': `${Math.round(20 * densityScale)}px`,
     '--rd-entry-gap': `${Math.round(16 * densityScale)}px`,
     '--rd-bullet-margin': `${Math.round(8 * densityScale)}px`,

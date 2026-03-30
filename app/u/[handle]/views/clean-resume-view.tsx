@@ -1,14 +1,14 @@
 'use client';
 
-import { Check, Copy, Grid3X3, Printer } from 'lucide-react';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { AlignJustify, AlignLeft, Check, Copy } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { cleanPhoneDisplay } from '@/components/ui/phone-input';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { containsHtmlFormatting, isHtmlEmpty } from '@/lib/html-utils';
 import { buildResumeDesignStyles, parseResumeDesign } from '@/lib/resume-design';
-import { getPortfolioPath } from '@/lib/url';
-import { formatDate } from '@/lib/utils';
+import { cn, formatDate } from '@/lib/utils';
 import { applyVisibilityFilter, type FilteredProfile } from '@/lib/visibility';
 import type {
   CustomSectionContent,
@@ -27,6 +27,12 @@ import { ResumeFontLoader } from './resume-font-loader';
 interface CleanResumeViewProps {
   profile: PublicProfile;
   profileHandle?: string;
+  /** Callback when the floating justify-all button is toggled (for persistence). */
+  onJustifyToggle?: (justified: boolean) => void;
+  /** Builder mode: whether all rich-text content is currently justified */
+  allContentJustified?: boolean;
+  /** Builder mode: callback to justify all rich-text content */
+  onJustifyAll?: () => void;
 }
 
 // ============================================================================
@@ -669,19 +675,37 @@ function CustomSection({ section }: { section: ProfileSection }) {
 // ACTIONS BAR
 // ============================================================================
 
-function ResumeActions({
-  resumeRef,
-  profileHandle,
-}: {
-  resumeRef: React.RefObject<HTMLDivElement | null>;
-  profileHandle?: string;
-}) {
+const IDLE_TIMEOUT_MS = 3000;
+
+function ResumeActions({ resumeRef }: { resumeRef: React.RefObject<HTMLDivElement | null> }) {
   const [copied, setCopied] = useState(false);
+  const [idle, setIdle] = useState(false);
+  const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Mouse-idle fade: hide after IDLE_TIMEOUT_MS of no movement ────────
+  useEffect(() => {
+    const resetIdle = () => {
+      setIdle(false);
+      if (idleTimer.current) clearTimeout(idleTimer.current);
+      idleTimer.current = setTimeout(() => setIdle(true), IDLE_TIMEOUT_MS);
+    };
+
+    // Start the initial timer
+    idleTimer.current = setTimeout(() => setIdle(true), IDLE_TIMEOUT_MS);
+
+    window.addEventListener('mousemove', resetIdle);
+    window.addEventListener('touchstart', resetIdle);
+
+    return () => {
+      if (idleTimer.current) clearTimeout(idleTimer.current);
+      window.removeEventListener('mousemove', resetIdle);
+      window.removeEventListener('touchstart', resetIdle);
+    };
+  }, []);
 
   const handleCopy = useCallback(async () => {
     if (!resumeRef.current) return;
 
-    // Get the text content, preserving some structure
     const text = resumeRef.current.innerText;
 
     try {
@@ -701,25 +725,12 @@ function ResumeActions({
     }
   }, [resumeRef]);
 
-  const handlePrint = useCallback(() => {
-    window.print();
-  }, []);
-
   return (
-    <div className="resume-actions print:hidden">
-      {profileHandle && (
-        <a href={getPortfolioPath(profileHandle)}>
-          <Button
-            variant="outline"
-            size="sm"
-            className="resume-action-button"
-            title="View Portfolio"
-          >
-            <Grid3X3 className="h-4 w-4" />
-            <span>Portfolio</span>
-          </Button>
-        </a>
-      )}
+    <div
+      className={`resume-actions transition-opacity duration-500 print:hidden ${
+        idle ? 'pointer-events-none opacity-0' : 'opacity-100'
+      }`}
+    >
       <Button
         variant="outline"
         size="sm"
@@ -730,16 +741,82 @@ function ResumeActions({
         {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
         <span>{copied ? 'Copied!' : 'Copy'}</span>
       </Button>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={handlePrint}
-        className="resume-action-button"
-        title="Print or save as PDF"
-      >
-        <Printer className="h-4 w-4" />
-        <span>Print</span>
-      </Button>
+    </div>
+  );
+}
+
+// ============================================================================
+// JUSTIFY ALL FLOATING BUTTON
+// ============================================================================
+
+function JustifyAllButton({
+  active,
+  onToggle,
+  allContentJustified,
+  onJustifyAll,
+}: {
+  active: boolean;
+  onToggle: () => void;
+  allContentJustified?: boolean;
+  onJustifyAll?: () => void;
+}) {
+  // Builder mode: state-aware button with red/green indicators
+  if (onJustifyAll !== undefined) {
+    return (
+      <div className="resume-justify-button print:hidden">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              size="icon"
+              className={cn(
+                'resume-justify-trigger h-8 w-8 transition-colors',
+                allContentJustified
+                  ? 'cursor-default border-emerald-500/40 bg-emerald-50/50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400'
+                  : 'border-red-500/40 bg-red-50/50 text-red-600 hover:bg-red-100/50 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20'
+              )}
+              onClick={onJustifyAll}
+              disabled={allContentJustified}
+            >
+              {allContentJustified ? (
+                <AlignJustify className="h-4 w-4" />
+              ) : (
+                <AlignLeft className="h-4 w-4" />
+              )}
+              <span className="sr-only">
+                {allContentJustified ? 'All text is justified' : 'Justify all text'}
+              </span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="left" className="text-xs">
+            {allContentJustified ? 'All text is justified' : 'Justify all text'}
+          </TooltipContent>
+        </Tooltip>
+      </div>
+    );
+  }
+
+  // Public view: simple CSS toggle
+  return (
+    <div className="resume-justify-button print:hidden">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant={active ? 'default' : 'outline'}
+            size="icon"
+            className="resume-justify-trigger h-8 w-8"
+            onClick={onToggle}
+          >
+            <AlignJustify className="h-4 w-4" />
+            <span className="sr-only">
+              {active ? 'Remove justified alignment' : 'Justify all text'}
+            </span>
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="left" className="text-xs">
+          {active ? 'Remove justified alignment' : 'Justify all text'}
+        </TooltipContent>
+      </Tooltip>
     </div>
   );
 }
@@ -748,8 +825,31 @@ function ResumeActions({
 // MAIN COMPONENT
 // ============================================================================
 
-export function CleanResumeView({ profile: rawProfile, profileHandle }: CleanResumeViewProps) {
+export function CleanResumeView({
+  profile: rawProfile,
+  onJustifyToggle,
+  allContentJustified,
+  onJustifyAll,
+}: CleanResumeViewProps) {
   const resumeRef = useRef<HTMLDivElement>(null);
+
+  // ── Justify-all local state (derived from design, toggleable) ─────────
+  const parsedDesign = useMemo(
+    () => parseResumeDesign(rawProfile.resumeDesign) as ResumeDesign | null,
+    [rawProfile.resumeDesign]
+  );
+  const [justifyAll, setJustifyAll] = useState(parsedDesign?.justifyAll ?? false);
+
+  // Sync local state when the design prop changes (e.g. from designer panel)
+  useEffect(() => {
+    setJustifyAll(parsedDesign?.justifyAll ?? false);
+  }, [parsedDesign?.justifyAll]);
+
+  const handleJustifyToggle = useCallback(() => {
+    const next = !justifyAll;
+    setJustifyAll(next);
+    onJustifyToggle?.(next);
+  }, [justifyAll, onJustifyToggle]);
 
   // ── Centralized visibility filtering ──────────────────────────────────
   // Apply section-level visibility once. After this, every array/field is
@@ -831,14 +931,26 @@ export function CleanResumeView({ profile: rawProfile, profileHandle }: CleanRes
   return (
     <>
       <ResumeFontLoader fontFamily={activeFontFamily} />
-      <ResumeActions resumeRef={resumeRef} profileHandle={profileHandle} />
+      <ResumeActions resumeRef={resumeRef} />
 
-      <article ref={resumeRef} className="resume-paper" style={designStyles}>
-        <ResumeHeader profile={profile} />
+      <div className="resume-paper-wrapper group/resume relative">
+        <JustifyAllButton
+          active={justifyAll}
+          onToggle={handleJustifyToggle}
+          allContentJustified={allContentJustified}
+          onJustifyAll={onJustifyAll}
+        />
+        <article
+          ref={resumeRef}
+          className={['resume-paper', justifyAll && 'resume-justify-all'].filter(Boolean).join(' ')}
+          style={designStyles}
+        >
+          <ResumeHeader profile={profile} />
 
-        {/* Render body sections in user-configured sortOrder */}
-        {bodySections.map(renderSection)}
-      </article>
+          {/* Render body sections in user-configured sortOrder */}
+          {bodySections.map(renderSection)}
+        </article>
+      </div>
     </>
   );
 }

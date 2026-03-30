@@ -77,6 +77,8 @@ export interface ResumeDesign {
   density?: ResumeDensity;
   /** Name font size in px (default 28) */
   nameFontSize?: number;
+  /** Apply justified text alignment to all resume content */
+  justifyAll?: boolean;
 }
 
 /** Default design settings applied when no custom design is configured */
@@ -89,6 +91,7 @@ export const RESUME_DESIGN_DEFAULTS: Required<ResumeDesign> = {
   fontSize: 13,
   density: 'normal',
   nameFontSize: 28,
+  justifyAll: false,
 };
 
 /** Maps font family identifiers to CSS font-family values */
@@ -126,7 +129,7 @@ export const RESUME_FONT_LABELS: Record<ResumeFontFamily, string> = {
 /**
  * Portfolio display view mode
  */
-export type PortfolioView = 'portfolio' | 'timeline' | 'snapshot';
+export type PortfolioView = 'portfolio' | 'timeline' | 'snapshot' | 'snap';
 
 /**
  * Full profile with all relations loaded

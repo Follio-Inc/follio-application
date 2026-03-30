@@ -2,6 +2,7 @@
 
 import {
   AlignCenter,
+  AlignJustify,
   AlignLeft,
   AlignRight,
   Minus,
@@ -50,6 +51,7 @@ import {
 
 import { ResumeFontLoader } from '@/app/u/[handle]/views/resume-font-loader';
 
+import { useJustifyAll } from '../lib/use-justify-all';
 import { useBuilderStore } from './builder-store-provider';
 
 // ─── Constants ────────────────────────────────────────────────────
@@ -249,6 +251,44 @@ function DividerPreview({ style }: { style: ResumeDividerStyle }) {
     default:
       return null;
   }
+}
+
+// ─── Justify All Button ───────────────────────────────────────────
+
+function JustifyAllButton() {
+  const { allJustified, justifyAll: handleJustifyAll } = useJustifyAll();
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className={cn(
+            'h-8 w-full gap-1.5 text-xs transition-colors',
+            allJustified
+              ? 'cursor-default border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+              : 'border-red-500/40 bg-red-500/10 text-red-600 hover:bg-red-500/20 dark:text-red-400 dark:hover:bg-red-500/20'
+          )}
+          onClick={handleJustifyAll}
+          disabled={allJustified}
+        >
+          {allJustified ? (
+            <AlignJustify className="h-3.5 w-3.5" />
+          ) : (
+            <AlignLeft className="h-3.5 w-3.5" />
+          )}
+          {allJustified ? 'All Justified' : 'Justify All'}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" className="text-xs">
+        {allJustified
+          ? 'All text content is already justified'
+          : 'Set justified alignment on all text content'}
+      </TooltipContent>
+    </Tooltip>
+  );
 }
 
 // ─── Main Designer Panel (Inline) ─────────────────────────────────
@@ -482,6 +522,11 @@ export function DesignerPanel() {
                   </Tooltip>
                 ))}
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs font-medium text-muted-foreground">Text Alignment</Label>
+              <JustifyAllButton />
             </div>
           </section>
 

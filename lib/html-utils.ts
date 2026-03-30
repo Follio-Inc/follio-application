@@ -145,3 +145,39 @@ export function htmlToBullets(html: string): string[] {
     .map((l) => l.trim())
     .filter((l) => l.length > 0);
 }
+
+// ─── Text Alignment Detection & Modification ────────────────────
+
+/**
+ * Regex matching non-justify text-align values in TipTap-generated HTML.
+ * TipTap adds `style="text-align: left|center|right"` to elements; the absence
+ * of any text-align means the editor's `defaultAlignment` is used (justify).
+ */
+const NON_JUSTIFY_ALIGN_RE = /text-align:\s*(?:left|center|right)/i;
+const NON_JUSTIFY_ALIGN_RE_GLOBAL = /text-align:\s*(?:left|center|right)/gi;
+
+/**
+ * Check whether an HTML string is fully justified.
+ *
+ * Returns `true` when the HTML contains NO non-justify text-align declarations.
+ * Null, undefined and empty strings are considered "fully justified" because
+ * the TipTap editor defaults to justify alignment for new content.
+ */
+export function isHtmlFullyJustified(html: string | null | undefined): boolean {
+  if (!html) return true;
+  return !NON_JUSTIFY_ALIGN_RE.test(html);
+}
+
+/**
+ * Rewrite every non-justify text-align value to `justify` in the given HTML.
+ *
+ * Preserves all other inline styles and attributes. Returns `null` for null
+ * input so it can be used safely with nullable database fields.
+ */
+export function justifyHtmlContent(html: string): string;
+export function justifyHtmlContent(html: null | undefined): null;
+export function justifyHtmlContent(html: string | null | undefined): string | null;
+export function justifyHtmlContent(html: string | null | undefined): string | null {
+  if (html == null) return null;
+  return html.replace(NON_JUSTIFY_ALIGN_RE_GLOBAL, 'text-align: justify');
+}

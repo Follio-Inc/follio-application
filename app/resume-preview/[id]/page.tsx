@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 import { notFound } from 'next/navigation';
 
 import { CleanResumeView } from '@/app/u/[handle]/views/clean-resume-view';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { db } from '@/lib/db';
 
 import type { PublicProfile } from '@/types';
@@ -83,12 +84,14 @@ export default async function ResumePreviewPage({ params }: ResumePreviewPagePro
   }) as unknown as PublicProfile;
 
   return (
-    <div className="bg-white" style={{ overflow: 'hidden' }}>
-      <main className="mx-auto max-w-5xl py-6">
-        <div className="[&>.resume-actions]:hidden">
-          <CleanResumeView profile={publicProfile} />
-        </div>
-      </main>
-    </div>
+    <TooltipProvider>
+      <div className="bg-white" style={{ overflow: 'hidden' }}>
+        <main className="mx-auto max-w-5xl">
+          <div className="[&>.resume-actions]:hidden">
+            <CleanResumeView profile={publicProfile} />
+          </div>
+        </main>
+      </div>
+    </TooltipProvider>
   );
 }

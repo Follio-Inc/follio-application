@@ -2,6 +2,8 @@
  * Portfolio Template System — Public API
  */
 
+export { PORTFOLIO_THUMBNAIL_FOCUS_ATTR } from './types';
+
 export type {
   TemplateCopy,
   TemplateKit,

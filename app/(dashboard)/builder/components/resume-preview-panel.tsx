@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { CleanResumeView } from '@/app/u/[handle]/views/clean-resume-view';
 
+import { useJustifyAll } from '../lib/use-justify-all';
 import { useBuilderStore } from './builder-store-provider';
 
 import type { PublicProfile } from '@/types';
@@ -18,6 +19,8 @@ export function ResumePreviewPanel() {
   const profile = useBuilderStore((s) => s.draftProfile);
   const containerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0.5);
+
+  const { allJustified, justifyAll: handleJustifyAll } = useJustifyAll();
 
   // Calculate scale based on container width
   useEffect(() => {
@@ -37,8 +40,11 @@ export function ResumePreviewPanel() {
 
   return (
     <div className="relative flex h-full flex-col">
-      {/* Scaled Resume Content */}
-      <div ref={containerRef} className="flex-1 overflow-auto px-6 pb-6 pt-6">
+      {/* Scrollable area — right padding keeps scrollbar away from the panel edge */}
+      <div
+        ref={containerRef}
+        className="scrollbar-thin flex-1 overflow-y-auto overflow-x-hidden px-6 pb-6 pr-10 pt-6"
+      >
         <div
           className="overflow-hidden"
           style={{
@@ -47,7 +53,11 @@ export function ResumePreviewPanel() {
         >
           {/* Hide ResumeActions (print/copy buttons) in preview mode */}
           <div className="pt-4 [&>.resume-actions]:hidden">
-            <CleanResumeView profile={profile as unknown as PublicProfile} />
+            <CleanResumeView
+              profile={profile as unknown as PublicProfile}
+              allContentJustified={allJustified}
+              onJustifyAll={handleJustifyAll}
+            />
           </div>
         </div>
       </div>

@@ -1,5 +1,6 @@
 'use client';
 
+import { FileText, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 // ─── Constants ────────────────────────────────────────────────────
@@ -16,6 +17,9 @@ const ASPECT_RATIO = RESUME_CONTENT_WIDTH / RESUME_CONTENT_HEIGHT;
 /** Maximum visible height (px) for the thumbnail container. */
 const MAX_HEIGHT = 260;
 
+/** Time (ms) before the iframe is considered timed out. */
+const LOAD_TIMEOUT_MS = 10_000;
+
 /**
  * ResumeThumbnail
  *
@@ -23,8 +27,9 @@ const MAX_HEIGHT = 260;
  * owner-only `/resume-preview/[id]` route inside a scaled-down iframe.
  *
  * - Uses a fixed aspect-ratio container so the card never changes size.
+ * - Shows a shimmer skeleton while the iframe is loading.
  * - The iframe is invisible (`opacity: 0`) until loaded, then fades in.
- * - No loading skeleton or icons — just a clean white card that reveals content.
+ * - Falls back to an icon placeholder on error or timeout, with a retry button.
  * - `pointer-events: none` prevents accidental interaction.
  * - CSS `transform: scale()` keeps the preview crisp (all text is real DOM).
  */
@@ -40,6 +45,7 @@ export function ResumeThumbnail({ profileId, className }: ResumeThumbnailProps) 
   const [loaded, setLoaded] = useState(false);
   const [errored, setErrored] = useState(false);
   const [scale, setScale] = useState<number | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
 
   // Compute scale on first layout + track resizes
   useEffect(() => {
@@ -60,10 +66,29 @@ export function ResumeThumbnail({ profileId, className }: ResumeThumbnailProps) 
     return () => observer.disconnect();
   }, []);
 
+  // Timeout: if the iframe hasn't loaded after LOAD_TIMEOUT_MS, show fallback
+  useEffect(() => {
+    if (loaded || errored) return;
+
+    const timer = setTimeout(() => {
+      setErrored(true);
+    }, LOAD_TIMEOUT_MS);
+
+    return () => clearTimeout(timer);
+  }, [loaded, errored, retryKey]);
+
   const handleLoad = useCallback(() => setLoaded(true), []);
   const handleError = useCallback(() => setErrored(true), []);
 
+  const handleRetry = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setLoaded(false);
+    setErrored(false);
+    setRetryKey((k) => k + 1);
+  }, []);
+
   const resolvedScale = scale ?? 0;
+  const showSkeleton = !loaded && !errored;
 
   return (
     <div
@@ -74,9 +99,40 @@ export function ResumeThumbnail({ profileId, className }: ResumeThumbnailProps) 
         maxHeight: `${MAX_HEIGHT}px`,
       }}
     >
+      {/* Loading skeleton — visible until iframe loads or errors */}
+      {showSkeleton && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+          <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-gray-50 to-gray-100" />
+          <div className="relative flex flex-col items-center gap-2">
+            <FileText className="h-8 w-8 text-gray-300" />
+            <div className="flex flex-col items-center gap-1.5">
+              <div className="h-2 w-24 rounded-full bg-gray-200" />
+              <div className="h-2 w-16 rounded-full bg-gray-200" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Error fallback with retry */}
+      {errored && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-gray-50/80">
+          <FileText className="h-8 w-8 text-gray-300" />
+          <p className="text-xs text-gray-400">Preview unavailable</p>
+          <button
+            type="button"
+            onClick={handleRetry}
+            className="pointer-events-auto flex items-center gap-1 rounded-md px-2 py-1 text-xs text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
+          >
+            <RefreshCw className="h-3 w-3" />
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* Iframe — invisible until fully loaded, then fades in */}
       {!errored && resolvedScale > 0 && (
         <iframe
+          key={retryKey}
           src={`/resume-preview/${profileId}`}
           title="Resume preview"
           loading="eager"

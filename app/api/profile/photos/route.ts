@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { url, caption, category } = body;
+    const { url, caption, category, originalUrl, adjustments } = body;
 
     if (!url || typeof url !== 'string') {
       return NextResponse.json({ error: 'URL is required' }, { status: 400 });
@@ -61,13 +61,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
-    // For PROFILE photos, replace the existing one (a profile has one avatar).
-    // Gallery photos accumulate.
-    if (validCategory === 'PROFILE') {
-      await db.profilePhoto.deleteMany({
-        where: { profileId, category: 'PROFILE' },
-      });
-    }
+    // Both PROFILE and GALLERY photos accumulate. Users can upload multiple
+    // profile photos and switch between them (selection lives on Profile.avatarUrl).
 
     // Get the highest sortOrder for the category
     const lastPhoto = await db.profilePhoto.findFirst({
@@ -79,6 +74,8 @@ export async function POST(request: NextRequest) {
       data: {
         profileId,
         url,
+        originalUrl: typeof originalUrl === 'string' ? originalUrl : undefined,
+        adjustments: adjustments && typeof adjustments === 'object' ? adjustments : undefined,
         caption: caption || null,
         category: validCategory,
         source: 'MANUAL',

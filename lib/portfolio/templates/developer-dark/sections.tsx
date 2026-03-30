@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import type { TemplateAIEnrichment, TemplateCopy, TemplateProfileData } from '../types';
+import { PORTFOLIO_THUMBNAIL_FOCUS_ATTR } from '../types';
 
 import { SocialLinksRow } from './social-icons';
 import { computeYearsOfExperience, formatDateRange, getDisplayName } from './utils';
@@ -172,7 +173,7 @@ export function DDHero({ profile, copy }: HeroProps) {
   return (
     <section id="dd-hero" className="dd-hero">
       <div className="dd-container">
-        <div className="dd-hero-centered">
+        <div className="dd-hero-centered" {...{ [PORTFOLIO_THUMBNAIL_FOCUS_ATTR]: '' }}>
           <div className="dd-accent-dash dd-animate-in" />
 
           <p className="dd-hero-greeting dd-animate-in dd-animate-delay-1">

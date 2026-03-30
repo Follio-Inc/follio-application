@@ -524,17 +524,19 @@ model YouTubeVideo {
 }
 
 model ProfilePhoto {
-  id        String        @id @default(cuid())
-  profileId String
-  url       String
-  caption   String?
-  category  PhotoCategory @default(GALLERY)
-  source    DataSource    @default(MANUAL)
-  sortOrder Int           @default(0)
-  isVisible Boolean       @default(true)
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
-  profile   Profile       @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  id          String        @id @default(cuid())
+  profileId   String
+  url         String
+  originalUrl String? // Raw unmodified original image (before crop/adjust)
+  adjustments Json? // Persisted editor state: {brightness, contrast, cropPosition, cropZoom, cropRotation, croppedAreaPixels}
+  caption     String?
+  category    PhotoCategory @default(GALLERY)
+  source      DataSource    @default(MANUAL)
+  sortOrder   Int           @default(0)
+  isVisible   Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  profile     Profile       @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
   @@index([profileId])
   @@index([category])
