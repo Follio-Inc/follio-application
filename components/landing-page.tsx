@@ -3,7 +3,7 @@
 import { type Variants, motion, useInView } from 'framer-motion';
 import { ArrowRight, BarChart3, Briefcase, Check, Clock, FileText, Shield } from 'lucide-react';
 import Link from 'next/link';
-import { type ReactNode, useRef } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 
 import { Logo } from '@/components/Logo';
 import { ResumeIllustration } from '@/components/resume-illustration';
@@ -441,6 +441,41 @@ function FadeIn({
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   Hero CTA button — highlights on mouse movement, color shift on hover
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+function HeroCTA() {
+  const [mouseMoving, setMouseMoving] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const onMove = () => {
+      setMouseMoving(true);
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => setMouseMoving(false), 800);
+    };
+    window.addEventListener('mousemove', onMove);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
+
+  return (
+    <Link href="/sign-up">
+      <Button
+        size="lg"
+        className="gap-2 shadow-md transition-shadow duration-500"
+        style={mouseMoving ? { boxShadow: '0 0 14px hsl(170 70% 50% / 0.15)' } : undefined}
+      >
+        Reimagine Your Resume
+        <ArrowRight className="h-4 w-4" />
+      </Button>
+    </Link>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    Hero showcase — displays the resume illustration
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -500,25 +535,15 @@ export function LandingPage() {
           <div className="grid items-center gap-12 lg:grid-cols-[1fr,auto] lg:gap-20">
             {/* Left: Copy */}
             <div className="max-w-xl">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5 }}
-                className="mb-5 inline-flex items-center gap-2 rounded-full border bg-muted/50 px-3 py-1 text-xs text-muted-foreground"
-              >
-                <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                The future of professional resumes
-              </motion.div>
-
               <motion.h1
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.1 }}
                 className="mb-5 text-4xl font-bold tracking-tight sm:text-5xl"
               >
-                Your resume,{' '}
+                Own Your{' '}
                 <span className="bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-                  reimagined
+                  First Impression
                 </span>
               </motion.h1>
 
@@ -528,8 +553,8 @@ export function LandingPage() {
                 transition={{ duration: 0.5, delay: 0.2 }}
                 className="mb-8 text-base leading-relaxed text-muted-foreground sm:text-lg"
               >
-                A single source of truth for your professional identity. Import once — get a resume,
-                portfolio, timeline, and snapshot — all perfectly formatted and always in sync.
+                The first truly digital resume — better than PDFs for building, sharing, and
+                applying.
               </motion.p>
 
               <motion.div
@@ -538,12 +563,7 @@ export function LandingPage() {
                 transition={{ duration: 0.5, delay: 0.3 }}
                 className="flex gap-3"
               >
-                <Link href="/sign-up">
-                  <Button size="lg" className="gap-2">
-                    Create your Follio
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
-                </Link>
+                <HeroCTA />
               </motion.div>
             </div>
 

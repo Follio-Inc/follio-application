@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { cleanPhoneDisplay } from '@/components/ui/phone-input';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { containsHtmlFormatting, isHtmlEmpty } from '@/lib/html-utils';
 import { buildResumeDesignStyles, parseResumeDesign } from '@/lib/resume-design';
 import { cn, formatDate } from '@/lib/utils';
@@ -764,34 +764,36 @@ function JustifyAllButton({
   if (onJustifyAll !== undefined) {
     return (
       <div className="resume-justify-button print:hidden">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="outline"
-              size="icon"
-              className={cn(
-                'resume-justify-trigger h-8 w-8 transition-colors',
-                allContentJustified
-                  ? 'cursor-default border-emerald-500/40 bg-emerald-50/50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400'
-                  : 'border-red-500/40 bg-red-50/50 text-red-600 hover:bg-red-100/50 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20'
-              )}
-              onClick={onJustifyAll}
-              disabled={allContentJustified}
-            >
-              {allContentJustified ? (
-                <AlignJustify className="h-4 w-4" />
-              ) : (
-                <AlignLeft className="h-4 w-4" />
-              )}
-              <span className="sr-only">
-                {allContentJustified ? 'All text is justified' : 'Justify all text'}
-              </span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="left" className="text-xs">
-            {allContentJustified ? 'All text is justified' : 'Justify all text'}
-          </TooltipContent>
-        </Tooltip>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                className={cn(
+                  'resume-justify-trigger h-8 w-8 transition-colors',
+                  allContentJustified
+                    ? 'cursor-default border-emerald-500/40 bg-emerald-50/50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400'
+                    : 'border-red-500/40 bg-red-50/50 text-red-600 hover:bg-red-100/50 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20'
+                )}
+                onClick={onJustifyAll}
+                disabled={allContentJustified}
+              >
+                {allContentJustified ? (
+                  <AlignJustify className="h-4 w-4" />
+                ) : (
+                  <AlignLeft className="h-4 w-4" />
+                )}
+                <span className="sr-only">
+                  {allContentJustified ? 'All text is justified' : 'Justify all text'}
+                </span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="left" className="text-xs">
+              {allContentJustified ? 'All text is justified' : 'Justify all text'}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
     );
   }
@@ -799,24 +801,26 @@ function JustifyAllButton({
   // Public view: simple CSS toggle
   return (
     <div className="resume-justify-button print:hidden">
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant={active ? 'default' : 'outline'}
-            size="icon"
-            className="resume-justify-trigger h-8 w-8"
-            onClick={onToggle}
-          >
-            <AlignJustify className="h-4 w-4" />
-            <span className="sr-only">
-              {active ? 'Remove justified alignment' : 'Justify all text'}
-            </span>
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="left" className="text-xs">
-          {active ? 'Remove justified alignment' : 'Justify all text'}
-        </TooltipContent>
-      </Tooltip>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={active ? 'default' : 'outline'}
+              size="icon"
+              className="resume-justify-trigger h-8 w-8"
+              onClick={onToggle}
+            >
+              <AlignJustify className="h-4 w-4" />
+              <span className="sr-only">
+                {active ? 'Remove justified alignment' : 'Justify all text'}
+              </span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="left" className="text-xs">
+            {active ? 'Remove justified alignment' : 'Justify all text'}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     </div>
   );
 }
