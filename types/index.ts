@@ -127,9 +127,13 @@ export const RESUME_FONT_LABELS: Record<ResumeFontFamily, string> = {
 // ===========================================
 
 /**
- * Portfolio display view mode
+ * Public site view mode.
+ *
+ * A profile renders as one of two views:
+ *  - `portfolio` — Visual showcase, deeper read.
+ *  - `resume`    — Traditional ATS-friendly document.
  */
-export type PortfolioView = 'portfolio' | 'timeline' | 'snapshot' | 'snap';
+export type PortfolioView = 'portfolio' | 'resume';
 
 /**
  * Full profile with all relations loaded

@@ -44,6 +44,7 @@ export function computeAlgorithmicSnapView(profile: PublicProfile): SnapViewData
     recruiterBrief: buildAlgorithmicBrief(profile, stats, careerTimeline),
     certifications: (profile.certifications ?? []).map((c) => c.name).slice(0, 4),
     awards: (profile.awards ?? []).map((a) => a.title).slice(0, 4),
+    topSkills: buildTopSkills(profile),
     isAIGenerated: false,
   };
 }
@@ -250,6 +251,35 @@ export function buildKeyProjects(profile: PublicProfile): SnapProject[] {
       tech: (p.techStack ?? []).slice(0, 3),
     };
   });
+}
+
+/**
+ * Build a flat, deduplicated list of top skills for Follio bubble display.
+ * Prioritizes: Expert > Advanced > others. Returns 8-12 skills max.
+ */
+export function buildTopSkills(profile: PublicProfile): string[] {
+  const skills = profile.skills ?? [];
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  const addSkill = (name: string) => {
+    const key = name.toLowerCase().trim();
+    if (!seen.has(key) && key.length > 0) {
+      seen.add(key);
+      result.push(name.trim());
+    }
+  };
+
+  // Expert first, then Advanced, then rest
+  const expert = skills.filter((s) => s.level === 'EXPERT');
+  const advanced = skills.filter((s) => s.level === 'ADVANCED');
+  const rest = skills.filter((s) => s.level !== 'EXPERT' && s.level !== 'ADVANCED');
+
+  for (const s of expert) addSkill(s.name);
+  for (const s of advanced) addSkill(s.name);
+  for (const s of rest) addSkill(s.name);
+
+  return result.slice(0, 12);
 }
 
 function buildAlgorithmicTagline(profile: PublicProfile, stats: SnapViewStats): string {

@@ -1,20 +1,33 @@
 'use client';
 
-import { AlignJustify, AlignLeft, PenLine, WandSparkles } from 'lucide-react';
+import { PenLine, WandSparkles } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 import { AllSectionsEditor } from './components/all-sections-editor';
 import { BuilderStoreProvider, useBuilderStore } from './components/builder-store-provider';
-import { BuilderToolbar } from './components/builder-toolbar';
-import { DesignerPanel } from './components/designer-panel';
-import { ImportSuggestionDialog } from './components/import-suggestion-dialog';
 import { ResumePreviewPanel } from './components/resume-preview-panel';
-import { useJustifyAll } from './lib/use-justify-all';
 
 import type { FullProfile, ProfileSection } from '@/types';
+
+// Designer panel is only visible when the user opens the Designer tab —
+// load it on demand so the initial editor bundle stays small.
+const DesignerPanel = dynamic(
+  () => import('./components/designer-panel').then((m) => ({ default: m.DesignerPanel })),
+  { ssr: false }
+);
+
+// Import suggestion dialog only opens in response to a user action — defer it.
+const ImportSuggestionDialog = dynamic(
+  () =>
+    import('./components/import-suggestion-dialog').then((m) => ({
+      default: m.ImportSuggestionDialog,
+    })),
+  { ssr: false }
+);
 
 // ──────────────────────────────────────────────
 // Public API
@@ -27,18 +40,10 @@ interface BuilderLayoutClientProps {
 }
 
 export function BuilderLayoutClient({ profile }: BuilderLayoutClientProps) {
-  const [sections, setSections] = useState<ProfileSection[]>(profile.sections || []);
-
-  // Fetch sections if not present (defensive)
-  useEffect(() => {
-    if (!sections.length) {
-      fetch('/api/profile/sections')
-        .then((r) => (r.ok ? r.json() : Promise.reject(r)))
-        .then((data) => setSections(data))
-        .catch((err) => console.error('Failed to fetch sections:', err));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sections.length]);
+  // Server layout guarantees default sections exist before this component
+  // mounts, so we can trust `profile.sections` and avoid a defensive
+  // client-side fetch that adds a roundtrip on every builder open.
+  const sections = profile.sections ?? [];
 
   return (
     <BuilderStoreProvider profile={profile}>
@@ -61,9 +66,7 @@ interface BuilderLayoutInnerProps {
 function BuilderLayoutInner({ sections }: BuilderLayoutInnerProps) {
   const commitInlineChange = useBuilderStore((s) => s.commitInlineChange);
   const storeSections = useBuilderStore((s) => s.draftProfile.sections);
-  const draftProfile = useBuilderStore((s) => s.draftProfile);
   const [designerActive, setDesignerActive] = useState(false);
-  const quickButtonsRef = useRef<HTMLDivElement>(null);
   const designerBtnRef = useRef<HTMLButtonElement>(null);
   const contentBtnRef = useRef<HTMLButtonElement>(null);
 
@@ -71,9 +74,7 @@ function BuilderLayoutInner({ sections }: BuilderLayoutInnerProps) {
     setDesignerActive((prev) => !prev);
   }, []);
 
-  const { allJustified, justifyAll: handleJustifyAll } = useJustifyAll();
-
-  // ── Quick-button opacity driven by mouse X position ──
+  // ── Edge-glow effect for the Designer/Content gutter tabs ──
   const handleContentMouseMove = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       const rect = e.currentTarget.getBoundingClientRect();
@@ -98,23 +99,11 @@ function BuilderLayoutInner({ sections }: BuilderLayoutInnerProps) {
             : '';
         contentBtnRef.current.style.transform = `scale(${1 + proximity * 0.04})`;
       }
-
-      // Quick-button fade
-      if (!designerActive && quickButtonsRef.current) {
-        // Fade in: 0 at ≤40%, fully visible at ≥75%
-        const opacity = Math.max(0, Math.min(1, (relativeX - 0.4) / 0.35));
-        quickButtonsRef.current.style.opacity = String(opacity);
-        quickButtonsRef.current.style.pointerEvents = opacity > 0.15 ? 'auto' : 'none';
-      }
     },
     [designerActive]
   );
 
   const handleContentMouseLeave = useCallback(() => {
-    if (quickButtonsRef.current) {
-      quickButtonsRef.current.style.opacity = '0';
-      quickButtonsRef.current.style.pointerEvents = 'none';
-    }
     if (designerBtnRef.current) {
       designerBtnRef.current.style.boxShadow = '';
       designerBtnRef.current.style.transform = '';
@@ -154,11 +143,6 @@ function BuilderLayoutInner({ sections }: BuilderLayoutInnerProps) {
   return (
     <div className="flex min-h-[calc(100vh-3.5rem)] flex-col bg-muted/30 xl:h-[calc(100vh-3.5rem)]">
       <TooltipProvider delayDuration={300}>
-        {/* Toolbar — spans full width */}
-        <div className="sticky top-0 z-20 flex-shrink-0 border-b border-border/40 bg-muted/50 backdrop-blur-sm">
-          <BuilderToolbar />
-        </div>
-
         {/* Content area — on xl+ fixed height with overflow hidden for sliding */}
         <div
           className="relative flex-1 xl:min-h-0 xl:overflow-hidden"
@@ -219,39 +203,6 @@ function BuilderLayoutInner({ sections }: BuilderLayoutInnerProps) {
               <WandSparkles className="h-[22px] w-[22px]" />
               <span className="text-[14px] font-medium [writing-mode:vertical-rl]">Designer</span>
             </button>
-
-            {/* Quick design toggle — opacity driven by mouse proximity */}
-            <div
-              ref={quickButtonsRef}
-              className="flex flex-col items-center gap-1.5 transition-opacity duration-200 ease-out"
-              style={{ opacity: 0, pointerEvents: 'none' }}
-            >
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={handleJustifyAll}
-                    disabled={allJustified}
-                    aria-label={allJustified ? 'All text is justified' : 'Justify all text'}
-                    className={cn(
-                      'rounded-l-lg border border-r-0 p-2.5 shadow-sm backdrop-blur-sm transition-colors',
-                      allJustified
-                        ? 'cursor-default border-emerald-500/40 bg-emerald-500/15 text-emerald-600 opacity-80 dark:text-emerald-400'
-                        : 'border-red-500/40 bg-red-500/10 text-red-600 hover:bg-red-500/20 dark:text-red-400'
-                    )}
-                  >
-                    {allJustified ? (
-                      <AlignJustify className="h-4 w-4" />
-                    ) : (
-                      <AlignLeft className="h-4 w-4" />
-                    )}
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="left" className="text-xs">
-                  {allJustified ? 'All text is justified' : 'Justify all text'}
-                </TooltipContent>
-              </Tooltip>
-            </div>
           </div>
 
           {/* ── Gutter tab: Content (left edge, visible when designer mode) ── */}

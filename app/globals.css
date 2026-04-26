@@ -814,15 +814,11 @@
     opacity: 1;
   }
 
-  /* Actions bar — fixed at bottom center */
+  /* Actions bar — fixed at bottom center.
+     Holds the floating action cluster (Copy text / Download / Share)
+     rendered by `<PublicResumeActions>` on the public resume page. */
   .resume-actions {
     @apply fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2;
-  }
-
-  .resume-action-button {
-    @apply gap-2 rounded-full px-4 shadow-md backdrop-blur-sm;
-    background: hsl(var(--background) / 0.9);
-    border: 1px solid hsl(var(--border));
   }
 
   /* ── Justify All floating button ── */

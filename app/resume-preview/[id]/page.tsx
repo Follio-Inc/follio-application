@@ -18,11 +18,6 @@ export const dynamic = 'force-dynamic';
  * - Works for all statuses (DRAFT, PRIVATE, PUBLIC) since the owner is viewing.
  */
 
-// Helper to serialize data for client components (converts Date objects to ISO strings)
-function serializeForClient<T>(data: T): T {
-  return JSON.parse(JSON.stringify(data));
-}
-
 interface ResumePreviewPageProps {
   params: Promise<{ id: string }>;
 }
@@ -63,9 +58,11 @@ export default async function ResumePreviewPage({ params }: ResumePreviewPagePro
     notFound();
   }
 
-  // Strip sensitive fields and serialize for client rendering
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // Strip sensitive fields. Next.js RSC serializes Date objects natively,
+  // so no manual JSON round-trip is needed.
   const { userId: _uid, user: _user, ...publicFields } = profile;
+  void _uid;
+  void _user;
 
   const publicContactInfo = profile.contactInfo
     ? {
@@ -78,10 +75,10 @@ export default async function ResumePreviewPage({ params }: ResumePreviewPagePro
       }
     : null;
 
-  const publicProfile = serializeForClient({
+  const publicProfile = {
     ...publicFields,
     contactInfo: publicContactInfo,
-  }) as unknown as PublicProfile;
+  } as unknown as PublicProfile;
 
   return (
     <TooltipProvider>

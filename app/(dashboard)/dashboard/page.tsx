@@ -7,7 +7,7 @@ import { DashboardClient, type DashboardData } from './dashboard-client';
 
 export const metadata = {
   title: 'Dashboard - Follio',
-  description: 'Your Follio command center — manage resumes, portfolio, and more.',
+  description: 'Your Follio workspace — edit your profile, manage your sites, and share.',
 };
 
 export default async function DashboardPage() {

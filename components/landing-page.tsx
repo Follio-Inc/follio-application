@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 
 import { Logo } from '@/components/Logo';
+import { AppHeader } from '@/components/app-header';
 import { ResumeIllustration } from '@/components/resume-illustration';
 import { Button } from '@/components/ui/button';
 
@@ -40,7 +41,7 @@ const STEPS = [
   {
     step: '3',
     title: 'Share everywhere',
-    desc: 'Get a unique URL with resume, portfolio, and timeline views.',
+    desc: 'One link, three views — your Follio, your Portfolio, and your Resume.',
   },
 ] as const;
 
@@ -509,21 +510,29 @@ export function LandingPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* ─── Navigation ─────────────────────────────────────────────────── */}
-      <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <Logo href="/" size="md" />
-          <div className="flex items-center gap-3">
-            <Link href="/sign-in">
-              <Button variant="ghost" size="sm">
-                Sign in
-              </Button>
+      {/* Composes the canonical AppHeader (marketing tone) so the chrome
+          here is byte-identical to the rest of the product — only the
+          container max-width relaxes for marketing. */}
+      <AppHeader
+        tone="marketing"
+        left={<Logo href="/" size="md" />}
+        right={
+          <>
+            <Link
+              href="/sign-in"
+              className="hidden h-8 items-center rounded-full px-3 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 sm:inline-flex"
+            >
+              Sign in
             </Link>
-            <Link href="/sign-up">
-              <Button size="sm">Get Started</Button>
+            <Link
+              href="/sign-up"
+              className="inline-flex h-8 items-center rounded-full bg-foreground px-3.5 text-[13px] font-medium text-background shadow-sm transition-all hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            >
+              Get started
             </Link>
-          </div>
-        </div>
-      </nav>
+          </>
+        }
+      />
 
       {/* ─── Hero: Asymmetric split ─────────────────────────────────────── */}
       <section className="relative overflow-hidden">

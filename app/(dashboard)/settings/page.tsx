@@ -7,11 +7,6 @@ import { SettingsPageClient } from './settings-page-client';
 
 import type { FullProfile } from '@/types';
 
-// Helper to serialize data for client components (converts Date objects to ISO strings)
-function serializeForClient<T>(data: T): T {
-  return JSON.parse(JSON.stringify(data));
-}
-
 export const metadata = {
   title: 'Settings - Follio',
   description: 'Manage your Follio account settings, data sources, and preferences',
@@ -55,7 +50,7 @@ export default async function SettingsPage() {
     redirect('/onboarding');
   }
 
-  const serializedProfile = serializeForClient(profile) as unknown as FullProfile;
-
-  return <SettingsPageClient profile={serializedProfile} />;
+  // Next.js RSC serializes Date objects natively over the wire — no manual
+  // JSON round-trip required.
+  return <SettingsPageClient profile={profile as unknown as FullProfile} />;
 }

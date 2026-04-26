@@ -560,16 +560,36 @@ export function DashboardResumesSection({
                   key={resume.id}
                   className="group relative w-[280px] shrink-0 overflow-hidden transition-shadow hover:shadow-md"
                 >
-                  {/* Resume thumbnail preview */}
-                  <button
-                    type="button"
-                    className="relative block w-full cursor-pointer border-b"
-                    onClick={() => void handleOpenInBuilder(resume.id)}
-                    disabled={isMutating}
+                  {/*
+                   * Resume thumbnail preview.
+                   *
+                   * Rendered as a div with role="button" rather than a real
+                   * <button> because <ResumeThumbnail> contains its own
+                   * "Retry" button in its error state, and a <button> cannot
+                   * be a descendant of another <button> (HTML hydration
+                   * error). The div + role/keydown pattern preserves
+                   * keyboard activation and screen-reader semantics.
+                   */}
+                  <div
+                    role="button"
+                    tabIndex={isMutating ? -1 : 0}
+                    aria-disabled={isMutating}
                     aria-label={`Open ${resume.resumeTitle} in builder`}
+                    className="relative block w-full cursor-pointer border-b border-border/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-disabled:cursor-not-allowed"
+                    onClick={() => {
+                      if (isMutating) return;
+                      void handleOpenInBuilder(resume.id);
+                    }}
+                    onKeyDown={(event) => {
+                      if (isMutating) return;
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        void handleOpenInBuilder(resume.id);
+                      }
+                    }}
                   >
-                    <ResumeThumbnail profileId={resume.id} className="rounded-t-xl" />
-                  </button>
+                    <ResumeThumbnail profileId={resume.id} className="rounded-t-2xl" />
+                  </div>
 
                   <CardContent className="pb-2 pt-3">
                     <div className="flex items-start justify-between gap-2">

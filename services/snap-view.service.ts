@@ -23,6 +23,7 @@ import {
   buildEducation,
   buildKeyProjects,
   buildSkillClusters,
+  buildTopSkills,
   computeAlgorithmicSnapView,
   computeStats,
 } from '@/lib/snap-view-utils';
@@ -240,6 +241,7 @@ async function generateWithAI(profile: PublicProfile): Promise<SnapViewData> {
     recruiterBrief: ai.recruiterBrief || '',
     certifications: ai.certifications ?? [],
     awards: ai.awards ?? [],
+    topSkills: buildTopSkills(profile),
     isAIGenerated: true,
   };
 }

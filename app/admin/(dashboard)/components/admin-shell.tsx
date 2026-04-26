@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
+import { AppHeader, AppHeaderDivider } from '@/components/app-header';
 import { Logo } from '@/components/Logo';
 import { cn } from '@/lib/utils';
 
@@ -78,38 +79,50 @@ export function AdminShell({
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-muted/30">
-      {/* Top bar */}
-      <header className="relative z-50 flex h-14 items-center border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        {/* Mobile hamburger */}
-        <button
-          onClick={() => setMobileOpen(true)}
-          className="pl-4 pr-2 text-muted-foreground hover:text-foreground md:hidden"
-          aria-label="Open navigation"
-        >
-          <Menu className="h-5 w-5" />
-        </button>
-
-        <div className="flex items-center gap-3 px-4 sm:px-6">
-          <Logo href="/admin" size="md" />
-          <div className="flex items-center gap-1.5 rounded-full bg-orange-500/10 px-2.5 py-1 text-xs font-semibold text-orange-600 dark:text-orange-400">
-            <Shield className="h-3 w-3" />
-            Admin
-          </div>
-        </div>
-
-        <div className="flex-1" />
-
-        <div className="flex items-center gap-4 pr-4 sm:pr-6">
-          <span className="hidden text-xs text-muted-foreground sm:block">{adminEmail}</span>
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Back to app</span>
-          </Link>
-        </div>
-      </header>
+      {/* Top bar — composes the canonical AppHeader so it's visually
+          identical to the dashboard, public profile, and marketing
+          chrome. Admin-specific bits (badge, "Back to app" link,
+          mobile hamburger) live in the slots. */}
+      <AppHeader
+        left={
+          <>
+            <button
+              onClick={() => setMobileOpen(true)}
+              className={cn(
+                'inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors md:hidden',
+                'hover:bg-muted hover:text-foreground',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40'
+              )}
+              aria-label="Open navigation"
+              aria-expanded={mobileOpen}
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <Logo href="/admin" size="md" />
+            <AppHeaderDivider />
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-500/10 px-2.5 py-1 text-xs font-semibold text-orange-600 dark:text-orange-400">
+              <Shield className="h-3 w-3" />
+              Admin
+            </span>
+          </>
+        }
+        right={
+          <>
+            <span className="hidden text-xs text-muted-foreground sm:block">{adminEmail}</span>
+            <Link
+              href="/dashboard"
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors',
+                'hover:bg-muted/60 hover:text-foreground',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40'
+              )}
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Back to app</span>
+            </Link>
+          </>
+        }
+      />
 
       <div className="flex flex-1 overflow-hidden">
         {/* Desktop sidebar */}

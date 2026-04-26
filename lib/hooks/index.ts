@@ -7,4 +7,5 @@ export type {
   UseContactManagerReturn,
 } from './use-contact-manager';
 
+export { useCopyElementText } from './use-copy-element-text';
 export { useResumeDownload } from './use-resume-download';

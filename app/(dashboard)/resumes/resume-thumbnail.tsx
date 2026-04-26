@@ -93,7 +93,7 @@ export function ResumeThumbnail({ profileId, className }: ResumeThumbnailProps) 
   return (
     <div
       ref={containerRef}
-      className={`relative w-full overflow-hidden bg-white ${className ?? ''}`}
+      className={`relative w-full overflow-hidden bg-white shadow-[inset_0_0_0_1px_hsl(var(--border)/0.5)] ${className ?? ''}`}
       style={{
         aspectRatio: `${ASPECT_RATIO}`,
         maxHeight: `${MAX_HEIGHT}px`,
@@ -140,17 +140,19 @@ export function ResumeThumbnail({ profileId, className }: ResumeThumbnailProps) 
           scrolling="no"
           onLoad={handleLoad}
           onError={handleError}
-          className="pointer-events-none select-none border-0 transition-opacity duration-300"
+          className="pointer-events-none select-none border-0 transition-opacity duration-300 [transform:translateZ(0)]"
           style={{
             width: `${RESUME_CONTENT_WIDTH}px`,
             height: '5000px',
-            transform: `scale(${resolvedScale})`,
+            transform: `scale(${resolvedScale}) translateZ(0)`,
             transformOrigin: 'top left',
             position: 'absolute',
             top: 0,
             left: 0,
             overflow: 'hidden',
             opacity: loaded ? 1 : 0,
+            backfaceVisibility: 'hidden',
+            WebkitBackfaceVisibility: 'hidden',
           }}
         />
       )}

@@ -1,6 +1,6 @@
 'use client';
 
-import { AlignJustify, AlignLeft, Check, Copy } from 'lucide-react';
+import { AlignJustify, AlignLeft } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -22,11 +22,19 @@ import type {
 } from '@/types';
 import { HEADER_SECTION_TYPES, type ResumeDesign, type ResumeFontFamily } from '@/types';
 
+import { PublicResumeActions } from './public-resume-actions';
 import { ResumeFontLoader } from './resume-font-loader';
 
 interface CleanResumeViewProps {
   profile: PublicProfile;
   profileHandle?: string;
+  /**
+   * Visitor auth context (resolved server-side). When provided, the
+   * floating action cluster is rendered (Copy text / Download / Share).
+   * Omit when rendering inside the builder preview, where these are
+   * handled by `<PreviewFloatingActions>` instead.
+   */
+  authState?: 'owner' | 'authenticated' | 'anonymous';
   /** Callback when the floating justify-all button is toggled (for persistence). */
   onJustifyToggle?: (justified: boolean) => void;
   /** Builder mode: whether all rich-text content is currently justified */
@@ -672,80 +680,6 @@ function CustomSection({ section }: { section: ProfileSection }) {
 }
 
 // ============================================================================
-// ACTIONS BAR
-// ============================================================================
-
-const IDLE_TIMEOUT_MS = 3000;
-
-function ResumeActions({ resumeRef }: { resumeRef: React.RefObject<HTMLDivElement | null> }) {
-  const [copied, setCopied] = useState(false);
-  const [idle, setIdle] = useState(false);
-  const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // ── Mouse-idle fade: hide after IDLE_TIMEOUT_MS of no movement ────────
-  useEffect(() => {
-    const resetIdle = () => {
-      setIdle(false);
-      if (idleTimer.current) clearTimeout(idleTimer.current);
-      idleTimer.current = setTimeout(() => setIdle(true), IDLE_TIMEOUT_MS);
-    };
-
-    // Start the initial timer
-    idleTimer.current = setTimeout(() => setIdle(true), IDLE_TIMEOUT_MS);
-
-    window.addEventListener('mousemove', resetIdle);
-    window.addEventListener('touchstart', resetIdle);
-
-    return () => {
-      if (idleTimer.current) clearTimeout(idleTimer.current);
-      window.removeEventListener('mousemove', resetIdle);
-      window.removeEventListener('touchstart', resetIdle);
-    };
-  }, []);
-
-  const handleCopy = useCallback(async () => {
-    if (!resumeRef.current) return;
-
-    const text = resumeRef.current.innerText;
-
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Fallback for older browsers
-      const textarea = document.createElement('textarea');
-      textarea.value = text;
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textarea);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  }, [resumeRef]);
-
-  return (
-    <div
-      className={`resume-actions transition-opacity duration-500 print:hidden ${
-        idle ? 'pointer-events-none opacity-0' : 'opacity-100'
-      }`}
-    >
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={handleCopy}
-        className="resume-action-button"
-        title="Copy to clipboard"
-      >
-        {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-        <span>{copied ? 'Copied!' : 'Copy'}</span>
-      </Button>
-    </div>
-  );
-}
-
-// ============================================================================
 // JUSTIFY ALL FLOATING BUTTON
 // ============================================================================
 
@@ -831,6 +765,7 @@ function JustifyAllButton({
 
 export function CleanResumeView({
   profile: rawProfile,
+  authState,
   onJustifyToggle,
   allContentJustified,
   onJustifyAll,
@@ -928,22 +863,47 @@ export function CleanResumeView({
     }
   };
 
-  // ── Determine the font family for the font loader ──────────────────
+  // ── Determine the font family for the font loader ——————————
   const activeFontFamily = (parseResumeDesign(rawProfile.resumeDesign) as ResumeDesign | null)
     ?.fontFamily as ResumeFontFamily | undefined;
+
+  // Anchor element for the kebab menu — sits at the resume's top-right.
+  // Stored in state (rather than a plain ref) so `<PublicResumeActions>`
+  // re-renders once the DOM node is available and can portal the kebab
+  // into it.
+  const [kebabAnchor, setKebabAnchor] = useState<HTMLDivElement | null>(null);
 
   return (
     <>
       <ResumeFontLoader fontFamily={activeFontFamily} />
-      <ResumeActions resumeRef={resumeRef} />
+      {authState ? (
+        <PublicResumeActions
+          resumeRef={resumeRef}
+          profileId={rawProfile.id}
+          handle={rawProfile.handle}
+          firstName={rawProfile.firstName ?? null}
+          resumeTitle={rawProfile.resumeTitle || 'Untitled Resume'}
+          resumeVisibility={rawProfile.resumeVisibility ?? 'PRIVATE'}
+          authState={authState}
+          kebabContainer={kebabAnchor}
+        />
+      ) : null}
 
       <div className="resume-paper-wrapper group/resume relative">
-        <JustifyAllButton
-          active={justifyAll}
-          onToggle={handleJustifyToggle}
-          allContentJustified={allContentJustified}
-          onJustifyAll={onJustifyAll}
-        />
+        {/* Kebab anchor — sits *outside* the resume's right margin,
+            vertically aligned with the top of the paper. The actual
+            menu is portalled in by `<PublicResumeActions>` so it
+            shares state with the bottom cluster (no logic
+            duplication). Hidden when there's no visitor (i.e. inside
+            the builder preview). */}
+        {authState ? (
+          <div
+            ref={setKebabAnchor}
+            className="absolute left-full top-0 z-20 ml-2 print:hidden"
+            aria-hidden="true"
+          />
+        ) : null}
+
         <article
           ref={resumeRef}
           className={['resume-paper', justifyAll && 'resume-justify-all'].filter(Boolean).join(' ')}

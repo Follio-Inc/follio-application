@@ -6,9 +6,12 @@ import { ThemeProvider } from '@/components/theme-provider';
 
 import './globals.css';
 
-// Force dynamic rendering to avoid static generation issues with Clerk in CI
-// This prevents build failures when using placeholder Clerk keys
-export const dynamic = 'force-dynamic';
+// NOTE: We intentionally do NOT mark the root layout as `force-dynamic`.
+// Pages that need dynamic rendering (anything calling Clerk's `auth()`,
+// reading cookies/headers, or using `force-dynamic` themselves) opt in
+// individually. Marking the root forces every page \u2014 including static
+// marketing pages \u2014 to be re-rendered on every request, killing prefetch
+// and edge caching.
 
 const inter = Inter({
   subsets: ['latin'],

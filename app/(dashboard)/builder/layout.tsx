@@ -23,10 +23,25 @@ const DEFAULT_SECTION_CONFIGS: { type: SectionType; title: string }[] = [
   { type: 'CERTIFICATIONS', title: 'Certifications' },
 ];
 
-// Helper to serialize data for client components (converts Date objects to ISO strings)
-function serializeForClient<T>(data: T): T {
-  return JSON.parse(JSON.stringify(data));
-}
+// Single source of truth for the include shape so we don't duplicate it.
+const PROFILE_INCLUDE = {
+  contactInfo: true,
+  links: { orderBy: { sortOrder: 'asc' } },
+  workExperiences: { orderBy: { sortOrder: 'asc' } },
+  educations: { orderBy: { sortOrder: 'asc' } },
+  skills: { orderBy: { sortOrder: 'asc' } },
+  skillGroups: {
+    include: { skills: { orderBy: { sortOrder: 'asc' } } },
+    orderBy: { sortOrder: 'asc' },
+  },
+  projects: { orderBy: { sortOrder: 'asc' } },
+  awards: { orderBy: { sortOrder: 'asc' } },
+  certifications: { orderBy: { sortOrder: 'asc' } },
+  blogPosts: { orderBy: { createdAt: 'desc' } },
+  youtubeVideos: { orderBy: { createdAt: 'desc' } },
+  photos: { orderBy: { sortOrder: 'asc' } },
+  sections: { orderBy: { sortOrder: 'asc' } },
+} as const;
 
 export default async function BuilderLayout({ children }: { children: React.ReactNode }) {
   const { userId } = await auth();
@@ -42,122 +57,82 @@ export default async function BuilderLayout({ children }: { children: React.Reac
 
   const profile = await db.profile.findUnique({
     where: { id: context.profileId },
-    include: {
-      contactInfo: true,
-      links: { orderBy: { sortOrder: 'asc' } },
-      workExperiences: { orderBy: { sortOrder: 'asc' } },
-      educations: { orderBy: { sortOrder: 'asc' } },
-      skills: { orderBy: { sortOrder: 'asc' } },
-      skillGroups: {
-        include: { skills: { orderBy: { sortOrder: 'asc' } } },
-        orderBy: { sortOrder: 'asc' },
-      },
-      projects: { orderBy: { sortOrder: 'asc' } },
-      awards: { orderBy: { sortOrder: 'asc' } },
-      certifications: { orderBy: { sortOrder: 'asc' } },
-      blogPosts: { orderBy: { createdAt: 'desc' } },
-      youtubeVideos: { orderBy: { createdAt: 'desc' } },
-      photos: { orderBy: { sortOrder: 'asc' } },
-      sections: { orderBy: { sortOrder: 'asc' } },
-    },
+    include: PROFILE_INCLUDE,
   });
 
   if (!profile) {
     redirect('/onboarding');
   }
 
-  // Auto-create any missing default sections
+  // Auto-create any missing default sections in a single transaction so
+  // we don't pay for a second `findUnique` round-trip with 14 relations.
   const existingTypes = new Set(profile.sections.map((s) => s.type));
   const missingSections = DEFAULT_SECTION_CONFIGS.filter(
     (config) => !existingTypes.has(config.type)
   );
 
   if (missingSections.length > 0) {
-    if (profile.sections.length === 0) {
-      // Brand new profile — create all defaults
-      await Promise.all(
-        DEFAULT_SECTION_CONFIGS.map((config, index) =>
-          db.profileSection.create({
-            data: {
-              profileId: profile.id,
-              type: config.type,
-              title: config.title,
-              sortOrder: index,
-              isVisible: true,
-            },
-          })
-        )
-      );
-    } else {
-      // Existing profile missing some sections — add them
-      const maxOrder = profile.sections.reduce((max, s) => Math.max(max, s.sortOrder), -1);
-      const linksIdx = profile.sections.findIndex((s) => s.type === 'LINKS');
-      const insertAfterIdx = linksIdx;
+    // Compute the desired final ordering in memory first so the DB writes
+    // can run as a single batch and we can build the in-memory result
+    // without re-fetching.
+    const linksIdx = profile.sections.findIndex((s) => s.type === 'LINKS');
+    const maxOrder = profile.sections.reduce((max, s) => Math.max(max, s.sortOrder), -1);
 
-      const newSections = await Promise.all(
-        missingSections.map((config, i) => {
-          const sortOrder =
-            config.type === 'SUMMARY' && insertAfterIdx >= 0
-              ? profile.sections[insertAfterIdx].sortOrder + 0.5
-              : maxOrder + 1 + i;
+    const provisionalNewSections = missingSections.map((config, i) => {
+      const sortOrder =
+        profile.sections.length === 0
+          ? // Brand new profile \u2014 use the default config order
+            DEFAULT_SECTION_CONFIGS.findIndex((c) => c.type === config.type)
+          : config.type === 'SUMMARY' && linksIdx >= 0
+            ? profile.sections[linksIdx].sortOrder + 0.5
+            : maxOrder + 1 + i;
 
-          return db.profileSection.create({
-            data: {
-              profileId: profile.id,
-              type: config.type,
-              title: config.title,
-              sortOrder,
-              isVisible: true,
-            },
-          });
-        })
-      );
-
-      // Re-normalize sort orders
-      const allSections = [...profile.sections, ...newSections].sort(
-        (a, b) => a.sortOrder - b.sortOrder
-      );
-      await Promise.all(
-        allSections.map((s, idx) =>
-          db.profileSection.update({
-            where: { id: s.id },
-            data: { sortOrder: idx },
-          })
-        )
-      );
-    }
-
-    // Re-fetch the profile with updated sections
-    const refreshed = await db.profile.findUnique({
-      where: { id: profile.id },
-      include: {
-        contactInfo: true,
-        links: { orderBy: { sortOrder: 'asc' } },
-        workExperiences: { orderBy: { sortOrder: 'asc' } },
-        educations: { orderBy: { sortOrder: 'asc' } },
-        skills: { orderBy: { sortOrder: 'asc' } },
-        skillGroups: {
-          include: { skills: { orderBy: { sortOrder: 'asc' } } },
-          orderBy: { sortOrder: 'asc' },
-        },
-        projects: { orderBy: { sortOrder: 'asc' } },
-        awards: { orderBy: { sortOrder: 'asc' } },
-        certifications: { orderBy: { sortOrder: 'asc' } },
-        blogPosts: { orderBy: { createdAt: 'desc' } },
-        youtubeVideos: { orderBy: { createdAt: 'desc' } },
-        photos: { orderBy: { sortOrder: 'asc' } },
-        sections: { orderBy: { sortOrder: 'asc' } },
-      },
+      return {
+        profileId: profile.id,
+        type: config.type,
+        title: config.title,
+        sortOrder,
+        isVisible: true,
+      };
     });
 
-    if (refreshed) {
-      const serializedProfile = serializeForClient(refreshed) as unknown as FullProfile;
-      return <BuilderLayoutClient profile={serializedProfile}>{children}</BuilderLayoutClient>;
-    }
+    const createdSections = await db.$transaction(async (tx) => {
+      // Create all missing sections \u2014 use individual creates so we get the
+      // generated rows back (createMany doesn't return data on all DBs).
+      const created = await Promise.all(
+        provisionalNewSections.map((data) => tx.profileSection.create({ data }))
+      );
+
+      // Re-normalize sort orders to dense indices across all sections.
+      const merged = [...profile.sections, ...created].sort((a, b) => a.sortOrder - b.sortOrder);
+      const normalized = merged.map((s, idx) => ({ ...s, sortOrder: idx }));
+
+      // Only update rows whose sortOrder actually changed.
+      await Promise.all(
+        normalized
+          .filter((s, idx) => merged[idx].sortOrder !== idx)
+          .map((s) =>
+            tx.profileSection.update({
+              where: { id: s.id },
+              data: { sortOrder: s.sortOrder },
+            })
+          )
+      );
+
+      return normalized;
+    });
+
+    // Patch the in-memory profile with the freshly-created + normalized
+    // sections so we can hand it directly to the client without re-fetching.
+    profile.sections = createdSections;
   }
 
-  // Serialize the profile data to convert Date objects to strings for client component
-  const serializedProfile = serializeForClient(profile) as unknown as FullProfile;
-
-  return <BuilderLayoutClient profile={serializedProfile}>{children}</BuilderLayoutClient>;
+  // Next.js RSC serializes Date objects natively over the wire \u2014 no need
+  // for `JSON.parse(JSON.stringify(...))` (which actually corrupts Date
+  // typings by silently turning them into strings).
+  return (
+    <BuilderLayoutClient profile={profile as unknown as FullProfile}>
+      {children}
+    </BuilderLayoutClient>
+  );
 }
