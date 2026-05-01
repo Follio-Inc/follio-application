@@ -3,12 +3,14 @@
  * Business logic for profile operations
  */
 
+import crypto from 'crypto';
+import { cache } from 'react';
+
 import { db } from '@/lib/db';
 import { Errors } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { applyVisibilityFilter } from '@/lib/visibility';
 import type { ContentVisibility, FullProfile, PublicProfile } from '@/types';
-import crypto from 'crypto';
 
 const profileLogger = logger.child({ source: 'profile-service' });
 
@@ -47,10 +49,15 @@ export async function getProfileByHandle(handle: string): Promise<FullProfile | 
 }
 
 /**
- * Get a public profile by handle (excludes sensitive data)
- * Filters out hidden sections and their associated content
+ * Get a public profile by handle (excludes sensitive data).
+ * Filters out hidden sections and their associated content.
+ *
+ * Wrapped in React `cache()` so multiple callers within the same
+ * server request (e.g. `generateMetadata` *and* the page handler)
+ * share a single DB query — meaningful first-paint speedup on the
+ * `/u/[handle]/*` routes where the same profile is fetched twice.
  */
-export async function getPublicProfile(handle: string): Promise<PublicProfile | null> {
+export const getPublicProfile = cache(async (handle: string): Promise<PublicProfile | null> => {
   try {
     const profile = await db.profile.findUnique({
       where: { handle },
@@ -105,7 +112,7 @@ export async function getPublicProfile(handle: string): Promise<PublicProfile | 
     profileLogger.error('Failed to fetch public profile', error, { handle });
     throw Errors.internal('Failed to load public profile');
   }
-}
+});
 
 /**
  * Check if a handle is available

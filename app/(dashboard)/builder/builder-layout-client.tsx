@@ -1,6 +1,7 @@
 'use client';
 
 import { PenLine, WandSparkles } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -8,12 +9,25 @@ import { cn } from '@/lib/utils';
 
 import { AllSectionsEditor } from './components/all-sections-editor';
 import { BuilderStoreProvider, useBuilderStore } from './components/builder-store-provider';
-import { BuilderToolbar } from './components/builder-toolbar';
-import { DesignerPanel } from './components/designer-panel';
-import { ImportSuggestionDialog } from './components/import-suggestion-dialog';
 import { ResumePreviewPanel } from './components/resume-preview-panel';
 
 import type { FullProfile, ProfileSection } from '@/types';
+
+// Designer panel is only visible when the user opens the Designer tab —
+// load it on demand so the initial editor bundle stays small.
+const DesignerPanel = dynamic(
+  () => import('./components/designer-panel').then((m) => ({ default: m.DesignerPanel })),
+  { ssr: false }
+);
+
+// Import suggestion dialog only opens in response to a user action — defer it.
+const ImportSuggestionDialog = dynamic(
+  () =>
+    import('./components/import-suggestion-dialog').then((m) => ({
+      default: m.ImportSuggestionDialog,
+    })),
+  { ssr: false }
+);
 
 // ──────────────────────────────────────────────
 // Public API
@@ -26,18 +40,10 @@ interface BuilderLayoutClientProps {
 }
 
 export function BuilderLayoutClient({ profile }: BuilderLayoutClientProps) {
-  const [sections, setSections] = useState<ProfileSection[]>(profile.sections || []);
-
-  // Fetch sections if not present (defensive)
-  useEffect(() => {
-    if (!sections.length) {
-      fetch('/api/profile/sections')
-        .then((r) => (r.ok ? r.json() : Promise.reject(r)))
-        .then((data) => setSections(data))
-        .catch((err) => console.error('Failed to fetch sections:', err));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sections.length]);
+  // Server layout guarantees default sections exist before this component
+  // mounts, so we can trust `profile.sections` and avoid a defensive
+  // client-side fetch that adds a roundtrip on every builder open.
+  const sections = profile.sections ?? [];
 
   return (
     <BuilderStoreProvider profile={profile}>
@@ -61,9 +67,51 @@ function BuilderLayoutInner({ sections }: BuilderLayoutInnerProps) {
   const commitInlineChange = useBuilderStore((s) => s.commitInlineChange);
   const storeSections = useBuilderStore((s) => s.draftProfile.sections);
   const [designerActive, setDesignerActive] = useState(false);
+  const designerBtnRef = useRef<HTMLButtonElement>(null);
+  const contentBtnRef = useRef<HTMLButtonElement>(null);
 
   const toggleDesigner = useCallback(() => {
     setDesignerActive((prev) => !prev);
+  }, []);
+
+  // ── Edge-glow effect for the Designer/Content gutter tabs ──
+  const handleContentMouseMove = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const relativeX = (e.clientX - rect.left) / rect.width;
+
+      // Glow the Designer button when mouse nears right edge (>80%)
+      if (designerBtnRef.current && !designerActive) {
+        const proximity = Math.max(0, Math.min(1, (relativeX - 0.8) / 0.2));
+        designerBtnRef.current.style.boxShadow =
+          proximity > 0
+            ? `0 0 ${8 + proximity * 14}px ${proximity * 6}px hsl(var(--primary) / ${0.15 + proximity * 0.25})`
+            : '';
+        designerBtnRef.current.style.transform = `scale(${1 + proximity * 0.04})`;
+      }
+
+      // Glow the Content button when mouse nears left edge (<20%)
+      if (contentBtnRef.current && designerActive) {
+        const proximity = Math.max(0, Math.min(1, (0.2 - relativeX) / 0.2));
+        contentBtnRef.current.style.boxShadow =
+          proximity > 0
+            ? `0 0 ${8 + proximity * 14}px ${proximity * 6}px hsl(var(--primary) / ${0.15 + proximity * 0.25})`
+            : '';
+        contentBtnRef.current.style.transform = `scale(${1 + proximity * 0.04})`;
+      }
+    },
+    [designerActive]
+  );
+
+  const handleContentMouseLeave = useCallback(() => {
+    if (designerBtnRef.current) {
+      designerBtnRef.current.style.boxShadow = '';
+      designerBtnRef.current.style.transform = '';
+    }
+    if (contentBtnRef.current) {
+      contentBtnRef.current.style.boxShadow = '';
+      contentBtnRef.current.style.transform = '';
+    }
   }, []);
 
   // Keep sections in sync with the zustand store so the preview stays up-to-date.
@@ -95,13 +143,12 @@ function BuilderLayoutInner({ sections }: BuilderLayoutInnerProps) {
   return (
     <div className="flex min-h-[calc(100vh-3.5rem)] flex-col bg-muted/30 xl:h-[calc(100vh-3.5rem)]">
       <TooltipProvider delayDuration={300}>
-        {/* Toolbar — spans full width */}
-        <div className="sticky top-0 z-20 flex-shrink-0 border-b border-border/40 bg-muted/50 backdrop-blur-sm">
-          <BuilderToolbar />
-        </div>
-
         {/* Content area — on xl+ fixed height with overflow hidden for sliding */}
-        <div className="relative flex-1 xl:min-h-0 xl:overflow-hidden">
+        <div
+          className="relative flex-1 xl:min-h-0 xl:overflow-hidden"
+          onMouseMove={handleContentMouseMove}
+          onMouseLeave={handleContentMouseLeave}
+        >
           {/* ── 3-panel sliding strip ── */}
           <div
             className="builder-slide flex h-full"
@@ -129,33 +176,43 @@ function BuilderLayoutInner({ sections }: BuilderLayoutInnerProps) {
             </aside>
           </div>
 
-          {/* ── Gutter tab: Designer (right edge, visible when editor mode) ── */}
-          <button
-            type="button"
-            onClick={toggleDesigner}
-            aria-label="Open designer panel"
+          {/* ── Right gutter: Designer tab + quick actions ── */}
+          <div
             className={cn(
-              'absolute right-0 top-1/2 z-30 -translate-y-1/2',
-              'hidden flex-col items-center gap-3 px-2 py-[22px] xl:flex',
-              'rounded-l-lg border border-r-0 border-primary/30',
-              'bg-primary shadow-lg shadow-primary/25',
-              'text-primary-foreground hover:bg-primary/90',
+              'absolute right-0 top-6 z-30',
+              'hidden flex-col items-center gap-2.5 xl:flex',
               'transition-all duration-300 ease-out',
-              'hover:px-3 hover:shadow-xl hover:shadow-primary/30',
               designerActive && 'pointer-events-none opacity-0'
             )}
           >
-            <WandSparkles className="h-[22px] w-[22px]" />
-            <span className="text-[14px] font-medium [writing-mode:vertical-rl]">Designer</span>
-          </button>
+            {/* Designer toggle */}
+            <button
+              ref={designerBtnRef}
+              type="button"
+              onClick={toggleDesigner}
+              aria-label="Open designer panel"
+              className={cn(
+                'flex flex-col items-center gap-3 px-2 py-[22px]',
+                'rounded-l-lg border border-r-0 border-primary/30',
+                'bg-primary shadow-lg shadow-primary/25',
+                'text-primary-foreground hover:bg-primary/90',
+                'transition-all duration-300 ease-out',
+                'hover:px-3 hover:shadow-xl hover:shadow-primary/30'
+              )}
+            >
+              <WandSparkles className="h-[22px] w-[22px]" />
+              <span className="text-[14px] font-medium [writing-mode:vertical-rl]">Designer</span>
+            </button>
+          </div>
 
           {/* ── Gutter tab: Content (left edge, visible when designer mode) ── */}
           <button
+            ref={contentBtnRef}
             type="button"
             onClick={toggleDesigner}
             aria-label="Return to content editor"
             className={cn(
-              'absolute left-0 top-1/2 z-30 -translate-y-1/2',
+              'absolute left-0 top-6 z-30',
               'hidden flex-col items-center gap-3 px-2 py-[22px] xl:flex',
               'rounded-r-lg border border-l-0 border-primary/30',
               'bg-primary shadow-lg shadow-primary/25',

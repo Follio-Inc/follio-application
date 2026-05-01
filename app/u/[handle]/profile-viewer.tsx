@@ -3,7 +3,7 @@
 import { MotionConfig } from 'framer-motion';
 import Link from 'next/link';
 
-import { ProfileNavbar } from '@/components/profile-navbar';
+import { SiteHeader } from '@/components/site-header';
 import { getTemplateMeta } from '@/lib/portfolio/templates/registry';
 
 import { AIPortfolioView } from './views/ai-portfolio-view';
@@ -11,15 +11,21 @@ import { PortfolioView } from './views/portfolio-view';
 import { TemplatePortfolioView } from './views/template-portfolio-view';
 
 import type { TemplatePortfolio } from '@/lib/portfolio/templates/types';
-import type { PublicProfile } from '@/types';
+import type { ContentVisibility, PublicProfile } from '@/types';
 import type { PortfolioPlan, PortfolioUserOverrides } from '@/types/portfolio';
 
 interface ProfileViewerProps {
   profile: PublicProfile;
   authState: 'owner' | 'authenticated' | 'anonymous';
   profileHandle: string;
-  resumeVisibility: 'PUBLIC' | 'UNLISTED' | 'PRIVATE';
-  /** When true, hides navbar and footer (used for dashboard thumbnail). */
+  /**
+   * Visibility of the Resume document. Drives the in-body "View Resume" CTA
+   * (the website's only link to the resume — same role as a LinkedIn link).
+   * Portfolio visibility itself is enforced upstream in the page route, so
+   * the viewer no longer needs to be told about it.
+   */
+  resumeVisibility: ContentVisibility;
+  /** When true, hides navbar, tab bar, and footer (used for dashboard thumbnail). */
   embed?: boolean;
   /** AI-generated portfolio plan (null if not generated yet). */
   generatedPlan?: PortfolioPlan | null;
@@ -50,7 +56,7 @@ export function ProfileViewer({
   templatePortfolio = null,
   githubProfile = null,
 }: ProfileViewerProps) {
-  /** Render the portfolio view — uses template, AI-generated, or default. */
+  /** Render the traditional portfolio view — uses template, AI-generated, or default. */
   const renderPortfolioView = () => {
     // Priority 1: Template-based portfolio
     if (templatePortfolio) {
@@ -93,28 +99,25 @@ export function ProfileViewer({
 
   return (
     <MotionConfig reducedMotion={embed ? 'always' : 'never'}>
-      <div className="min-h-screen bg-gradient-to-b from-muted/30 to-background">
+      <div className="min-h-screen bg-background">
         {!embed && (
-          <ProfileNavbar
-            authState={authState}
+          <SiteHeader
             profileHandle={profileHandle}
+            authState={authState}
             navbarTheme={navbarTheme}
           />
         )}
-
         <main className={hasFullPagePortfolio ? '' : 'container max-w-5xl py-8 pb-24'}>
           {renderPortfolioView()}
         </main>
-
         {!embed && !hasFullPagePortfolio && (
-          <footer className="border-t bg-background py-6">
+          <footer className="border-t border-border/50 bg-background py-6">
             <div className="container text-center text-sm text-muted-foreground">
               <p>
                 Built with{' '}
                 <Link href="/" className="font-medium text-primary hover:underline">
                   Follio
-                </Link>{' '}
-                — Your professional identity, everywhere.
+                </Link>
               </p>
             </div>
           </footer>

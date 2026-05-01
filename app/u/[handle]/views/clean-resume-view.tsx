@@ -1,13 +1,10 @@
 'use client';
 
-import { Check, Copy, Grid3X3, Printer } from 'lucide-react';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { Button } from '@/components/ui/button';
 import { cleanPhoneDisplay } from '@/components/ui/phone-input';
 import { containsHtmlFormatting, isHtmlEmpty } from '@/lib/html-utils';
 import { buildResumeDesignStyles, parseResumeDesign } from '@/lib/resume-design';
-import { getPortfolioPath } from '@/lib/url';
 import { formatDate } from '@/lib/utils';
 import { applyVisibilityFilter, type FilteredProfile } from '@/lib/visibility';
 import type {
@@ -22,11 +19,25 @@ import type {
 } from '@/types';
 import { HEADER_SECTION_TYPES, type ResumeDesign, type ResumeFontFamily } from '@/types';
 
+import { PublicResumeActions } from './public-resume-actions';
 import { ResumeFontLoader } from './resume-font-loader';
 
 interface CleanResumeViewProps {
   profile: PublicProfile;
   profileHandle?: string;
+  /**
+   * Visitor auth context (resolved server-side). When provided, the
+   * floating action cluster is rendered (Copy text / Download / Share).
+   * Omit when rendering inside the builder preview, where these are
+   * handled by `<PreviewFloatingActions>` instead.
+   */
+  authState?: 'owner' | 'authenticated' | 'anonymous';
+  /** Callback when the floating justify-all button is toggled (for persistence). */
+  onJustifyToggle?: (justified: boolean) => void;
+  /** Builder mode: whether all rich-text content is currently justified */
+  allContentJustified?: boolean;
+  /** Builder mode: callback to justify all rich-text content */
+  onJustifyAll?: () => void;
 }
 
 // ============================================================================
@@ -666,90 +677,23 @@ function CustomSection({ section }: { section: ProfileSection }) {
 }
 
 // ============================================================================
-// ACTIONS BAR
-// ============================================================================
-
-function ResumeActions({
-  resumeRef,
-  profileHandle,
-}: {
-  resumeRef: React.RefObject<HTMLDivElement | null>;
-  profileHandle?: string;
-}) {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = useCallback(async () => {
-    if (!resumeRef.current) return;
-
-    // Get the text content, preserving some structure
-    const text = resumeRef.current.innerText;
-
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Fallback for older browsers
-      const textarea = document.createElement('textarea');
-      textarea.value = text;
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textarea);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  }, [resumeRef]);
-
-  const handlePrint = useCallback(() => {
-    window.print();
-  }, []);
-
-  return (
-    <div className="resume-actions print:hidden">
-      {profileHandle && (
-        <a href={getPortfolioPath(profileHandle)}>
-          <Button
-            variant="outline"
-            size="sm"
-            className="resume-action-button"
-            title="View Portfolio"
-          >
-            <Grid3X3 className="h-4 w-4" />
-            <span>Portfolio</span>
-          </Button>
-        </a>
-      )}
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={handleCopy}
-        className="resume-action-button"
-        title="Copy to clipboard"
-      >
-        {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-        <span>{copied ? 'Copied!' : 'Copy'}</span>
-      </Button>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={handlePrint}
-        className="resume-action-button"
-        title="Print or save as PDF"
-      >
-        <Printer className="h-4 w-4" />
-        <span>Print</span>
-      </Button>
-    </div>
-  );
-}
-
-// ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 
-export function CleanResumeView({ profile: rawProfile, profileHandle }: CleanResumeViewProps) {
+export function CleanResumeView({ profile: rawProfile, authState }: CleanResumeViewProps) {
   const resumeRef = useRef<HTMLDivElement>(null);
+
+  // ── Justify-all local state (derived from design, toggleable) ─────────
+  const parsedDesign = useMemo(
+    () => parseResumeDesign(rawProfile.resumeDesign) as ResumeDesign | null,
+    [rawProfile.resumeDesign]
+  );
+  const [justifyAll, setJustifyAll] = useState(parsedDesign?.justifyAll ?? false);
+
+  // Sync local state when the design prop changes (e.g. from designer panel)
+  useEffect(() => {
+    setJustifyAll(parsedDesign?.justifyAll ?? false);
+  }, [parsedDesign?.justifyAll]);
 
   // ── Centralized visibility filtering ──────────────────────────────────
   // Apply section-level visibility once. After this, every array/field is
@@ -824,21 +768,58 @@ export function CleanResumeView({ profile: rawProfile, profileHandle }: CleanRes
     }
   };
 
-  // ── Determine the font family for the font loader ──────────────────
+  // ── Determine the font family for the font loader ——————————
   const activeFontFamily = (parseResumeDesign(rawProfile.resumeDesign) as ResumeDesign | null)
     ?.fontFamily as ResumeFontFamily | undefined;
+
+  // Anchor element for the kebab menu — sits at the resume's top-right.
+  // Stored in state (rather than a plain ref) so `<PublicResumeActions>`
+  // re-renders once the DOM node is available and can portal the kebab
+  // into it.
+  const [kebabAnchor, setKebabAnchor] = useState<HTMLDivElement | null>(null);
 
   return (
     <>
       <ResumeFontLoader fontFamily={activeFontFamily} />
-      <ResumeActions resumeRef={resumeRef} profileHandle={profileHandle} />
+      {authState ? (
+        <PublicResumeActions
+          resumeRef={resumeRef}
+          profileId={rawProfile.id}
+          handle={rawProfile.handle}
+          firstName={rawProfile.firstName ?? null}
+          resumeTitle={rawProfile.resumeTitle || 'Untitled Resume'}
+          resumeVisibility={rawProfile.resumeVisibility ?? 'PRIVATE'}
+          authState={authState}
+          kebabContainer={kebabAnchor}
+        />
+      ) : null}
 
-      <article ref={resumeRef} className="resume-paper" style={designStyles}>
-        <ResumeHeader profile={profile} />
+      <div className="resume-paper-wrapper group/resume relative">
+        {/* Kebab anchor — sits *outside* the resume's right margin,
+            vertically aligned with the top of the paper. The actual
+            menu is portalled in by `<PublicResumeActions>` so it
+            shares state with the bottom cluster (no logic
+            duplication). Hidden when there's no visitor (i.e. inside
+            the builder preview). */}
+        {authState ? (
+          <div
+            ref={setKebabAnchor}
+            className="absolute left-full top-0 z-20 ml-2 print:hidden"
+            aria-hidden="true"
+          />
+        ) : null}
 
-        {/* Render body sections in user-configured sortOrder */}
-        {bodySections.map(renderSection)}
-      </article>
+        <article
+          ref={resumeRef}
+          className={['resume-paper', justifyAll && 'resume-justify-all'].filter(Boolean).join(' ')}
+          style={designStyles}
+        >
+          <ResumeHeader profile={profile} />
+
+          {/* Render body sections in user-configured sortOrder */}
+          {bodySections.map(renderSection)}
+        </article>
+      </div>
     </>
   );
 }

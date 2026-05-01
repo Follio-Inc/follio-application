@@ -1,7 +1,14 @@
+import react from '@vitejs/plugin-react';
 import path from 'path';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  // Vite 8 (used by Vitest 4) needs an explicit JSX transformer for the
+  // .tsx files our tests pull in transitively. The Next.js tsconfig sets
+  // `jsx: "preserve"` (required by the Next compiler), so esbuild/oxc
+  // refuses to handle JSX on its own. The official React plugin provides
+  // the automatic-runtime transform without altering the project tsconfig.
+  plugins: [react()],
   test: {
     globals: true,
     environment: 'node',

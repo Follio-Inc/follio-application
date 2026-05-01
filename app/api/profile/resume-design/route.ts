@@ -141,6 +141,14 @@ function validateResumeDesign(body: unknown): {
     design.nameFontSize = size;
   }
 
+  // justifyAll
+  if (raw.justifyAll !== undefined) {
+    if (typeof raw.justifyAll !== 'boolean') {
+      return { valid: false, data: null, error: 'justifyAll must be a boolean' };
+    }
+    design.justifyAll = raw.justifyAll;
+  }
+
   return { valid: true, data: design };
 }
 

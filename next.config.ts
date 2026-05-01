@@ -41,6 +41,10 @@ const nextConfig: NextConfig = {
         ? process.env.ALLOWED_ORIGINS.split(',')
         : ['localhost:3000'],
     },
+    // Tree-shake heavy barrel-import libraries so each `import { X } from 'lucide-react'`
+    // pulls only X instead of the entire icon set. Major win for bundle size and
+    // dev-mode compile times \u2014 these libs are imported in dozens of places.
+    optimizePackageImports: ['lucide-react', '@radix-ui/react-icons', 'framer-motion', 'date-fns'],
   },
 
   // Externalize packages that don't work with webpack bundling

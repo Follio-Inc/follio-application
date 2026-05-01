@@ -13,6 +13,23 @@
  */
 
 // ============================================================================
+// SHARED CONSTANTS
+// ============================================================================
+
+/**
+ * HTML data-attribute placed on the element that templates consider the most
+ * visually prominent for thumbnail / link-preview rendering.
+ *
+ * Template renderers add this attribute to a specific content element
+ * (e.g. the hero text block), and the dashboard thumbnail component
+ * centres the preview on that element.
+ *
+ * Usage in templates:  `<div data-portfolio-thumbnail-focus> … </div>`
+ * Query in consumers:  `doc.querySelector('[data-portfolio-thumbnail-focus]')`
+ */
+export const PORTFOLIO_THUMBNAIL_FOCUS_ATTR = 'data-portfolio-thumbnail-focus';
+
+// ============================================================================
 // TEMPLATE PORTFOLIO DATA (stored in GeneratedPortfolio.plan)
 // ============================================================================
 
@@ -278,6 +295,16 @@ export interface TemplateKitMeta {
    * When omitted, the navbar uses the default system dark/light theme.
    */
   navbarTheme?: TemplateNavbarTheme;
+
+  /**
+   * The section type whose content is most visually prominent for
+   * thumbnail / preview rendering. The dashboard thumbnail component
+   * scrolls to the element marked with `PORTFOLIO_THUMBNAIL_FOCUS_ATTR`
+   * inside this section. Also used by future link-preview APIs.
+   *
+   * Defaults to `'hero'` when omitted.
+   */
+  thumbnailFocusSection?: TemplateSectionType;
 }
 
 // ============================================================================

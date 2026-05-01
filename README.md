@@ -1,312 +1,235 @@
-# Follio — Your Professional Identity, Everywhere
+# Follio — Your professional self, three views
 
 <div align="center">
 
 ![Follio Logo](public/logo/follio-logo-full.png)
 
-**One profile. Four views. Perfect parsing.**
+**One profile. One link. Three views: Follio, Portfolio, Resume.**
 
-Build your professional presence once, share it everywhere.
-
-[Demo](https://follio.app) · [Documentation](#documentation) · [Contributing](#contributing)
+[Demo](https://follio.app) · [Architecture](#architecture) · [Contributing](CONTRIBUTING.md)
 
 </div>
 
 ---
 
-## ✨ Features
+## What Follio is
 
-### 🎯 **One Canonical Profile**
+Follio is a single source of truth for your professional self. You capture your data once — by uploading a resume, connecting GitHub, or editing directly — and Follio renders it as three coordinated public views, each living at its own shareable URL:
 
-- Single source of truth for your professional data
-- Import from LinkedIn, GitHub, or upload your resume
-- Smart merge with conflict resolution and provenance tracking
+| View          | URL                  | Purpose                                                                        |
+| ------------- | -------------------- | ------------------------------------------------------------------------------ |
+| **Follio**    | `/u/[handle]/follio` | Single-screen brand snapshot — the heart of the product. The first impression. |
+| **Portfolio** | `/u/[handle]`        | Visual, AI-curated showcase. The deeper read.                                  |
+| **Resume**    | `/u/[handle]/resume` | Traditional ATS-friendly document. Printable and exportable.                   |
 
-### 👁️ **Four Curated Views**
+A single slim header bar (`<SiteHeader>`) lets visitors hop between the three views without losing context. Each view respects its own visibility setting (public, unlisted, or private) and is hidden from viewers who lack access.
 
-- **Resume View** — Traditional, ATS-friendly format
-- **Portfolio View** — Visual showcase of projects
-- **Timeline View** — Interactive career journey
-- **SnapShot View** — Key facts dashboard at a glance
+## Core loop
 
-### 📤 **Perfect Parsing Exports**
-
-- JSON Resume standard (machine-readable)
-- Plain text (ATS-optimized)
-- PDF generation (coming soon)
-- Zero information loss from input to output
-
-### 🔒 **Privacy Controls**
-
-- Public, private, or draft profiles
-- Share tokens for controlled access
-- Full data ownership
-
----
-
-## 🚀 Quick Start
-
-### Prerequisites
-
-- Node.js 18+
-- PostgreSQL 15+
-- pnpm (recommended) or npm
-
-### Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/follio-app.git
-cd follio-app
-
-# Install dependencies
-pnpm install
-
-# Set up environment variables
-cp .env.example .env.local
-# Edit .env.local with your values
-
-# Start the database (Docker)
-docker-compose up -d
-
-# Run migrations
-pnpm prisma migrate dev
-
-# Seed the database (optional)
-pnpm prisma db seed
-
-# Start the development server
-pnpm dev
+```
+Capture (once)  →  Curate (review what AI made)  →  Share (one link, three views)
 ```
 
-Visit [http://localhost:3000](http://localhost:3000)
+Every feature serves this loop. If something doesn't, it shouldn't exist.
 
 ---
 
-## 📁 Project Structure
+## Project structure
 
 ```
 follio-app/
-├── app/                        # Next.js App Router
-│   ├── (dashboard)/            # Authenticated routes
-│   │   ├── builder/            # Profile builder
-│   │   └── dashboard/          # User dashboard
-│   ├── api/                    # API routes
-│   │   ├── export/             # Export endpoints
-│   │   ├── import/             # Import endpoints
-│   │   └── profile/            # Profile CRUD
-│   ├── sign-in/                # Clerk auth pages
-│   ├── sign-up/
-│   └── u/[handle]/             # Public profile viewer
+├── app/
+│   ├── page.tsx                      # Marketing landing (anonymous) / redirect to /dashboard (authed)
+│   ├── (dashboard)/                  # Authenticated workspace
+│   │   ├── dashboard/                # Workspace home — overview, your sites
+│   │   ├── builder/                  # Profile editor (the canonical data)
+│   │   ├── resumes/                  # List of all your sites/profiles
+│   │   ├── data-sources/             # LinkedIn, GitHub, resume upload
+│   │   ├── share/                    # Share controls and tokens
+│   │   └── settings/                 # Account
+│   ├── u/[handle]/                   # Public site (the three views)
+│   │   ├── page.tsx                  # Portfolio view (default)
+│   │   ├── resume/page.tsx           # Resume view
+│   │   ├── follio/page.tsx           # Follio view (single-screen snapshot)
+│   │   └── views/                    # The view components themselves
+│   ├── api/                          # All API routes
+│   ├── admin/                        # Admin dashboard (role-gated)
+│   └── onboarding/                   # First-run flow
 ├── components/
-│   └── ui/                     # shadcn/ui components
-├── lib/                        # Utilities
-│   ├── db.ts                   # Prisma client
-│   ├── utils.ts                # Helper functions
-│   └── validations.ts          # Zod schemas
-├── prisma/
-│   ├── schema.prisma           # Data model
-│   └── seed.ts                 # Seed data
-├── services/                   # Business logic
-│   ├── export.service.ts       # Export transformations
-│   ├── github.service.ts       # GitHub integration
-│   ├── merge.service.ts        # Data merging
-│   ├── profile.service.ts      # Profile queries
-│   └── resume-parser.service.ts# Resume parsing
-├── types/
-│   └── index.ts                # TypeScript types
-└── __tests__/                  # Test files
+│   ├── site-header.tsx               # The unified Follio/Portfolio/Resume switcher (slim chrome)
+│   ├── profile-navbar.tsx            # Legacy top bar (still used by the Links viewer)
+│   ├── landing-page.tsx              # Marketing landing
+│   └── ui/                           # shadcn/ui primitives
+├── services/                         # Business logic (one file per domain)
+├── lib/                              # Utilities, db client, validations, errors
+├── prisma/                           # Schema + migrations
+├── types/                            # TypeScript types
+└── __tests__/                        # Vitest tests
 ```
 
 ---
 
-## 🏗️ Architecture
+## Quick start
 
-### Tech Stack
+### Prerequisites
 
-| Layer      | Technology               |
-| ---------- | ------------------------ |
-| Framework  | Next.js 15 (App Router)  |
-| Language   | TypeScript               |
-| Styling    | Tailwind CSS + shadcn/ui |
-| Database   | PostgreSQL + Prisma ORM  |
-| Auth       | Clerk                    |
-| Animations | Framer Motion            |
-| Validation | Zod                      |
-| Testing    | Vitest                   |
+- Node.js 20+
+- PostgreSQL 15+
+- pnpm
 
-### Data Model
+### Setup
 
-The canonical profile model supports:
+```bash
+git clone <repo>
+cd follio-app
+pnpm install
 
-- **Profile** — Core identity (handle, name, headline, summary)
-- **ContactInfo** — Email, phone, addresses
-- **WorkExperience** — Job history with bullets and tags
-- **Education** — Degrees and certifications
-- **Skills** — With levels and groupings
-- **Projects** — With tech stack and GitHub metadata
-- **Links** — Social profiles and websites
-- **Awards & Certifications** — Achievements
+cp .env.example .env.local       # fill in values (see below)
 
-Each entity tracks its **source** (MANUAL, GITHUB, LINKEDIN, RESUME_IMPORT, API) for intelligent merging.
+docker-compose up -d              # start Postgres
+pnpm prisma migrate dev           # apply schema
+pnpm prisma db seed               # optional seed data
 
-### Export Formats
+pnpm dev                          # http://localhost:3000
+```
 
-| Endpoint                    | Format      | Use Case              |
-| --------------------------- | ----------- | --------------------- |
-| `/api/export/[handle]/json` | JSON Resume | Machine parsing, APIs |
-| `/api/export/[handle]/text` | Plain text  | ATS systems           |
-| `/api/export/[handle]/pdf`  | PDF (HTML)  | Human reading         |
-
----
-
-## 🔐 Environment Variables
-
-Create a `.env.local` file with:
+### Environment variables
 
 ```env
 # Database
 DATABASE_URL="postgresql://user:password@localhost:5432/follio"
 
-# Clerk Authentication
+# Clerk auth
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="pk_test_..."
 CLERK_SECRET_KEY="sk_test_..."
 NEXT_PUBLIC_CLERK_SIGN_IN_URL="/sign-in"
 NEXT_PUBLIC_CLERK_SIGN_UP_URL="/sign-up"
-NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL="/builder"
+NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL="/dashboard"
 NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL="/onboarding"
 
-# Optional: GitHub OAuth
+# Public URL (controls subdomain vs path-based public URLs)
+NEXT_PUBLIC_APP_URL="http://localhost:3000"
+NEXT_PUBLIC_ROOT_DOMAIN="follio.me"
+NEXT_PUBLIC_SUBDOMAIN_ENABLED="false"
+
+# Optional integrations
 GITHUB_CLIENT_ID=""
 GITHUB_CLIENT_SECRET=""
-
-# Optional: Redis (for rate limiting)
-REDIS_URL="redis://localhost:6379"
+OPENAI_API_KEY=""
 ```
 
 ---
 
-## 📖 API Reference
+## Architecture
 
-### Profile API
+### Tech stack
 
-```typescript
-// Get current user's profile
-GET /api/profile
+| Layer      | Choice                        |
+| ---------- | ----------------------------- |
+| Framework  | Next.js 15 (App Router, RSC)  |
+| Language   | TypeScript (strict)           |
+| Styling    | Tailwind CSS + shadcn/ui      |
+| Database   | PostgreSQL via Prisma         |
+| Auth       | Clerk                         |
+| AI         | OpenAI (GPT-4o + GPT-4o-mini) |
+| Animations | Framer Motion                 |
+| Validation | Zod                           |
+| Tests      | Vitest                        |
 
-// Create/update profile
-POST /api/profile
-PATCH /api/profile
+### Data model
 
-// Check handle availability
-GET /api/profile/check-handle?handle=johndoe
-```
+The canonical Profile is the single source of truth. The three public views are pure projections of the same data — there is no separate "resume document" or "portfolio document" stored independently.
 
-### Import API
+**Profile** owns:
 
-```typescript
-// Import from resume file
-POST /api/import/resume
-Content-Type: multipart/form-data
-Body: { file: File } or { text: string }
+- `ContactInfo` — email, phone, location
+- `WorkExperience[]`, `Education[]`, `Skill[]` (+ `SkillGroup[]`), `Project[]`
+- `Award[]`, `Certification[]`, `BlogPost[]`, `YouTubeVideo[]`
+- `Link[]` — social and external profiles
+- `ProfilePhoto[]` — gallery
+- `ProfileSection[]` — controls visibility/order of sections in the editor
 
-// Import from GitHub
-POST /api/import/github
-Body: { username: string, accessToken?: string }
-```
+Each item carries its **source** (`MANUAL`, `GITHUB`, `LINKEDIN`, `RESUME_IMPORT`, `API`) so multi-source merges can preserve provenance.
 
-### Export API
+### The AI pipeline (Portfolio view)
 
-```typescript
-// JSON Resume format
-GET /api/export/[handle]/json
+The Portfolio view is generated by a multi-stage AI pipeline that turns raw profile data into curated copy + section configuration. The pipeline is documented in detail in [`docs/IMPORT_ARCHITECTURE.md`](docs/IMPORT_ARCHITECTURE.md) and the in-repo memory file `/.copilot/memory/repo/portfolio-architecture.md`.
 
-// Plain text format
-GET /api/export/[handle]/text
+Stages: **Profile understanding → evidence extraction → strategy → narrative → design brief → validation**.
 
-// PDF (HTML for rendering)
-GET /api/export/[handle]/pdf
-```
+The Resume view is rendered directly from the Profile (no AI needed). The Follio view uses a lightweight algorithmic "snap" computation, optionally upgraded by a single AI pass (see `services/snap-view.service.ts`).
+
+### Visibility model
+
+Each view has its own visibility independently:
+
+- `portfolioVisibility` — controls Portfolio view (and Follio view, which shares the same source data)
+- `resumeVisibility` — controls Resume view
+
+Settings: `PUBLIC`, `UNLISTED` (link-only, not indexed), `PRIVATE` (owner-only).
+
+Share tokens (`ShareToken`) can grant time-limited or view-count-limited access to unlisted views. A token can be scoped to a single view via `allowedView`.
+
+### URL conventions
+
+Two url shapes are supported, controlled by `NEXT_PUBLIC_SUBDOMAIN_ENABLED`:
+
+| Subdomain mode | Portfolio                  | Resume                       | Follio                       |
+| -------------- | -------------------------- | ---------------------------- | ---------------------------- |
+| **Off** (dev)  | `/u/handle`                | `/u/handle/resume`           | `/u/handle/follio`           |
+| **On** (prod)  | `https://handle.follio.me` | `https://handle.follio.me/r` | `https://handle.follio.me/f` |
+
+Helpers in [`lib/url.ts`](lib/url.ts):
+
+- `getPortfolioUrl(handle)` / `getPortfolioPath(handle)`
+- `getResumeUrl(handle)` / `getResumePath(handle)`
+- `getFollioUrl(handle)` / `getFollioPath(handle)`
+
+Use the `*Url` variants for OG tags, share buttons, and external links. Use the `*Path` variants for `<Link>` and `redirect()`.
+
+### Export formats
+
+| Endpoint                    | Format      | Use case        |
+| --------------------------- | ----------- | --------------- |
+| `/api/export/[handle]/json` | JSON Resume | Machine parsing |
+| `/api/export/[handle]/text` | Plain text  | ATS systems     |
+| `/api/export/[handle]/pdf`  | PDF (HTML)  | Human reading   |
 
 ---
 
-## 🧪 Testing
+## Engineering principles
+
+These are non-negotiable. They are enforced by code review.
+
+1. **One source of truth.** The Profile owns the data. Views read it; they do not own a copy.
+2. **No magic strings.** Every URL, route, or noun goes through a helper or constant.
+3. **Visibility at the boundary.** Public-page server components check visibility before rendering, never the view components themselves.
+4. **No workarounds.** Fix the root cause. If the right fix means refactoring, refactor.
+5. **Type-safe at the edges.** API payloads and external inputs go through Zod (`lib/validations.ts`) before hitting business logic.
+6. **Errors are typed.** Use the helpers in `lib/errors.ts`. Never throw raw strings.
+
+For the full set, see [`.github/copilot-instructions.md`](.github/copilot-instructions.md).
+
+---
+
+## Testing
 
 ```bash
-# Run all tests
-pnpm test
-
-# Run with coverage
-pnpm test:coverage
-
-# Run in watch mode
-pnpm test:watch
+pnpm test                 # Vitest watch mode
+pnpm test --run           # one-shot
+pnpm test --coverage      # coverage report
 ```
 
----
-
-## 🚢 Deployment
-
-### Vercel (Recommended)
-
-1. Push to GitHub
-2. Import project in Vercel
-3. Set environment variables
-4. Deploy
-
-The app is optimized for Vercel with:
-
-- Edge middleware for auth
-- ISR (60s revalidation) for profile pages
-- Serverless functions for API routes
-
-### Docker
-
-```bash
-docker build -t follio .
-docker run -p 3000:3000 follio
-```
+Tests live in `__tests__/` and cover services, parsers, and pure utilities. UI components are not unit-tested by default — they're exercised through end-to-end flows.
 
 ---
 
-## 🛣️ Roadmap
+## Contributing
 
-- [x] Core profile builder
-- [x] Four view types
-- [x] Export endpoints (JSON, text)
-- [x] GitHub import
-- [x] Resume parsing
-- [ ] LinkedIn OAuth integration
-- [ ] PDF export with Playwright
-- [ ] AI-powered resume optimization
-- [ ] Custom domains
-- [ ] Analytics dashboard
-- [ ] Team profiles
+See [`CONTRIBUTING.md`](CONTRIBUTING.md). The short version: small commits, conventional messages, no broken tests, follow the engineering principles above.
 
 ---
 
-## 🤝 Contributing
+## License
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
-
----
-
-<div align="center">
-
-Built with ❤️ by the Follio team
-
-[Website](https://follio.app) · [Twitter](https://twitter.com/follioapp) · [Discord](https://discord.gg/follio)
-
-</div>
+Private — not yet open-sourced.

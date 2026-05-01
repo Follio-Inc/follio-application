@@ -6,6 +6,8 @@ import {
   escapeHtml,
   htmlToBullets,
   isHtmlEmpty,
+  isHtmlFullyJustified,
+  justifyHtmlContent,
   stripHtmlTags,
 } from '@/lib/html-utils';
 
@@ -229,5 +231,105 @@ describe('bulletsToHtml → htmlToBullets round-trip', () => {
     const html = bulletsToHtml(original);
     const restored = htmlToBullets(html);
     expect(restored).toEqual(original);
+  });
+});
+
+// ─── isHtmlFullyJustified ──────────────────────────────────────────────────
+
+describe('isHtmlFullyJustified', () => {
+  it('returns true for null/undefined/empty', () => {
+    expect(isHtmlFullyJustified(null)).toBe(true);
+    expect(isHtmlFullyJustified(undefined)).toBe(true);
+    expect(isHtmlFullyJustified('')).toBe(true);
+  });
+
+  it('returns true for HTML with no text-align', () => {
+    expect(isHtmlFullyJustified('<p>Hello world</p>')).toBe(true);
+  });
+
+  it('returns true for HTML with text-align: justify', () => {
+    expect(isHtmlFullyJustified('<p style="text-align: justify">Hello</p>')).toBe(true);
+  });
+
+  it('returns false for text-align: left', () => {
+    expect(isHtmlFullyJustified('<p style="text-align: left">Hello</p>')).toBe(false);
+  });
+
+  it('returns false for text-align: center', () => {
+    expect(isHtmlFullyJustified('<p style="text-align: center">Hello</p>')).toBe(false);
+  });
+
+  it('returns false for text-align: right', () => {
+    expect(isHtmlFullyJustified('<p style="text-align: right">Hello</p>')).toBe(false);
+  });
+
+  it('returns false when mixed alignments exist', () => {
+    const html = '<p style="text-align: justify">Justified</p><p style="text-align: left">Left</p>';
+    expect(isHtmlFullyJustified(html)).toBe(false);
+  });
+
+  it('handles TipTap bullet list HTML with alignment', () => {
+    const html = '<ul><li><p style="text-align: center">Item 1</p></li><li><p>Item 2</p></li></ul>';
+    expect(isHtmlFullyJustified(html)).toBe(false);
+  });
+});
+
+// ─── justifyHtmlContent ────────────────────────────────────────────────────
+
+describe('justifyHtmlContent', () => {
+  it('returns null for null input', () => {
+    expect(justifyHtmlContent(null)).toBe(null);
+  });
+
+  it('returns null for undefined input', () => {
+    expect(justifyHtmlContent(undefined)).toBe(null);
+  });
+
+  it('returns unchanged HTML when already justified', () => {
+    const html = '<p style="text-align: justify">Hello</p>';
+    expect(justifyHtmlContent(html)).toBe(html);
+  });
+
+  it('returns unchanged HTML when no text-align exists', () => {
+    const html = '<p>Simple text</p>';
+    expect(justifyHtmlContent(html)).toBe(html);
+  });
+
+  it('replaces text-align: left with justify', () => {
+    const html = '<p style="text-align: left">Hello</p>';
+    expect(justifyHtmlContent(html)).toBe('<p style="text-align: justify">Hello</p>');
+  });
+
+  it('replaces text-align: center with justify', () => {
+    const html = '<p style="text-align: center">Hello</p>';
+    expect(justifyHtmlContent(html)).toBe('<p style="text-align: justify">Hello</p>');
+  });
+
+  it('replaces text-align: right with justify', () => {
+    const html = '<p style="text-align: right">Hello</p>';
+    expect(justifyHtmlContent(html)).toBe('<p style="text-align: justify">Hello</p>');
+  });
+
+  it('replaces all occurrences in multi-element HTML', () => {
+    const html = '<p style="text-align: left">First</p><p style="text-align: right">Second</p>';
+    expect(justifyHtmlContent(html)).toBe(
+      '<p style="text-align: justify">First</p><p style="text-align: justify">Second</p>'
+    );
+  });
+
+  it('preserves other inline styles alongside text-align', () => {
+    const html = '<p style="color: red; text-align: center; font-weight: bold">Hello</p>';
+    expect(justifyHtmlContent(html)).toBe(
+      '<p style="color: red; text-align: justify; font-weight: bold">Hello</p>'
+    );
+  });
+
+  it('handles bullet list HTML with mixed alignment', () => {
+    const html = '<ul><li><p style="text-align: center">Item 1</p></li><li><p>Item 2</p></li></ul>';
+    const result = justifyHtmlContent(html);
+    expect(result).toBe(
+      '<ul><li><p style="text-align: justify">Item 1</p></li><li><p>Item 2</p></li></ul>'
+    );
+    expect(isHtmlFullyJustified(result!)).toBe(true);
   });
 });

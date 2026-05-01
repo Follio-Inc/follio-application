@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 import { notFound } from 'next/navigation';
 
 import { CleanResumeView } from '@/app/u/[handle]/views/clean-resume-view';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { db } from '@/lib/db';
 
 import type { PublicProfile } from '@/types';
@@ -16,11 +17,6 @@ export const dynamic = 'force-dynamic';
  * - Renders CleanResumeView with zero surrounding chrome.
  * - Works for all statuses (DRAFT, PRIVATE, PUBLIC) since the owner is viewing.
  */
-
-// Helper to serialize data for client components (converts Date objects to ISO strings)
-function serializeForClient<T>(data: T): T {
-  return JSON.parse(JSON.stringify(data));
-}
 
 interface ResumePreviewPageProps {
   params: Promise<{ id: string }>;
@@ -62,9 +58,11 @@ export default async function ResumePreviewPage({ params }: ResumePreviewPagePro
     notFound();
   }
 
-  // Strip sensitive fields and serialize for client rendering
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // Strip sensitive fields. Next.js RSC serializes Date objects natively,
+  // so no manual JSON round-trip is needed.
   const { userId: _uid, user: _user, ...publicFields } = profile;
+  void _uid;
+  void _user;
 
   const publicContactInfo = profile.contactInfo
     ? {
@@ -77,18 +75,20 @@ export default async function ResumePreviewPage({ params }: ResumePreviewPagePro
       }
     : null;
 
-  const publicProfile = serializeForClient({
+  const publicProfile = {
     ...publicFields,
     contactInfo: publicContactInfo,
-  }) as unknown as PublicProfile;
+  } as unknown as PublicProfile;
 
   return (
-    <div className="bg-white" style={{ overflow: 'hidden' }}>
-      <main className="mx-auto max-w-5xl py-6">
-        <div className="[&>.resume-actions]:hidden">
-          <CleanResumeView profile={publicProfile} />
-        </div>
-      </main>
-    </div>
+    <TooltipProvider>
+      <div className="bg-white" style={{ overflow: 'hidden' }}>
+        <main className="mx-auto max-w-5xl">
+          <div className="[&>.resume-actions]:hidden">
+            <CleanResumeView profile={publicProfile} />
+          </div>
+        </main>
+      </div>
+    </TooltipProvider>
   );
 }

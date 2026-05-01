@@ -1,7 +1,17 @@
 'use client';
 
 import { useClerk, useUser } from '@clerk/nextjs';
-import { Check, ChevronDown, Copy, Globe, Lock, LogOut, Settings, User } from 'lucide-react';
+import {
+  Check,
+  ChevronDown,
+  Copy,
+  Globe,
+  LayoutDashboard,
+  Lock,
+  LogOut,
+  Settings,
+  User,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -52,7 +62,7 @@ export function UserMenu() {
   if (!mounted || !user) {
     return (
       <div className="flex items-center gap-2">
-        <div className="h-8 w-8 animate-pulse rounded-full bg-muted" />
+        <div className="h-9 w-[58px] animate-pulse rounded-full bg-muted" />
       </div>
     );
   }
@@ -96,16 +106,20 @@ export function UserMenu() {
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
-            className="group relative flex items-center gap-1 rounded-full py-1 pl-1 pr-1.5 ring-2 ring-transparent transition-all duration-300 hover:bg-muted/50 hover:ring-primary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            aria-label="User menu"
+            className="group relative inline-flex h-9 items-center gap-1 rounded-full pl-0.5 pr-2 transition-all duration-200 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 data-[state=open]:bg-muted"
+            aria-label="Open account menu"
           >
-            <Avatar className="h-8 w-8 shadow-sm">
+            <Avatar className="h-8 w-8 ring-1 ring-border/60 transition-all group-hover:ring-border group-data-[state=open]:ring-foreground/30">
               <AvatarImage src={user.imageUrl} alt={displayName} />
               <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/5 text-xs font-semibold text-primary">
                 {initials}
               </AvatarFallback>
             </Avatar>
-            <ChevronDown className="h-3 w-3 text-muted-foreground/60 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+            <ChevronDown
+              className="h-3.5 w-3.5 text-muted-foreground transition-transform duration-200 group-hover:text-foreground group-data-[state=open]:rotate-180 group-data-[state=open]:text-foreground"
+              strokeWidth={2.25}
+              aria-hidden
+            />
           </button>
         </DropdownMenuTrigger>
 
@@ -194,8 +208,23 @@ export function UserMenu() {
 
           <DropdownMenuSeparator className="my-0 opacity-50" />
 
-          {/* Navigation */}
+          {/* Primary navigation — the two surfaces a signed-in user
+              actually moves between from anywhere in the app. */}
           <DropdownMenuGroup className="p-2">
+            <DropdownMenuItem asChild>
+              <Link
+                href="/dashboard"
+                className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 transition-colors"
+              >
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/50">
+                  <LayoutDashboard className="h-4 w-4 text-muted-foreground" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium">Dashboard</span>
+                  <span className="text-[11px] text-muted-foreground">Manage your resumes</span>
+                </div>
+              </Link>
+            </DropdownMenuItem>
             {handle && (
               <DropdownMenuItem asChild>
                 <Link
@@ -206,45 +235,40 @@ export function UserMenu() {
                     <User className="h-4 w-4 text-muted-foreground" />
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-sm font-medium">View Profile</span>
+                    <span className="text-sm font-medium">View profile</span>
                     <span className="text-[11px] text-muted-foreground">See your public page</span>
                   </div>
                 </Link>
               </DropdownMenuItem>
             )}
-            <DropdownMenuItem asChild>
-              <Link
-                href="/settings"
-                className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 transition-colors"
-              >
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/50">
-                  <Settings className="h-4 w-4 text-muted-foreground" />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-sm font-medium">Settings</span>
-                  <span className="text-[11px] text-muted-foreground">Preferences & account</span>
-                </div>
-              </Link>
-            </DropdownMenuItem>
           </DropdownMenuGroup>
 
           <DropdownMenuSeparator className="my-0 opacity-50" />
 
-          {/* Sign Out */}
-          <div className="p-2">
+          {/* Footer — quieter, account-level actions. Settings and
+              sign-out share the same compact row treatment so neither
+              competes with the primary nav above. */}
+          <DropdownMenuGroup className="p-2">
+            <DropdownMenuItem asChild>
+              <Link
+                href="/settings"
+                className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <Settings className="h-4 w-4" />
+                <span className="text-sm font-medium">Settings</span>
+              </Link>
+            </DropdownMenuItem>
             <DropdownMenuItem
-              className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-muted-foreground transition-all duration-200 focus:bg-destructive/5 focus:text-destructive"
+              className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-colors focus:bg-destructive/5 focus:text-destructive"
               onClick={handleSignOut}
               disabled={isSigningOut}
             >
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/50">
-                <LogOut className="h-4 w-4" />
-              </div>
+              <LogOut className="h-4 w-4" />
               <span className="text-sm font-medium">
-                {isSigningOut ? 'Signing out...' : 'Sign out'}
+                {isSigningOut ? 'Signing out…' : 'Sign out'}
               </span>
             </DropdownMenuItem>
-          </div>
+          </DropdownMenuGroup>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

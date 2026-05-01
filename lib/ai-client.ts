@@ -47,6 +47,7 @@ const MAX_TOKENS = {
   narrativeGeneration: 4096,
   designBrief: 1500,
   validation: 2048,
+  snapViewGeneration: 3000,
 } as const;
 
 export type AITaskType = 'extraction' | 'strategy' | 'creative';
@@ -205,6 +206,7 @@ export function getStageConfig(stage: PipelineStage): {
     narrativeGeneration: 'creative',
     designBrief: 'strategy',
     validation: 'extraction',
+    snapViewGeneration: 'strategy',
   };
 
   const taskType = stageTaskMap[stage];

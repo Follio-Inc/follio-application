@@ -1,10 +1,42 @@
 'use client';
 
-import { Home, LayoutGrid, Menu, Settings, X } from 'lucide-react';
+/**
+ * DashboardTopbar
+ *
+ * Authenticated app chrome for the dashboard surfaces. Composes the
+ * canonical `AppHeader` so the bar's height, glass background, and
+ * scroll-aware edge are byte-identical to every other top bar in the
+ * product. This layer owns *only* the slot contents — primary nav and
+ * the mobile drawer.
+ *
+ * Navigation style
+ * ----------------
+ * Modern horizontal pill tabs (Linear / Vercel / Cron pattern):
+ *   - Icon + label *inline* (not stacked) — reads as language, not iconography.
+ *   - Active state is a soft filled pill (`bg-muted/80`), not an underline.
+ *   - Pills sit in a single row, with a barely-there grouping background
+ *     so the nav feels like one cohesive control rather than three
+ *     independent links.
+ *   - Hover lifts subtly; active is firm but quiet.
+ *
+ * Layout
+ * ------
+ *   Desktop : [Logo · Pill nav]                                       [Avatar]
+ *   Mobile  : [☰ · Logo]                                              [Avatar]
+ *
+ * Settings has intentionally been removed from the top bar surface
+ * (both the desktop utility cluster and the mobile drawer). It now
+ * lives exclusively inside the avatar dropdown, where account-level
+ * preferences belong — keeping the chrome focused on the two product
+ * areas a user actually navigates between (Home, Resumes).
+ */
+
+import { Home, LayoutGrid, Menu, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
+import { AppHeader, AppHeaderDivider } from '@/components/app-header';
 import { Logo } from '@/components/Logo';
 import { cn } from '@/lib/utils';
 
@@ -19,55 +51,54 @@ interface NavItemConfig {
 
 /* ───────────────────────────── Data ────────────────────────────── */
 
-/** Left side — primary product areas */
-const leftItems: NavItemConfig[] = [
+/** Primary product areas — left-anchored next to the brand. */
+const primaryItems: NavItemConfig[] = [
   {
     href: '/dashboard',
-    label: 'Dashboard',
+    label: 'Home',
     icon: Home,
     match: (path) => path === '/dashboard',
   },
   {
     href: '/resumes',
-    label: 'My Resumes',
+    label: 'Resumes',
     icon: LayoutGrid,
-    match: (path) => path.startsWith('/resumes') || path.startsWith('/builder'),
-  },
-];
-
-/** Right side — account & settings */
-const rightItems: NavItemConfig[] = [
-  {
-    href: '/settings',
-    label: 'Settings',
-    icon: Settings,
-    match: (path) => path.startsWith('/settings') || path.startsWith('/data-sources'),
+    // Builder is its own focused workspace (with its own ResumeSwitcher in the
+    // top-right) so we deliberately do NOT highlight "Resumes" while inside
+    // the builder — the page context is owned by the builder, not the listing.
+    match: (path) => path.startsWith('/resumes'),
   },
 ];
 
 /* ──────────────────────── Sub-components ────────────────────────── */
 
-/** A single icon+label nav item (LinkedIn-style: icon above label) */
-function TopNavItem({ href, icon: Icon, label, isActive }: NavItemConfig & { isActive: boolean }) {
+/**
+ * A single horizontal pill nav item. Active pills carry a soft filled
+ * background (no underline). Hover state is a slightly lifted tone.
+ */
+function PillNavItem({ href, icon: Icon, label, isActive }: NavItemConfig & { isActive: boolean }) {
   return (
     <Link
       href={href}
+      aria-current={isActive ? 'page' : undefined}
       className={cn(
-        'relative flex flex-col items-center gap-0.5 px-3 py-1.5 transition-colors',
-        isActive ? 'text-foreground' : 'text-muted-foreground/70 hover:text-foreground'
+        'inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium transition-all duration-150',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
+        isActive
+          ? 'bg-background text-foreground shadow-sm ring-1 ring-border/60'
+          : 'text-muted-foreground hover:text-foreground'
       )}
     >
-      <Icon className="h-[22px] w-[22px]" strokeWidth={isActive ? 2.2 : 1.8} />
-      <span className="hidden text-[11px] font-medium leading-tight sm:block">{label}</span>
-      {/* Active indicator line */}
-      {isActive && (
-        <span className="absolute -bottom-px left-0 right-0 h-[2px] rounded-full bg-foreground" />
-      )}
+      <Icon
+        className={cn('h-[15px] w-[15px]', isActive ? 'text-foreground' : 'text-muted-foreground')}
+        strokeWidth={2}
+      />
+      <span>{label}</span>
     </Link>
   );
 }
 
-/** Mobile drawer nav item — horizontal layout */
+/** Mobile drawer nav item — horizontal layout. */
 function MobileNavItem({
   href,
   icon: Icon,
@@ -79,14 +110,15 @@ function MobileNavItem({
     <Link
       href={href}
       onClick={onClick}
+      aria-current={isActive ? 'page' : undefined}
       className={cn(
-        'flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors',
+        'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
         isActive
-          ? 'bg-primary/10 text-primary'
-          : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+          ? 'bg-muted text-foreground'
+          : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
       )}
     >
-      <Icon className="h-5 w-5 shrink-0" />
+      <Icon className="h-[18px] w-[18px] shrink-0" strokeWidth={2} />
       <span>{label}</span>
     </Link>
   );
@@ -94,12 +126,6 @@ function MobileNavItem({
 
 /* ──────────────────────── Main Component ────────────────────────── */
 
-/**
- * Top navigation bar.
- *
- * Left:  [Logo]  |  [Dashboard]  [My Resumes]  [Portfolio]
- * Right: [Settings]  [children → UserMenu]
- */
 export function DashboardTopbar({ children }: { children?: React.ReactNode }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -115,81 +141,74 @@ export function DashboardTopbar({ children }: { children?: React.ReactNode }) {
     };
   }, [mobileOpen]);
 
-  const allItems = [...leftItems, ...rightItems];
-
   return (
     <>
-      {/* ── Desktop / Tablet: top bar ─────────────────────────────── */}
-      <nav className="relative z-50 hidden h-14 items-center border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 md:flex">
-        {/* Left cluster: Logo + product nav */}
-        <div className="flex items-center gap-1 pl-4 sm:pl-6">
-          <div className="mr-4">
+      <AppHeader
+        left={
+          <>
+            <button
+              onClick={() => setMobileOpen(true)}
+              className={cn(
+                'inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors md:hidden',
+                'hover:bg-muted hover:text-foreground',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40'
+              )}
+              aria-label="Open navigation"
+              aria-expanded={mobileOpen}
+            >
+              <Menu className="h-5 w-5" />
+            </button>
             <Logo href="/dashboard" size="md" />
-          </div>
-          <div className="flex items-center border-l pl-4">
-            {leftItems.map((item) => (
-              <TopNavItem key={item.href} {...item} isActive={item.match(pathname)} />
-            ))}
-          </div>
-        </div>
 
-        {/* Spacer */}
-        <div className="flex-1" />
+            {/* Primary nav — modern segmented pill cluster.
+                Hosted in a faintly tinted shell so the group reads as
+                one control, not three loose links. */}
+            <nav
+              aria-label="Primary"
+              className="ml-2 hidden items-center gap-0.5 rounded-full bg-muted/40 p-0.5 md:flex"
+            >
+              {primaryItems.map((item) => (
+                <PillNavItem key={item.href} {...item} isActive={item.match(pathname)} />
+              ))}
+            </nav>
+          </>
+        }
+        right={
+          <>
+            {children && <AppHeaderDivider className="mx-1 hidden md:block" />}
+            {children}
+          </>
+        }
+      />
 
-        {/* Right cluster: utilities + user avatar */}
-        <div className="flex items-center gap-1 pr-4 sm:pr-6">
-          {rightItems.map((item) => (
-            <TopNavItem key={item.href} {...item} isActive={item.match(pathname)} />
-          ))}
-          {/* User menu (avatar) */}
-          {children && <div className="ml-2 border-l pl-3">{children}</div>}
-        </div>
-      </nav>
-
-      {/* ── Mobile: compact bar + hamburger ────────────────────────── */}
-      <div className="flex h-14 items-center border-b bg-background/95 backdrop-blur md:hidden">
-        <button
-          onClick={() => setMobileOpen(true)}
-          className="pl-4 pr-2 text-muted-foreground hover:text-foreground"
-          aria-label="Open navigation"
-        >
-          <Menu className="h-5 w-5" />
-        </button>
-        <Logo href="/dashboard" size="sm" />
-        <div className="flex-1" />
-        {/* User menu on mobile too */}
-        {children && <div className="pr-4">{children}</div>}
-      </div>
-
-      {/* ── Mobile: backdrop ──────────────────────────────────────── */}
+      {/* ── Mobile drawer ───────────────────────────────────────── */}
       <div
         className={cn(
-          'fixed inset-0 z-40 bg-background/80 backdrop-blur-sm transition-opacity duration-300 md:hidden',
+          'fixed inset-0 z-40 bg-background/60 backdrop-blur-sm transition-opacity duration-300 md:hidden',
           mobileOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
         )}
         onClick={() => setMobileOpen(false)}
         aria-hidden
       />
-
-      {/* ── Mobile: slide-out drawer ──────────────────────────────── */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 w-[280px] border-r bg-background shadow-xl transition-transform duration-300 ease-in-out md:hidden',
+          'fixed inset-y-0 left-0 z-50 w-[280px] border-r bg-background shadow-2xl transition-transform duration-300 ease-out md:hidden',
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         )}
+        aria-hidden={!mobileOpen}
       >
         <div className="flex h-14 items-center justify-between border-b px-4">
           <Logo href="/dashboard" size="md" />
           <button
             onClick={() => setMobileOpen(false)}
-            className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
             aria-label="Close navigation"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
-        <nav className="space-y-1 px-3 py-4">
-          {allItems.map((item) => (
+        <nav className="space-y-0.5 px-3 py-4" aria-label="Mobile navigation">
+          {primaryItems.map((item) => (
             <MobileNavItem
               key={item.href}
               {...item}

@@ -95,4 +95,10 @@ export const META: TemplateKitMeta = {
       background: '223 39% 7%',
     },
   } satisfies TemplateNavbarTheme,
+
+  /**
+   * The hero section contains the primary identity statement
+   * and is the most visually impactful area of this template.
+   */
+  thumbnailFocusSection: 'hero',
 };

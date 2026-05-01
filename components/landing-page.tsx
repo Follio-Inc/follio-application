@@ -1,11 +1,12 @@
 'use client';
 
 import { type Variants, motion, useInView } from 'framer-motion';
-import { ArrowRight, BarChart3, Briefcase, Check, Clock, FileText } from 'lucide-react';
+import { ArrowRight, BarChart3, Briefcase, Check, Clock, FileText, Shield } from 'lucide-react';
 import Link from 'next/link';
-import { type ReactNode, useRef } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 
 import { Logo } from '@/components/Logo';
+import { AppHeader } from '@/components/app-header';
 import { ResumeIllustration } from '@/components/resume-illustration';
 import { Button } from '@/components/ui/button';
 
@@ -40,7 +41,7 @@ const STEPS = [
   {
     step: '3',
     title: 'Share everywhere',
-    desc: 'Get a unique URL with resume, portfolio, and timeline views.',
+    desc: 'One link, three views — your Follio, your Portfolio, and your Resume.',
   },
 ] as const;
 
@@ -441,6 +442,41 @@ function FadeIn({
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   Hero CTA button — highlights on mouse movement, color shift on hover
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+function HeroCTA() {
+  const [mouseMoving, setMouseMoving] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const onMove = () => {
+      setMouseMoving(true);
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => setMouseMoving(false), 800);
+    };
+    window.addEventListener('mousemove', onMove);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
+
+  return (
+    <Link href="/sign-up">
+      <Button
+        size="lg"
+        className="gap-2 shadow-md transition-shadow duration-500"
+        style={mouseMoving ? { boxShadow: '0 0 14px hsl(170 70% 50% / 0.15)' } : undefined}
+      >
+        Reimagine Your Resume
+        <ArrowRight className="h-4 w-4" />
+      </Button>
+    </Link>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    Hero showcase — displays the resume illustration
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -474,21 +510,29 @@ export function LandingPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* ─── Navigation ─────────────────────────────────────────────────── */}
-      <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <Logo href="/" size="md" />
-          <div className="flex items-center gap-3">
-            <Link href="/sign-in">
-              <Button variant="ghost" size="sm">
-                Sign in
-              </Button>
+      {/* Composes the canonical AppHeader (marketing tone) so the chrome
+          here is byte-identical to the rest of the product — only the
+          container max-width relaxes for marketing. */}
+      <AppHeader
+        tone="marketing"
+        left={<Logo href="/" size="md" />}
+        right={
+          <>
+            <Link
+              href="/sign-in"
+              className="hidden h-8 items-center rounded-full px-3 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 sm:inline-flex"
+            >
+              Sign in
             </Link>
-            <Link href="/sign-up">
-              <Button size="sm">Get Started</Button>
+            <Link
+              href="/sign-up"
+              className="inline-flex h-8 items-center rounded-full bg-foreground px-3.5 text-[13px] font-medium text-background shadow-sm transition-all hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            >
+              Get started
             </Link>
-          </div>
-        </div>
-      </nav>
+          </>
+        }
+      />
 
       {/* ─── Hero: Asymmetric split ─────────────────────────────────────── */}
       <section className="relative overflow-hidden">
@@ -500,25 +544,15 @@ export function LandingPage() {
           <div className="grid items-center gap-12 lg:grid-cols-[1fr,auto] lg:gap-20">
             {/* Left: Copy */}
             <div className="max-w-xl">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5 }}
-                className="mb-5 inline-flex items-center gap-2 rounded-full border bg-muted/50 px-3 py-1 text-xs text-muted-foreground"
-              >
-                <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                The future of professional resumes
-              </motion.div>
-
               <motion.h1
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.1 }}
                 className="mb-5 text-4xl font-bold tracking-tight sm:text-5xl"
               >
-                Your resume,{' '}
+                Own Your{' '}
                 <span className="bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-                  reimagined
+                  First Impression
                 </span>
               </motion.h1>
 
@@ -528,8 +562,8 @@ export function LandingPage() {
                 transition={{ duration: 0.5, delay: 0.2 }}
                 className="mb-8 text-base leading-relaxed text-muted-foreground sm:text-lg"
               >
-                A single source of truth for your professional identity. Import once — get a resume,
-                portfolio, timeline, and snapshot — all perfectly formatted and always in sync.
+                The first truly digital resume — better than PDFs for building, sharing, and
+                applying.
               </motion.p>
 
               <motion.div
@@ -538,12 +572,7 @@ export function LandingPage() {
                 transition={{ duration: 0.5, delay: 0.3 }}
                 className="flex gap-3"
               >
-                <Link href="/sign-up">
-                  <Button size="lg" className="gap-2">
-                    Create your Follio
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
-                </Link>
+                <HeroCTA />
               </motion.div>
             </div>
 
@@ -839,6 +868,13 @@ export function LandingPage() {
               </Link>
               <Link href="/contact" className="transition-colors hover:text-foreground">
                 Contact
+              </Link>
+              <Link
+                href="/admin/sign-in"
+                className="transition-colors hover:text-foreground"
+                title="Admin"
+              >
+                <Shield className="h-3.5 w-3.5" />
               </Link>
             </div>
           </div>

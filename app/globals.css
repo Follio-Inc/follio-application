@@ -350,6 +350,10 @@
     color: var(--rd-heading-color, inherit);
   }
 
+  .dark .resume-name {
+    color: var(--rd-heading-color-dark, #e5e5e5);
+  }
+
   .resume-headline {
     font-size: 15px;
     color: #555;
@@ -399,12 +403,23 @@
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 
+  .dark .resume-section-title {
+    color: var(--rd-heading-color-dark, #e5e5e5);
+  }
+
   .resume-section-line {
     height: var(--rd-divider-height, 1px);
     background: var(--rd-divider-bg, currentColor);
     border-top: var(--rd-divider-border, none);
     border-bottom: var(--rd-divider-border-bottom, none);
     opacity: var(--rd-divider-opacity, 0.2);
+  }
+
+  .dark .resume-section-line {
+    background: var(--rd-divider-bg-dark, currentColor);
+    border-top: var(--rd-divider-border-dark, none);
+    border-bottom: var(--rd-divider-border-bottom-dark, none);
+    opacity: var(--rd-divider-opacity, 0.35);
   }
 
   /* Summary */
@@ -507,6 +522,10 @@
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 
+  .dark .resume-entry-tags {
+    color: #888;
+  }
+
   /* Bullet points */
   .resume-bullets {
     margin: var(--rd-bullet-margin, 8px) 0 0 0;
@@ -538,7 +557,7 @@
   }
 
   .dark .resume-bullets li::marker {
-    color: var(--rd-accent-color, #888);
+    color: var(--rd-accent-color-dark, #888);
     opacity: 0.6;
   }
 
@@ -583,7 +602,7 @@
   }
 
   .dark .resume-entry .rich-text-bullets li::marker {
-    color: var(--rd-accent-color, #888);
+    color: var(--rd-accent-color-dark, #888);
     opacity: 0.6;
   }
 
@@ -795,23 +814,70 @@
     opacity: 1;
   }
 
-  /* Actions bar — fixed at bottom center, slightly transparent */
+  /* Actions bar — fixed at bottom center.
+     Holds the floating action cluster (Copy text / Download / Share)
+     rendered by `<PublicResumeActions>` on the public resume page. */
   .resume-actions {
-    @apply fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 gap-2 rounded-full p-2 shadow-lg backdrop-blur-sm;
-    background: hsl(var(--background) / 0.85);
+    @apply fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2;
+  }
+
+  /* ── Justify All floating button ── */
+  .resume-paper-wrapper {
+    position: relative;
+  }
+
+  .resume-justify-button {
+    @apply absolute -right-2 -top-2 z-10 translate-x-full;
+    opacity: 0.25;
+    transition: opacity 0.3s ease;
+  }
+
+  /* Highlight on hover over the resume area */
+  .group\/resume:hover .resume-justify-button {
+    opacity: 0.7;
+  }
+
+  .resume-justify-button:hover {
+    opacity: 1 !important;
+  }
+
+  .resume-justify-trigger {
+    @apply rounded-md shadow-sm backdrop-blur-sm;
+    background: hsl(var(--background) / 0.9);
     border: 1px solid hsl(var(--border));
   }
 
-  .resume-action-button {
-    @apply gap-2 rounded-full px-4;
+  /* ── Justify All mode — applies to all text in resume ── */
+  .resume-paper.resume-justify-all {
+    text-align: justify;
+  }
+
+  .resume-paper.resume-justify-all .resume-header {
+    text-align: var(--rd-header-alignment, center);
+  }
+
+  .resume-paper.resume-justify-all .resume-entry-header {
+    text-align: left;
+  }
+
+  .resume-paper.resume-justify-all .resume-entry-date {
+    text-align: right;
+  }
+
+  .resume-paper.resume-justify-all .resume-skills-grouped,
+  .resume-paper.resume-justify-all .resume-skills-flat,
+  .resume-paper.resume-justify-all .resume-entry-tags,
+  .resume-paper.resume-justify-all .resume-entry-tech {
+    text-align: justify;
   }
 }
 
 /* Print styles for clean resume */
 @media print {
   /* Hide everything except the resume */
-  body > *:not(.resume-paper),
+  body > *:not(.resume-paper):not(.resume-paper-wrapper),
   .resume-actions,
+  .resume-justify-button,
   header,
   footer,
   nav {

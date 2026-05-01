@@ -14,9 +14,11 @@ import {
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
+import { AppHeader } from '@/components/app-header';
+import { UserMenu } from '@/components/auth/user-menu';
+import { DashboardTopbar } from '@/components/dashboard-sidebar';
 import { Logo } from '@/components/Logo';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,45 +40,68 @@ interface ProfileNavbarProps {
   navbarTheme?: TemplateNavbarTheme | null;
 }
 
+/**
+ * Public profile chrome for the Links route.
+ *
+ * Mirrors `<SiteHeader>` so the links page behaves the same way every
+ * other public surface does: a logged-in viewer sees their workspace
+ * nav (so they never lose their context), an anonymous viewer sees a
+ * quiet brand + sign-up chrome, and a templated portfolio gets the
+ * minimal chrome so the template's design isn't fought.
+ */
 export function ProfileNavbar({ authState, profileHandle, navbarTheme }: ProfileNavbarProps) {
-  // Build inline CSS variable overrides from template theme
-  const themeStyle = navbarTheme?.overrides
-    ? (Object.fromEntries(
-        Object.entries(navbarTheme.overrides).map(([key, value]) => [`--${key}`, value])
-      ) as React.CSSProperties)
-    : undefined;
+  // Templated chrome — stay out of the design's way.
+  if (navbarTheme) {
+    return (
+      <AppHeader
+        navbarTheme={navbarTheme}
+        left={<Logo href="/" size="md" />}
+        right={<OwnerOrAuthControls authState={authState} profileHandle={profileHandle} />}
+      />
+    );
+  }
 
+  // Logged-in viewer — their workspace nav travels with them.
+  if (authState !== 'anonymous') {
+    return (
+      <DashboardTopbar>
+        <UserMenu />
+      </DashboardTopbar>
+    );
+  }
+
+  // Anonymous — brand + the two doors in.
+  return <AppHeader left={<Logo href="/" size="md" />} right={<AnonymousControls />} />;
+}
+
+/**
+ * Right-aligned auth/owner control cluster.
+ *
+ * Reused by `SiteHeader` so that the new slim chrome and the legacy
+ * `ProfileNavbar` share a single source of truth for the avatar menu,
+ * dashboard button, and signed-out CTAs.
+ */
+export function OwnerOrAuthControls({
+  authState,
+  profileHandle,
+}: {
+  authState: AuthState;
+  profileHandle?: string;
+}) {
   return (
-    <header
-      className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60"
-      data-navbar-theme={navbarTheme?.mode}
-      style={themeStyle}
-    >
-      <div className="flex h-14 items-center justify-between px-4 sm:px-6 lg:px-8">
-        <Logo href="/" size="md" />
-        <div className="flex items-center gap-3">
-          {authState === 'owner' && <OwnerControls profileHandle={profileHandle} />}
-          {authState === 'authenticated' && <AuthenticatedControls />}
-          {authState === 'anonymous' && <AnonymousControls />}
-        </div>
-      </div>
-    </header>
+    <div className="flex items-center gap-2">
+      {authState === 'owner' && <OwnerControls profileHandle={profileHandle} />}
+      {authState === 'authenticated' && <AuthenticatedControls />}
+      {authState === 'anonymous' && <AnonymousControls />}
+    </div>
   );
 }
 
-// --- Owner: sees edit button + their avatar menu ---
+// --- Owner: just the avatar menu. Dashboard lives inside that menu, so
+// surfacing a separate "Dashboard" pill here was a redundant second
+// path — it's gone. ---
 function OwnerControls({ profileHandle }: { profileHandle?: string }) {
-  return (
-    <>
-      <Link href="/dashboard">
-        <Button variant="outline" size="sm" className="gap-2">
-          <LayoutDashboard className="h-4 w-4" />
-          <span className="hidden sm:inline">Dashboard</span>
-        </Button>
-      </Link>
-      <ProfileMenu profileHandle={profileHandle} />
-    </>
-  );
+  return <ProfileMenu profileHandle={profileHandle} />;
 }
 
 // --- Authenticated visitor: sees their own avatar menu (no edit controls) ---
@@ -84,17 +109,21 @@ function AuthenticatedControls() {
   return <ProfileMenu />;
 }
 
-// --- Anonymous: subtle sign in / sign up ---
+// --- Anonymous: subtle, modern sign-in / sign-up pair ---
 function AnonymousControls() {
   return (
     <>
-      <Link href="/sign-in">
-        <Button variant="ghost" size="sm">
-          Sign in
-        </Button>
+      <Link
+        href="/sign-in"
+        className="hidden h-8 items-center rounded-full px-3 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 sm:inline-flex"
+      >
+        Sign in
       </Link>
-      <Link href="/sign-up">
-        <Button size="sm">Sign up</Button>
+      <Link
+        href="/sign-up"
+        className="inline-flex h-8 items-center rounded-full bg-foreground px-3.5 text-[13px] font-medium text-background shadow-sm transition-all hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+      >
+        Get started
       </Link>
     </>
   );
@@ -169,16 +198,20 @@ function ProfileMenu({ profileHandle }: { profileHandle?: string } = {}) {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          className="group relative flex items-center gap-1 rounded-full py-1 pl-1 pr-1.5 ring-2 ring-transparent transition-all duration-300 hover:bg-muted/50 hover:ring-primary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          aria-label="User menu"
+          className="group relative inline-flex h-9 items-center gap-1 rounded-full pl-0.5 pr-2 transition-all duration-200 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 data-[state=open]:bg-muted"
+          aria-label="Open account menu"
         >
-          <Avatar className="h-8 w-8 shadow-sm">
+          <Avatar className="h-8 w-8 ring-1 ring-border/60 transition-all group-hover:ring-border group-data-[state=open]:ring-foreground/30">
             <AvatarImage src={user.imageUrl} alt={displayName} />
             <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/5 text-xs font-semibold text-primary">
               {initials}
             </AvatarFallback>
           </Avatar>
-          <ChevronDown className="h-3 w-3 text-muted-foreground/60 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+          <ChevronDown
+            className="h-3.5 w-3.5 text-muted-foreground transition-transform duration-200 group-hover:text-foreground group-data-[state=open]:rotate-180 group-data-[state=open]:text-foreground"
+            strokeWidth={2.25}
+            aria-hidden
+          />
         </button>
       </DropdownMenuTrigger>
 
@@ -314,7 +347,8 @@ function ProfileMenu({ profileHandle }: { profileHandle?: string } = {}) {
 
         <DropdownMenuSeparator className="my-0 opacity-50" />
 
-        {/* Navigation */}
+        {/* Primary navigation — the workspace surface a signed-in
+            visitor or owner needs to reach from any profile page. */}
         <DropdownMenuGroup className="p-2">
           <DropdownMenuItem asChild>
             <Link
@@ -326,21 +360,7 @@ function ProfileMenu({ profileHandle }: { profileHandle?: string } = {}) {
               </div>
               <div className="flex flex-col">
                 <span className="text-sm font-medium">Dashboard</span>
-                <span className="text-[11px] text-muted-foreground">Manage resumes & settings</span>
-              </div>
-            </Link>
-          </DropdownMenuItem>
-          <DropdownMenuItem asChild>
-            <Link
-              href="/settings"
-              className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 transition-colors"
-            >
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/50">
-                <Settings className="h-4 w-4 text-muted-foreground" />
-              </div>
-              <div className="flex flex-col">
-                <span className="text-sm font-medium">Settings</span>
-                <span className="text-[11px] text-muted-foreground">Preferences & account</span>
+                <span className="text-[11px] text-muted-foreground">Manage your resumes</span>
               </div>
             </Link>
           </DropdownMenuItem>
@@ -348,21 +368,30 @@ function ProfileMenu({ profileHandle }: { profileHandle?: string } = {}) {
 
         <DropdownMenuSeparator className="my-0 opacity-50" />
 
-        {/* Sign Out */}
-        <div className="p-2">
+        {/* Footer — quieter, account-level actions. Settings and
+            sign-out share the same compact row treatment so they sit
+            beneath the primary nav without competing with it. */}
+        <DropdownMenuGroup className="p-2">
+          <DropdownMenuItem asChild>
+            <Link
+              href="/settings"
+              className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <Settings className="h-4 w-4" />
+              <span className="text-sm font-medium">Settings</span>
+            </Link>
+          </DropdownMenuItem>
           <DropdownMenuItem
-            className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-muted-foreground transition-all duration-200 focus:bg-destructive/5 focus:text-destructive"
+            className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-colors focus:bg-destructive/5 focus:text-destructive"
             onClick={handleSignOut}
             disabled={isSigningOut}
           >
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/50">
-              <LogOut className="h-4 w-4" />
-            </div>
+            <LogOut className="h-4 w-4" />
             <span className="text-sm font-medium">
-              {isSigningOut ? 'Signing out...' : 'Sign out'}
+              {isSigningOut ? 'Signing out…' : 'Sign out'}
             </span>
           </DropdownMenuItem>
-        </div>
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );

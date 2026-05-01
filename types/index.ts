@@ -77,6 +77,8 @@ export interface ResumeDesign {
   density?: ResumeDensity;
   /** Name font size in px (default 28) */
   nameFontSize?: number;
+  /** Apply justified text alignment to all resume content */
+  justifyAll?: boolean;
 }
 
 /** Default design settings applied when no custom design is configured */
@@ -89,6 +91,7 @@ export const RESUME_DESIGN_DEFAULTS: Required<ResumeDesign> = {
   fontSize: 13,
   density: 'normal',
   nameFontSize: 28,
+  justifyAll: false,
 };
 
 /** Maps font family identifiers to CSS font-family values */
@@ -124,9 +127,13 @@ export const RESUME_FONT_LABELS: Record<ResumeFontFamily, string> = {
 // ===========================================
 
 /**
- * Portfolio display view mode
+ * Public site view mode.
+ *
+ * A profile renders as one of two views:
+ *  - `portfolio` — Visual showcase, deeper read.
+ *  - `resume`    — Traditional ATS-friendly document.
  */
-export type PortfolioView = 'portfolio' | 'timeline' | 'snapshot';
+export type PortfolioView = 'portfolio' | 'resume';
 
 /**
  * Full profile with all relations loaded

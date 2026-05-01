@@ -154,7 +154,7 @@ export default function OnboardingPurposePage() {
                   disabled={isLoading}
                   className="text-muted-foreground"
                 >
-                  Skip for now
+                  Skip
                 </Button>
               </div>
             </CardContent>

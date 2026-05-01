@@ -582,12 +582,12 @@ export function ResumeDashboardClient({
                 {/* Resume thumbnail preview */}
                 <button
                   type="button"
-                  className="relative block w-full cursor-pointer border-b"
+                  className="relative block w-full cursor-pointer border-b border-border/60"
                   onClick={() => void handleOpenInBuilder(resume.id)}
                   disabled={isMutating}
                   aria-label={`Open ${resume.resumeTitle} in builder`}
                 >
-                  <ResumeThumbnail profileId={resume.id} className="rounded-t-xl" />
+                  <ResumeThumbnail profileId={resume.id} className="rounded-t-2xl" />
                 </button>
 
                 <CardContent className="pb-2 pt-3">

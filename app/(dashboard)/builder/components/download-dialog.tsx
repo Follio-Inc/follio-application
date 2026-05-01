@@ -493,7 +493,8 @@ export function DownloadDialog({
         {onShareClick && (
           <div className="flex items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
             <p className="text-sm text-muted-foreground">
-              Follio resumes are true digital resumes and can be shared directly with employers.
+              Follio resumes are true digital resumes — share a link with anyone for a live,
+              interactive view.
             </p>
             <Button
               variant="outline"
