@@ -1,17 +1,15 @@
-import { ClerkProvider } from '@clerk/nextjs';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 
+import { ClerkProviderWrapper } from '@/components/providers/clerk-provider-wrapper';
 import { ThemeProvider } from '@/components/theme-provider';
 
 import './globals.css';
 
-// NOTE: We intentionally do NOT mark the root layout as `force-dynamic`.
-// Pages that need dynamic rendering (anything calling Clerk's `auth()`,
-// reading cookies/headers, or using `force-dynamic` themselves) opt in
-// individually. Marking the root forces every page \u2014 including static
-// marketing pages \u2014 to be re-rendered on every request, killing prefetch
-// and edge caching.
+// Build environments may inject a placeholder Clerk publishable key, which
+// crashes static prerendering when Clerk validates the key. Keep root layout
+// dynamic so prerender does not evaluate Clerk at build time.
+export const dynamic = 'force-dynamic';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -60,7 +58,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider>
+    <ClerkProviderWrapper>
       <html lang="en" suppressHydrationWarning>
         <body className={`${inter.variable} font-sans antialiased`} suppressHydrationWarning>
           <ThemeProvider
@@ -73,6 +71,6 @@ export default function RootLayout({
           </ThemeProvider>
         </body>
       </html>
-    </ClerkProvider>
+    </ClerkProviderWrapper>
   );
 }
