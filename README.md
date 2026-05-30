@@ -75,23 +75,30 @@ follio-app/
 
 - Node.js 20+
 - PostgreSQL 15+
-- pnpm
+- npm 10+
 
 ### Setup
 
 ```bash
 git clone <repo>
 cd follio-app
-pnpm install
+# Optional if you use nvm/fnm/Volta: switch to the repo's Node version first
+# nvm use
+npm install
 
-cp .env.example .env.local       # fill in values (see below)
+cp .env.example .env.local  # fill in values (see below)
+ln -s .env.local .env       # Prisma CLI reads .env
 
 docker-compose up -d              # start Postgres
-pnpm prisma migrate dev           # apply schema
-pnpm prisma db seed               # optional seed data
+npm run db:migrate                # apply schema
+npm run db:seed                   # optional seed data
 
-pnpm dev                          # http://localhost:3000
+npm run dev                       # http://localhost:3000
 ```
+
+If you are using a hosted Postgres database such as Neon for local development,
+you can skip `docker-compose up -d` and point `DATABASE_URL` / `DIRECT_URL` at
+that remote database instead.
 
 ### Environment variables
 
@@ -215,9 +222,9 @@ For the full set, see [`.github/copilot-instructions.md`](.github/copilot-instru
 ## Testing
 
 ```bash
-pnpm test                 # Vitest watch mode
-pnpm test --run           # one-shot
-pnpm test --coverage      # coverage report
+npm run test              # Vitest watch mode
+npm run test:run          # one-shot
+npm run test:coverage     # coverage report
 ```
 
 Tests live in `__tests__/` and cover services, parsers, and pure utilities. UI components are not unit-tested by default — they're exercised through end-to-end flows.

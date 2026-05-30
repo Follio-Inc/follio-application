@@ -21,18 +21,62 @@ const RESUME_SKILLS = [
   'CI/CD',
 ] as const;
 
+const RESUME_PROJECTS = [
+  {
+    name: 'Helios — Distributed Job Scheduler',
+    tag: 'Open Source',
+    blurb:
+      'Fault-tolerant scheduler in Go with exactly-once delivery semantics, handling 5M+ daily jobs across multi-region clusters. 4.2K★ on GitHub and running in production at 30+ companies.',
+  },
+  {
+    name: 'Cascade — Streaming ETL Framework',
+    tag: 'Open Source',
+    blurb:
+      'Declarative pipeline framework on Kafka + Flink that cut end-to-end data latency from hours to seconds. Now powers real-time analytics for 12 internal product teams.',
+  },
+  {
+    name: 'Vellum — Type-Safe API Toolkit',
+    tag: 'Side project',
+    blurb:
+      'End-to-end typed RPC layer for TypeScript monorepos with zero codegen. 1.1K★ and featured in the React Status and Node Weekly newsletters.',
+  },
+] as const;
+
+const RESUME_AWARDS = [
+  'AWS Certified Solutions Architect — Professional · 2023',
+  'CNCF Certified Kubernetes Administrator (CKA) · 2022',
+  'Speaker, KubeCon NA 2023 — “Scaling Event-Driven Systems to Millions of Requests”',
+  'Patent pending — Adaptive canary deployment via real-time telemetry signals',
+] as const;
+
+/**
+ * Section heading — an uppercase label trailed by a hairline that fades into
+ * the page. Reads as a clean, modern divider without the heaviness of a full
+ * rule, while keeping the Follio standard's restrained, single-accent feel.
+ */
+function SectionHeading({ children }: { children: string }) {
+  return (
+    <div className="mb-2 flex items-center gap-2">
+      <p className="text-[8px] font-semibold uppercase tracking-[0.14em] text-primary">
+        {children}
+      </p>
+      <span className="h-px flex-1 bg-gradient-to-r from-primary/30 via-gray-200 to-transparent dark:via-gray-700/70" />
+    </div>
+  );
+}
+
 export function ResumeIllustration() {
   return (
     <div className="flex h-full flex-col bg-white dark:bg-gray-950" style={sansFont}>
       {/* ── Accent bar ── */}
-      <div className="h-[3px] bg-primary" />
+      <div className="h-[3px] bg-gradient-to-r from-primary via-primary to-primary/60" />
 
       {/* ── Header ── */}
       <div className="px-6 pb-2 pt-5 text-center">
-        <h3 className="text-[17px] font-bold tracking-[-0.02em] text-gray-900 dark:text-gray-50">
+        <h3 className="text-[17px] font-bold tracking-[-0.025em] text-gray-900 dark:text-gray-50">
           Sarah Chen
         </h3>
-        <p className="mt-0.5 text-[8px] font-medium tracking-[0.08em] text-primary">
+        <p className="mt-1 text-[8px] font-semibold uppercase tracking-[0.16em] text-primary">
           Senior Software Engineer
         </p>
         <div className="mt-2 flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 text-[7px] font-light text-gray-500 dark:text-gray-400">
@@ -47,7 +91,7 @@ export function ResumeIllustration() {
       </div>
 
       {/* ── Summary ── */}
-      <div className="px-6 pb-2">
+      <div className="px-6 pb-2 pt-3">
         <p className="text-[7.5px] font-light leading-[1.8] text-gray-700 dark:text-gray-300">
           Full-stack engineer with 8+ years shipping high-throughput distributed systems at scale.
           Led platform teams at two YC-backed startups and a Fortune 500 fintech. Specialized in
@@ -56,13 +100,9 @@ export function ResumeIllustration() {
         </p>
       </div>
 
-      <div className="bg-gray-150 mx-6 h-px dark:bg-gray-800/60" />
-
       {/* ── Experience ── */}
-      <div className="px-6 pt-2.5">
-        <p className="mb-1.5 text-[8px] font-semibold uppercase tracking-[0.12em] text-primary dark:text-primary">
-          Experience
-        </p>
+      <div className="px-6 pt-1.5">
+        <SectionHeading>Experience</SectionHeading>
 
         <div className="space-y-2">
           {/* Role 1 */}
@@ -203,13 +243,30 @@ export function ResumeIllustration() {
         </div>
       </div>
 
-      <div className="bg-gray-150 mx-6 mt-2.5 h-px dark:bg-gray-800/60" />
+      {/* ── Selected Projects ── */}
+      <div className="px-6 pt-3">
+        <SectionHeading>Selected Projects</SectionHeading>
+        <div className="space-y-2">
+          {RESUME_PROJECTS.map((project) => (
+            <div key={project.name}>
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-[8px] font-semibold tracking-[-0.01em] text-gray-900 dark:text-gray-100">
+                  {project.name}
+                </p>
+                <p className="shrink-0 text-[6.5px] font-light tabular-nums text-gray-600 dark:text-gray-400">
+                  {project.tag}
+                </p>
+              </div>
+              <p className="mt-0.5 text-[7px] font-light leading-[1.7] text-gray-700 dark:text-gray-300">
+                {project.blurb}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
 
-      {/* ── Education ── */}
-      <div className="px-6 pt-2.5">
-        <p className="mb-1.5 text-[8px] font-semibold uppercase tracking-[0.12em] text-primary dark:text-primary">
-          Education
-        </p>
+      <div className="px-6 pt-3">
+        <SectionHeading>Education</SectionHeading>
         <div className="space-y-2">
           <div>
             <div className="flex items-start justify-between">
@@ -251,16 +308,32 @@ export function ResumeIllustration() {
         </div>
       </div>
 
-      <div className="bg-gray-150 mx-6 mt-2.5 h-px dark:bg-gray-800/60" />
+      {/* ── Technical Skills — chips ── */}
+      <div className="px-6 pt-3">
+        <SectionHeading>Skills</SectionHeading>
+        <div className="flex flex-wrap gap-1">
+          {RESUME_SKILLS.map((skill) => (
+            <span
+              key={skill}
+              className="rounded-[3px] border border-gray-200 bg-gray-50 px-1.5 py-[2px] text-[6.5px] font-medium leading-none text-gray-700 dark:border-gray-800/70 dark:bg-gray-900/50 dark:text-gray-300"
+            >
+              {skill}
+            </span>
+          ))}
+        </div>
+      </div>
 
-      {/* ── Technical Skills — inline paragraph ── */}
-      <div className="px-6 pb-7 pt-2.5">
-        <p className="mb-1.5 text-[8px] font-semibold uppercase tracking-[0.12em] text-primary dark:text-primary">
-          Skills
-        </p>
-        <p className="text-[7px] font-light leading-[1.8] text-gray-700 dark:text-gray-300">
-          {RESUME_SKILLS.join('  ·  ')}
-        </p>
+      {/* ── Awards & Certifications ── */}
+      <div className="px-6 pb-7 pt-3">
+        <SectionHeading>Awards &amp; Certifications</SectionHeading>
+        <ul className="space-y-[3px] text-[7px] font-light leading-[1.7] text-gray-700 dark:text-gray-300">
+          {RESUME_AWARDS.map((award) => (
+            <li key={award} className="flex gap-1.5">
+              <span className="mt-[5px] h-[3px] w-[3px] shrink-0 rounded-full bg-primary/50" />
+              <span>{award}</span>
+            </li>
+          ))}
+        </ul>
       </div>
     </div>
   );

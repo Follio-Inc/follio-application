@@ -2,6 +2,11 @@
   "name": "follio-app",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "20.x",
+    "npm": ">=10"
+  },
+  "packageManager": "npm@10.8.2",
   "scripts": {
     "dev": "next dev --turbo",
     "build": "prisma generate && prisma migrate deploy && next build",
