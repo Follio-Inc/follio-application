@@ -30,9 +30,9 @@ import {
   useScroll,
   useTransform,
 } from 'framer-motion';
-import { Shield } from 'lucide-react';
+import { ChevronDown, Shield } from 'lucide-react';
 import Link from 'next/link';
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { Logo } from '@/components/Logo';
 import { AppHeader } from '@/components/app-header';
@@ -1663,12 +1663,12 @@ function StackedCapabilities() {
   if (reduceMotion) {
     return (
       <div className="mx-auto max-w-5xl px-4 pb-20 pt-20 sm:px-6 sm:pb-28 sm:pt-28 lg:px-8">
-        <div className="mb-12 max-w-2xl sm:mb-16">
+        <div className="mb-12 sm:mb-16">
           <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.2em] text-primary">
             More than a document
           </p>
-          <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-            A resume that does things a PDF never could.
+          <h2 className="whitespace-nowrap text-3xl font-semibold tracking-tight sm:text-4xl">
+            Your <RotatingWord /> resume that works for you.
           </h2>
         </div>
         <div className="space-y-6 sm:space-y-8">
@@ -1696,12 +1696,12 @@ function StackedCapabilities() {
       */}
       <div className="sticky top-0 flex h-screen flex-col overflow-hidden">
         <div className="mx-auto w-full max-w-5xl px-4 pt-20 sm:px-6 sm:pt-24 lg:px-8">
-          <div className="max-w-2xl">
+          <div>
             <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.2em] text-primary">
               More than a document
             </p>
-            <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-              A resume that does things a PDF never could.
+            <h2 className="whitespace-nowrap text-3xl font-semibold tracking-tight sm:text-4xl">
+              Your <RotatingWord /> resume that works for you.
             </h2>
           </div>
         </div>
@@ -1984,19 +1984,49 @@ function ResumeShowcase() {
 const ROTATING_WORDS = [
   'living',
   'adaptive',
-  'answering',
-  'self-improving',
   'parsable',
+  'answering',
   'errorless',
   'connected',
   'shareable',
+  'self-improving',
 ] as const;
 const ROTATION_INTERVAL_MS = 2400;
+
+/**
+ * Shared timing for every part of the word swap. The container's width glide,
+ * the exiting word sliding up, and the entering word sliding in all use this
+ * exact same duration + easing so they move as one synchronized motion.
+ */
+const SWAP_DURATION_S = 0.5;
+const SWAP_EASE = [0.22, 1, 0.36, 1] as const;
 
 function RotatingWord() {
   const reduceMotion = useReducedMotion();
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
+  const sizerRef = useRef<HTMLSpanElement>(null);
+  const [width, setWidth] = useState<number | undefined>(undefined);
+
+  const word = ROTATING_WORDS[index];
+
+  // Measure the actual rendered width of the current word and glide the
+  // container to it. Measuring the real in-flow sizer (rather than a cached
+  // table) guarantees the container width always exactly equals the word's
+  // width — so there is always precisely one normal space before "resume",
+  // never a merge and never an extra gap. Re-runs whenever the word changes,
+  // and after webfonts settle / on resize, since metrics shift then.
+  useLayoutEffect(() => {
+    const measure = () => {
+      if (sizerRef.current) setWidth(sizerRef.current.getBoundingClientRect().width);
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    if (typeof document !== 'undefined' && 'fonts' in document) {
+      document.fonts.ready.then(measure).catch(() => {});
+    }
+    return () => window.removeEventListener('resize', measure);
+  }, [word]);
 
   useEffect(() => {
     if (reduceMotion || paused) return;
@@ -2014,10 +2044,8 @@ function RotatingWord() {
     };
   }, [reduceMotion, paused]);
 
-  const word = ROTATING_WORDS[index];
-
   return (
-    <span
+    <motion.span
       className="relative inline-flex items-baseline align-baseline"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
@@ -2025,25 +2053,46 @@ function RotatingWord() {
       onBlur={() => setPaused(false)}
       aria-live="polite"
       aria-atomic="true"
-      style={{ overflow: 'clip', overflowClipMargin: '0.3em' }}
+      style={{ overflow: 'clip', overflowClipMargin: '0.35em' }}
+      animate={width !== undefined ? { width } : undefined}
+      transition={{ duration: reduceMotion ? 0 : SWAP_DURATION_S, ease: SWAP_EASE }}
     >
-      <AnimatePresence mode="wait" initial={false}>
+      {/*
+       * In-flow sizer: the current word rendered invisibly. It establishes the
+       * container's natural height + baseline and is the element measured to
+       * drive the animated width above.
+       */}
+      <span ref={sizerRef} aria-hidden className="invisible whitespace-nowrap select-none">
+        {word}
+      </span>
+
+      {/*
+       * Visible words. The entering and exiting word are absolutely positioned
+       * at the same origin so they overlap and slide vertically past each other
+       * — neither ever shifts the other horizontally. The container's width
+       * glides to the new word's width in step with the swap.
+       */}
+      <AnimatePresence initial={false}>
         <motion.span
           key={word}
-          initial={reduceMotion ? { opacity: 0 } : { y: '0.5em', opacity: 0 }}
+          initial={reduceMotion ? { opacity: 0 } : { y: '0.6em', opacity: 0 }}
           animate={reduceMotion ? { opacity: 1 } : { y: 0, opacity: 1 }}
-          exit={reduceMotion ? { opacity: 0 } : { y: '-0.5em', opacity: 0 }}
-          transition={{ duration: reduceMotion ? 0.2 : 0.45, ease: [0.22, 1, 0.36, 1] }}
-          className="inline-block whitespace-nowrap bg-gradient-to-r from-primary to-primary/70 bg-clip-text align-baseline text-transparent"
+          exit={reduceMotion ? { opacity: 0 } : { y: '-0.6em', opacity: 0 }}
+          transition={{ duration: reduceMotion ? 0.2 : SWAP_DURATION_S, ease: SWAP_EASE }}
+          className="absolute left-0 top-0 whitespace-nowrap bg-gradient-to-r from-primary to-primary/70 bg-clip-text align-baseline text-transparent"
         >
           {word}
         </motion.span>
       </AnimatePresence>
-    </span>
+    </motion.span>
   );
 }
 
 function Hero() {
+  const { scrollY } = useScroll();
+  // Start fading at 80px (ignores micro-scrolls), fully gone by 160px
+  const scrollIndicatorOpacity = useTransform(scrollY, [80, 160], [1, 0]);
+
   return (
     <section className="relative flex min-h-[calc(100svh-3.5rem)] items-center overflow-hidden">
       <div className="pointer-events-none absolute left-1/2 top-0 -z-10 h-[520px] w-[900px] -translate-x-1/2 rounded-full bg-primary/[0.06] blur-3xl" />
@@ -2055,10 +2104,7 @@ function Hero() {
           transition={{ duration: 0.6, delay: 0.05 }}
           className="max-w-3xl text-balance text-4xl font-semibold leading-[1.18] tracking-tight text-foreground sm:text-5xl lg:text-6xl"
         >
-          <span className="block leading-[1.18]">
-            Your <RotatingWord />
-          </span>
-          <span className="block leading-[1.18]">resume that works for you.</span>
+          A resume that does things a PDF never could.
         </motion.h1>
 
         <motion.p
@@ -2090,6 +2136,26 @@ function Hero() {
           <HeroCTA />
         </motion.div>
       </div>
+
+      {/* ── Scroll indicator ── */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.6, delay: 0.9 }}
+        style={{ opacity: scrollIndicatorOpacity }}
+        className="pointer-events-none absolute bottom-8 left-1/2 flex -translate-x-1/2 flex-col items-center gap-1.5"
+        aria-hidden
+      >
+        <span className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground/60">
+          Scroll to explore
+        </span>
+        <motion.div
+          animate={{ y: [0, 6, 0] }}
+          transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
+        >
+          <ChevronDown className="h-5 w-5 text-muted-foreground/50" strokeWidth={1.5} />
+        </motion.div>
+      </motion.div>
     </section>
   );
 }
