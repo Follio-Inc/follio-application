@@ -29,6 +29,7 @@ import {
   useReducedMotion,
   useScroll,
   useTransform,
+  useVelocity,
 } from 'framer-motion';
 import { ChevronDown, Shield } from 'lucide-react';
 import Link from 'next/link';
@@ -71,6 +72,29 @@ function FadeIn({
       transition={{ duration: 0.55, delay, ease: [0.22, 1, 0.36, 1] }}
     >
       {children}
+    </motion.div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Scroll indicator — fades away once intentional scrolling begins.
+   Positioned absolutely at the bottom of whichever pinned/full-height frame
+   contains it; each section drives the opacity via its own scroll progress.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+function ScrollIndicator({ opacity }: { opacity: MotionValue<number> }) {
+  return (
+    <motion.div
+      style={{ opacity }}
+      className="pointer-events-none absolute bottom-8 left-1/2 -translate-x-1/2"
+      aria-hidden
+    >
+      <motion.div
+        animate={{ y: [0, 6, 0] }}
+        transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
+      >
+        <ChevronDown className="h-5 w-5 text-muted-foreground/50" strokeWidth={1.5} />
+      </motion.div>
     </motion.div>
   );
 }
@@ -1659,6 +1683,10 @@ function StackedCapabilities() {
   });
 
   const cards = getStackedCapabilities();
+  const scrollVelocity = useVelocity(scrollYProgress);
+  // Show when stopped or scrolling up; fade out on intentional downward scroll.
+  // Deadband [0, 0.05] ignores micro-scrolls; fully gone by 0.4 progress-units/s.
+  const indicatorOpacity = useTransform(scrollVelocity, [0.05, 0.4], [1, 0]);
 
   if (reduceMotion) {
     return (
@@ -1719,6 +1747,8 @@ function StackedCapabilities() {
             ))}
           </div>
         </div>
+
+        <ScrollIndicator opacity={indicatorOpacity} />
       </div>
     </section>
   );
@@ -1913,6 +1943,7 @@ function ResumeShowcase() {
       style={{ height: `calc(100vh + ${maxScroll}px)` }}
     >
       <div className="sticky top-0 flex h-screen items-center overflow-hidden">
+        <ScrollIndicator opacity={hintOpacity} />
         <div className="mx-auto grid w-full max-w-6xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-2 lg:gap-16 lg:px-8">
           {/* ── Copy + CTA ── */}
           <div className="max-w-xl">
@@ -2137,25 +2168,7 @@ function Hero() {
         </motion.div>
       </div>
 
-      {/* ── Scroll indicator ── */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.6, delay: 0.9 }}
-        style={{ opacity: scrollIndicatorOpacity }}
-        className="pointer-events-none absolute bottom-8 left-1/2 flex -translate-x-1/2 flex-col items-center gap-1.5"
-        aria-hidden
-      >
-        <span className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground/60">
-          Scroll to explore
-        </span>
-        <motion.div
-          animate={{ y: [0, 6, 0] }}
-          transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
-        >
-          <ChevronDown className="h-5 w-5 text-muted-foreground/50" strokeWidth={1.5} />
-        </motion.div>
-      </motion.div>
+      <ScrollIndicator opacity={scrollIndicatorOpacity} />
     </section>
   );
 }

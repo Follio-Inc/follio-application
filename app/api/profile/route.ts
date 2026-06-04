@@ -1,9 +1,10 @@
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 
-import { resolveActiveProfileContext } from '@/lib/active-profile';
+import { resolveActiveProfileContext, resolveActiveProfileContextOrNull } from '@/lib/active-profile';
 import { syncAvatarToClerk } from '@/lib/clerk-avatar-sync';
 import { db } from '@/lib/db';
+import { handleApiError } from '@/lib/errors';
 import { CreateProfileSchema } from '@/lib/validations';
 
 async function ensureActiveProfileForUser(clerkId: string): Promise<void> {
@@ -198,7 +199,11 @@ export async function GET() {
     }
 
     await ensureActiveProfileForUser(userId);
-    const context = await resolveActiveProfileContext(userId);
+    const context = await resolveActiveProfileContextOrNull(userId);
+
+    if (!context?.profileId) {
+      return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
+    }
 
     const profile = await db.profile.findUnique({
       where: { id: context.profileId },
@@ -225,8 +230,7 @@ export async function GET() {
 
     return NextResponse.json({ profile });
   } catch (error) {
-    console.error('Error fetching profile:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return handleApiError(error, { path: '/api/profile', method: 'GET' });
   }
 }
 

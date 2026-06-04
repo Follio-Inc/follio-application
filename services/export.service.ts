@@ -7,7 +7,7 @@
  * Puppeteer (headless Chrome) is used for the HTML → PDF conversion.
  */
 
-import puppeteer from 'puppeteer';
+import type { Browser } from 'puppeteer-core';
 
 import { cleanPhoneDisplay } from '@/components/ui/phone-input';
 import { containsHtmlFormatting, isHtmlEmpty, stripHtmlTags } from '@/lib/html-utils';
@@ -1341,6 +1341,44 @@ interface PdfOptions {
 }
 
 /**
+ * Launch a headless Chromium browser suitable for the current runtime.
+ *
+ * In serverless production environments (e.g. Vercel) the system Chrome
+ * binary is unavailable and the full `puppeteer` Chromium download exceeds
+ * the function size limit. There we use `@sparticuz/chromium`, a Chromium
+ * build packaged specifically for AWS Lambda / Vercel, driven by the
+ * lightweight `puppeteer-core`.
+ *
+ * In local development we fall back to the full `puppeteer` package, which
+ * bundles its own Chromium and requires no extra system setup.
+ */
+async function launchBrowser(): Promise<Browser> {
+  const isServerless = Boolean(
+    process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.AWS_REGION
+  );
+
+  if (isServerless) {
+    const [{ default: chromium }, puppeteerCore] = await Promise.all([
+      import('@sparticuz/chromium'),
+      import('puppeteer-core'),
+    ]);
+
+    return puppeteerCore.launch({
+      args: chromium.args,
+      executablePath: await chromium.executablePath(),
+      headless: true,
+    });
+  }
+
+  // Local development: use the full puppeteer package (bundled Chromium).
+  const { default: puppeteer } = await import('puppeteer');
+  return puppeteer.launch({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  }) as unknown as Promise<Browser>;
+}
+
+/**
  * Generate a PDF resume that is visually identical to the on-screen
  * `CleanResumeView` preview.
  *
@@ -1356,16 +1394,15 @@ export async function generateResumePDF(
 ): Promise<Buffer> {
   const html = toPDFHtml(profile);
 
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-  });
+  const browser = await launchBrowser();
 
   try {
     const page = await browser.newPage();
 
-    // Set content and wait for fonts to finish loading
-    await page.setContent(html, { waitUntil: 'networkidle0' });
+    // Render the HTML and wait for all web fonts to finish loading so the
+    // PDF metrics match the on-screen preview exactly.
+    await page.setContent(html, { waitUntil: 'load' });
+    await page.evaluate(() => document.fonts.ready);
 
     let pdfBuffer: Uint8Array;
 

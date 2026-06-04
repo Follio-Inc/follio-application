@@ -9,6 +9,18 @@ import { getProfileByHandle } from '@/services/profile.service';
 const VALID_LAYOUTS = new Set<PdfLayout>(['paged', 'continuous']);
 
 /**
+ * PDF generation launches a headless Chromium instance, which requires the
+ * full Node.js runtime (not the Edge runtime).
+ */
+export const runtime = 'nodejs';
+
+/**
+ * Rendering and converting the resume HTML to PDF can take several seconds,
+ * which exceeds the default serverless timeout. Allow up to 60s.
+ */
+export const maxDuration = 60;
+
+/**
  * GET /api/export/[handle]/pdf?layout=paged|continuous
  * Export profile as a downloadable PDF resume.
  *
