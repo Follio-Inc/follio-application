@@ -4,13 +4,13 @@ import { Check, ChevronDown, Search } from 'lucide-react';
 import * as React from 'react';
 
 import {
-    cleanPhoneDisplay,
-    countries,
-    extractDialCode,
-    formatPhoneValue,
-    formatStandardPhone,
-    parsePhoneString,
-    type PhoneValue,
+  cleanPhoneDisplay,
+  countries,
+  extractDialCode,
+  formatPhoneValue,
+  formatStandardPhone,
+  parsePhoneString,
+  type PhoneValue,
 } from '@/lib/phone';
 import { cn } from '@/lib/utils';
 import { Button } from './button';
@@ -23,12 +23,12 @@ import { ScrollArea } from './scroll-area';
 // boundary violation that occurs when server code invokes a function
 // exported from a `'use client'` module.
 export {
-    cleanPhoneDisplay,
-    countries,
-    extractDialCode,
-    formatPhoneValue,
-    formatStandardPhone,
-    parsePhoneString
+  cleanPhoneDisplay,
+  countries,
+  extractDialCode,
+  formatPhoneValue,
+  formatStandardPhone,
+  parsePhoneString,
 };
 export type { PhoneValue };
 

@@ -8,14 +8,14 @@ import { buildResumeDesignStyles, parseResumeDesign } from '@/lib/resume-design'
 import { formatDate } from '@/lib/utils';
 import { applyVisibilityFilter, type FilteredProfile } from '@/lib/visibility';
 import type {
-    CustomSectionContent,
-    CustomSectionItem,
-    InterestItem,
-    LanguageItem,
-    ProfileSection,
-    PublicationItem,
-    PublicProfile,
-    VolunteeringItem,
+  CustomSectionContent,
+  CustomSectionItem,
+  InterestItem,
+  LanguageItem,
+  ProfileSection,
+  PublicationItem,
+  PublicProfile,
+  VolunteeringItem,
 } from '@/types';
 import { HEADER_SECTION_TYPES, type ResumeDesign, type ResumeFontFamily } from '@/types';
 
