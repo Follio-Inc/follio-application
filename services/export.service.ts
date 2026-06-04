@@ -9,25 +9,25 @@
 
 import type { Browser } from 'puppeteer-core';
 
-import { cleanPhoneDisplay } from '@/components/ui/phone-input';
 import { containsHtmlFormatting, isHtmlEmpty, stripHtmlTags } from '@/lib/html-utils';
 import { logger } from '@/lib/logger';
+import { cleanPhoneDisplay } from '@/lib/phone';
 import { parseResumeDesign } from '@/lib/resume-design';
 import { formatDate } from '@/lib/utils';
 import type {
-  CustomSectionContent,
-  CustomSectionItem,
-  FullProfile,
-  InterestItem,
-  JSONResume,
-  LanguageItem,
-  ProfileSection,
-  PublicationItem,
-  ResumeDensity,
-  ResumeDesign,
-  ResumeDividerStyle,
-  ResumeFontFamily,
-  VolunteeringItem,
+    CustomSectionContent,
+    CustomSectionItem,
+    FullProfile,
+    InterestItem,
+    JSONResume,
+    LanguageItem,
+    ProfileSection,
+    PublicationItem,
+    ResumeDensity,
+    ResumeDesign,
+    ResumeDividerStyle,
+    ResumeFontFamily,
+    VolunteeringItem,
 } from '@/types';
 import { HEADER_SECTION_TYPES, RESUME_DESIGN_DEFAULTS, RESUME_FONT_MAP } from '@/types';
 
