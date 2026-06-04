@@ -1,7 +1,10 @@
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 
-import { resolveActiveProfileContext, resolveActiveProfileContextOrNull } from '@/lib/active-profile';
+import {
+  resolveActiveProfileContext,
+  resolveActiveProfileContextOrNull,
+} from '@/lib/active-profile';
 import { syncAvatarToClerk } from '@/lib/clerk-avatar-sync';
 import { db } from '@/lib/db';
 import { handleApiError } from '@/lib/errors';

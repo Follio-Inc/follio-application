@@ -2093,7 +2093,7 @@ function RotatingWord() {
        * container's natural height + baseline and is the element measured to
        * drive the animated width above.
        */}
-      <span ref={sizerRef} aria-hidden className="invisible whitespace-nowrap select-none">
+      <span ref={sizerRef} aria-hidden className="invisible select-none whitespace-nowrap">
         {word}
       </span>
 
