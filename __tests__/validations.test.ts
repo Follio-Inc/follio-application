@@ -30,6 +30,7 @@ import {
   SkillSchema,
   UpdateProfileSchema,
   WorkExperienceSchema,
+  normalizeCurrentDates,
 } from '@/lib/validations';
 import { describe, expect, it } from 'vitest';
 
@@ -227,6 +228,18 @@ describe('Validation Schemas', () => {
 
     it('should reject invalid URL', () => {
       expect(() => LinkSchema.parse({ type: 'GITHUB', url: 'not-a-url' })).toThrow();
+    });
+
+    it('should reject javascript: and data: URLs (XSS vectors)', () => {
+      // eslint-disable-next-line no-script-url
+      expect(() => LinkSchema.parse({ type: 'OTHER', url: 'javascript:alert(1)' })).toThrow();
+      expect(() =>
+        LinkSchema.parse({ type: 'OTHER', url: 'data:text/html,<script>alert(1)</script>' })
+      ).toThrow();
+    });
+
+    it('should reject non-http(s) schemes like ftp:', () => {
+      expect(() => LinkSchema.parse({ type: 'OTHER', url: 'ftp://example.com/file' })).toThrow();
     });
   });
 
@@ -542,6 +555,41 @@ describe('Validation Schemas', () => {
 
     it('should require jsonData', () => {
       expect(() => LinkedInImportSchema.parse({})).toThrow();
+    });
+  });
+
+  describe('normalizeCurrentDates', () => {
+    it('forces endDate to null when isCurrent is true', () => {
+      const result = normalizeCurrentDates({
+        isCurrent: true,
+        endDate: new Date('2024-01-01'),
+      });
+      expect(result.endDate).toBeNull();
+      expect(result.isCurrent).toBe(true);
+    });
+
+    it('leaves endDate untouched when isCurrent is false', () => {
+      const end = new Date('2024-01-01');
+      const result = normalizeCurrentDates({ isCurrent: false, endDate: end });
+      expect(result.endDate).toBe(end);
+    });
+
+    it('leaves endDate untouched when isCurrent is undefined', () => {
+      const end = new Date('2024-01-01');
+      const result = normalizeCurrentDates({ endDate: end });
+      expect(result.endDate).toBe(end);
+    });
+
+    it('preserves other fields', () => {
+      const result = normalizeCurrentDates({
+        isCurrent: true,
+        endDate: new Date('2024-01-01'),
+        company: 'Acme',
+        startDate: new Date('2020-01-01'),
+      });
+      expect(result.company).toBe('Acme');
+      expect(result.startDate).toEqual(new Date('2020-01-01'));
+      expect(result.endDate).toBeNull();
     });
   });
 });

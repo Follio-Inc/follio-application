@@ -25,7 +25,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 
-import { containsHtmlFormatting } from '@/lib/html-utils';
+import { containsHtmlFormatting, sanitizeRichHtml } from '@/lib/html-utils';
 import { formatDate } from '@/lib/utils';
 import { applyVisibilityFilter } from '@/lib/visibility';
 import type {
@@ -322,7 +322,7 @@ export function ResumeView({ profile: rawProfile }: ResumeViewProps) {
                             {containsHtmlFormatting(bullet) ? (
                               <span
                                 className="text-muted-foreground"
-                                dangerouslySetInnerHTML={{ __html: bullet }}
+                                dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(bullet) }}
                               />
                             ) : (
                               <span className="text-muted-foreground">{bullet}</span>

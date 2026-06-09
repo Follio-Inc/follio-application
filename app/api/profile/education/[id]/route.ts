@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
-import { EducationSchema } from '@/lib/validations';
+import { EducationSchema, normalizeCurrentDates } from '@/lib/validations';
 
 /**
  * PATCH /api/profile/education/[id]
@@ -49,7 +49,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const education = await db.education.update({
       where: { id },
       data: {
-        ...validatedData.data,
+        ...normalizeCurrentDates(validatedData.data),
         updatedAt: new Date(),
       },
     });

@@ -1,9 +1,16 @@
 import { auth } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 
 import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { AppError, ErrorCode, handleApiError } from '@/lib/errors';
+import { CertificationSchema } from '@/lib/validations';
+
+/** PATCH body: certification fields plus an optional reorder hint. */
+const CertificationUpdateSchema = CertificationSchema.partial().extend({
+  sortOrder: z.number().int().optional(),
+});
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -66,7 +73,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       expirationDate,
       sortOrder,
       isVisible,
-    } = body;
+    } = CertificationUpdateSchema.parse(body);
 
     const certification = await db.certification.update({
       where: {
@@ -79,9 +86,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         ...(credentialId !== undefined && { credentialId }),
         ...(credentialUrl !== undefined && { credentialUrl }),
         ...(isVisible !== undefined && { isVisible }),
-        ...(issueDate !== undefined && { issueDate: issueDate ? new Date(issueDate) : null }),
+        ...(issueDate !== undefined && { issueDate: issueDate ?? null }),
         ...(expirationDate !== undefined && {
-          expirationDate: expirationDate ? new Date(expirationDate) : null,
+          expirationDate: expirationDate ?? null,
         }),
         ...(sortOrder !== undefined && { sortOrder }),
       },

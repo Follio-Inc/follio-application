@@ -20,8 +20,10 @@ import {
   isServer,
   isValidHandle,
   parseDateFlexible,
+  parseMonthInput,
   parsePhoneWithCountryCode,
   toMonthInputFormat,
+  toMonthInputValue,
   truncate,
 } from '@/lib/utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -71,22 +73,35 @@ describe('Utils', () => {
       expect(formatDate(undefined)).toBe('');
     });
 
+    it('should return empty string for an invalid date', () => {
+      expect(formatDate('not-a-date')).toBe('');
+      expect(formatDate(new Date('invalid'))).toBe('');
+    });
+
     it('should use custom format options', () => {
       const date = new Date(2024, 0, 15);
       const result = formatDate(date, { month: 'long', year: 'numeric' });
       expect(result).toBe('January 2024');
     });
+
+    it('should format month-precision dates in UTC regardless of timezone', () => {
+      // Stored exactly as the builder persists "March 2024".
+      expect(formatDate('2024-03-01T00:00:00.000Z')).toBe('Mar 2024');
+      // An instant late in the month in UTC must NOT roll forward to the next
+      // month even when the runtime timezone is ahead of UTC.
+      expect(formatDate('2024-12-31T23:00:00.000Z')).toBe('Dec 2024');
+    });
   });
 
   describe('formatDateRange', () => {
     it('should format a date range', () => {
-      const start = new Date(2020, 0, 1);
-      const end = new Date(2024, 0, 1);
+      const start = new Date(Date.UTC(2020, 0, 1));
+      const end = new Date(Date.UTC(2024, 0, 1));
       expect(formatDateRange(start, end)).toBe('Jan 2020 - Jan 2024');
     });
 
     it('should show Present for current positions', () => {
-      const start = new Date(2020, 0, 1);
+      const start = new Date(Date.UTC(2020, 0, 1));
       expect(formatDateRange(start, null, true)).toBe('Jan 2020 - Present');
     });
 
@@ -96,8 +111,7 @@ describe('Utils', () => {
 
     it('should handle string dates', () => {
       const result = formatDateRange('2020-01-01', '2024-01-01');
-      // Just verify it returns a date range format (may vary by timezone)
-      expect(result).toMatch(/\w+ \d{4} - \w+ \d{4}/);
+      expect(result).toBe('Jan 2020 - Jan 2024');
     });
   });
 
@@ -323,45 +337,45 @@ describe('Utils', () => {
     it('should parse YYYY-MM format', () => {
       const date = parseDateFlexible('2024-01');
       expect(date).toBeInstanceOf(Date);
-      expect(date?.getFullYear()).toBe(2024);
-      expect(date?.getMonth()).toBe(0);
+      expect(date?.getUTCFullYear()).toBe(2024);
+      expect(date?.getUTCMonth()).toBe(0);
     });
 
     it('should parse Month Year format', () => {
       const date = parseDateFlexible('January 2024');
       expect(date).toBeInstanceOf(Date);
-      expect(date?.getFullYear()).toBe(2024);
-      expect(date?.getMonth()).toBe(0);
+      expect(date?.getUTCFullYear()).toBe(2024);
+      expect(date?.getUTCMonth()).toBe(0);
     });
 
     it('should parse abbreviated month format', () => {
       const date = parseDateFlexible('Jan 2024');
       expect(date).toBeInstanceOf(Date);
-      expect(date?.getFullYear()).toBe(2024);
+      expect(date?.getUTCFullYear()).toBe(2024);
     });
 
     it('should parse Year Month format', () => {
       const date = parseDateFlexible('2024 Jan');
       expect(date).toBeInstanceOf(Date);
-      expect(date?.getFullYear()).toBe(2024);
+      expect(date?.getUTCFullYear()).toBe(2024);
     });
 
     it('should parse MM/YYYY format', () => {
       const date = parseDateFlexible('01/2024');
       expect(date).toBeInstanceOf(Date);
-      expect(date?.getFullYear()).toBe(2024);
+      expect(date?.getUTCFullYear()).toBe(2024);
     });
 
     it('should parse MM-YYYY format', () => {
       const date = parseDateFlexible('01-2024');
       expect(date).toBeInstanceOf(Date);
-      expect(date?.getFullYear()).toBe(2024);
+      expect(date?.getUTCFullYear()).toBe(2024);
     });
 
     it('should parse year only', () => {
       const date = parseDateFlexible('2024');
       expect(date).toBeInstanceOf(Date);
-      expect(date?.getFullYear()).toBe(2024);
+      expect(date?.getUTCFullYear()).toBe(2024);
     });
 
     it('should return null for Present/Current', () => {
@@ -389,6 +403,15 @@ describe('Utils', () => {
     it('should parse ISO format strings', () => {
       const date = parseDateFlexible('2024-01-15T00:00:00Z');
       expect(date).toBeInstanceOf(Date);
+    });
+
+    it('should anchor month-precision dates to midnight UTC on the 1st', () => {
+      // The exact instant must be identical on every timezone so that storage
+      // and display never drift by a month.
+      expect(parseDateFlexible('2024-03')?.toISOString()).toBe('2024-03-01T00:00:00.000Z');
+      expect(parseDateFlexible('March 2024')?.toISOString()).toBe('2024-03-01T00:00:00.000Z');
+      expect(parseDateFlexible('03/2024')?.toISOString()).toBe('2024-03-01T00:00:00.000Z');
+      expect(parseDateFlexible('2024')?.toISOString()).toBe('2024-01-01T00:00:00.000Z');
     });
 
     it('should handle all month abbreviations', () => {
@@ -461,6 +484,41 @@ describe('Utils', () => {
 
     it('should return empty string for invalid dates', () => {
       expect(toMonthInputFormat('invalid')).toBe('');
+    });
+  });
+
+  describe('parseMonthInput / toMonthInputValue', () => {
+    it('should parse a month input to midnight UTC on the 1st', () => {
+      expect(parseMonthInput('2024-03')?.toISOString()).toBe('2024-03-01T00:00:00.000Z');
+    });
+
+    it('should return null for empty or malformed values', () => {
+      expect(parseMonthInput('')).toBeNull();
+      expect(parseMonthInput(null)).toBeNull();
+      expect(parseMonthInput(undefined)).toBeNull();
+      expect(parseMonthInput('2024')).toBeNull();
+      expect(parseMonthInput('2024-13')).toBeNull();
+      expect(parseMonthInput('not-a-month')).toBeNull();
+    });
+
+    it('should render the stored UTC month back into the input value', () => {
+      expect(toMonthInputValue('2024-03-01T00:00:00.000Z')).toBe('2024-03');
+      // A date stored late in the month (UTC) must keep its month in the input.
+      expect(toMonthInputValue('2024-12-31T23:00:00.000Z')).toBe('2024-12');
+    });
+
+    it('should return empty string for nullish or invalid dates', () => {
+      expect(toMonthInputValue(null)).toBe('');
+      expect(toMonthInputValue(undefined)).toBe('');
+      expect(toMonthInputValue(new Date('invalid'))).toBe('');
+    });
+
+    it('should round-trip the selected month without drift', () => {
+      const selected = '2024-03';
+      const stored = parseMonthInput(selected);
+      expect(toMonthInputValue(stored)).toBe(selected);
+      // And the displayed label reflects the same month.
+      expect(formatDate(stored)).toBe('Mar 2024');
     });
   });
 

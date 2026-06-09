@@ -9,6 +9,7 @@
 import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { parseResumeFromPdfBuffer, type ParsedResume } from '@/lib/resume-parser';
+import { parseDateFlexible } from '@/lib/utils';
 import { LinkType, Prisma } from '@prisma/client';
 
 // ============================================================================
@@ -99,14 +100,9 @@ function sanitize(text: string | undefined | null): string | undefined {
  */
 function parseDateSafe(dateStr: string | undefined | null): Date | undefined {
   if (!dateStr) return undefined;
-  try {
-    const date = new Date(dateStr);
-    // Check if date is valid
-    if (isNaN(date.getTime())) return undefined;
-    return date;
-  } catch {
-    return undefined;
-  }
+  // Use the shared flexible parser so month-precision dates are anchored to
+  // UTC (timezone-invariant), matching how they are formatted on display.
+  return parseDateFlexible(dateStr) ?? undefined;
 }
 
 /**

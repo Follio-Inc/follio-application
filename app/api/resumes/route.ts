@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
+import { ensurePrimaryProfile } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { handleApiError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
@@ -606,6 +607,7 @@ export async function GET() {
     }
 
     const activeProfileId = await ensureActiveProfile(user.id);
+    const primaryProfileId = await ensurePrimaryProfile(db, user.id, activeProfileId ?? undefined);
 
     const resumes = await db.profile.findMany({
       where: {
@@ -630,6 +632,7 @@ export async function GET() {
     return NextResponse.json({
       resumes,
       activeProfileId,
+      primaryProfileId,
     });
   } catch (error) {
     return handleApiError(error, { method: 'GET', path: '/api/resumes' });
@@ -705,6 +708,11 @@ export async function POST(request: NextRequest) {
       }
 
       await setActiveProfile(tx, user.id, createdProfile.id);
+
+      // Assign the portfolio (primary) profile only when the user has none yet,
+      // so the very first resume becomes the portfolio. Creating additional
+      // resumes must never change the existing portfolio.
+      await ensurePrimaryProfile(tx, user.id, createdProfile.id);
 
       return createdProfile;
     });

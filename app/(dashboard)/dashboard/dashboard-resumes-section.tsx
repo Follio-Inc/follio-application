@@ -17,6 +17,7 @@ import {
   Pencil,
   Plus,
   Share2,
+  Star,
   Trash2,
   X,
 } from 'lucide-react';
@@ -69,6 +70,7 @@ export interface DashboardResumeItem {
 interface DashboardResumesSectionProps {
   initialResumes: DashboardResumeItem[];
   initialActiveProfileId: string | null;
+  initialPrimaryProfileId: string | null;
 }
 
 // ─── Constants ────────────────────────────────────────────────────
@@ -214,12 +216,14 @@ function InlineRenameInput({
 export function DashboardResumesSection({
   initialResumes,
   initialActiveProfileId,
+  initialPrimaryProfileId,
 }: DashboardResumesSectionProps) {
   const router = useRouter();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const [resumes, setResumes] = useState<DashboardResumeItem[]>(initialResumes);
   const [activeProfileId, setActiveProfileId] = useState<string | null>(initialActiveProfileId);
+  const [primaryProfileId, setPrimaryProfileId] = useState<string | null>(initialPrimaryProfileId);
   const [isMutating, setIsMutating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -291,9 +295,11 @@ export function DashboardResumesSection({
       const data = (await response.json()) as {
         resumes: DashboardResumeItem[];
         activeProfileId: string | null;
+        primaryProfileId: string | null;
       };
       setResumes(data.resumes);
       setActiveProfileId(data.activeProfileId);
+      setPrimaryProfileId(data.primaryProfileId);
     } catch {
       // Silently fail — user sees stale data until next action
     }
@@ -306,6 +312,23 @@ export function DashboardResumesSection({
     const response = await fetch(`/api/resumes/${resumeId}/activate`, { method: 'PATCH' });
     if (!response.ok) throw new Error('Failed to open resume in builder');
     setActiveProfileId(resumeId);
+  };
+
+  const handleSetAsPortfolio = async (resumeId: string) => {
+    if (resumeId === primaryProfileId) return;
+    setIsMutating(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/resumes/${resumeId}/set-primary`, { method: 'PATCH' });
+      if (!response.ok) throw new Error('Failed to set portfolio');
+      setPrimaryProfileId(resumeId);
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to set portfolio');
+    } finally {
+      setIsMutating(false);
+    }
   };
 
   const handleCreateBlankAndOpen = async () => {
@@ -589,6 +612,12 @@ export function DashboardResumesSection({
                     }}
                   >
                     <ResumeThumbnail profileId={resume.id} className="rounded-t-2xl" />
+                    {resume.id === primaryProfileId && (
+                      <Badge className="absolute left-2 top-2 z-10 gap-1 text-[10px] shadow-sm">
+                        <Star className="h-2.5 w-2.5" />
+                        Portfolio
+                      </Badge>
+                    )}
                   </div>
 
                   <CardContent className="pb-2 pt-3">
@@ -658,6 +687,15 @@ export function DashboardResumesSection({
                           >
                             <Copy className="mr-2 h-4 w-4" />
                             Clone
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => void handleSetAsPortfolio(resume.id)}
+                            disabled={resume.id === primaryProfileId || isMutating}
+                          >
+                            <Star className="mr-2 h-4 w-4" />
+                            {resume.id === primaryProfileId
+                              ? 'Current Portfolio'
+                              : 'Set as Portfolio'}
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem

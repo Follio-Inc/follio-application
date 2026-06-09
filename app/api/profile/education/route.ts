@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
-import { EducationSchema } from '@/lib/validations';
+import { EducationSchema, normalizeCurrentDates } from '@/lib/validations';
 
 /**
  * GET /api/profile/education
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
     const education = await db.education.create({
       data: {
         profileId,
-        ...validatedData.data,
+        ...normalizeCurrentDates(validatedData.data),
         sortOrder: (lastEducation?.sortOrder ?? -1) + 1,
         source: 'MANUAL',
       },

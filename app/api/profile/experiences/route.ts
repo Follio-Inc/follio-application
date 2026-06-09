@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
-import { WorkExperienceSchema } from '@/lib/validations';
+import { normalizeCurrentDates, WorkExperienceSchema } from '@/lib/validations';
 
 /**
  * GET /api/profile/experiences
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
     const experience = await db.workExperience.create({
       data: {
         profileId,
-        ...validatedData.data,
+        ...normalizeCurrentDates(validatedData.data),
         sortOrder: (lastExperience?.sortOrder ?? -1) + 1,
         source: 'MANUAL',
       },

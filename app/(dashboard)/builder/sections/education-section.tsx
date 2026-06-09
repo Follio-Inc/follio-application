@@ -19,7 +19,7 @@ import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { Switch } from '@/components/ui/switch';
 import { notifyProfileUpdated } from '@/lib/events';
 import { useReorderPersist } from '@/lib/hooks/use-reorder-persist';
-import { cn } from '@/lib/utils';
+import { cn, parseMonthInput, toMonthInputValue } from '@/lib/utils';
 
 import { SortableCardList } from '../components/sortable-card-list';
 
@@ -85,9 +85,9 @@ export function EducationSection({
 
   const handleReorder = useCallback(
     (reordered: Education[]) => {
-      persistOrder(reordered);
+      persistOrder(reordered, educations);
     },
-    [persistOrder]
+    [persistOrder, educations]
   );
 
   const handleDialogOpenChange = (open: boolean) => {
@@ -270,11 +270,11 @@ export function EducationSection({
           <Label>Start Date</Label>
           <Input
             type="month"
-            value={formData.startDate ? new Date(formData.startDate).toISOString().slice(0, 7) : ''}
+            value={toMonthInputValue(formData.startDate)}
             onChange={(e) =>
               setFormData((prev) => ({
                 ...prev,
-                startDate: e.target.value ? new Date(e.target.value) : null,
+                startDate: parseMonthInput(e.target.value),
               }))
             }
           />
@@ -284,11 +284,11 @@ export function EducationSection({
             <Label>End Date</Label>
             <Input
               type="month"
-              value={formData.endDate ? new Date(formData.endDate).toISOString().slice(0, 7) : ''}
+              value={toMonthInputValue(formData.endDate)}
               onChange={(e) =>
                 setFormData((prev) => ({
                   ...prev,
-                  endDate: e.target.value ? new Date(e.target.value) : null,
+                  endDate: parseMonthInput(e.target.value),
                 }))
               }
             />
@@ -437,13 +437,11 @@ export function EducationSection({
               <Label>Start Date</Label>
               <Input
                 type="month"
-                value={
-                  formData.startDate ? new Date(formData.startDate).toISOString().slice(0, 7) : ''
-                }
+                value={toMonthInputValue(formData.startDate)}
                 onChange={(e) =>
                   setFormData((prev) => ({
                     ...prev,
-                    startDate: e.target.value ? new Date(e.target.value) : null,
+                    startDate: parseMonthInput(e.target.value),
                   }))
                 }
               />
@@ -453,13 +451,11 @@ export function EducationSection({
                 <Label>End Date</Label>
                 <Input
                   type="month"
-                  value={
-                    formData.endDate ? new Date(formData.endDate).toISOString().slice(0, 7) : ''
-                  }
+                  value={toMonthInputValue(formData.endDate)}
                   onChange={(e) =>
                     setFormData((prev) => ({
                       ...prev,
-                      endDate: e.target.value ? new Date(e.target.value) : null,
+                      endDate: parseMonthInput(e.target.value),
                     }))
                   }
                 />

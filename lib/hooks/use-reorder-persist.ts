@@ -21,8 +21,12 @@ export type ReorderableModel =
 /**
  * Hook that persists `sortOrder` changes to the backend for Prisma-backed models.
  *
- * Returns a callback `persistOrder(items)` that the caller should invoke
- * whenever the order changes (drag-and-drop or sort-by-date).
+ * Returns a callback `persistOrder(items, previousItems?)` that the caller
+ * should invoke whenever the order changes (drag-and-drop or sort-by-date).
+ *
+ * The parent state is updated optimistically. When `previousItems` is provided
+ * and the request fails, the optimistic update is rolled back so the UI never
+ * shows an order that was not actually persisted.
  *
  * Debounces rapid consecutive calls (e.g. multiple drags in quick succession)
  * to avoid hammering the API.
@@ -34,7 +38,7 @@ export function useReorderPersist<T extends { id: string }>(
   const abortRef = useRef<AbortController | null>(null);
 
   const persistOrder = useCallback(
-    async (items: T[]) => {
+    async (items: T[], previousItems?: T[]) => {
       // Optimistic: update the parent state immediately
       onUpdate(items);
 
@@ -59,15 +63,24 @@ export function useReorderPersist<T extends { id: string }>(
 
         if (!response.ok) {
           console.error('Failed to persist reorder:', await response.text());
+          // Roll back the optimistic update so the UI matches the server.
+          if (previousItems) {
+            onUpdate(previousItems);
+          }
         } else {
           notifyProfileUpdated();
         }
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') {
-          // Expected when a newer request supersedes this one
+          // Expected when a newer request supersedes this one — the superseding
+          // request owns the final state, so do not roll back here.
           return;
         }
         console.error('Failed to persist reorder:', err);
+        // Roll back the optimistic update on network/other failures.
+        if (previousItems) {
+          onUpdate(previousItems);
+        }
       }
     },
     [model, onUpdate]

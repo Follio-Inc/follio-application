@@ -51,6 +51,7 @@ prisma/*.db-journal
 # Uploads (if any local storage)
 uploads/
 tmp/
+temp/
 
 # Logs
 logs

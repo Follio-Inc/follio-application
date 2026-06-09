@@ -181,6 +181,17 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // This is the user's first profile (a 409 is returned above otherwise), so
+    // designate it as the stable portfolio (primary) profile.
+    await db.user.update({
+      where: { id: user.id },
+      data: {
+        primaryProfile: {
+          connect: { id: profile.id },
+        },
+      },
+    });
+
     return NextResponse.json({ success: true, profile }, { status: 201 });
   } catch (error) {
     console.error('[POST /api/profile] Error creating profile:', error);

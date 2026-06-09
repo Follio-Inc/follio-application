@@ -9,7 +9,12 @@
 
 import type { Browser } from 'puppeteer-core';
 
-import { containsHtmlFormatting, isHtmlEmpty, stripHtmlTags } from '@/lib/html-utils';
+import {
+  containsHtmlFormatting,
+  isHtmlEmpty,
+  sanitizeRichHtml,
+  stripHtmlTags,
+} from '@/lib/html-utils';
 import { logger } from '@/lib/logger';
 import { cleanPhoneDisplay } from '@/lib/phone';
 import { parseResumeDesign } from '@/lib/resume-design';
@@ -45,6 +50,23 @@ function escapeHtml(str: string | null | undefined): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+/**
+ * Return an HTML-attribute-safe URL, or an empty string when the URL uses a
+ * disallowed scheme.
+ *
+ * `escapeHtml` alone is insufficient for `href`/`src`: a value such as
+ * `javascript:alert(1)` contains no characters that escaping would alter, yet
+ * still executes when the link is clicked. This restricts URLs to the safe
+ * schemes the app actually uses (http, https, mailto, tel) plus relative
+ * references, then escapes the result for attribute interpolation.
+ */
+function safeUrl(url: string | null | undefined): string {
+  if (!url) return '';
+  const trimmed = url.trim();
+  const isSafe = /^(?:https?|mailto|tel):/i.test(trimmed) || /^(?:\/|#|\.)/.test(trimmed);
+  return isSafe ? escapeHtml(trimmed) : '';
 }
 
 /** A single contact item for resume header rendering. */
@@ -629,9 +651,9 @@ function sectionDividerHtml(title: string): string {
 
 function summarySectionHtml(profile: FullProfile): string {
   if (!profile.summary || isHtmlEmpty(profile.summary)) return '';
-  // Summary may contain rich HTML from the editor
+  // Summary may contain rich HTML from the editor — sanitize before embedding.
   const content = containsHtmlFormatting(profile.summary)
-    ? profile.summary
+    ? sanitizeRichHtml(profile.summary)
     : escapeHtml(profile.summary);
   return `
   <section class="resume-section">
@@ -649,13 +671,18 @@ function experienceSectionHtml(profile: FullProfile): string {
       const dateRange = formatDateRange(exp.startDate, exp.endDate, exp.isCurrent);
       const companyLine = [exp.company, exp.location].filter(Boolean).join(', ');
 
-      // Prefer bulletsHtml for perfect rendering (same as CleanResumeView)
+      // Prefer bulletsHtml for perfect rendering (same as CleanResumeView).
+      // All editor-authored HTML is sanitized before embedding in the PDF.
       let bulletsHtml = '';
       if (exp.bulletsHtml) {
-        bulletsHtml = exp.bulletsHtml;
+        bulletsHtml = sanitizeRichHtml(exp.bulletsHtml);
       } else if (exp.bullets && exp.bullets.length > 0) {
         const lis = exp.bullets
-          .map((b) => (containsHtmlFormatting(b) ? `<li>${b}</li>` : `<li>${escapeHtml(b)}</li>`))
+          .map((b) =>
+            containsHtmlFormatting(b)
+              ? `<li>${sanitizeRichHtml(b)}</li>`
+              : `<li>${escapeHtml(b)}</li>`
+          )
           .join('');
         bulletsHtml = `<ul class="resume-bullets">${lis}</ul>`;
       }
@@ -757,7 +784,7 @@ function projectsSectionHtml(profile: FullProfile): string {
       const description = p.customDescription || p.shortDesc || p.description;
       const descHtml =
         description && containsHtmlFormatting(description)
-          ? `<div class="resume-entry-description resume-rich-html">${description}</div>`
+          ? `<div class="resume-entry-description resume-rich-html">${sanitizeRichHtml(description)}</div>`
           : description
             ? `<div class="resume-entry-description resume-rich-html">${escapeHtml(description)}</div>`
             : '';
@@ -765,7 +792,11 @@ function projectsSectionHtml(profile: FullProfile): string {
       let highlightsHtml = '';
       if (p.highlights && p.highlights.length > 0) {
         const lis = p.highlights
-          .map((h) => (containsHtmlFormatting(h) ? `<li>${h}</li>` : `<li>${escapeHtml(h)}</li>`))
+          .map((h) =>
+            containsHtmlFormatting(h)
+              ? `<li>${sanitizeRichHtml(h)}</li>`
+              : `<li>${escapeHtml(h)}</li>`
+          )
           .join('');
         highlightsHtml = `<ul class="resume-bullets">${lis}</ul>`;
       }
@@ -846,8 +877,9 @@ function publicationsSectionHtml(items: PublicationItem[]): string {
   const entries = items
     .filter((p) => p.isVisible !== false)
     .map((pub) => {
-      const titleHtml = pub.url
-        ? `<a href="${escapeHtml(pub.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(pub.title)}</a>`
+      const safeHref = safeUrl(pub.url);
+      const titleHtml = safeHref
+        ? `<a href="${safeHref}" target="_blank" rel="noopener noreferrer">${escapeHtml(pub.title)}</a>`
         : escapeHtml(pub.title);
       return `
       <div class="resume-publication">
@@ -874,10 +906,7 @@ function volunteeringSectionHtml(items: VolunteeringItem[]): string {
   const entries = items
     .filter((v) => v.isVisible !== false)
     .map((vol) => {
-      const dateRange =
-        vol.startDate || vol.endDate || vol.isCurrent
-          ? `${vol.startDate || ''} – ${vol.isCurrent ? 'Present' : vol.endDate || ''}`
-          : '';
+      const dateRange = formatDateRange(vol.startDate, vol.endDate, vol.isCurrent);
       return `
       <div class="resume-entry">
         <div class="resume-entry-header">
@@ -1282,7 +1311,7 @@ export function toPDFHtml(profile: FullProfile): string {
     if (showPhoto) {
       headerHtml = `
       <header class="resume-header" style="display:flex;align-items:flex-start;gap:16px;">
-        <img src="${escapeHtml(profile.avatarUrl!)}" alt="${escapeHtml(fullName)}" class="resume-header-photo" />
+        <img src="${safeUrl(profile.avatarUrl)}" alt="${escapeHtml(fullName)}" class="resume-header-photo" />
         <div style="min-width:0;flex:1;">
           <h1 class="resume-name">${escapeHtml(fullName)}</h1>
           ${profile.headline ? `<p class="resume-headline">${escapeHtml(profile.headline)}</p>` : ''}

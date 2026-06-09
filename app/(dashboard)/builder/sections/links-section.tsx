@@ -116,9 +116,9 @@ export function LinksSection({ links, onUpdate, autoEditId, onEditComplete }: Li
   const persistOrder = useReorderPersist<Link>('link', onUpdate);
   const handleReorder = useCallback(
     (reordered: Link[]) => {
-      persistOrder(reordered);
+      persistOrder(reordered, links);
     },
-    [persistOrder]
+    [persistOrder, links]
   );
 
   // ── Inline form (auto-edit mode) ──

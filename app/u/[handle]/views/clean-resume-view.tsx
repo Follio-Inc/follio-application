@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { containsHtmlFormatting, isHtmlEmpty } from '@/lib/html-utils';
+import { containsHtmlFormatting, isHtmlEmpty, sanitizeRichHtml } from '@/lib/html-utils';
 import { cleanPhoneDisplay } from '@/lib/phone';
 import { buildResumeDesignStyles, parseResumeDesign } from '@/lib/resume-design';
 import { formatDate } from '@/lib/utils';
@@ -198,7 +198,9 @@ function RichHtml({
   as?: 'div' | 'p' | 'span';
 }) {
   if (containsHtmlFormatting(html)) {
-    return <Tag className={className} dangerouslySetInnerHTML={{ __html: html }} />;
+    return (
+      <Tag className={className} dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(html) }} />
+    );
   }
   return <Tag className={className}>{html}</Tag>;
 }
@@ -258,14 +260,14 @@ function ExperienceEntry({
       {/* Prefer bulletsHtml for perfect rendering (alignment, bullet style, etc.). */}
       {/* Fall back to bullets[] for backward compat / when bulletsHtml is absent. */}
       {bulletsHtml ? (
-        <div dangerouslySetInnerHTML={{ __html: bulletsHtml }} />
+        <div dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(bulletsHtml) }} />
       ) : (
         bullets &&
         bullets.length > 0 && (
           <ul className="resume-bullets">
             {bullets.map((bullet, index) =>
               containsHtmlFormatting(bullet) ? (
-                <li key={index} dangerouslySetInnerHTML={{ __html: bullet }} />
+                <li key={index} dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(bullet) }} />
               ) : (
                 <li key={index}>{bullet}</li>
               )
@@ -428,7 +430,10 @@ function ProjectsSection({ projects }: { projects: PublicProfile['projects'] }) 
                 <ul className="resume-bullets">
                   {project.highlights.map((highlight, index) =>
                     containsHtmlFormatting(highlight) ? (
-                      <li key={index} dangerouslySetInnerHTML={{ __html: highlight }} />
+                      <li
+                        key={index}
+                        dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(highlight) }}
+                      />
                     ) : (
                       <li key={index}>{highlight}</li>
                     )

@@ -8,6 +8,7 @@ import {
   isHtmlEmpty,
   isHtmlFullyJustified,
   justifyHtmlContent,
+  sanitizeRichHtml,
   stripHtmlTags,
 } from '@/lib/html-utils';
 
@@ -331,5 +332,81 @@ describe('justifyHtmlContent', () => {
       '<ul><li><p style="text-align: justify">Item 1</p></li><li><p>Item 2</p></li></ul>'
     );
     expect(isHtmlFullyJustified(result!)).toBe(true);
+  });
+});
+
+// ─── sanitizeRichHtml ───────────────────────────────────────────────────────
+
+describe('sanitizeRichHtml', () => {
+  it('returns empty string for null, undefined and empty input', () => {
+    expect(sanitizeRichHtml(null)).toBe('');
+    expect(sanitizeRichHtml(undefined)).toBe('');
+    expect(sanitizeRichHtml('')).toBe('');
+  });
+
+  it('preserves allowed inline formatting tags', () => {
+    const html = '<strong>Bold</strong> <em>italic</em> <u>under</u> <s>strike</s>';
+    expect(sanitizeRichHtml(html)).toBe(html);
+  });
+
+  it('preserves bullet lists with style classes', () => {
+    const html = '<ul class="bullet-style-disc" data-bullet-style="disc"><li><p>Item</p></li></ul>';
+    expect(sanitizeRichHtml(html)).toBe(html);
+  });
+
+  it('preserves text-align inline styles', () => {
+    const html = '<p style="text-align: center">Centered</p>';
+    expect(sanitizeRichHtml(html)).toBe(html);
+  });
+
+  it('strips <script> tags entirely', () => {
+    const result = sanitizeRichHtml('<p>Safe</p><script>alert(1)</script>');
+    expect(result).toContain('<p>Safe</p>');
+    expect(result).not.toContain('<script');
+    expect(result.toLowerCase()).not.toContain('alert(1)');
+  });
+
+  it('strips <img> tags with onerror handlers (stored XSS vector)', () => {
+    const result = sanitizeRichHtml('<img src=x onerror="alert(document.cookie)">');
+    expect(result).not.toContain('<img');
+    expect(result.toLowerCase()).not.toContain('onerror');
+  });
+
+  it('removes inline event handler attributes', () => {
+    const result = sanitizeRichHtml('<p onclick="steal()">Click</p>');
+    expect(result.toLowerCase()).not.toContain('onclick');
+    expect(result).toContain('Click');
+  });
+
+  it('strips javascript: protocol from anchor href', () => {
+    // eslint-disable-next-line no-script-url
+    const result = sanitizeRichHtml('<a href="javascript:alert(1)">link</a>');
+    expect(result.toLowerCase()).not.toContain('javascript:');
+  });
+
+  it('strips data: protocol from anchor href', () => {
+    const result = sanitizeRichHtml('<a href="data:text/html,<script>alert(1)</script>">link</a>');
+    expect(result.toLowerCase()).not.toContain('data:');
+  });
+
+  it('preserves safe http(s) links', () => {
+    const html = '<a href="https://example.com">site</a>';
+    expect(sanitizeRichHtml(html)).toContain('href="https://example.com"');
+  });
+
+  it('preserves mailto and tel links', () => {
+    expect(sanitizeRichHtml('<a href="mailto:a@b.com">m</a>')).toContain('mailto:a@b.com');
+    expect(sanitizeRichHtml('<a href="tel:+15551234">t</a>')).toContain('tel:+15551234');
+  });
+
+  it('adds rel="noopener noreferrer" to target=_blank links', () => {
+    const result = sanitizeRichHtml('<a href="https://example.com" target="_blank">x</a>');
+    expect(result).toContain('rel="noopener noreferrer"');
+  });
+
+  it('strips disallowed structural tags like <iframe>', () => {
+    const result = sanitizeRichHtml('<iframe src="https://evil.com"></iframe><p>ok</p>');
+    expect(result).not.toContain('<iframe');
+    expect(result).toContain('<p>ok</p>');
   });
 });

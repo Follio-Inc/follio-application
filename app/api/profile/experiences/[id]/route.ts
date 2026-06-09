@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
-import { WorkExperienceSchema } from '@/lib/validations';
+import { normalizeCurrentDates, WorkExperienceSchema } from '@/lib/validations';
 
 /**
  * PATCH /api/profile/experiences/[id]
@@ -49,7 +49,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const experience = await db.workExperience.update({
       where: { id },
       data: {
-        ...validatedData.data,
+        ...normalizeCurrentDates(validatedData.data),
         updatedAt: new Date(),
       },
     });

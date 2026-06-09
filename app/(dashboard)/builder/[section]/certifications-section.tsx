@@ -91,9 +91,9 @@ export function CertificationsSection({
 
   const handleReorder = useCallback(
     (reordered: Certification[]) => {
-      persistOrder(reordered);
+      persistOrder(reordered, certifications);
     },
-    [persistOrder]
+    [persistOrder, certifications]
   );
 
   const toggleVisibility = async (certification: Certification) => {
@@ -226,7 +226,9 @@ export function CertificationsSection({
   const formatDate = (date: Date | string | null | undefined) => {
     if (!date) return '';
     const d = new Date(date);
-    return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    if (Number.isNaN(d.getTime())) return '';
+    // Month-precision dates are stored as UTC; format in UTC to keep the month stable.
+    return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
   };
 
   const isExpired = (date: Date | string | null | undefined) => {

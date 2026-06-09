@@ -20,6 +20,7 @@ model User {
   importLogs     ImportLog[]
   importSessions ImportSession[]
   profile        Profile?        @relation("ActiveProfile")
+  primaryProfile Profile?        @relation("PrimaryProfile")
   profiles       Profile[]       @relation("OwnedProfiles")
   shareTokens    ShareToken[]
 
@@ -45,6 +46,7 @@ model Profile {
   id                     String                 @id @default(cuid())
   userId                 String
   activeForUserId        String?                @unique
+  primaryForUserId       String?                @unique
   resumeTitle            String                 @default("Untitled Resume")
   isArchived             Boolean                @default(false)
   handle                 String                 @unique
@@ -83,6 +85,7 @@ model Profile {
   photos                 ProfilePhoto[]
   user                   User                   @relation("OwnedProfiles", fields: [userId], references: [id], onDelete: Cascade)
   activeForUser          User?                  @relation("ActiveProfile", fields: [activeForUserId], references: [id], onDelete: SetNull)
+  primaryForUser         User?                  @relation("PrimaryProfile", fields: [primaryForUserId], references: [id], onDelete: SetNull)
   sections               ProfileSection[]
   projects               Project[]
   rawImports             RawImportPayload[]

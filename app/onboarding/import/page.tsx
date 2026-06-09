@@ -13,6 +13,7 @@ import {
   Link2,
   Linkedin,
   Loader2,
+  Pencil,
   Plus,
   RotateCcw,
   Sparkles,
@@ -1174,7 +1175,7 @@ export default function OnboardingImportPage() {
   // ─── Photo resolution helper ───────────────────────────────────
 
   // ─── Continue to Review handler ────────────────────────────────
-  const handleGoToReview = async () => {
+  const handleGoToReview = async (options?: { skipReview?: boolean }) => {
     // If resume parsing is still running, wait for it
     if (resumeParsingPromise) {
       setIsWaitingForParsing(true);
@@ -1404,7 +1405,9 @@ export default function OnboardingImportPage() {
     };
 
     sessionStorage.setItem('onboarding_parsed_resume', JSON.stringify(dataForReview));
-    router.push('/onboarding/review');
+    // skipReview sends the user straight to the dashboard by auto-submitting the
+    // imported data on the review screen; otherwise they step through the review.
+    router.push(options?.skipReview ? '/onboarding/review?auto=1' : '/onboarding/review');
   };
 
   // ─── Navigation ─────────────────────────────────────────────────
@@ -2470,10 +2473,10 @@ export default function OnboardingImportPage() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.5 }}
                 >
-                  <h2 className="text-xl font-bold">All set! Ready to review</h2>
+                  <h2 className="text-xl font-bold">All set!</h2>
                   <p className="mt-2 text-sm text-muted-foreground">
-                    We&apos;ve gathered your data. Let&apos;s review everything before creating your
-                    profile.
+                    We&apos;ve gathered your data. Head straight to your dashboard, or review the
+                    details first if you&apos;d like.
                   </p>
                 </motion.div>
 
@@ -2620,25 +2623,40 @@ export default function OnboardingImportPage() {
             )}
 
             {currentStep === 'review' ? (
-              <Button
-                onClick={handleGoToReview}
-                disabled={isWaitingForParsing}
-                className="gap-2 bg-gradient-to-r from-primary to-primary/80 px-8 shadow-lg shadow-primary/25 transition-all hover:shadow-xl hover:shadow-primary/30"
-                size="lg"
-              >
-                {isWaitingForParsing ? (
-                  <>
-                    <Spinner size="sm" />
-                    Finalizing...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="h-4 w-4" />
-                    Review Profile
-                    <ArrowRight className="h-4 w-4" />
-                  </>
-                )}
-              </Button>
+              <div className="flex items-center gap-3">
+                {/* Secondary: review everything step by step (optional) */}
+                <Button
+                  onClick={() => handleGoToReview()}
+                  disabled={isWaitingForParsing}
+                  variant="outline"
+                  size="lg"
+                  className="gap-2"
+                >
+                  <Pencil className="h-4 w-4" />
+                  Review details
+                </Button>
+
+                {/* Primary: skip review and go straight to the dashboard */}
+                <Button
+                  onClick={() => handleGoToReview({ skipReview: true })}
+                  disabled={isWaitingForParsing}
+                  className="gap-2 bg-gradient-to-r from-primary to-primary/80 px-8 shadow-lg shadow-primary/25 transition-all hover:shadow-xl hover:shadow-primary/30"
+                  size="lg"
+                >
+                  {isWaitingForParsing ? (
+                    <>
+                      <Spinner size="sm" />
+                      Finalizing...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4" />
+                      Go to Dashboard
+                      <ArrowRight className="h-4 w-4" />
+                    </>
+                  )}
+                </Button>
+              </div>
             ) : isLastDataStep ? (
               <Button
                 onClick={goNext}

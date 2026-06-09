@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { AppError, ErrorCode, handleApiError } from '@/lib/errors';
+import { CertificationSchema } from '@/lib/validations';
 
 // GET /api/profile/certifications - Get all certifications
 export async function GET() {
@@ -43,11 +44,8 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, issuer, credentialId, credentialUrl, issueDate, expirationDate } = body;
-
-    if (!name || !issuer) {
-      throw new AppError('Name and issuer are required', ErrorCode.VALIDATION_ERROR, 400);
-    }
+    const { name, issuer, credentialId, credentialUrl, issueDate, expirationDate } =
+      CertificationSchema.parse(body);
 
     // Get max sortOrder
     const maxOrder = await db.certification.aggregate({
@@ -62,8 +60,8 @@ export async function POST(request: NextRequest) {
         issuer,
         credentialId,
         credentialUrl,
-        issueDate: issueDate ? new Date(issueDate) : null,
-        expirationDate: expirationDate ? new Date(expirationDate) : null,
+        issueDate: issueDate ?? null,
+        expirationDate: expirationDate ?? null,
         sortOrder: (maxOrder._max.sortOrder ?? -1) + 1,
         source: 'MANUAL',
       },

@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
-import { ProjectSchema } from '@/lib/validations';
+import { normalizeCurrentDates, ProjectSchema } from '@/lib/validations';
 
 /**
  * PATCH /api/profile/projects/[id]
@@ -49,7 +49,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const project = await db.project.update({
       where: { id },
       data: {
-        ...validatedData.data,
+        ...normalizeCurrentDates(validatedData.data),
         updatedAt: new Date(),
       },
     });

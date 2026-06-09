@@ -6,6 +6,25 @@
 import { z } from 'zod';
 
 // ===========================================
+// SHARED FIELD HELPERS
+// ===========================================
+
+/**
+ * A URL restricted to the `http`/`https` schemes.
+ *
+ * Zod's built-in `.url()` accepts *any* valid URL, including dangerous schemes
+ * such as `javascript:` and `data:`, which become XSS vectors when the value is
+ * later rendered into an `href`/`src`. Every user-supplied URL field in the app
+ * should use this helper instead of `z.string().url()` so the trust boundary is
+ * enforced at validation time.
+ */
+export const httpUrl = (message = 'Must be a valid http(s) URL') =>
+  z
+    .string()
+    .url(message)
+    .refine((value) => /^https?:\/\//i.test(value), { message });
+
+// ===========================================
 // LIMITS
 // ===========================================
 
@@ -58,7 +77,7 @@ export const ProfileBasicInfoSchema = z.object({
   headline: z.string().max(200).optional(),
   summary: z.string().max(5000).optional(),
   location: z.string().max(100).optional(),
-  avatarUrl: z.string().url().optional().or(z.literal('')),
+  avatarUrl: httpUrl().optional().or(z.literal('')),
 });
 
 export const CreateProfileSchema = z.object({
@@ -87,7 +106,7 @@ export const ContactInfoSchema = z.object({
   phoneNumber: z.string().max(20).optional(),
   phonePublic: z.boolean().optional(),
   locationPublic: z.boolean().optional(),
-  website: z.string().url().optional().or(z.literal('')),
+  website: httpUrl().optional().or(z.literal('')),
   additionalEmails: z
     .array(
       z.object({
@@ -116,7 +135,7 @@ export const ContactInfoSchema = z.object({
 
 export const LinkSchema = z.object({
   type: LinkTypeSchema,
-  url: z.string().url('Must be a valid URL'),
+  url: httpUrl('Must be a valid URL'),
   label: z.string().max(50).optional(),
   isVisible: z.boolean().optional(),
 });
@@ -129,7 +148,7 @@ export const LinksArraySchema = z.array(LinkSchema);
 
 export const WorkExperienceSchema = z.object({
   company: z.string().min(1, 'Company name is required').max(100),
-  companyUrl: z.string().url().optional().or(z.literal('')),
+  companyUrl: httpUrl().optional().or(z.literal('')),
   role: z.string().min(1, 'Role is required').max(100),
   location: z.string().max(100).optional(),
   locationType: LocationTypeSchema.optional(),
@@ -149,7 +168,7 @@ export const WorkExperienceSchema = z.object({
 
 export const EducationSchema = z.object({
   institution: z.string().min(1, 'Institution name is required').max(100),
-  institutionUrl: z.string().url().optional().or(z.literal('')),
+  institutionUrl: httpUrl().optional().or(z.literal('')),
   degree: z.string().max(100).optional(),
   fieldOfStudy: z.string().max(100).optional(),
   location: z.string().max(100).optional(),
@@ -187,10 +206,10 @@ export const ProjectSchema = z.object({
   title: z.string().min(1, 'Project title is required').max(100),
   description: z.string().max(2000).optional(),
   shortDesc: z.string().max(200).optional(),
-  url: z.string().url().optional().or(z.literal('')),
-  repoUrl: z.string().url().optional().or(z.literal('')),
-  imageUrl: z.string().url().optional().or(z.literal('')),
-  images: z.array(z.string().url()).max(10).optional(),
+  url: httpUrl().optional().or(z.literal('')),
+  repoUrl: httpUrl().optional().or(z.literal('')),
+  imageUrl: httpUrl().optional().or(z.literal('')),
+  images: z.array(httpUrl()).max(10).optional(),
   techStack: z.array(z.string().max(50)).max(20).optional(),
   highlights: z.array(z.string().max(200)).max(10).optional(),
   startDate: z.coerce.date().optional().nullable(),
@@ -215,7 +234,7 @@ export const AwardSchema = z.object({
   issuer: z.string().max(100).optional(),
   date: z.coerce.date().optional().nullable(),
   description: z.string().max(500).optional(),
-  url: z.string().url().optional().or(z.literal('')),
+  url: httpUrl().optional().or(z.literal('')),
   isVisible: z.boolean().optional(),
 });
 
@@ -223,7 +242,7 @@ export const CertificationSchema = z.object({
   name: z.string().min(1, 'Certification name is required').max(100),
   issuer: z.string().min(1, 'Issuer is required').max(100),
   credentialId: z.string().max(100).optional(),
-  credentialUrl: z.string().url().optional().or(z.literal('')),
+  credentialUrl: httpUrl().optional().or(z.literal('')),
   issueDate: z.coerce.date().optional().nullable(),
   expirationDate: z.coerce.date().optional().nullable(),
   isVisible: z.boolean().optional(),
@@ -268,9 +287,31 @@ export const LinkedInImportSchema = z.object({
 });
 
 // ===========================================
-// TYPE EXPORTS (inferred from schemas)
+// FIELD NORMALIZATION HELPERS
 // ===========================================
 
+/**
+ * Enforce the invariant that a "current" role/education/project has no end
+ * date. The UI hides the end-date field when `isCurrent` is checked, but the
+ * server must enforce it too — otherwise a client (or a malformed request)
+ * could persist both `isCurrent: true` and an `endDate`, leaving the record
+ * internally inconsistent.
+ *
+ * Returns a shallow copy with `endDate` forced to `null` when `isCurrent` is
+ * `true`; otherwise returns the input unchanged.
+ */
+export function normalizeCurrentDates<T extends { isCurrent?: boolean | null; endDate?: unknown }>(
+  data: T
+): T {
+  if (data.isCurrent === true) {
+    return { ...data, endDate: null };
+  }
+  return data;
+}
+
+// ===========================================
+// TYPE EXPORTS (inferred from schemas)
+// ===========================================
 export type ProfileBasicInfo = z.infer<typeof ProfileBasicInfoSchema>;
 export type CreateProfile = z.infer<typeof CreateProfileSchema>;
 export type UpdateProfile = z.infer<typeof UpdateProfileSchema>;

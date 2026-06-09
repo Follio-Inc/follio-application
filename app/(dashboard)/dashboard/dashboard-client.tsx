@@ -25,9 +25,10 @@ interface ActiveProfile {
 }
 
 export interface DashboardData {
-  activeProfile: ActiveProfile;
+  portfolioProfile: ActiveProfile;
   resumes: DashboardResumeItem[];
   activeProfileId: string | null;
+  primaryProfileId: string | null;
 }
 
 interface DashboardClientProps {
@@ -45,10 +46,10 @@ const VISIBILITY_CONFIG: Record<string, { label: string; icon: typeof Globe }> =
 // ─── Component ────────────────────────────────────────────────────
 
 export function DashboardClient({ data }: DashboardClientProps) {
-  const { activeProfile, resumes, activeProfileId } = data;
+  const { portfolioProfile, resumes, activeProfileId, primaryProfileId } = data;
   const [copied, setCopied] = useState<string | null>(null);
 
-  const portfolioUrl = getPortfolioUrl(activeProfile.handle);
+  const portfolioUrl = getPortfolioUrl(portfolioProfile.handle);
 
   const handleCopy = useCallback(async (url: string, key: string) => {
     try {
@@ -67,11 +68,11 @@ export function DashboardClient({ data }: DashboardClientProps) {
           ═══════════════════════════════════════════════════════════ */}
       <section>
         <SectionHeader title="Portfolio">
-          <VisibilityBadge visibility={activeProfile.portfolioVisibility} />
+          <VisibilityBadge visibility={portfolioProfile.portfolioVisibility} />
         </SectionHeader>
 
         <div className="group/portfolio relative mt-4 overflow-hidden rounded-2xl border bg-muted/10 transition-all hover:border-foreground/15 hover:shadow-sm">
-          <PortfolioThumbnail handle={activeProfile.handle} />
+          <PortfolioThumbnail handle={portfolioProfile.handle} />
           {/* Soft bottom fade */}
           <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-background/80 to-transparent" />
 
@@ -125,7 +126,7 @@ export function DashboardClient({ data }: DashboardClientProps) {
               className="h-8 gap-1.5 rounded-lg px-3 text-xs shadow-sm"
               asChild
             >
-              <Link href={`/u/${activeProfile.handle}`} target="_blank">
+              <Link href={`/u/${portfolioProfile.handle}`} target="_blank">
                 <ExternalLink className="h-3.5 w-3.5" />
                 View
               </Link>
@@ -151,6 +152,7 @@ export function DashboardClient({ data }: DashboardClientProps) {
           <DashboardResumesSection
             initialResumes={resumes}
             initialActiveProfileId={activeProfileId}
+            initialPrimaryProfileId={primaryProfileId}
           />
         </div>
       </section>
