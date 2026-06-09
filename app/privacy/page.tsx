@@ -52,7 +52,7 @@ export default function PrivacyPage() {
                   ['Account', 'A unique account created to access Follio.'],
                   ['Company', 'Follio Inc., 626 E Kilbourn Ave, Apt 1408, Milwaukee, WI 53202.'],
                   ['Service', 'The Follio website and related services.'],
-                  ['Website', 'Follio, available at follio.me.'],
+                  ['Website', 'Follio, available at follio.app and follio.me.'],
                 ].map(([term, definition]) => (
                   <div
                     key={term}
@@ -105,7 +105,29 @@ export default function PrivacyPage() {
 
             <section className="space-y-3">
               <h2 className="text-xl font-semibold tracking-tight text-foreground">
-                4. Cookies and tracking
+                4. Google Sign-In and OAuth data
+              </h2>
+              <p>
+                If you choose Sign in with Google, authentication is handled by Clerk on our behalf.
+                We receive basic account data from Google, such as your name, email address, and
+                profile photo, to create and secure your Follio account.
+              </p>
+              <ul className="list-disc space-y-2 pl-5">
+                <li>
+                  We do not request access to Gmail, Google Drive, Google Contacts, Calendar, or
+                  other Google user data for sign-in.
+                </li>
+                <li>
+                  We use Google account data only for authentication, account security, and
+                  personalized account display.
+                </li>
+                <li>We do not sell Google user data, and we do not use it for advertising.</li>
+              </ul>
+            </section>
+
+            <section className="space-y-3">
+              <h2 className="text-xl font-semibold tracking-tight text-foreground">
+                5. Cookies and tracking
               </h2>
               <p>
                 We use essential cookies to keep you signed in and to operate the website, and we
@@ -116,7 +138,7 @@ export default function PrivacyPage() {
 
             <section className="space-y-3">
               <h2 className="text-xl font-semibold tracking-tight text-foreground">
-                5. Sharing and retention
+                6. Sharing and retention
               </h2>
               <p>
                 We may share information with service providers, affiliates, business partners,
@@ -132,7 +154,7 @@ export default function PrivacyPage() {
 
             <section className="space-y-3">
               <h2 className="text-xl font-semibold tracking-tight text-foreground">
-                6. Security, transfers, and your rights
+                7. Security, transfers, and your rights
               </h2>
               <p>
                 We take reasonable measures to protect your data, but no online system is perfectly
@@ -147,7 +169,7 @@ export default function PrivacyPage() {
 
             <section className="space-y-3">
               <h2 className="text-xl font-semibold tracking-tight text-foreground">
-                7. Children&apos;s privacy
+                8. Children&apos;s privacy
               </h2>
               <p>
                 Follio is not intended for anyone under 16. We do not knowingly collect personal
@@ -157,7 +179,7 @@ export default function PrivacyPage() {
 
             <section className="space-y-3">
               <h2 className="text-xl font-semibold tracking-tight text-foreground">
-                8. Contact us
+                9. Contact us
               </h2>
               <p>
                 If you have questions about this Privacy Policy or your data, contact us through the{' '}
@@ -169,10 +191,10 @@ export default function PrivacyPage() {
                 </Link>{' '}
                 or directly at{' '}
                 <a
-                  href="mailto:shobhit.s@follio.me"
+                  href="mailto:legal@follio.dev"
                   className="text-foreground underline decoration-primary/40 underline-offset-4 hover:decoration-primary"
                 >
-                  shobhit.s@follio.me
+                  legal@follio.dev
                 </a>
                 .
               </p>

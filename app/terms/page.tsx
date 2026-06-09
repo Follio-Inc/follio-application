@@ -48,7 +48,8 @@ export default function TermsPage() {
                 not agree, you must not use the service.
               </p>
               <p>
-                Follio Inc. operates the website at follio.me and related products and services.
+                Follio Inc. operates websites at follio.app and follio.me, plus related products and
+                services.
               </p>
             </section>
 
@@ -152,10 +153,10 @@ export default function TermsPage() {
                 </Link>{' '}
                 or by email to{' '}
                 <a
-                  href="mailto:shobhit.s@follio.me"
+                  href="mailto:legal@follio.dev"
                   className="text-foreground underline decoration-primary/40 underline-offset-4 hover:decoration-primary"
                 >
-                  shobhit.s@follio.me
+                  legal@follio.dev
                 </a>
                 .
               </p>
