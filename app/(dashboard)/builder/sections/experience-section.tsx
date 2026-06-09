@@ -21,7 +21,7 @@ import { Switch } from '@/components/ui/switch';
 import { notifyProfileUpdated } from '@/lib/events';
 import { useReorderPersist } from '@/lib/hooks/use-reorder-persist';
 import { bulletsToHtml, htmlToBullets } from '@/lib/html-utils';
-import { cn } from '@/lib/utils';
+import { cn, parseMonthInput, toMonthInputValue } from '@/lib/utils';
 
 import { SortableCardList } from '../components/sortable-card-list';
 
@@ -99,9 +99,9 @@ export function ExperienceSection({
 
   const handleReorder = useCallback(
     (reordered: WorkExperience[]) => {
-      persistOrder(reordered);
+      persistOrder(reordered, experiences);
     },
-    [persistOrder]
+    [persistOrder, experiences]
   );
 
   // ── Inline editing helpers ──────────────────────
@@ -391,8 +391,13 @@ export function ExperienceSection({
           <Label>Start Date</Label>
           <Input
             type="month"
-            value={formData.startDate ? new Date(formData.startDate).toISOString().slice(0, 7) : ''}
-            onChange={(e) => updateField('startDate', new Date(e.target.value))}
+            value={toMonthInputValue(formData.startDate)}
+            onChange={(e) =>
+              setFormData((prev) => ({
+                ...prev,
+                startDate: parseMonthInput(e.target.value) ?? undefined,
+              }))
+            }
           />
         </div>
         {!formData.isCurrent && (
@@ -400,8 +405,10 @@ export function ExperienceSection({
             <Label>End Date</Label>
             <Input
               type="month"
-              value={formData.endDate ? new Date(formData.endDate).toISOString().slice(0, 7) : ''}
-              onChange={(e) => updateField('endDate', new Date(e.target.value))}
+              value={toMonthInputValue(formData.endDate)}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, endDate: parseMonthInput(e.target.value) }))
+              }
             />
           </div>
         )}

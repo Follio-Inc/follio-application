@@ -7,6 +7,10 @@
 /**
  * Format a date string to a human-readable format.
  * Handles ISO strings, "YYYY-MM" formats, and plain years.
+ *
+ * Month-precision dates are persisted as a UTC instant on the 1st of the month,
+ * so we both construct and format in UTC. This keeps the rendered month stable
+ * regardless of the runtime timezone (matching `formatDate` in `lib/utils`).
  */
 export function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return '';
@@ -15,8 +19,12 @@ export function formatDate(dateStr: string | null | undefined): string {
     // Handle "YYYY-MM" format
     if (/^\d{4}-\d{2}$/.test(dateStr)) {
       const [year, month] = dateStr.split('-');
-      const date = new Date(Number(year), Number(month) - 1);
-      return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+      const date = new Date(Date.UTC(Number(year), Number(month) - 1, 1));
+      return date.toLocaleDateString('en-US', {
+        month: 'short',
+        year: 'numeric',
+        timeZone: 'UTC',
+      });
     }
 
     // Handle plain year
@@ -27,7 +35,11 @@ export function formatDate(dateStr: string | null | undefined): string {
     // Handle ISO or other parseable date strings
     const date = new Date(dateStr);
     if (isNaN(date.getTime())) return dateStr;
-    return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'UTC',
+    });
   } catch {
     return dateStr;
   }

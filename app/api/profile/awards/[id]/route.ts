@@ -1,9 +1,16 @@
 import { auth } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 
 import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { AppError, ErrorCode, handleApiError } from '@/lib/errors';
+import { AwardSchema } from '@/lib/validations';
+
+/** PATCH body: award fields plus an optional reorder hint. */
+const AwardUpdateSchema = AwardSchema.partial().extend({
+  sortOrder: z.number().int().optional(),
+});
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -57,7 +64,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     const body = await request.json();
-    const { title, issuer, date, description, url, sortOrder, isVisible } = body;
+    const { title, issuer, date, description, url, sortOrder, isVisible } =
+      AwardUpdateSchema.parse(body);
 
     const award = await db.award.update({
       where: {
@@ -67,7 +75,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       data: {
         ...(title !== undefined && { title }),
         ...(issuer !== undefined && { issuer }),
-        ...(date !== undefined && { date: date ? new Date(date) : null }),
+        ...(date !== undefined && { date: date ?? null }),
         ...(description !== undefined && { description }),
         ...(url !== undefined && { url }),
         ...(sortOrder !== undefined && { sortOrder }),

@@ -9,6 +9,8 @@
  * the database (string[]) without losing formatting or double-escaping.
  */
 
+import DOMPurify from 'isomorphic-dompurify';
+
 // ─── HTML Detection ─────────────────────────────────────────────────────────
 
 /** Common inline HTML tags produced by the Tiptap rich text editor */
@@ -68,6 +70,97 @@ export function stripHtmlTags(html: string): string {
     .replace(/&#39;/g, "'")
     .replace(/\n{2,}/g, '\n')
     .trim();
+}
+
+// ─── HTML Sanitization ──────────────────────────────────────────────────────
+
+/**
+ * The exact set of tags the Tiptap rich text editor can produce. Anything
+ * outside this allowlist (e.g. `<script>`, `<img>`, `<iframe>`) is stripped.
+ */
+const ALLOWED_HTML_TAGS = [
+  'p',
+  'br',
+  'span',
+  'strong',
+  'b',
+  'em',
+  'i',
+  'u',
+  's',
+  'a',
+  'sub',
+  'sup',
+  'code',
+  'ul',
+  'ol',
+  'li',
+] as const;
+
+/**
+ * Attributes that survive sanitization. `style` is needed for `text-align`,
+ * `class` / `data-bullet-style` for bullet styling, and the link attributes
+ * for anchors. URL attributes are protocol-checked by DOMPurify's allowlist.
+ */
+const ALLOWED_HTML_ATTRS = [
+  'href',
+  'target',
+  'rel',
+  'style',
+  'class',
+  'data-bullet-style',
+] as const;
+
+/**
+ * URI schemes permitted in `href`/`src` attributes. Notably excludes
+ * `javascript:` and `data:` to prevent script injection through links.
+ */
+const SAFE_URI_REGEXP = /^(?:https?|mailto|tel):|^(?:\/|#|\.)/i;
+
+/**
+ * Harden anchors: every link is forced to open in a new tab with
+ * `rel="noopener noreferrer"`, preventing reverse-tabnabbing and referrer
+ * leaks. Applying this to all anchors (not just existing `target="_blank"`
+ * ones) keeps behaviour deterministic regardless of how DOMPurify normalises
+ * the `target` attribute. Registered once at module load.
+ */
+DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+  if (node.tagName === 'A' && node.hasAttribute('href')) {
+    node.setAttribute('target', '_blank');
+    node.setAttribute('rel', 'noopener noreferrer');
+  }
+});
+
+/**
+ * Sanitize rich-text HTML that originates from user input (the Tiptap editor,
+ * resume imports, etc.) before it is rendered via `dangerouslySetInnerHTML`.
+ *
+ * This is the single trust boundary for stored HTML. It must be applied at
+ * every render site on public pages — content authored by one user is shown to
+ * arbitrary visitors, so an unsanitized bullet such as
+ * `<img src=x onerror=alert(document.cookie)>` would otherwise be a stored XSS
+ * vector.
+ *
+ * Allows only the tags/attributes the editor produces, restricts link
+ * protocols to a safe set, and forces external links to open with
+ * `rel="noopener noreferrer"`.
+ *
+ * Returns an empty string for null/undefined/empty input.
+ */
+export function sanitizeRichHtml(html: string | null | undefined): string {
+  if (!html) return '';
+
+  return DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: [...ALLOWED_HTML_TAGS],
+    ALLOWED_ATTR: [...ALLOWED_HTML_ATTRS],
+    ALLOWED_URI_REGEXP: SAFE_URI_REGEXP,
+    // Forbid any inline event handlers and other dangerous vectors outright.
+    FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'srcset'],
+    FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'img', 'svg', 'math'],
+    // Keep the result as an HTML string (not a DOM node).
+    RETURN_DOM: false,
+    RETURN_DOM_FRAGMENT: false,
+  });
 }
 
 // ─── Bullet ↔ HTML Conversion ───────────────────────────────────────────────

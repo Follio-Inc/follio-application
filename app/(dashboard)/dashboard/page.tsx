@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 
+import { ensurePrimaryProfile } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 
 import { DashboardClient, type DashboardData } from './dashboard-client';
@@ -24,6 +25,7 @@ export default async function DashboardPage() {
       email: true,
       createdAt: true,
       profile: { select: { id: true } },
+      primaryProfile: { select: { id: true } },
     },
   });
 
@@ -65,10 +67,21 @@ export default async function DashboardPage() {
     },
   });
 
-  // The "active" profile is the one used for the builder / portfolio
-  const activeProfile = rawProfiles.find((p) => p.id === user.profile?.id) ?? rawProfiles[0];
+  // The Portfolio surface is backed by the stable "primary" profile, which is
+  // decoupled from whichever resume is currently active in the builder. This
+  // keeps the portfolio link and snapshot intact when new resumes are created.
+  let primaryProfileId = user.primaryProfile?.id ?? null;
+  let portfolioProfile = rawProfiles.find((p) => p.id === primaryProfileId) ?? null;
 
-  if (!activeProfile) {
+  if (!portfolioProfile) {
+    // Lazily assign a primary profile (prefer the active one, else the oldest)
+    // for users created before primary profiles existed, or whose primary was
+    // archived/removed.
+    primaryProfileId = await ensurePrimaryProfile(db, user.id, user.profile?.id);
+    portfolioProfile = rawProfiles.find((p) => p.id === primaryProfileId) ?? rawProfiles[0] ?? null;
+  }
+
+  if (!portfolioProfile) {
     redirect('/onboarding');
   }
 
@@ -87,18 +100,19 @@ export default async function DashboardPage() {
   }));
 
   const data: DashboardData = {
-    activeProfile: {
-      id: activeProfile.id,
-      handle: activeProfile.handle,
-      firstName: activeProfile.firstName,
-      lastName: activeProfile.lastName,
-      headline: activeProfile.headline,
-      avatarUrl: activeProfile.avatarUrl,
-      portfolioVisibility: activeProfile.portfolioVisibility,
-      resumeVisibility: activeProfile.resumeVisibility,
+    portfolioProfile: {
+      id: portfolioProfile.id,
+      handle: portfolioProfile.handle,
+      firstName: portfolioProfile.firstName,
+      lastName: portfolioProfile.lastName,
+      headline: portfolioProfile.headline,
+      avatarUrl: portfolioProfile.avatarUrl,
+      portfolioVisibility: portfolioProfile.portfolioVisibility,
+      resumeVisibility: portfolioProfile.resumeVisibility,
     },
     resumes,
     activeProfileId: user.profile?.id ?? null,
+    primaryProfileId: portfolioProfile.id,
   };
 
   return (

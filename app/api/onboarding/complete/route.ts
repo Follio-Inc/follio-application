@@ -509,6 +509,9 @@ export async function POST(request: NextRequest) {
           profile: {
             connect: { id: profile.id },
           },
+          primaryProfile: {
+            connect: { id: profile.id },
+          },
         },
       });
 
@@ -876,6 +879,9 @@ async function handleReviewedData(
       where: { id: user.id },
       data: {
         profile: {
+          connect: { id: profile.id },
+        },
+        primaryProfile: {
           connect: { id: profile.id },
         },
       },

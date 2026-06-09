@@ -100,9 +100,9 @@ export function ProjectsSection({
 
   const handleReorder = useCallback(
     (reordered: Project[]) => {
-      persistOrder(reordered);
+      persistOrder(reordered, projects);
     },
-    [persistOrder]
+    [persistOrder, projects]
   );
 
   const handleDialogOpenChange = (open: boolean) => {

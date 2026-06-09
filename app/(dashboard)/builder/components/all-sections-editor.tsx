@@ -204,7 +204,8 @@ function formatDateRange(
 ): string {
   const fmt = (d: Date | string) => {
     const date = typeof d === 'string' ? new Date(d) : d;
-    return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    // Month-precision dates are stored as UTC; format in UTC to keep the month stable.
+    return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
   };
   if (!start) return '';
   const startStr = fmt(start);

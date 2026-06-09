@@ -75,9 +75,9 @@ export function AwardsSection({
 
   const handleReorder = useCallback(
     (reordered: AwardType[]) => {
-      persistOrder(reordered);
+      persistOrder(reordered, awards);
     },
-    [persistOrder]
+    [persistOrder, awards]
   );
 
   const toggleVisibility = async (award: AwardType) => {
@@ -200,7 +200,9 @@ export function AwardsSection({
   const formatDate = (date: Date | string | null | undefined) => {
     if (!date) return '';
     const d = new Date(date);
-    return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    if (Number.isNaN(d.getTime())) return '';
+    // Month-precision dates are stored as UTC; format in UTC to keep the month stable.
+    return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
   };
 
   // ── Inline form (auto-edit mode) ──

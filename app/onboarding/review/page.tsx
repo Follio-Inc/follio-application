@@ -26,8 +26,8 @@ import {
   Wrench,
   X,
 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { Suspense, useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useEffect, useRef, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -41,7 +41,7 @@ import {
 } from '@/components/ui/phone-input';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
-import { containsHtmlFormatting, stripHtmlTags } from '@/lib/html-utils';
+import { containsHtmlFormatting, sanitizeRichHtml, stripHtmlTags } from '@/lib/html-utils';
 import { toMonthInputFormat } from '@/lib/utils';
 
 // IndexedDB helpers for retrieving large uploaded photos
@@ -456,7 +456,14 @@ function buildEmailsList(
 
 function ReviewPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user } = useUser();
+
+  // When the user chooses "Go to Dashboard" on the import step, we skip the
+  // step-by-step review and submit the imported data as-is. The review screen
+  // then renders a creating-profile state instead of the editable steps.
+  const isAutoMode = searchParams.get('auto') === '1';
+  const autoSubmittedRef = useRef(false);
 
   // Wrap Clerk email operations with reverification to handle step-up auth automatically
   // This will show a modal asking user to re-enter password if needed
@@ -884,6 +891,26 @@ function ReviewPageContent() {
       setIsSaving(false);
     }
   };
+
+  // Auto-complete: when arriving with ?auto=1 ("Go to Dashboard"), submit the
+  // imported data without manual review. We wait until the data has loaded and
+  // Clerk emails have been merged into the contact list so the primary login
+  // email is preserved, then submit exactly once. If submission fails, we fall
+  // back to the manual review UI so the user can fix the issue and retry.
+  useEffect(() => {
+    if (!isAutoMode || autoSubmittedRef.current) return;
+    if (isLoading || !user) return;
+
+    const clerkPrimary = user.primaryEmailAddress?.emailAddress?.toLowerCase();
+    const emailsReady =
+      !clerkPrimary ||
+      (data.contactInfo?.allEmails?.some((e) => e.email.toLowerCase() === clerkPrimary) ?? false);
+    if (!emailsReady) return;
+
+    autoSubmittedRef.current = true;
+    void handleSaveProfile();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAutoMode, isLoading, user, data]);
 
   // Profile update handlers
   const updateProfile = (field: keyof ParsedProfile, value: string) => {
@@ -1393,6 +1420,26 @@ function ReviewPageContent() {
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
+
+  // Auto-complete mode: skip the editable steps and show a creating-profile
+  // state while the imported data is submitted. On failure we drop back to the
+  // normal review UI (error is surfaced inline there) so the user can recover.
+  if (isAutoMode && !error) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-6 px-4 text-center">
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
+          <Sparkles className="h-8 w-8 text-primary" />
+        </div>
+        <div className="space-y-1">
+          <h2 className="text-xl font-semibold">Creating your profile</h2>
+          <p className="text-sm text-muted-foreground">
+            Setting everything up — this will only take a moment.
+          </p>
+        </div>
         <Spinner size="lg" />
       </div>
     );
@@ -2573,7 +2620,7 @@ function ExperienceCard({
               <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
                 {experience.bullets.map((bullet, idx) =>
                   containsHtmlFormatting(bullet) ? (
-                    <li key={idx} dangerouslySetInnerHTML={{ __html: bullet }} />
+                    <li key={idx} dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(bullet) }} />
                   ) : (
                     <li key={idx}>{bullet}</li>
                   )

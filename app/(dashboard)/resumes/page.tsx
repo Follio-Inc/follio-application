@@ -22,6 +22,7 @@ export default async function ResumesPage() {
     select: {
       id: true,
       profile: { select: { id: true } },
+      primaryProfile: { select: { id: true } },
     },
   });
 
@@ -64,10 +65,15 @@ export default async function ResumesPage() {
   }));
 
   const activeProfileId = user.profile?.id ?? null;
+  const primaryProfileId = user.primaryProfile?.id ?? null;
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-      <ResumeDashboardClient initialResumes={resumes} initialActiveProfileId={activeProfileId} />
+      <ResumeDashboardClient
+        initialResumes={resumes}
+        initialActiveProfileId={activeProfileId}
+        initialPrimaryProfileId={primaryProfileId}
+      />
     </div>
   );
 }

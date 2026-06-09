@@ -436,13 +436,22 @@ export function ContactDetailsSection({
           onLinksUpdate([...profile.links, link]);
           notifyProfileUpdated();
         } else if (entry.linkId) {
+          // Capture the server's current value so we can revert the input if the save fails.
+          const previousValue = profile.links.find((l) => l.id === entry.linkId)?.url ?? '';
+
           // Update existing link
           const response = await fetch(`/api/profile/links/${entry.linkId}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ url: entry.value }),
           });
-          if (!response.ok) throw new Error('Failed to update link');
+          if (!response.ok) {
+            // Restore the last-known-good value so the UI never claims an unsaved edit persisted.
+            setEntries((prev) =>
+              prev.map((e) => (e.id === entry.id ? { ...e, value: previousValue } : e))
+            );
+            throw new Error('Failed to update link');
+          }
           const { link } = (await response.json()) as { link: Link };
 
           // Update parent state
@@ -527,7 +536,11 @@ export function ContactDetailsSection({
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ [field]: newVisible }),
           });
-          if (!res.ok) throw new Error(`Failed to update ${entry.kind} visibility`);
+          if (!res.ok) {
+            // Roll back the optimistic builder-store update before surfacing the error.
+            onContactUpdate({ [field]: !newVisible });
+            throw new Error(`Failed to update ${entry.kind} visibility`);
+          }
           notifyProfileUpdated();
         } else if (entry.kind === 'link' && entry.linkId) {
           const res = await fetch(`/api/profile/links/${entry.linkId}`, {
@@ -564,6 +577,10 @@ export function ContactDetailsSection({
       const newIndex = entries.findIndex((e) => e.id === (over.id as string));
       if (oldIndex === -1 || newIndex === -1) return;
 
+      // Snapshot the pre-reorder state so we can roll back if persistence fails.
+      const previousEntries = entries;
+      const previousOrderIds = entries.map((e) => e.id);
+
       const reordered = arrayMove(entries, oldIndex, newIndex);
 
       // 1. Update local UI state
@@ -573,14 +590,26 @@ export function ContactDetailsSection({
       const orderIds = reordered.map((e) => e.id);
       onContactUpdate({ headerFieldsOrder: orderIds });
 
+      // Roll back both local state and the builder store on failure.
+      const rollback = () => {
+        setEntries(previousEntries);
+        onContactUpdate({ headerFieldsOrder: previousOrderIds });
+      };
+
       // 3. Persist to API
       fetch('/api/profile/contact', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ headerFieldsOrder: orderIds }),
       })
-        .then(() => notifyProfileUpdated())
-        .catch((err) => console.error('Failed to persist header order:', err));
+        .then((res) => {
+          if (!res.ok) throw new Error('Failed to persist header order');
+          notifyProfileUpdated();
+        })
+        .catch((err) => {
+          console.error('Failed to persist header order:', err);
+          rollback();
+        });
 
       // Persist link sortOrder for links (keeps link entity order in sync)
       const linkEntries = reordered
@@ -593,7 +622,10 @@ export function ContactDetailsSection({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ model: 'link', items: linkEntries }),
         })
-          .then(() => notifyProfileUpdated())
+          .then((res) => {
+            if (!res.ok) throw new Error('Failed to persist link order');
+            notifyProfileUpdated();
+          })
           .catch((err) => console.error('Failed to persist link order:', err));
       }
     },

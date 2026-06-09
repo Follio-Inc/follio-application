@@ -11,27 +11,29 @@
  *
  * Navigation style
  * ----------------
- * Modern horizontal pill tabs (Linear / Vercel / Cron pattern):
+ * A single segmented control (Linear / Vercel / Arc pattern):
  *   - Icon + label *inline* (not stacked) — reads as language, not iconography.
- *   - Active state is a soft filled pill (`bg-muted/80`), not an underline.
- *   - Pills sit in a single row, with a barely-there grouping background
- *     so the nav feels like one cohesive control rather than three
- *     independent links.
- *   - Hover lifts subtly; active is firm but quiet.
+ *   - One shared, spring-animated indicator slides between tabs instead of
+ *     each pill toggling its own background — the motion makes the active
+ *     state feel like one continuous control, which is the 2026 standard.
+ *   - The track is a barely-there tinted shell so the group reads as one
+ *     cohesive control rather than independent links.
+ *   - Hover quietly raises inactive tabs; the active tab is firm but calm.
  *
  * Layout
  * ------
- *   Desktop : [Logo · Pill nav]                                       [Avatar]
+ *   Desktop : [Logo · Segmented nav]                                  [Avatar]
  *   Mobile  : [☰ · Logo]                                              [Avatar]
  *
  * Settings has intentionally been removed from the top bar surface
  * (both the desktop utility cluster and the mobile drawer). It now
  * lives exclusively inside the avatar dropdown, where account-level
- * preferences belong — keeping the chrome focused on the two product
- * areas a user actually navigates between (Home, Resumes).
+ * preferences belong — keeping the chrome focused on the product areas
+ * a user actually navigates between (Home, Portfolio, Resumes).
  */
 
-import { Home, LayoutGrid, Menu, X } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { FileText, Globe, Home, Menu, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -51,6 +53,12 @@ interface NavItemConfig {
 
 /* ───────────────────────────── Data ────────────────────────────── */
 
+/**
+ * Shared layout id for the spring-animated active indicator. A single id
+ * across every tab lets framer-motion slide one element between them.
+ */
+const NAV_INDICATOR_LAYOUT_ID = 'dashboard-nav-indicator';
+
 /** Primary product areas — left-anchored next to the brand. */
 const primaryItems: NavItemConfig[] = [
   {
@@ -60,9 +68,17 @@ const primaryItems: NavItemConfig[] = [
     match: (path) => path === '/dashboard',
   },
   {
+    // Resolves to the owner's live portfolio (`/u/[handle]`), where the
+    // dashboard chrome travels with them — so this tab stays highlighted.
+    href: '/me',
+    label: 'Portfolio',
+    icon: Globe,
+    match: (path) => path.startsWith('/u/'),
+  },
+  {
     href: '/resumes',
     label: 'Resumes',
-    icon: LayoutGrid,
+    icon: FileText,
     // Builder is its own focused workspace (with its own ResumeSwitcher in the
     // top-right) so we deliberately do NOT highlight "Resumes" while inside
     // the builder — the page context is owned by the builder, not the listing.
@@ -73,27 +89,35 @@ const primaryItems: NavItemConfig[] = [
 /* ──────────────────────── Sub-components ────────────────────────── */
 
 /**
- * A single horizontal pill nav item. Active pills carry a soft filled
- * background (no underline). Hover state is a slightly lifted tone.
+ * A single tab inside the segmented nav. The active tab renders the shared
+ * `motion` indicator; because every active tab uses the same `layoutId`,
+ * framer-motion animates one continuous element sliding between them.
  */
-function PillNavItem({ href, icon: Icon, label, isActive }: NavItemConfig & { isActive: boolean }) {
+function SegmentedNavItem({
+  href,
+  icon: Icon,
+  label,
+  isActive,
+}: NavItemConfig & { isActive: boolean }) {
   return (
     <Link
       href={href}
       aria-current={isActive ? 'page' : undefined}
       className={cn(
-        'inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium transition-all duration-150',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
-        isActive
-          ? 'bg-background text-foreground shadow-sm ring-1 ring-border/60'
-          : 'text-muted-foreground hover:text-foreground'
+        'relative inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-medium transition-colors duration-200',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background',
+        isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
       )}
     >
-      <Icon
-        className={cn('h-[15px] w-[15px]', isActive ? 'text-foreground' : 'text-muted-foreground')}
-        strokeWidth={2}
-      />
-      <span>{label}</span>
+      {isActive && (
+        <motion.span
+          layoutId={NAV_INDICATOR_LAYOUT_ID}
+          className="absolute inset-0 z-0 rounded-full bg-background shadow-sm ring-1 ring-border/60"
+          transition={{ type: 'spring', stiffness: 420, damping: 34, mass: 0.8 }}
+        />
+      )}
+      <Icon className="relative z-10 h-[15px] w-[15px]" strokeWidth={2} />
+      <span className="relative z-10">{label}</span>
     </Link>
   );
 }
@@ -160,15 +184,16 @@ export function DashboardTopbar({ children }: { children?: React.ReactNode }) {
             </button>
             <Logo href="/dashboard" size="md" />
 
-            {/* Primary nav — modern segmented pill cluster.
-                Hosted in a faintly tinted shell so the group reads as
-                one control, not three loose links. */}
+            {/* Primary nav — a single segmented control with one shared,
+                spring-animated indicator that slides between tabs. Hosted
+                in a faintly tinted shell so the group reads as one control,
+                not a row of loose links. */}
             <nav
               aria-label="Primary"
-              className="ml-2 hidden items-center gap-0.5 rounded-full bg-muted/40 p-0.5 md:flex"
+              className="ml-2 hidden items-center gap-0.5 rounded-full bg-muted/50 p-1 ring-1 ring-border/40 md:flex"
             >
               {primaryItems.map((item) => (
-                <PillNavItem key={item.href} {...item} isActive={item.match(pathname)} />
+                <SegmentedNavItem key={item.href} {...item} isActive={item.match(pathname)} />
               ))}
             </nav>
           </>

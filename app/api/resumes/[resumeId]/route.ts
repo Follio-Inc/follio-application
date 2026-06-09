@@ -126,6 +126,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
       select: {
         id: true,
         profile: { select: { id: true } },
+        primaryProfile: { select: { id: true } },
       },
     });
 
@@ -153,14 +154,17 @@ export async function DELETE(_request: Request, context: RouteContext) {
     }
 
     const wasActive = user.profile?.id === profile.id;
+    const wasPrimary = user.primaryProfile?.id === profile.id;
 
     // Delete the profile (cascades to all related data via Prisma schema)
     await db.profile.delete({
       where: { id: profile.id },
     });
 
-    // If the deleted resume was active, switch to the oldest remaining one
-    if (wasActive) {
+    // If the deleted resume was active and/or the portfolio (primary), re-point
+    // those pointers at the oldest remaining resume so the dashboard and
+    // builder always resolve to a valid profile.
+    if (wasActive || wasPrimary) {
       const nextProfile = await db.profile.findFirst({
         where: { userId: user.id },
         orderBy: { createdAt: 'asc' },
@@ -171,9 +175,8 @@ export async function DELETE(_request: Request, context: RouteContext) {
         await db.user.update({
           where: { id: user.id },
           data: {
-            profile: {
-              connect: { id: nextProfile.id },
-            },
+            ...(wasActive && { profile: { connect: { id: nextProfile.id } } }),
+            ...(wasPrimary && { primaryProfile: { connect: { id: nextProfile.id } } }),
           },
         });
       }
@@ -183,6 +186,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
       userId: user.id,
       profileId: resumeId,
       wasActive,
+      wasPrimary,
     });
 
     return NextResponse.json({ success: true });

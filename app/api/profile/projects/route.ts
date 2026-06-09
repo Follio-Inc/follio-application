@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
-import { ProjectSchema } from '@/lib/validations';
+import { normalizeCurrentDates, ProjectSchema } from '@/lib/validations';
 
 /**
  * GET /api/profile/projects
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
     const project = await db.project.create({
       data: {
         profileId,
-        ...validatedData.data,
+        ...normalizeCurrentDates(validatedData.data),
         sortOrder: (lastProject?.sortOrder ?? -1) + 1,
         source: 'MANUAL',
       },

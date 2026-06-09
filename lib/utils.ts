@@ -14,7 +14,19 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
- * Format a date for display
+ * Format a date for display.
+ *
+ * Resume/profile dates (work experience, education, certifications, etc.) are
+ * month-precision values that we persist as a UTC instant at midnight on the
+ * 1st of the month — e.g. "March 2024" is stored as `2024-03-01T00:00:00.000Z`.
+ * They represent a calendar month, NOT a moment in time, so they must be
+ * formatted in UTC. Formatting them in the runtime's local timezone causes the
+ * rendered month to silently shift by one whenever that timezone differs from
+ * UTC — for example the user's browser during live preview versus the server
+ * during PDF export. Anchoring formatting to UTC guarantees the displayed month
+ * always equals the stored month, on every device, server, and locale.
+ *
+ * Callers may override `timeZone` via `options` when formatting a true instant.
  */
 export function formatDate(
   date: Date | string | null | undefined,
@@ -22,7 +34,13 @@ export function formatDate(
 ): string {
   if (!date) return '';
   const d = typeof date === 'string' ? new Date(date) : date;
-  return d.toLocaleDateString('en-US', options ?? { month: 'short', year: 'numeric' });
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-US', {
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+    ...options,
+  });
 }
 
 /**
@@ -212,6 +230,12 @@ const MONTH_MAP: Record<string, number> = {
  * - ISO format (e.g., "2024-01-15")
  * - Just year (e.g., "2024")
  *
+ * Month-precision inputs are anchored to midnight UTC on the 1st of the month
+ * (via `Date.UTC`) so parsing is timezone-invariant: a given string always
+ * yields the same instant whether it runs on the user's browser or on a server
+ * in any timezone. This keeps parsing symmetric with {@link formatDate}, which
+ * also renders in UTC, preventing off-by-one-month drift.
+ *
  * Returns null for invalid dates or "Present"/"Current" strings
  */
 export function parseDateFlexible(dateStr: string | undefined | null): Date | null {
@@ -231,7 +255,7 @@ export function parseDateFlexible(dateStr: string | undefined | null): Date | nu
     const year = parseInt(yyyyMMMatch[1], 10);
     const month = parseInt(yyyyMMMatch[2], 10) - 1;
     if (year >= 1950 && year <= 2100 && month >= 0 && month <= 11) {
-      return new Date(year, month, 1);
+      return new Date(Date.UTC(year, month, 1));
     }
   }
 
@@ -242,7 +266,7 @@ export function parseDateFlexible(dateStr: string | undefined | null): Date | nu
     const year = parseInt(monthYearMatch[2], 10);
     const month = MONTH_MAP[monthKey];
     if (month !== undefined && year >= 1950 && year <= 2100) {
-      return new Date(year, month, 1);
+      return new Date(Date.UTC(year, month, 1));
     }
   }
 
@@ -253,7 +277,7 @@ export function parseDateFlexible(dateStr: string | undefined | null): Date | nu
     const monthKey = yearMonthMatch[2].toLowerCase();
     const month = MONTH_MAP[monthKey];
     if (month !== undefined && year >= 1950 && year <= 2100) {
-      return new Date(year, month, 1);
+      return new Date(Date.UTC(year, month, 1));
     }
   }
 
@@ -263,7 +287,7 @@ export function parseDateFlexible(dateStr: string | undefined | null): Date | nu
     const month = parseInt(mmYYYYMatch[1], 10) - 1;
     const year = parseInt(mmYYYYMatch[2], 10);
     if (year >= 1950 && year <= 2100 && month >= 0 && month <= 11) {
-      return new Date(year, month, 1);
+      return new Date(Date.UTC(year, month, 1));
     }
   }
 
@@ -272,7 +296,7 @@ export function parseDateFlexible(dateStr: string | undefined | null): Date | nu
   if (yearOnlyMatch) {
     const year = parseInt(yearOnlyMatch[1], 10);
     if (year >= 1950 && year <= 2100) {
-      return new Date(year, 0, 1);
+      return new Date(Date.UTC(year, 0, 1));
     }
   }
 
@@ -280,7 +304,7 @@ export function parseDateFlexible(dateStr: string | undefined | null): Date | nu
   try {
     const date = new Date(str);
     if (!isNaN(date.getTime())) {
-      const year = date.getFullYear();
+      const year = date.getUTCFullYear();
       if (year >= 1950 && year <= 2100) {
         return date;
       }
@@ -315,8 +339,8 @@ export function toMonthInputFormat(dateStr: string | undefined | null): string {
   // Try to parse the date
   const date = parseDateFlexible(str);
   if (date) {
-    const year = date.getFullYear();
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getUTCFullYear();
+    const month = (date.getUTCMonth() + 1).toString().padStart(2, '0');
     return `${year}-${month}`;
   }
 
@@ -324,10 +348,41 @@ export function toMonthInputFormat(dateStr: string | undefined | null): string {
 }
 
 /**
- * Get image dimensions from a URL.
- * Returns null if the image cannot be loaded or if called on the server.
- * Note: Browser-only — uses the DOM Image constructor.
+ * Parse an HTML `<input type="month">` value ("YYYY-MM") into a
+ * timezone-stable `Date` anchored at midnight UTC on the 1st of that month.
+ *
+ * Using `Date.UTC` (instead of `new Date(year, month, 1)` or
+ * `new Date("YYYY-MM")` implicitly) makes the stored instant identical on every
+ * runtime timezone, so the month a user selects is exactly the month that gets
+ * persisted and later rendered. Returns `null` for empty or malformed input so
+ * callers can store an explicit null rather than an "Invalid Date".
  */
+export function parseMonthInput(value: string | null | undefined): Date | null {
+  if (!value) return null;
+  const match = /^(\d{4})-(\d{2})$/.exec(value.trim());
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  if (month < 1 || month > 12) return null;
+  return new Date(Date.UTC(year, month - 1, 1));
+}
+
+/**
+ * Convert a stored `Date` (or ISO string) into the "YYYY-MM" value expected by
+ * an HTML `<input type="month">`.
+ *
+ * Reads the UTC calendar fields so the control displays the same month that was
+ * persisted, regardless of the browser's timezone. Returns an empty string for
+ * nullish or invalid dates.
+ */
+export function toMonthInputValue(date: Date | string | null | undefined): string {
+  if (!date) return '';
+  const d = typeof date === 'string' ? new Date(date) : date;
+  if (Number.isNaN(d.getTime())) return '';
+  const year = d.getUTCFullYear();
+  const month = (d.getUTCMonth() + 1).toString().padStart(2, '0');
+  return `${year}-${month}`;
+}
 export function getImageDimensions(url: string): Promise<{ width: number; height: number } | null> {
   return new Promise((resolve) => {
     if (!url) {

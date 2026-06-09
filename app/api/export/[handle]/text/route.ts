@@ -1,9 +1,9 @@
-import { auth } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 
-import { db } from '@/lib/db';
 import { toPlainText } from '@/services/export.service';
 import { getProfileByHandle } from '@/services/profile.service';
+
+import { assertResumeExportAccess, contentDispositionAttachment } from '../access';
 
 /**
  * GET /api/export/[handle]/text
@@ -23,24 +23,9 @@ export async function GET(
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
-    const { userId: clerkId } = await auth();
-    let isOwner = false;
-    if (clerkId) {
-      const user = await db.user.findUnique({
-        where: { clerkId },
-        select: { id: true },
-      });
-      isOwner = user?.id === profile.userId;
-    }
-
-    if (!isOwner) {
-      if (profile.status !== 'PUBLIC') {
-        return NextResponse.json({ error: 'Profile is not public' }, { status: 403 });
-      }
-
-      if (profile.resumeVisibility === 'UNLISTED') {
-        return NextResponse.json({ error: 'Resume is unlisted' }, { status: 403 });
-      }
+    const access = await assertResumeExportAccess(request, handle, profile);
+    if (!access.allowed) {
+      return access.response;
     }
 
     const plainText = toPlainText(profile);
@@ -48,7 +33,7 @@ export async function GET(
     return new NextResponse(plainText, {
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',
-        'Content-Disposition': `attachment; filename="${handle}-resume.txt"`,
+        'Content-Disposition': contentDispositionAttachment(`${handle}-resume.txt`),
       },
     });
   } catch (error) {

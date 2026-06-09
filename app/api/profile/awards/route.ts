@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { AppError, ErrorCode, handleApiError } from '@/lib/errors';
+import { AwardSchema } from '@/lib/validations';
 
 // GET /api/profile/awards - Get all awards
 export async function GET() {
@@ -43,11 +44,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { title, issuer, date, description, url } = body;
-
-    if (!title) {
-      throw new AppError('Title is required', ErrorCode.VALIDATION_ERROR, 400);
-    }
+    const { title, issuer, date, description, url } = AwardSchema.parse(body);
 
     // Get max sortOrder
     const maxOrder = await db.award.aggregate({
@@ -60,7 +57,7 @@ export async function POST(request: NextRequest) {
         profileId,
         title,
         issuer,
-        date: date ? new Date(date) : null,
+        date: date ?? null,
         description,
         url,
         sortOrder: (maxOrder._max.sortOrder ?? -1) + 1,
