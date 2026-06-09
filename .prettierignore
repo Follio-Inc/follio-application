@@ -1,0 +1,15 @@
+# Dependencies
+node_modules
+
+# Build outputs
+.next/
+out/
+build
+dist
+
+# Testing / coverage
+coverage
+
+# Reference/scratch files (not part of the app)
+temp/
+tmp/
