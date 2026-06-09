@@ -151,6 +151,8 @@ export function SignUpForm() {
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Verify email
             </Button>
+
+            <div id="clerk-captcha" />
           </form>
 
           <p className="text-center text-sm text-muted-foreground">
@@ -347,6 +349,8 @@ export function SignUpForm() {
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Create account
           </Button>
+
+          <div id="clerk-captcha" />
         </form>
 
         <p className="text-center text-sm text-muted-foreground">

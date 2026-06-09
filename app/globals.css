@@ -582,6 +582,12 @@
   .resume-entry .rich-text-bullets li p,
   .resume-entry ul[data-bullet-style] li p {
     margin: 0;
+    /* Match the editor's `defaultAlignment: 'justify'` so freshly-parsed
+       bullets — which carry no inline text-align — render identically in
+       the read-only preview and the builder's RichTextEditor. Explicit
+       per-bullet alignments still win because TipTap writes them as inline
+       `style="text-align: …"`, which outranks this class rule. */
+    text-align: justify;
   }
 
   .resume-entry .rich-text-bullets li strong {
@@ -950,6 +956,9 @@
   .resume-entry .rich-text-bullets li p,
   .resume-entry ul[data-bullet-style] li p {
     margin: 0;
+    /* Keep justify as the default in print too, mirroring the on-screen
+       preview and the editor's default alignment. */
+    text-align: justify;
   }
 
   /* Rich HTML prose in print */
