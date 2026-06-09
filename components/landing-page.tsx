@@ -2233,6 +2233,20 @@ export function LandingPage() {
 
       {/* ─── Footer ──────────────────────────────────────────────────────── */}
       <footer className="border-t border-border/60">
+        <div className="mx-auto max-w-6xl px-4 pt-10 sm:px-6 lg:px-8">
+          <p className="max-w-3xl text-xs leading-6 text-muted-foreground/80">
+            Follio helps you build a living, shareable professional resume and portfolio. When you
+            sign in with Google, we use the basic profile information provided by Google — your
+            name, email address, and profile picture — to create and secure your account and
+            personalize your workspace. We do not access Gmail, Drive, Contacts, or other Google
+            services. For full details, see our{' '}
+            <Link href="/privacy" className="underline transition-colors hover:text-foreground">
+              Privacy Policy
+            </Link>
+            .
+          </p>
+        </div>
+
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 py-10 sm:flex-row sm:px-6 lg:px-8">
           <div className="flex items-center gap-2">
             <Logo size="sm" showText={false} />
