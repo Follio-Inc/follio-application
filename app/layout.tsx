@@ -16,6 +16,8 @@ const inter = Inter({
   variable: '--font-inter',
 });
 
+const SITE_URL = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/+$/, '') || 'https://follio.app';
+
 export const metadata: Metadata = {
   title: {
     default: 'Follio - Your Digital Resume Platform',
@@ -34,7 +36,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     locale: 'en_US',
-    url: 'https://follio.dev',
+    url: SITE_URL,
     siteName: 'Follio',
     title: 'Follio - Your Digital Resume Platform',
     description:

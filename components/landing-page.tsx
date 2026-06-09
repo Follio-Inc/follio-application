@@ -2144,18 +2144,10 @@ function Hero() {
           transition={{ duration: 0.6, delay: 0.15 }}
           className="mt-6 max-w-3xl text-pretty text-[15px] leading-7 text-muted-foreground/90 sm:text-[18px] sm:leading-8"
         >
-          <span className="block">Follio replaces outdated PDFs with a truly digital resume.</span>
-          <span className="mt-2 block">
-            It is{' '}
-            <span className="font-medium text-foreground/90">
-              free from parsing and formatting issues
-            </span>
-            , adapts to each viewer&apos;s interests,
-          </span>
-          <span className="block">
-            suggests skills to learn based on job market trends, and answers recruiter questions on
-            your behalf.
-          </span>
+          Follio is a web app for job seekers and professionals to build one living profile and
+          share it as a resume, portfolio, or quick snapshot through a single link, with clean
+          formatting, viewer-adaptive presentation, and AI assistance that helps answer recruiter
+          questions and suggest skills based on market trends.
         </motion.p>
 
         <motion.div
