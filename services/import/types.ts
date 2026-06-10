@@ -18,6 +18,7 @@ import type { DataSource } from '@prisma/client';
 export interface NormalizedProfileData {
   // Basic info
   firstName?: string;
+  middleName?: string;
   lastName?: string;
   headline?: string;
   summary?: string;

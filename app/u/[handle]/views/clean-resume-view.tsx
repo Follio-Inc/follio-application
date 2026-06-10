@@ -79,7 +79,9 @@ function formatDateRange(
 // ============================================================================
 
 function ResumeHeader({ profile }: { profile: FilteredProfile }) {
-  const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(' ');
+  const fullName = [profile.firstName, profile.middleName, profile.lastName]
+    .filter(Boolean)
+    .join(' ');
 
   const showPhoto =
     (profile as unknown as Record<string, unknown>).resumeShowPhoto === true &&

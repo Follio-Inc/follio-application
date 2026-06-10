@@ -90,6 +90,20 @@ describe('Multi-Source Merger Service', () => {
       expect(result.lastName).toBe('Zhang');
       expect(result.source).toBe('SIGNUP');
     });
+
+    it('should preserve middleName from the winning source', () => {
+      const sources: NameEntry[] = [
+        { firstName: 'John', middleName: 'Resume', lastName: 'Doe', source: 'RESUME' },
+        { firstName: 'John', middleName: 'Signup', lastName: 'Doe', source: 'SIGNUP' },
+      ];
+
+      const result = resolveName(sources);
+
+      expect(result.firstName).toBe('John');
+      expect(result.middleName).toBe('Signup');
+      expect(result.lastName).toBe('Doe');
+      expect(result.source).toBe('SIGNUP');
+    });
   });
 
   describe('resolveEmails', () => {

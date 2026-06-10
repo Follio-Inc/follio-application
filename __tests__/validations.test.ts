@@ -129,12 +129,18 @@ describe('Validation Schemas', () => {
     it('should accept valid profile info', () => {
       const data = {
         firstName: 'John',
+        middleName: 'Taylor',
         lastName: 'Doe',
         headline: 'Software Engineer',
         summary: 'Experienced developer',
         location: 'San Francisco, CA',
         avatarUrl: 'https://example.com/avatar.jpg',
       };
+      expect(() => ProfileBasicInfoSchema.parse(data)).not.toThrow();
+    });
+
+    it('should allow missing middleName', () => {
+      const data = { firstName: 'John', lastName: 'Doe' };
       expect(() => ProfileBasicInfoSchema.parse(data)).not.toThrow();
     });
 

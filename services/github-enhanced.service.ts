@@ -90,6 +90,7 @@ export interface EnhancedGitHubData {
 export interface NormalizedEnhancedGitHubData {
   profile: {
     firstName?: string;
+    middleName?: string;
     lastName?: string;
     headline?: string;
     summary?: string;
@@ -586,10 +587,15 @@ export function normalizeEnhancedGitHubData(
 ): NormalizedEnhancedGitHubData {
   const { user, pinnedRepos, repos, organizations, languageStats, totalStats, readmes } = data;
 
-  // Parse name
-  const nameParts = user.name?.split(' ') || [];
+  // Parse name into first/middle/last while keeping middle optional.
+  const nameParts =
+    user.name
+      ?.split(/\s+/)
+      .map((part) => part.trim())
+      .filter((part) => part.length > 0) || [];
   const firstName = nameParts[0] || user.login;
-  const lastName = nameParts.slice(1).join(' ') || undefined;
+  const middleName = nameParts.length > 2 ? nameParts.slice(1, -1).join(' ') : undefined;
+  const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : undefined;
 
   // Get top languages
   const primaryLanguages = Object.keys(languageStats).slice(0, 5);
@@ -733,6 +739,7 @@ export function normalizeEnhancedGitHubData(
   return {
     profile: {
       firstName,
+      middleName,
       lastName,
       headline: user.bio || `${firstName} on GitHub`,
       summary: user.bio || undefined,

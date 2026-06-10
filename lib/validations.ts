@@ -73,6 +73,7 @@ export const HandleSchema = z
 
 export const ProfileBasicInfoSchema = z.object({
   firstName: z.string().min(1, 'First name is required').max(50),
+  middleName: z.string().max(50).optional(),
   lastName: z.string().max(50).optional(),
   headline: z.string().max(200).optional(),
   summary: z.string().max(5000).optional(),

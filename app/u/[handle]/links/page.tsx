@@ -20,7 +20,9 @@ export async function generateMetadata({ params }: LinksPageProps): Promise<Meta
     return { title: 'Links Not Found | Follio' };
   }
 
-  const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(' ');
+  const fullName = [profile.firstName, profile.middleName, profile.lastName]
+    .filter(Boolean)
+    .join(' ');
   const title = `${fullName} — Links | Follio`;
   const description = profile.headline || `${fullName}'s links`;
 

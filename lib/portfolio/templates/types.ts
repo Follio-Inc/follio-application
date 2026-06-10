@@ -353,6 +353,7 @@ export interface TemplateProfileData {
   id: string;
   handle: string;
   firstName: string | null;
+  middleName: string | null;
   lastName: string | null;
   headline: string | null;
   summary: string | null;

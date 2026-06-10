@@ -172,6 +172,7 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             firstName: profile.firstName,
+            middleName: profile.middleName,
             lastName: profile.lastName,
             headline: profile.headline,
             summary: profile.summary,

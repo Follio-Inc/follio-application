@@ -33,6 +33,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
             handle: true,
             resumeTitle: true,
             firstName: true,
+            middleName: true,
             lastName: true,
             headline: true,
             avatarUrl: true,

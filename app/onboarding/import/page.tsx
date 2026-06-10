@@ -1223,28 +1223,37 @@ export default function OnboardingImportPage() {
     const githubProfile = (githubData?.profile as Record<string, unknown>) || {};
     const resumeContactInfo = resumeData?.contactInfo as Record<string, unknown> | undefined;
 
-    const allNames: Array<{ firstName?: string; lastName?: string; source: string }> = [];
+    const allNames: Array<{
+      firstName?: string;
+      middleName?: string;
+      lastName?: string;
+      source: string;
+    }> = [];
     if (user?.firstName || user?.lastName)
       allNames.push({
         firstName: user.firstName || undefined,
+        middleName: undefined,
         lastName: user.lastName || undefined,
         source: 'SIGNUP',
       });
-    if (resumeProfile.firstName || resumeProfile.lastName)
+    if (resumeProfile.firstName || resumeProfile.middleName || resumeProfile.lastName)
       allNames.push({
         firstName: resumeProfile.firstName as string | undefined,
+        middleName: resumeProfile.middleName as string | undefined,
         lastName: resumeProfile.lastName as string | undefined,
         source: 'RESUME',
       });
-    if (linkedinProfile.firstName || linkedinProfile.lastName)
+    if (linkedinProfile.firstName || linkedinProfile.middleName || linkedinProfile.lastName)
       allNames.push({
         firstName: linkedinProfile.firstName as string | undefined,
+        middleName: linkedinProfile.middleName as string | undefined,
         lastName: linkedinProfile.lastName as string | undefined,
         source: 'LINKEDIN',
       });
-    if (githubProfile.firstName || githubProfile.lastName)
+    if (githubProfile.firstName || githubProfile.middleName || githubProfile.lastName)
       allNames.push({
         firstName: githubProfile.firstName as string | undefined,
+        middleName: githubProfile.middleName as string | undefined,
         lastName: githubProfile.lastName as string | undefined,
         source: 'GITHUB',
       });
@@ -1255,6 +1264,8 @@ export default function OnboardingImportPage() {
         linkedinProfile.firstName ||
         githubProfile.firstName ||
         user?.firstName,
+      middleName:
+        resumeProfile.middleName || linkedinProfile.middleName || githubProfile.middleName,
       lastName:
         resumeProfile.lastName ||
         linkedinProfile.lastName ||

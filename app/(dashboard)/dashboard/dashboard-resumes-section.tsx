@@ -61,6 +61,7 @@ export interface DashboardResumeItem {
   status: string;
   resumeVisibility: string;
   firstName: string | null;
+  middleName: string | null;
   lastName: string | null;
   headline: string | null;
   updatedAt: string;
@@ -129,7 +130,7 @@ function formatRelativeDate(dateString: string): string {
 }
 
 function getDisplayName(resume: DashboardResumeItem): string | null {
-  const parts = [resume.firstName, resume.lastName].filter(Boolean);
+  const parts = [resume.firstName, resume.middleName, resume.lastName].filter(Boolean);
   return parts.length > 0 ? parts.join(' ') : null;
 }
 

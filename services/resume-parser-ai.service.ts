@@ -24,6 +24,7 @@ const aiParseLogger = logger.child({ source: 'resume-parser-ai' });
 export interface ParsedResumeAI {
   basics: {
     firstName?: string;
+    middleName?: string;
     lastName?: string;
     email?: string;
     phone?: string;
@@ -118,6 +119,7 @@ Return a JSON object with this EXACT structure (no markdown, just JSON):
 {
   "basics": {
     "firstName": "string",
+    "middleName": "string (optional)",
     "lastName": "string",
     "email": "string",
     "phone": "string",
@@ -236,6 +238,7 @@ async function parseWithAI(text: string): Promise<ParsedResumeAI | null> {
     const result: ParsedResumeAI = {
       basics: {
         firstName: basics.firstName as string | undefined,
+        middleName: basics.middleName as string | undefined,
         lastName: basics.lastName as string | undefined,
         email: basics.email as string | undefined,
         phone: basics.phone as string | undefined,
@@ -376,6 +379,7 @@ export async function parseResumeHybrid(buffer: Buffer, mimeType: string): Promi
   return {
     basics: {
       firstName: ruleBasedResult.basics?.firstName,
+      middleName: ruleBasedResult.basics?.middleName,
       lastName: ruleBasedResult.basics?.lastName,
       email: ruleBasedResult.basics?.email,
       phone: ruleBasedResult.basics?.phone,
@@ -411,6 +415,7 @@ export async function parseResumeHybrid(buffer: Buffer, mimeType: string): Promi
 
 export interface NormalizedResumeDataAI {
   firstName?: string;
+  middleName?: string;
   lastName?: string;
   headline?: string;
   bio?: string;
@@ -468,6 +473,7 @@ export interface NormalizedResumeDataAI {
 export function normalizeResumeDataAI(parsed: ParsedResumeAI): NormalizedResumeDataAI {
   const normalized: NormalizedResumeDataAI = {
     firstName: parsed.basics?.firstName,
+    middleName: parsed.basics?.middleName,
     lastName: parsed.basics?.lastName,
     headline: parsed.basics?.headline,
     bio: parsed.basics?.summary,
@@ -508,6 +514,7 @@ export function normalizeResumeDataAI(parsed: ParsedResumeAI): NormalizedResumeD
 
   aiParseLogger.debug('Normalize AI output', {
     hasFirstName: !!normalized.firstName,
+    hasMiddleName: !!normalized.middleName,
     hasLastName: !!normalized.lastName,
     skillCount: normalized.skills?.length ?? 0,
     experienceCount: normalized.workExperiences?.length ?? 0,

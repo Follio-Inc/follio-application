@@ -79,10 +79,35 @@ function convertToAppFormat(
   lines: Lines,
   sections: ResumeSectionToLines
 ): ParsedResume {
-  // Split name into first and last
-  const nameParts = resume.profile.name.split(/\s+/);
-  const firstName = nameParts[0] || '';
-  const lastName = nameParts.slice(1).join(' ') || '';
+  // Split full name into first/middle/last while keeping middle optional.
+  const splitName = (
+    fullName: string
+  ): { firstName: string; middleName?: string; lastName: string } => {
+    const parts = fullName
+      .split(/\s+/)
+      .map((part) => part.trim())
+      .filter((part) => part.length > 0);
+
+    if (parts.length === 0) {
+      return { firstName: '', lastName: '' };
+    }
+
+    if (parts.length === 1) {
+      return { firstName: parts[0], lastName: '' };
+    }
+
+    if (parts.length === 2) {
+      return { firstName: parts[0], lastName: parts[1] };
+    }
+
+    return {
+      firstName: parts[0],
+      middleName: parts.slice(1, -1).join(' '),
+      lastName: parts[parts.length - 1],
+    };
+  };
+
+  const { firstName, middleName, lastName } = splitName(resume.profile.name);
 
   // Extract URLs from profile section
   const links: string[] = [];
@@ -197,6 +222,7 @@ function convertToAppFormat(
 
   return {
     firstName,
+    middleName,
     lastName,
     headline,
     email: resume.profile.email,

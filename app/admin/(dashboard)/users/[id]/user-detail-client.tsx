@@ -65,6 +65,7 @@ interface ProfileData {
   handle: string;
   resumeTitle: string | null;
   firstName: string | null;
+  middleName: string | null;
   lastName: string | null;
   headline: string | null;
   avatarUrl: string | null;
@@ -226,8 +227,9 @@ export function UserDetailClient({
   };
   const primaryProfile = user.profiles[0];
   const displayName = primaryProfile
-    ? [primaryProfile.firstName, primaryProfile.lastName].filter(Boolean).join(' ') ||
-      primaryProfile.handle
+    ? [primaryProfile.firstName, primaryProfile.middleName, primaryProfile.lastName]
+        .filter(Boolean)
+        .join(' ') || primaryProfile.handle
     : user.email;
 
   return (

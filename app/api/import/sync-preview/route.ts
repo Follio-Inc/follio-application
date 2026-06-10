@@ -25,6 +25,7 @@ const toDataSource = (source: string | undefined): DataSource => {
 
 interface SyncProfileData {
   firstName?: string;
+  middleName?: string;
   lastName?: string;
   headline?: string;
   summary?: string;
@@ -220,6 +221,7 @@ export async function POST(request: NextRequest) {
         label: string;
       }> = [
         { field: 'firstName', sourceField: 'firstNameSource', label: 'First Name' },
+        { field: 'middleName', sourceField: 'middleNameSource', label: 'Middle Name' },
         { field: 'lastName', sourceField: 'lastNameSource', label: 'Last Name' },
         { field: 'headline', sourceField: 'headlineSource', label: 'Headline' },
         { field: 'summary', sourceField: 'summarySource', label: 'Summary' },

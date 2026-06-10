@@ -90,6 +90,10 @@ function toNormalizedResult(
     result.profile!.firstName = sanitizeText(parsed.firstName);
     result.summary!.profileFields!++;
   }
+  if (parsed.middleName) {
+    result.profile!.middleName = sanitizeText(parsed.middleName);
+    result.summary!.profileFields!++;
+  }
   if (parsed.lastName) {
     result.profile!.lastName = sanitizeText(parsed.lastName);
     result.summary!.profileFields!++;

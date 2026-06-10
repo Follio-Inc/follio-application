@@ -76,6 +76,8 @@ async function clearProfileData(profileId: string): Promise<void> {
     data: {
       firstName: null,
       firstNameSource: DataSource.MANUAL,
+      middleName: null,
+      middleNameSource: DataSource.MANUAL,
       lastName: null,
       lastNameSource: DataSource.MANUAL,
       headline: null,
@@ -100,6 +102,10 @@ async function saveResumeDataToProfile(
   if (data.profile.firstName) {
     profileUpdate.firstName = data.profile.firstName;
     profileUpdate.firstNameSource = DataSource.RESUME;
+  }
+  if (data.profile.middleName) {
+    profileUpdate.middleName = data.profile.middleName;
+    profileUpdate.middleNameSource = DataSource.RESUME;
   }
   if (data.profile.lastName) {
     profileUpdate.lastName = data.profile.lastName;

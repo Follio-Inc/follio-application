@@ -41,6 +41,7 @@ export interface AIParserConfig {
 export interface ParsedResumeAI {
   basics: {
     firstName?: string;
+    middleName?: string;
     lastName?: string;
     email?: string;
     phone?: string;
@@ -101,6 +102,7 @@ interface ProjectAI {
 export interface NormalizedResumeData {
   profile: {
     firstName?: string;
+    middleName?: string;
     lastName?: string;
     headline?: string;
     summary?: string;
@@ -204,7 +206,7 @@ CRITICAL RULES:
 4. Skills should be individual items, not categories (split "Python, Java, C++" into separate items)
 5. For work experience bullets, include ALL bullet points/achievements
 6. If a field is genuinely not present, omit it entirely (don't use null, empty strings, or "N/A")
-7. The name is usually on the first line - split into firstName and lastName
+7. The name is usually on the first line - split into firstName, middleName (optional), and lastName
 8. Headline/title is the professional title (e.g., "Senior Software Engineer", "Product Manager")
 9. Look for LinkedIn, GitHub, portfolio URLs in the contact/header section
 10. Parse certifications with their issuing organization and date if available
@@ -215,6 +217,7 @@ Return this EXACT JSON structure:
 {
   "basics": {
     "firstName": "string",
+    "middleName": "string (optional)",
     "lastName": "string", 
     "email": "string",
     "phone": "string",
@@ -375,6 +378,7 @@ function validateAndCleanResponse(parsed: unknown): ParsedResumeAI {
   const result: ParsedResumeAI = {
     basics: {
       firstName: getString(data.basics, 'firstName'),
+      middleName: getString(data.basics, 'middleName'),
       lastName: getString(data.basics, 'lastName'),
       email: getString(data.basics, 'email'),
       phone: getString(data.basics, 'phone'),
@@ -528,6 +532,7 @@ function normalizeAIData(parsed: ParsedResumeAI, processingTimeMs: number): Norm
   if (parsed.basics) {
     normalized.profile = {
       firstName: sanitize(parsed.basics.firstName),
+      middleName: sanitize(parsed.basics.middleName),
       lastName: sanitize(parsed.basics.lastName),
       headline: sanitize(parsed.basics.headline),
       summary: sanitize(parsed.basics.summary),
@@ -693,7 +698,15 @@ export async function importResumeWithAI(buffer: Buffer, userId: string): Promis
     const normalized = normalizeAIData(parsed, processingTime);
 
     console.log('[AI Resume Import] === EXTRACTION SUMMARY ===');
-    console.log(`  Name: ${normalized.profile.firstName} ${normalized.profile.lastName}`);
+    console.log(
+      `  Name: ${[
+        normalized.profile.firstName,
+        normalized.profile.middleName,
+        normalized.profile.lastName,
+      ]
+        .filter(Boolean)
+        .join(' ')}`
+    );
     console.log(`  Email: ${normalized.contactInfo?.email}`);
     console.log(`  Headline: ${normalized.profile.headline?.substring(0, 50)}`);
     console.log(`  Experiences: ${normalized.experiences.length}`);
@@ -782,6 +795,7 @@ export async function saveAIResumeToProfile(
           resumeTitle: 'Imported Resume',
           handle: `user-${user.id.slice(0, 8)}`,
           firstName: data.profile.firstName,
+          middleName: data.profile.middleName,
           lastName: data.profile.lastName,
         },
       });
@@ -803,6 +817,10 @@ export async function saveAIResumeToProfile(
     if (data.profile.firstName) {
       profileUpdate.firstName = data.profile.firstName;
       profileUpdate.firstNameSource = DataSource.RESUME;
+    }
+    if (data.profile.middleName) {
+      profileUpdate.middleName = data.profile.middleName;
+      profileUpdate.middleNameSource = DataSource.RESUME;
     }
     if (data.profile.lastName) {
       profileUpdate.lastName = data.profile.lastName;
