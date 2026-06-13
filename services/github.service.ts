@@ -36,6 +36,21 @@ export interface NormalizedGitHubData {
     type: string;
     url: string;
     label: string;
+    source: 'GITHUB';
+  }[];
+  projects: {
+    title: string;
+    description?: string;
+    shortDesc?: string;
+    url?: string;
+    repoUrl: string;
+    techStack: string[];
+    featured: boolean;
+    sortOrder: number;
+    source: 'GITHUB';
+    ghStars?: number;
+    ghForks?: number;
+    ghLanguage?: string;
   }[];
   skills: {
     name: string;
