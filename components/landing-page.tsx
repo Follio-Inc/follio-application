@@ -258,7 +258,7 @@ const VIEWS: ReadonlyArray<{
   },
 ];
 
-function ViewSwitcher() {
+export function ViewSwitcher() {
   const [active, setActive] = useState<ViewKey>('follio');
   const current = VIEWS.find((v) => v.key === active) ?? VIEWS[0];
   const Mock = current.Mock;
@@ -321,7 +321,7 @@ function ViewSwitcher() {
    Section content
    ═══════════════════════════════════════════════════════════════════════════ */
 
-const STEPS = [
+export const STEPS = [
   {
     n: '01',
     title: 'Import once',
