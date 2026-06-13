@@ -60,3 +60,6 @@ logs
 
 # clerk configuration (can include secrets)
 /.clerk/
+
+# Chromium Pack (Downloaded at build time)
+/public/chromium-*-pack.*

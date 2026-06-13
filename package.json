@@ -9,8 +9,8 @@
   "packageManager": "npm@10.8.2",
   "scripts": {
     "dev": "next dev --turbo",
-    "build": "prisma generate && prisma migrate deploy && next build",
-    "build:ci": "prisma generate && next build",
+    "build": "node scripts/download-chromium.js && prisma generate && prisma migrate deploy && next build",
+    "build:ci": "node scripts/download-chromium.js && prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
     "lint:fix": "next lint --fix",

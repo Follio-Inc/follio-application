@@ -1367,6 +1367,7 @@ export type PdfLayout = 'paged' | 'continuous';
 interface PdfOptions {
   /** @default 'paged' */
   layout?: PdfLayout;
+  origin?: string;
 }
 
 /**
@@ -1381,7 +1382,7 @@ interface PdfOptions {
  * In local development we fall back to the full `puppeteer` package, which
  * bundles its own Chromium and requires no extra system setup.
  */
-async function launchBrowser(): Promise<Browser> {
+async function launchBrowser(origin?: string): Promise<Browser> {
   const isServerless = Boolean(
     process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.AWS_REGION
   );
@@ -1393,7 +1394,10 @@ async function launchBrowser(): Promise<Browser> {
     ]);
 
     const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
-    const packUrl = `https://github.com/Sparticuz/chromium/releases/download/v147.0.0/chromium-v147.0.0-pack.${arch}.tar`;
+    const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+    const packUrl = origin
+      ? `${origin}/chromium-v147.0.0-pack.${arch}.tar${bypassSecret ? `?x-vercel-protection-bypass=${bypassSecret}` : ''}`
+      : `https://github.com/Sparticuz/chromium/releases/download/v147.0.0/chromium-v147.0.0-pack.${arch}.tar`;
 
     return puppeteerCore.launch({
       args: [...chromium.args, '--disable-dev-shm-usage'],
@@ -1423,11 +1427,11 @@ async function launchBrowser(): Promise<Browser> {
  */
 export async function generateResumePDF(
   profile: FullProfile,
-  { layout = 'paged' }: PdfOptions = {}
+  { layout = 'paged', origin }: PdfOptions = {}
 ): Promise<Buffer> {
   const html = toPDFHtml(profile);
 
-  const browser = await launchBrowser();
+  const browser = await launchBrowser(origin);
 
   try {
     const page = await browser.newPage();
