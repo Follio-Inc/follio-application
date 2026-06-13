@@ -151,6 +151,7 @@ const compressImageForClerk = async (file: File): Promise<File> => {
 // Types for parsed resume data
 interface ParsedProfile {
   firstName?: string;
+  middleName?: string;
   lastName?: string;
   headline?: string;
   summary?: string;
@@ -251,7 +252,7 @@ interface ReviewData {
     primaryPhoneIndex?: number;
   };
   // All names collected from different sources (signup, resume, linkedin, github)
-  allNames?: Array<{ firstName?: string; lastName?: string; source: string }>;
+  allNames?: Array<{ firstName?: string; middleName?: string; lastName?: string; source: string }>;
 }
 
 type ReviewStep =
@@ -737,6 +738,7 @@ function ReviewPageContent() {
       // Get handle from sessionStorage or generate one
       const storedHandle = sessionStorage.getItem('onboarding_handle');
       const firstName = data.profile.firstName || 'User';
+      const middleName = data.profile.middleName || '';
       const lastName = data.profile.lastName || '';
 
       // Handle avatar upload to Clerk directly from client
@@ -822,6 +824,7 @@ function ReviewPageContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           firstName,
+          middleName: middleName || undefined,
           lastName,
           handle: storedHandle,
           resumeFileName: resumeFileName || undefined,
@@ -1495,16 +1498,17 @@ function ReviewPageContent() {
                   // Compute unique names by combining firstName + lastName
                   const uniqueNamesMap = new Map<
                     string,
-                    { firstName: string; lastName: string; sources: string[] }
+                    { firstName: string; middleName: string; lastName: string; sources: string[] }
                   >();
 
                   if (data.allNames) {
                     for (const nameEntry of data.allNames) {
                       const firstName = (nameEntry.firstName || '').trim();
+                      const middleName = (nameEntry.middleName || '').trim();
                       const lastName = (nameEntry.lastName || '').trim();
-                      const key = `${firstName.toLowerCase()}|${lastName.toLowerCase()}`;
+                      const key = `${firstName.toLowerCase()}|${middleName.toLowerCase()}|${lastName.toLowerCase()}`;
 
-                      if (key === '|') continue; // Skip empty names
+                      if (key === '||') continue; // Skip empty names
 
                       if (uniqueNamesMap.has(key)) {
                         // Add source to existing entry
@@ -1515,6 +1519,7 @@ function ReviewPageContent() {
                       } else {
                         uniqueNamesMap.set(key, {
                           firstName,
+                          middleName,
                           lastName,
                           sources: [nameEntry.source],
                         });
@@ -1534,9 +1539,16 @@ function ReviewPageContent() {
                       </label>
                       <div className="space-y-2">
                         {uniqueNames.map((nameEntry, idx) => {
-                          const fullName = `${nameEntry.firstName} ${nameEntry.lastName}`.trim();
+                          const fullName = [
+                            nameEntry.firstName,
+                            nameEntry.middleName,
+                            nameEntry.lastName,
+                          ]
+                            .filter(Boolean)
+                            .join(' ');
                           const isSelected =
                             data.profile.firstName === nameEntry.firstName &&
+                            data.profile.middleName === nameEntry.middleName &&
                             data.profile.lastName === nameEntry.lastName;
                           return (
                             <button
@@ -1548,6 +1560,7 @@ function ReviewPageContent() {
                                   profile: {
                                     ...prev.profile,
                                     firstName: nameEntry.firstName,
+                                    middleName: nameEntry.middleName,
                                     lastName: nameEntry.lastName,
                                   },
                                 }));
@@ -1570,13 +1583,21 @@ function ReviewPageContent() {
                   );
                 })()}
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                   <div>
                     <label className="mb-1.5 block text-sm font-medium">First Name</label>
                     <Input
                       value={data.profile.firstName || ''}
                       onChange={(e) => updateProfile('firstName', e.target.value)}
                       placeholder="John"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium">Middle Name</label>
+                    <Input
+                      value={data.profile.middleName || ''}
+                      onChange={(e) => updateProfile('middleName', e.target.value)}
+                      placeholder="Taylor"
                     />
                   </div>
                   <div>
@@ -2319,7 +2340,9 @@ function ReviewPageContent() {
                     label="Profile"
                     value={
                       data.profile.firstName
-                        ? `${data.profile.firstName} ${data.profile.lastName || ''}`
+                        ? [data.profile.firstName, data.profile.middleName, data.profile.lastName]
+                            .filter(Boolean)
+                            .join(' ')
                         : 'Not set'
                     }
                   />

@@ -25,6 +25,7 @@ const parseLogger = logger.child({ source: 'resume-parser' });
 export interface ParsedResume {
   basics?: {
     firstName?: string;
+    middleName?: string;
     lastName?: string;
     email?: string;
     phone?: string;
@@ -849,6 +850,7 @@ function containsJobTitle(text: string): boolean {
 
 function extractNameAndHeadline(text: string): {
   firstName?: string;
+  middleName?: string;
   lastName?: string;
   headline?: string;
 } {
@@ -934,15 +936,17 @@ function extractNameAndHeadline(text: string): {
   });
 
   const firstName = filtered[0];
-  const lastName = filtered.length > 1 ? filtered.slice(1).join(' ') : undefined;
+  const middleName = filtered.length > 2 ? filtered.slice(1, -1).join(' ') : undefined;
+  const lastName = filtered.length > 1 ? filtered[filtered.length - 1] : undefined;
 
   parseLogger.debug('Name extraction complete', {
     hasFirstName: !!firstName,
+    hasMiddleName: !!middleName,
     hasLastName: !!lastName,
   });
   parseLogger.debug('Headline extraction complete', { hasHeadline: !!headline });
 
-  return { firstName, lastName, headline };
+  return { firstName, middleName, lastName, headline };
 }
 
 // ============================================================================
@@ -1446,6 +1450,7 @@ export function parseResumeText(rawText: string): ParsedResume {
   // Extract name and headline
   const nameHeadline = extractNameAndHeadline(text);
   result.basics!.firstName = nameHeadline.firstName;
+  result.basics!.middleName = nameHeadline.middleName;
   result.basics!.lastName = nameHeadline.lastName;
   result.basics!.headline = nameHeadline.headline;
 
@@ -1507,6 +1512,7 @@ export async function parseResume(buffer: Buffer, mimeType: string): Promise<Par
 
 export interface NormalizedResumeData {
   firstName?: string;
+  middleName?: string;
   lastName?: string;
   headline?: string;
   bio?: string;
@@ -1562,6 +1568,7 @@ export interface NormalizedResumeData {
 export function normalizeResumeData(parsed: ParsedResume): NormalizedResumeData {
   const normalized: NormalizedResumeData = {
     firstName: parsed.basics?.firstName,
+    middleName: parsed.basics?.middleName,
     lastName: parsed.basics?.lastName,
     headline: parsed.basics?.headline,
     bio: parsed.basics?.summary,
@@ -1597,6 +1604,7 @@ export function normalizeResumeData(parsed: ParsedResume): NormalizedResumeData 
 
   parseLogger.debug('Normalize output', {
     hasFirstName: !!normalized.firstName,
+    hasMiddleName: !!normalized.middleName,
     hasLastName: !!normalized.lastName,
     skillCount: normalized.skills?.length ?? 0,
     experienceCount: normalized.workExperiences?.length ?? 0,

@@ -19,6 +19,7 @@ import { LinkType, Prisma } from '@prisma/client';
 export interface NormalizedResumeData {
   profile: {
     firstName?: string;
+    middleName?: string;
     lastName?: string;
     headline?: string;
     summary?: string;
@@ -176,6 +177,7 @@ export function normalizeResumeData(parsed: ParsedResume): NormalizedResumeData 
 
   // Profile - include whatever we have
   if (parsed.firstName) normalized.profile.firstName = sanitize(parsed.firstName);
+  if (parsed.middleName) normalized.profile.middleName = sanitize(parsed.middleName);
   if (parsed.lastName) normalized.profile.lastName = sanitize(parsed.lastName);
   if (parsed.headline) normalized.profile.headline = sanitize(parsed.headline);
   if (parsed.summary) normalized.profile.summary = sanitize(parsed.summary);
@@ -357,6 +359,7 @@ export async function saveResumeDataToProfile(
           resumeTitle: 'Imported Resume',
           handle: `user-${user.id.slice(0, 8)}`,
           firstName: data.profile.firstName,
+          middleName: data.profile.middleName,
           lastName: data.profile.lastName,
         },
       });
@@ -378,6 +381,10 @@ export async function saveResumeDataToProfile(
     if (data.profile.firstName) {
       profileUpdate.firstName = data.profile.firstName;
       profileUpdate.firstNameSource = 'RESUME';
+    }
+    if (data.profile.middleName) {
+      profileUpdate.middleName = data.profile.middleName;
+      profileUpdate.middleNameSource = 'RESUME';
     }
     if (data.profile.lastName) {
       profileUpdate.lastName = data.profile.lastName;

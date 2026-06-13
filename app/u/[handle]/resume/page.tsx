@@ -20,7 +20,9 @@ export async function generateMetadata({ params }: ResumePageProps): Promise<Met
     return { title: 'Resume Not Found | Follio' };
   }
 
-  const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(' ');
+  const fullName = [profile.firstName, profile.middleName, profile.lastName]
+    .filter(Boolean)
+    .join(' ');
   const title = `${fullName} — Resume | Follio`;
   const description = profile.headline || `${fullName}'s professional resume`;
 

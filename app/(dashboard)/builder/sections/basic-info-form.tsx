@@ -37,6 +37,7 @@ export function BasicInfoForm({ profile, onUpdate, embedded }: BasicInfoFormProp
     resolver: zodResolver(ProfileBasicInfoSchema),
     defaultValues: {
       firstName: profile.firstName || '',
+      middleName: profile.middleName || '',
       lastName: profile.lastName || '',
       headline: profile.headline || '',
       location: profile.location || '',
@@ -52,7 +53,7 @@ export function BasicInfoForm({ profile, onUpdate, embedded }: BasicInfoFormProp
   const formFields = (
     <div className="space-y-6">
       {/* Name */}
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-3">
         <div className="space-y-2">
           <Label htmlFor="firstName">First Name *</Label>
           <Input
@@ -64,6 +65,15 @@ export function BasicInfoForm({ profile, onUpdate, embedded }: BasicInfoFormProp
           {form.formState.errors.firstName && (
             <p className="text-sm text-destructive">{form.formState.errors.firstName.message}</p>
           )}
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="middleName">Middle Name</Label>
+          <Input
+            id="middleName"
+            value={form.watch('middleName')}
+            onChange={(e) => handleChange('middleName', e.target.value)}
+            placeholder="Taylor"
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="lastName">Last Name</Label>

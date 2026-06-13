@@ -31,6 +31,7 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
               some: {
                 OR: [
                   { firstName: { contains: search, mode: 'insensitive' as const } },
+                  { middleName: { contains: search, mode: 'insensitive' as const } },
                   { lastName: { contains: search, mode: 'insensitive' as const } },
                   { handle: { contains: search, mode: 'insensitive' as const } },
                 ],
@@ -68,6 +69,7 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
           select: {
             handle: true,
             firstName: true,
+            middleName: true,
             lastName: true,
             avatarUrl: true,
             status: true,
@@ -103,6 +105,7 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
       ? {
           handle: u.profiles[0].handle,
           firstName: u.profiles[0].firstName,
+          middleName: u.profiles[0].middleName,
           lastName: u.profiles[0].lastName,
           avatarUrl: u.profiles[0].avatarUrl,
           status: u.profiles[0].status,

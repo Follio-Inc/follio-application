@@ -75,7 +75,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { handle, firstName, lastName, headline, summary, location } = validatedData.data;
+    const { handle, firstName, middleName, lastName, headline, summary, location } =
+      validatedData.data;
 
     // Check if user exists, create if not (handles first-time profile creation)
     let user = await db.user.findUnique({
@@ -162,8 +163,10 @@ export async function POST(request: NextRequest) {
       data: {
         userId: user.id,
         handle,
-        resumeTitle: [firstName, lastName].filter(Boolean).join(' ').trim() || 'Untitled Resume',
+        resumeTitle:
+          [firstName, middleName, lastName].filter(Boolean).join(' ').trim() || 'Untitled Resume',
         firstName,
+        middleName,
         lastName,
         headline,
         summary,
@@ -302,6 +305,7 @@ export async function PATCH(request: NextRequest) {
       data: {
         ...(body.handle && { handle: body.handle }),
         firstName: body.firstName,
+        middleName: body.middleName,
         lastName: body.lastName,
         headline: body.headline,
         summary: body.summary,

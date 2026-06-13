@@ -47,6 +47,7 @@ const safeParseDate = (dateStr: string | undefined | null): Date | null => {
 
 interface SyncProfileData {
   firstName?: string;
+  middleName?: string;
   lastName?: string;
   headline?: string;
   summary?: string;
@@ -182,6 +183,7 @@ export async function POST(request: NextRequest) {
         sourceField: string;
       }> = [
         { field: 'firstName', sourceField: 'firstNameSource' },
+        { field: 'middleName', sourceField: 'middleNameSource' },
         { field: 'lastName', sourceField: 'lastNameSource' },
         { field: 'headline', sourceField: 'headlineSource' },
         { field: 'summary', sourceField: 'summarySource' },

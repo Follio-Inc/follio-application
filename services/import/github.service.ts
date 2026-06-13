@@ -23,6 +23,7 @@ function toNormalizedResult(data: NormalizedGitHubData): NormalizedImportResult 
     source: 'GITHUB',
     profile: {
       firstName: data.profile.firstName,
+      middleName: data.profile.middleName,
       lastName: data.profile.lastName,
       headline: data.profile.headline,
       summary: data.profile.summary,

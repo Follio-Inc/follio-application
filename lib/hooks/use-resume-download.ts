@@ -6,6 +6,25 @@ import type { PdfLayout } from '@/app/(dashboard)/builder/components/download-di
 
 const DEFAULT_LAYOUT: PdfLayout = 'continuous';
 
+export function buildResumePdfUrl(
+  handle: string,
+  layout: PdfLayout,
+  currentSearch: string
+): string {
+  const url = new URL(`/api/export/${handle}/pdf`, 'http://localhost');
+  url.searchParams.set('layout', layout);
+
+  if (currentSearch) {
+    const searchParams = new URLSearchParams(currentSearch);
+    for (const [key, value] of searchParams.entries()) {
+      if (key === 'layout') continue;
+      url.searchParams.set(key, value);
+    }
+  }
+
+  return `${url.pathname}${url.search}`;
+}
+
 interface UseResumeDownloadOptions {
   /** Profile handle used to build the export API URL. */
   handle: string;
@@ -43,7 +62,8 @@ export function useResumeDownload({
   const download = useCallback(async () => {
     setIsDownloading(true);
     try {
-      const response = await fetch(`/api/export/${handle}/pdf?layout=${layout}`);
+      const pdfUrl = buildResumePdfUrl(handle, layout, window.location.search);
+      const response = await fetch(pdfUrl);
       if (!response.ok) {
         const body = await response.json().catch(() => null);
         const detail = (body as { error?: string })?.error ?? response.statusText;

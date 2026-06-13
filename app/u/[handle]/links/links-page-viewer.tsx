@@ -18,7 +18,8 @@ interface LinksPageViewerProps {
 }
 
 export function LinksPageViewer({ profile, authState, profileHandle }: LinksPageViewerProps) {
-  const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(' ') || 'User';
+  const fullName =
+    [profile.firstName, profile.middleName, profile.lastName].filter(Boolean).join(' ') || 'User';
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-muted/30 to-background">

@@ -125,6 +125,7 @@ interface ManualLinkInput {
 interface ReviewedData {
   profile: {
     firstName?: string;
+    middleName?: string;
     lastName?: string;
     headline?: string;
     summary?: string;
@@ -234,6 +235,7 @@ export async function POST(request: NextRequest) {
       importedData,
       reviewedData,
       firstName: providedFirstName,
+      middleName: providedMiddleName,
       lastName: providedLastName,
       handle: providedHandle,
       manualLinks,
@@ -245,6 +247,7 @@ export async function POST(request: NextRequest) {
       importedData?: Record<string, NormalizedImportResult | undefined>;
       reviewedData?: ReviewedData;
       firstName?: string;
+      middleName?: string;
       lastName?: string;
       handle?: string;
       manualLinks?: ManualLinkInput[];
@@ -349,6 +352,7 @@ export async function POST(request: NextRequest) {
         reviewedData,
         providedHandle,
         providedFirstName,
+        providedMiddleName,
         providedLastName,
         clerkUserForReview?.imageUrl,
         galleryPhotos,
@@ -416,17 +420,23 @@ export async function POST(request: NextRequest) {
     if (signupName?.firstName || signupName?.lastName) {
       nameEntries.push({
         firstName: signupName.firstName,
+        middleName: undefined,
         lastName: signupName.lastName,
         source: 'SIGNUP',
       });
     }
 
     // Add imported name
-    if (mergedProfile.firstName || mergedProfile.lastName) {
+    if (mergedProfile.firstName || mergedProfile.middleName || mergedProfile.lastName) {
       nameEntries.push({
         firstName: mergedProfile.firstName,
+        middleName: mergedProfile.middleName,
         lastName: mergedProfile.lastName,
-        source: mergedProfile.firstNameSource || mergedProfile.lastNameSource || 'RESUME',
+        source:
+          mergedProfile.firstNameSource ||
+          mergedProfile.middleNameSource ||
+          mergedProfile.lastNameSource ||
+          'RESUME',
       });
     }
 
@@ -463,6 +473,7 @@ export async function POST(request: NextRequest) {
     // Use provided name or fall back to resolved name with precedence
     // Precedence: Manual provided > Signup > Resume > LinkedIn > GitHub
     const finalFirstName = providedFirstName || resolvedName.firstName || 'New';
+    const finalMiddleName = providedMiddleName || resolvedName.middleName;
     const finalLastName = providedLastName || resolvedName.lastName;
     const finalNameSource = providedFirstName
       ? 'MANUAL'
@@ -483,8 +494,10 @@ export async function POST(request: NextRequest) {
           userId: user.id,
           handle,
           resumeTitle:
-            [finalFirstName, finalLastName].filter(Boolean).join(' ').trim() || 'Untitled Resume',
+            [finalFirstName, finalMiddleName, finalLastName].filter(Boolean).join(' ').trim() ||
+            'Untitled Resume',
           firstName: finalFirstName,
+          middleName: finalMiddleName,
           lastName: finalLastName,
           headline: mergedProfile.headline,
           summary: mergedProfile.summary,
@@ -495,6 +508,7 @@ export async function POST(request: NextRequest) {
           portfolioVisibility: 'PUBLIC', // Portfolio public by default
           // Set sources for provenance
           firstNameSource: toDataSource(finalNameSource),
+          middleNameSource: toDataSource(finalNameSource),
           lastNameSource: toDataSource(finalNameSource),
           headlineSource: toDataSource(mergedProfile.headlineSource),
           summarySource: toDataSource(mergedProfile.summarySource),
@@ -670,6 +684,7 @@ export async function POST(request: NextRequest) {
         where: { id: user.profile.id },
         data: {
           firstName: mergedProfile.firstName || user.profile.firstName,
+          middleName: mergedProfile.middleName || user.profile.middleName,
           lastName: mergedProfile.lastName || user.profile.lastName,
           headline: mergedProfile.headline || user.profile.headline,
           summary: mergedProfile.summary || user.profile.summary,
@@ -808,6 +823,7 @@ async function handleReviewedData(
   reviewedData: ReviewedData,
   providedHandle?: string,
   providedFirstName?: string,
+  providedMiddleName?: string,
   providedLastName?: string,
   clerkAvatarUrl?: string | null,
   galleryPhotos?: string[],
@@ -845,6 +861,7 @@ async function handleReviewedData(
   }
 
   const finalFirstName = providedFirstName || reviewedData.profile.firstName || 'New';
+  const finalMiddleName = providedMiddleName || reviewedData.profile.middleName;
   const finalLastName = providedLastName || reviewedData.profile.lastName;
 
   // Create or update profile
@@ -862,8 +879,10 @@ async function handleReviewedData(
         userId: user.id,
         handle,
         resumeTitle:
-          [finalFirstName, finalLastName].filter(Boolean).join(' ').trim() || 'Untitled Resume',
+          [finalFirstName, finalMiddleName, finalLastName].filter(Boolean).join(' ').trim() ||
+          'Untitled Resume',
         firstName: finalFirstName,
+        middleName: finalMiddleName,
         lastName: finalLastName,
         headline: reviewedData.profile.headline,
         summary: reviewedData.profile.summary,
@@ -895,6 +914,7 @@ async function handleReviewedData(
       where: { id: user.profile.id },
       data: {
         firstName: finalFirstName,
+        middleName: finalMiddleName,
         lastName: finalLastName,
         headline: reviewedData.profile.headline || user.profile.headline,
         summary: reviewedData.profile.summary || user.profile.summary,
@@ -1355,6 +1375,7 @@ async function handleReviewedData(
 function mergeImportedData(importedData: Record<string, unknown>) {
   const merged: {
     firstName?: string;
+    middleName?: string;
     lastName?: string;
     headline?: string;
     summary?: string;
@@ -1366,6 +1387,7 @@ function mergeImportedData(importedData: Record<string, unknown>) {
     phoneSource?: string;
     website?: string;
     firstNameSource?: string;
+    middleNameSource?: string;
     lastNameSource?: string;
     headlineSource?: string;
     summarySource?: string;
@@ -1466,6 +1488,10 @@ function mergeImportedData(importedData: Record<string, unknown>) {
         if (!merged.firstName && profileData.firstName) {
           merged.firstName = profileData.firstName as string;
           merged.firstNameSource = 'RESUME';
+        }
+        if (!merged.middleName && profileData.middleName) {
+          merged.middleName = profileData.middleName as string;
+          merged.middleNameSource = 'RESUME';
         }
         if (!merged.lastName && profileData.lastName) {
           merged.lastName = profileData.lastName as string;
@@ -1576,6 +1602,10 @@ function mergeImportedData(importedData: Record<string, unknown>) {
       if (!merged.firstName && data.profile.firstName) {
         merged.firstName = data.profile.firstName;
         merged.firstNameSource = sourceType;
+      }
+      if (!merged.middleName && data.profile.middleName) {
+        merged.middleName = data.profile.middleName;
+        merged.middleNameSource = sourceType;
       }
       if (!merged.lastName && data.profile.lastName) {
         merged.lastName = data.profile.lastName;

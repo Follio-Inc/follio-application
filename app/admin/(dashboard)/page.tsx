@@ -51,7 +51,9 @@ export default async function AdminOverviewPage() {
         email: true,
         createdAt: true,
         mainPurpose: true,
-        profile: { select: { id: true, handle: true, firstName: true, lastName: true } },
+        profile: {
+          select: { id: true, handle: true, firstName: true, middleName: true, lastName: true },
+        },
       },
     }),
     db.user.groupBy({
@@ -119,7 +121,9 @@ export default async function AdminOverviewPage() {
       createdAt: u.createdAt.toISOString(),
       mainPurpose: u.mainPurpose,
       name: u.profile
-        ? [u.profile.firstName, u.profile.lastName].filter(Boolean).join(' ') || null
+        ? [u.profile.firstName, u.profile.middleName, u.profile.lastName]
+            .filter(Boolean)
+            .join(' ') || null
         : null,
       handle: u.profile?.handle ?? null,
     })),

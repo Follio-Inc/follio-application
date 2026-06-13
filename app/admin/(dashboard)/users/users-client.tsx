@@ -20,6 +20,7 @@ interface UserRow {
   profile: {
     handle: string;
     firstName: string | null;
+    middleName: string | null;
     lastName: string | null;
     avatarUrl: string | null;
     status: string;
@@ -48,8 +49,10 @@ interface Props {
 /* ────────────────────────── Helpers ────────────────────────── */
 
 function getUserDisplayName(user: UserRow): string {
-  if (user.profile?.firstName || user.profile?.lastName) {
-    return [user.profile.firstName, user.profile.lastName].filter(Boolean).join(' ');
+  if (user.profile?.firstName || user.profile?.middleName || user.profile?.lastName) {
+    return [user.profile.firstName, user.profile.middleName, user.profile.lastName]
+      .filter(Boolean)
+      .join(' ');
   }
   return user.email.split('@')[0];
 }

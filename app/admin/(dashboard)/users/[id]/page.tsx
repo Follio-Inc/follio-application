@@ -35,6 +35,7 @@ export default async function AdminUserDetailPage({ params }: PageProps) {
           handle: true,
           resumeTitle: true,
           firstName: true,
+          middleName: true,
           lastName: true,
           headline: true,
           avatarUrl: true,

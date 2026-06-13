@@ -22,6 +22,7 @@ export interface GitHubLanguages {
 export interface NormalizedGitHubData {
   profile: {
     firstName?: string;
+    middleName?: string;
     lastName?: string;
     headline?: string;
     summary?: string;
@@ -178,9 +179,14 @@ export async function normalizeGitHubData(
   ]);
 
   // Parse name
-  const nameParts = user.name?.split(' ') || [];
+  const nameParts =
+    user.name
+      ?.split(/\s+/)
+      .map((part) => part.trim())
+      .filter((part) => part.length > 0) || [];
   const firstName = nameParts[0] || username;
-  const lastName = nameParts.slice(1).join(' ') || undefined;
+  const middleName = nameParts.length > 2 ? nameParts.slice(1, -1).join(' ') : undefined;
+  const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : undefined;
 
   // Get languages and topics
   const languages = aggregateLanguages(repos);
@@ -240,6 +246,7 @@ export async function normalizeGitHubData(
   return {
     profile: {
       firstName,
+      middleName,
       lastName,
       headline: user.bio || `${firstName} on GitHub`,
       summary: user.bio || undefined,

@@ -87,6 +87,7 @@ export interface PhoneEntry {
  */
 export interface NameEntry {
   firstName?: string;
+  middleName?: string;
   lastName?: string;
   source: DataSource | string;
 }
@@ -96,6 +97,7 @@ export interface NameEntry {
  */
 export interface ResolvedName {
   firstName?: string;
+  middleName?: string;
   lastName?: string;
   source: DataSource | string;
 }
@@ -114,6 +116,7 @@ export interface ResolvedEmails {
  */
 export interface SourceProfileData {
   firstName?: string;
+  middleName?: string;
   lastName?: string;
   headline?: string;
   summary?: string;
@@ -146,7 +149,7 @@ export interface SourceData {
 export function resolveName(sources: NameEntry[]): ResolvedName {
   // Sort by priority (highest first)
   const sorted = [...sources]
-    .filter((s) => s.firstName || s.lastName)
+    .filter((s) => s.firstName || s.middleName || s.lastName)
     .sort((a, b) => {
       const priorityA = SOURCE_PRIORITY[a.source.toUpperCase()] || 0;
       const priorityB = SOURCE_PRIORITY[b.source.toUpperCase()] || 0;
@@ -161,6 +164,7 @@ export function resolveName(sources: NameEntry[]): ResolvedName {
   const winner = sorted[0];
   return {
     firstName: winner.firstName,
+    middleName: winner.middleName,
     lastName: winner.lastName,
     source: winner.source,
   };
@@ -246,16 +250,18 @@ export function resolveField<T>(sources: Array<{ value: T | null | undefined; so
  */
 export function mergeProfileFromSources(
   sources: SourceData[],
-  signupData?: { firstName?: string; lastName?: string; email: string }
+  signupData?: { firstName?: string; middleName?: string; lastName?: string; email: string }
 ): {
   profile: {
     firstName?: string;
+    middleName?: string;
     lastName?: string;
     headline?: string;
     summary?: string;
     location?: string;
     avatarUrl?: string;
     firstNameSource: string;
+    middleNameSource: string;
     lastNameSource: string;
     headlineSource: string;
     summarySource: string;
@@ -270,9 +276,10 @@ export function mergeProfileFromSources(
   const nameEntries: NameEntry[] = [];
 
   // Add signup name if provided (highest priority)
-  if (signupData?.firstName || signupData?.lastName) {
+  if (signupData?.firstName || signupData?.middleName || signupData?.lastName) {
     nameEntries.push({
       firstName: signupData.firstName,
+      middleName: signupData.middleName,
       lastName: signupData.lastName,
       source: 'SIGNUP',
     });
@@ -280,9 +287,10 @@ export function mergeProfileFromSources(
 
   // Add names from other sources
   for (const source of sources) {
-    if (source.profile?.firstName || source.profile?.lastName) {
+    if (source.profile?.firstName || source.profile?.middleName || source.profile?.lastName) {
       nameEntries.push({
         firstName: source.profile.firstName,
+        middleName: source.profile.middleName,
         lastName: source.profile.lastName,
         source: String(source.source).toUpperCase(),
       });
@@ -340,12 +348,14 @@ export function mergeProfileFromSources(
   return {
     profile: {
       firstName: resolvedName.firstName,
+      middleName: resolvedName.middleName,
       lastName: resolvedName.lastName,
       headline: headlineResult.value,
       summary: summaryResult.value,
       location: locationResult.value,
       avatarUrl: avatarUrlResult.value,
       firstNameSource: String(resolvedName.source).toUpperCase(),
+      middleNameSource: String(resolvedName.source).toUpperCase(),
       lastNameSource: String(resolvedName.source).toUpperCase(),
       headlineSource: headlineResult.source.toUpperCase(),
       summarySource: summaryResult.source.toUpperCase(),

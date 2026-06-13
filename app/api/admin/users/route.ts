@@ -77,6 +77,7 @@ export async function GET(request: NextRequest) {
               id: true,
               handle: true,
               firstName: true,
+              middleName: true,
               lastName: true,
               avatarUrl: true,
               status: true,

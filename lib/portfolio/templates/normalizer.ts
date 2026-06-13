@@ -53,6 +53,7 @@ export function normalizeProfileForTemplate(
     id: profile.id,
     handle: profile.handle,
     firstName: profile.firstName ?? null,
+    middleName: profile.middleName ?? null,
     lastName: profile.lastName ?? null,
     headline: profile.headline ?? null,
     summary: profile.summary ?? null,

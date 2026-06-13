@@ -27,9 +27,11 @@ interface ResumeShellProps {
 export function ResumeShell({ profile, authState, profileHandle }: ResumeShellProps) {
   useEffect(() => {
     if (typeof document === 'undefined') return;
-    const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(' ');
+    const fullName = [profile.firstName, profile.middleName, profile.lastName]
+      .filter(Boolean)
+      .join(' ');
     document.title = `${fullName} — Resume | Follio`;
-  }, [profile.firstName, profile.lastName]);
+  }, [profile.firstName, profile.middleName, profile.lastName]);
 
   return (
     <div className="min-h-screen bg-background">

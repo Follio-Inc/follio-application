@@ -37,7 +37,9 @@ export default async function OGImage({ params }: { params: Promise<{ handle: st
     );
   }
 
-  const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(' ') || 'Unknown';
+  const fullName =
+    [profile.firstName, profile.middleName, profile.lastName].filter(Boolean).join(' ') ||
+    'Unknown';
   const headline = profile.headline || 'Professional Portfolio';
   const summary = profile.summary
     ? profile.summary.length > 140

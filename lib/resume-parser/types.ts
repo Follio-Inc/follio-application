@@ -96,6 +96,7 @@ export interface Resume {
 // Parsed resume for our application
 export interface ParsedResume {
   firstName: string;
+  middleName?: string;
   lastName: string;
   headline: string;
   email: string;

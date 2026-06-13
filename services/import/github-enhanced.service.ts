@@ -114,6 +114,7 @@ function toNormalizedResult(data: NormalizedEnhancedGitHubData): NormalizedImpor
     source: 'GITHUB',
     profile: {
       firstName: data.profile.firstName,
+      middleName: data.profile.middleName,
       lastName: data.profile.lastName,
       headline: data.profile.headline,
       summary: data.profile.summary,
@@ -589,6 +590,8 @@ export async function saveEnhancedGitHubToProfile(
     const profileUpdate: Partial<{
       firstName: string;
       firstNameSource: DataSource;
+      middleName: string;
+      middleNameSource: DataSource;
       lastName: string;
       lastNameSource: DataSource;
       headline: string;
@@ -607,6 +610,13 @@ export async function saveEnhancedGitHubToProfile(
     ) {
       profileUpdate.firstName = data.profile.firstName;
       profileUpdate.firstNameSource = DataSource.GITHUB;
+    }
+    if (
+      data.profile.middleName &&
+      shouldOverrideSource(currentProfile.middleNameSource, 'GITHUB', currentProfile.middleName)
+    ) {
+      profileUpdate.middleName = data.profile.middleName;
+      profileUpdate.middleNameSource = DataSource.GITHUB;
     }
     if (
       data.profile.lastName &&
