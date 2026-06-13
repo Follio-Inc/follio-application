@@ -1394,8 +1394,9 @@ async function launchBrowser(origin?: string): Promise<Browser> {
     ]);
 
     const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
+    const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
     const packUrl = origin
-      ? `${origin}/chromium-v147.0.0-pack.${arch}.tar`
+      ? `${origin}/chromium-v147.0.0-pack.${arch}.tar${bypassSecret ? `?x-vercel-protection-bypass=${bypassSecret}` : ''}`
       : `https://github.com/Sparticuz/chromium/releases/download/v147.0.0/chromium-v147.0.0-pack.${arch}.tar`;
 
     return puppeteerCore.launch({
