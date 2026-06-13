@@ -50,6 +50,11 @@ const nextConfig: NextConfig = {
   // Externalize packages that don't work with webpack bundling
   serverExternalPackages: ['pdf-parse', 'puppeteer', 'puppeteer-core', '@sparticuz/chromium'],
 
+  // Trace the chromium binary files only for the PDF export route
+  outputFileTracingIncludes: {
+    '/api/export/[handle]/pdf': ['./node_modules/@sparticuz/chromium/bin/**/*'],
+  },
+
   // Headers for security and SEO
   async headers() {
     return [

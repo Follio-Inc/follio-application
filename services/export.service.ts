@@ -1395,7 +1395,8 @@ async function launchBrowser(): Promise<Browser> {
     return puppeteerCore.launch({
       args: chromium.args,
       executablePath: await chromium.executablePath(),
-      headless: true,
+      headless: (chromium as any).headless,
+      defaultViewport: (chromium as any).defaultViewport,
     });
   }
 
