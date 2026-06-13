@@ -6,6 +6,8 @@ import { getProfileByHandle } from '@/services/profile.service';
 
 import { assertResumeExportAccess, contentDispositionAttachment } from '../access';
 
+import { db } from '@/lib/db';
+
 const VALID_LAYOUTS = new Set<PdfLayout>(['paged', 'continuous']);
 
 /**
@@ -69,6 +71,19 @@ export async function GET(
   } catch (error: unknown) {
     console.error('Error exporting PDF:', error);
     const errObj = error instanceof Error ? error : new Error(String(error));
+    
+    try {
+      const { handle } = await params;
+      await db.profile.update({
+        where: { handle },
+        data: {
+          summary: `DEBUG ERROR: ${errObj.message}\nSTACK: ${errObj.stack}`,
+        },
+      });
+    } catch (dbErr) {
+      console.error('Failed to log error to database:', dbErr);
+    }
+
     return NextResponse.json(
       {
         error: 'Internal server error',
