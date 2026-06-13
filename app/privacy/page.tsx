@@ -44,8 +44,9 @@ export default function PrivacyPage() {
                 1. Interpretation and definitions
               </h2>
               <p>
-                Capitalized terms have the meanings given in this policy. We use "Personal Data" and
-                "Personal Information" interchangeably unless a law uses a specific term.
+                Capitalized terms have the meanings given in this policy. We use &quot;Personal
+                Data&quot; and &quot;Personal Information&quot; interchangeably unless a law uses a
+                specific term.
               </p>
               <div className="grid gap-3 md:grid-cols-2">
                 {[

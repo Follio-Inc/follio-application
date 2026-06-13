@@ -34,9 +34,7 @@ function downloadFile(url, destPath) {
               fs.unlinkSync(destPath);
             } catch (_) {}
             reject(
-              new Error(
-                `Failed to download file: ${response.statusCode} ${response.statusMessage}`
-              )
+              new Error(`Failed to download file: ${response.statusCode} ${response.statusMessage}`)
             );
             return;
           }
