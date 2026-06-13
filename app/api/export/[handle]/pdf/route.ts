@@ -65,8 +65,16 @@ export async function GET(
         'Content-Length': String(pdfBuffer.length),
       },
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error exporting PDF:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    const errObj = error instanceof Error ? error : new Error(String(error));
+    return NextResponse.json(
+      {
+        error: 'Internal server error',
+        message: errObj.message,
+        stack: errObj.stack,
+      },
+      { status: 500 }
+    );
   }
 }

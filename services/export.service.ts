@@ -1388,13 +1388,16 @@ async function launchBrowser(): Promise<Browser> {
 
   if (isServerless) {
     const [{ default: chromium }, puppeteerCore] = await Promise.all([
-      import('@sparticuz/chromium'),
+      import('@sparticuz/chromium-min'),
       import('puppeteer-core'),
     ]);
 
+    const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
+    const packUrl = `https://github.com/Sparticuz/chromium/releases/download/v147.0.0/chromium-v147.0.0-pack.${arch}.tar`;
+
     return puppeteerCore.launch({
-      args: chromium.args,
-      executablePath: await chromium.executablePath(),
+      args: [...chromium.args, '--disable-dev-shm-usage'],
+      executablePath: await chromium.executablePath(packUrl),
       headless: (chromium as any).headless,
       defaultViewport: (chromium as any).defaultViewport,
     });
