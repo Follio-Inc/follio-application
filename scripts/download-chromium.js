@@ -23,31 +23,33 @@ console.log(`Downloading Chromium pack from ${url}...`);
 const file = fs.createWriteStream(destPath);
 
 function download(downloadUrl) {
-  https.get(downloadUrl, (response) => {
-    if (response.statusCode === 302 || response.statusCode === 301) {
-      // Follow redirect
-      download(response.headers.location);
-      return;
-    }
+  https
+    .get(downloadUrl, (response) => {
+      if (response.statusCode === 302 || response.statusCode === 301) {
+        // Follow redirect
+        download(response.headers.location);
+        return;
+      }
 
-    if (response.statusCode !== 200) {
-      console.error(`Failed to download file: ${response.statusCode} ${response.statusMessage}`);
+      if (response.statusCode !== 200) {
+        console.error(`Failed to download file: ${response.statusCode} ${response.statusMessage}`);
+        process.exit(1);
+      }
+
+      response.pipe(file);
+
+      file.on('finish', () => {
+        file.close();
+        console.log('Download completed successfully.');
+      });
+    })
+    .on('error', (err) => {
+      try {
+        fs.unlinkSync(destPath);
+      } catch (_) {}
+      console.error(`Error downloading file: ${err.message}`);
       process.exit(1);
-    }
-
-    response.pipe(file);
-
-    file.on('finish', () => {
-      file.close();
-      console.log('Download completed successfully.');
     });
-  }).on('error', (err) => {
-    try {
-      fs.unlinkSync(destPath);
-    } catch (_) {}
-    console.error(`Error downloading file: ${err.message}`);
-    process.exit(1);
-  });
 }
 
 download(url);
