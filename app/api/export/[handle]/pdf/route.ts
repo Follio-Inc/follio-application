@@ -71,7 +71,7 @@ export async function GET(
   } catch (error: unknown) {
     console.error('Error exporting PDF:', error);
     const errObj = error instanceof Error ? error : new Error(String(error));
-    
+
     try {
       const { handle } = await params;
       await db.profile.update({
