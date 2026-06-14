@@ -1388,20 +1388,54 @@ async function launchBrowser(origin?: string): Promise<Browser> {
   );
 
   if (isServerless) {
-    const [{ default: chromium }, puppeteerCore] = await Promise.all([
+    const [{ default: chromium }, puppeteerCore, fs, path, { execSync }] = await Promise.all([
       import('@sparticuz/chromium-min'),
       import('puppeteer-core'),
+      import('fs'),
+      import('path'),
+      import('child_process'),
     ]);
 
     const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
-    const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
-    const packUrl = origin
-      ? `${origin}/chromium-v147.0.0-pack.${arch}.tar${bypassSecret ? `?x-vercel-protection-bypass=${bypassSecret}` : ''}`
-      : `https://github.com/Sparticuz/chromium/releases/download/v147.0.0/chromium-v147.0.0-pack.${arch}.tar`;
+    const destDir = '/tmp/chromium-pack';
+    const tarName = `chromium-v147.0.0-pack.${arch}.tar`;
+    const tarPath = path.join(process.cwd(), 'public', tarName);
+
+    try {
+      if (!fs.existsSync(destDir)) {
+        fs.mkdirSync(destDir, { recursive: true });
+      }
+
+      const markerFile = path.join(destDir, 'chromium.br');
+      if (!fs.existsSync(markerFile)) {
+        serviceLogger.info(`Extracting ${tarPath} to ${destDir}...`);
+        if (!fs.existsSync(tarPath)) {
+          throw new Error(`Chromium tarball not found at ${tarPath}`);
+        }
+        execSync(`tar -xf ${tarPath} -C ${destDir}`);
+        serviceLogger.info('Chromium extraction completed successfully.');
+      } else {
+        serviceLogger.info('Chromium pack already extracted in /tmp');
+      }
+    } catch (err: any) {
+      serviceLogger.error('Failed to extract local Chromium pack', err);
+      // Fallback to URL method in case local extraction fails for some reason
+      const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+      const packUrl = origin
+        ? `${origin}/chromium-v147.0.0-pack.${arch}.tar${bypassSecret ? `?x-vercel-protection-bypass=${bypassSecret}` : ''}`
+        : `https://github.com/Sparticuz/chromium/releases/download/v147.0.0/chromium-v147.0.0-pack.${arch}.tar`;
+
+      return puppeteerCore.launch({
+        args: [...chromium.args, '--disable-dev-shm-usage'],
+        executablePath: await chromium.executablePath(packUrl),
+        headless: (chromium as any).headless,
+        defaultViewport: (chromium as any).defaultViewport,
+      });
+    }
 
     return puppeteerCore.launch({
       args: [...chromium.args, '--disable-dev-shm-usage'],
-      executablePath: await chromium.executablePath(packUrl),
+      executablePath: await chromium.executablePath(destDir),
       headless: (chromium as any).headless,
       defaultViewport: (chromium as any).defaultViewport,
     });
