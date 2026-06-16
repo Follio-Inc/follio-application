@@ -1367,7 +1367,6 @@ export type PdfLayout = 'paged' | 'continuous';
 interface PdfOptions {
   /** @default 'paged' */
   layout?: PdfLayout;
-  origin?: string;
 }
 
 /**
@@ -1382,7 +1381,7 @@ interface PdfOptions {
  * In local development we fall back to the full `puppeteer` package, which
  * bundles its own Chromium and requires no extra system setup.
  */
-async function launchBrowser(origin?: string): Promise<Browser> {
+async function launchBrowser(): Promise<Browser> {
   const isServerless = Boolean(
     process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.AWS_REGION
   );
@@ -1419,11 +1418,11 @@ async function launchBrowser(origin?: string): Promise<Browser> {
       }
     } catch (err: any) {
       serviceLogger.error('Failed to extract local Chromium pack', err);
-      // Fallback to URL method in case local extraction fails for some reason
-      const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
-      const packUrl = origin
-        ? `${origin}/chromium-v147.0.0-pack.${arch}.tar${bypassSecret ? `?x-vercel-protection-bypass=${bypassSecret}` : ''}`
-        : `https://github.com/Sparticuz/chromium/releases/download/v147.0.0/chromium-v147.0.0-pack.${arch}.tar`;
+      // Fallback to GitHub URL for reliable Chromium download
+      // On Vercel, the /public directory is not accessible via filesystem,
+      // so extraction always fails. Using GitHub's release URL ensures
+      // chromium.executablePath() can download and cache the binary reliably.
+      const packUrl = `https://github.com/Sparticuz/chromium/releases/download/v147.0.0/chromium-v147.0.0-pack.${arch}.tar`;
 
       return puppeteerCore.launch({
         args: [...chromium.args, '--disable-dev-shm-usage'],
@@ -1461,11 +1460,11 @@ async function launchBrowser(origin?: string): Promise<Browser> {
  */
 export async function generateResumePDF(
   profile: FullProfile,
-  { layout = 'paged', origin }: PdfOptions = {}
+  { layout = 'paged' }: PdfOptions = {}
 ): Promise<Buffer> {
   const html = toPDFHtml(profile);
 
-  const browser = await launchBrowser(origin);
+  const browser = await launchBrowser();
 
   try {
     const page = await browser.newPage();

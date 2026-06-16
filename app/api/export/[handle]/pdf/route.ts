@@ -57,8 +57,7 @@ export async function GET(
       return access.response;
     }
 
-    const origin = request.nextUrl.origin;
-    const pdfBuffer = await generateResumePDF(profile, { layout, origin });
+    const pdfBuffer = await generateResumePDF(profile, { layout });
     const uint8 = new Uint8Array(pdfBuffer);
 
     return new NextResponse(uint8, {
