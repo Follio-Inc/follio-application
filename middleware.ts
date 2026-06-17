@@ -27,6 +27,40 @@ const isPublicRoute = createRouteMatcher([
   '/sign-up/sso-callback',
 ]);
 
+export function getSubdomainRewriteUrl(req: {
+  nextUrl: URL;
+  headers: { get(name: string): string | null };
+}) {
+  const pathname = req.nextUrl.pathname;
+  const hostname = req.headers.get('host') || '';
+
+  if (isMainDomain(hostname)) return null;
+  if (pathname.startsWith('/api') || pathname.startsWith('/trpc')) return null;
+
+  const handle = extractHandleFromHost(hostname);
+  if (!handle) return null;
+
+  const url = req.nextUrl.clone();
+
+  if (pathname === '/r' || pathname === '/r/') {
+    url.pathname = `/u/${handle}/resume`;
+    return url;
+  }
+
+  if (pathname === '/l' || pathname === '/l/') {
+    url.pathname = `/u/${handle}/links`;
+    return url;
+  }
+
+  if (pathname === '/' || pathname === '') {
+    url.pathname = `/u/${handle}`;
+    return url;
+  }
+
+  url.pathname = `/u/${handle}${pathname}`;
+  return url;
+}
+
 export default clerkMiddleware(async (auth, req) => {
   // Allow Clerk's internal sign-out requests without interference
   // This prevents "Failed to fetch" errors during sign-out
@@ -37,36 +71,9 @@ export default clerkMiddleware(async (auth, req) => {
 
   // --- Subdomain routing ---
   // Detect user subdomains: username.follio.me → rewrite to /u/username
-  const hostname = req.headers.get('host') || '';
-  if (!isMainDomain(hostname)) {
-    const handle = extractHandleFromHost(hostname);
-    if (handle) {
-      const url = req.nextUrl.clone();
-
-      // username.follio.me/r → /u/username/resume
-      if (pathname === '/r' || pathname === '/r/') {
-        url.pathname = `/u/${handle}/resume`;
-        // Preserve query params (including ?key=...)
-        return NextResponse.rewrite(url);
-      }
-
-      // username.follio.me/l → /u/username/links
-      if (pathname === '/l' || pathname === '/l/') {
-        url.pathname = `/u/${handle}/links`;
-        return NextResponse.rewrite(url);
-      }
-
-      // username.follio.me → /u/username (root and any other paths)
-      if (pathname === '/' || pathname === '') {
-        url.pathname = `/u/${handle}`;
-        return NextResponse.rewrite(url);
-      }
-
-      // username.follio.me/anything-else → pass through to /u/handle/anything
-      // This allows future sub-routes under the subdomain
-      url.pathname = `/u/${handle}${pathname}`;
-      return NextResponse.rewrite(url);
-    }
+  const rewriteUrl = getSubdomainRewriteUrl(req);
+  if (rewriteUrl) {
+    return NextResponse.rewrite(rewriteUrl);
   }
 
   // Protect dashboard and builder routes
