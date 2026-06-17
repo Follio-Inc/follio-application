@@ -6,8 +6,6 @@ import { getProfileByHandle } from '@/services/profile.service';
 
 import { assertResumeExportAccess, contentDispositionAttachment } from '../access';
 
-import { db } from '@/lib/db';
-
 const VALID_LAYOUTS = new Set<PdfLayout>(['paged', 'continuous']);
 
 /**
@@ -15,6 +13,9 @@ const VALID_LAYOUTS = new Set<PdfLayout>(['paged', 'continuous']);
  * full Node.js runtime (not the Edge runtime).
  */
 export const runtime = 'nodejs';
+
+/** Never cache export responses at the CDN or in Next's data cache. */
+export const dynamic = 'force-dynamic';
 
 /**
  * Rendering and converting the resume HTML to PDF can take several seconds,
@@ -37,9 +38,9 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ handle: string }> }
 ) {
-  try {
-    const { handle } = await params;
+  const { handle } = await params;
 
+  try {
     // Parse layout from query string, default to 'paged'
     const layoutParam = request.nextUrl.searchParams.get('layout') ?? 'paged';
     const layout: PdfLayout = VALID_LAYOUTS.has(layoutParam as PdfLayout)
@@ -65,31 +66,24 @@ export async function GET(
         'Content-Type': 'application/pdf',
         'Content-Disposition': contentDispositionAttachment(`${handle}-resume.pdf`),
         'Content-Length': String(pdfBuffer.length),
+        'Cache-Control': 'private, no-store, no-cache, must-revalidate',
       },
     });
   } catch (error: unknown) {
     console.error('Error exporting PDF:', error);
     const errObj = error instanceof Error ? error : new Error(String(error));
 
-    try {
-      const { handle } = await params;
-      await db.profile.update({
-        where: { handle },
-        data: {
-          summary: `DEBUG ERROR: ${errObj.message}\nSTACK: ${errObj.stack}`,
-        },
-      });
-    } catch (dbErr) {
-      console.error('Failed to log error to database:', dbErr);
-    }
-
     return NextResponse.json(
       {
         error: 'Internal server error',
         message: errObj.message,
-        stack: errObj.stack,
       },
-      { status: 500 }
+      {
+        status: 500,
+        headers: {
+          'Cache-Control': 'private, no-store, no-cache, must-revalidate',
+        },
+      }
     );
   }
 }

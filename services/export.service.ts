@@ -1370,6 +1370,16 @@ interface PdfOptions {
 }
 
 /**
+ * Sparticuz ships Linux-only Chromium binaries for Lambda/Vercel.
+ * Only use them on Linux in an actual serverless runtime — not when
+ * VERCEL/AWS_* env vars are set locally on macOS/Windows for simulation.
+ */
+function isServerlessChromiumRuntime(): boolean {
+  if (process.platform !== 'linux') return false;
+  return Boolean(process.env.VERCEL === '1' || process.env.AWS_LAMBDA_FUNCTION_NAME);
+}
+
+/**
  * Launch a headless Chromium browser suitable for the current runtime.
  *
  * In serverless production environments (e.g. Vercel) the system Chrome
@@ -1382,9 +1392,7 @@ interface PdfOptions {
  * bundles its own Chromium and requires no extra system setup.
  */
 async function launchBrowser(): Promise<Browser> {
-  const isServerless = Boolean(
-    process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.AWS_REGION
-  );
+  const isServerless = isServerlessChromiumRuntime();
 
   if (isServerless) {
     const [{ default: chromium }, puppeteerCore, fs, path, { execSync }] = await Promise.all([
@@ -1399,6 +1407,9 @@ async function launchBrowser(): Promise<Browser> {
     const destDir = '/tmp/chromium-pack';
     const tarName = `chromium-v147.0.0-pack.${arch}.tar`;
     const tarPath = path.join(process.cwd(), 'public', tarName);
+    const packUrl = `https://github.com/Sparticuz/chromium/releases/download/v147.0.0/chromium-v147.0.0-pack.${arch}.tar`;
+
+    let chromiumPath: string;
 
     try {
       if (!fs.existsSync(destDir)) {
@@ -1416,31 +1427,22 @@ async function launchBrowser(): Promise<Browser> {
       } else {
         serviceLogger.info('Chromium pack already extracted in /tmp');
       }
-    } catch (err: any) {
-      serviceLogger.error('Failed to extract local Chromium pack', err);
-      // Fallback to GitHub URL for reliable Chromium download
-      // On Vercel, the /public directory is not accessible via filesystem,
-      // so extraction always fails. Using GitHub's release URL ensures
-      // chromium.executablePath() can download and cache the binary reliably.
-      const packUrl = `https://github.com/Sparticuz/chromium/releases/download/v147.0.0/chromium-v147.0.0-pack.${arch}.tar`;
 
-      return puppeteerCore.launch({
-        args: [...chromium.args, '--disable-dev-shm-usage'],
-        executablePath: await chromium.executablePath(packUrl),
-        headless: (chromium as any).headless,
-        defaultViewport: (chromium as any).defaultViewport,
-      });
+      chromiumPath = await chromium.executablePath(destDir);
+    } catch (err: unknown) {
+      serviceLogger.error('Failed to extract local Chromium pack', err);
+      chromiumPath = await chromium.executablePath(packUrl);
     }
 
     return puppeteerCore.launch({
       args: [...chromium.args, '--disable-dev-shm-usage'],
-      executablePath: await chromium.executablePath(destDir),
+      executablePath: chromiumPath,
       headless: (chromium as any).headless,
       defaultViewport: (chromium as any).defaultViewport,
     });
   }
 
-  // Local development: use the full puppeteer package (bundled Chromium).
+  // Local / non-Linux: use the full puppeteer package (bundled Chromium).
   const { default: puppeteer } = await import('puppeteer');
   return puppeteer.launch({
     headless: true,

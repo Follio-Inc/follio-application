@@ -48,7 +48,14 @@ const nextConfig: NextConfig = {
   },
 
   // Externalize packages that don't work with webpack bundling
-  serverExternalPackages: ['pdf-parse', 'puppeteer', 'puppeteer-core', '@sparticuz/chromium-min'],
+  serverExternalPackages: [
+    'pdf-parse',
+    'puppeteer',
+    'puppeteer-core',
+    '@sparticuz/chromium-min',
+    'isomorphic-dompurify',
+    'jsdom',
+  ],
 
   // Headers for security and SEO
   async headers() {
@@ -107,6 +114,17 @@ const nextConfig: NextConfig = {
           {
             key: 'Cache-Control',
             value: 'private, no-store',
+          },
+        ],
+      },
+      // Export API responses must never be edge-cached — a cached 500 breaks
+      // downloads until the CDN entry expires.
+      {
+        source: '/api/export/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'private, no-store, no-cache, must-revalidate',
           },
         ],
       },

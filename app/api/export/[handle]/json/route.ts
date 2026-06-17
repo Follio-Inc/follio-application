@@ -5,6 +5,9 @@ import { getProfileByHandle } from '@/services/profile.service';
 
 import { assertResumeExportAccess, contentDispositionAttachment } from '../access';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/export/[handle]/json
  * Export profile as JSON Resume format.
