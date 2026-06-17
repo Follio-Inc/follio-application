@@ -9,7 +9,7 @@ describe('middleware subdomain rewrite', () => {
         clone: () => new URL(`http://${host}${pathname}`),
       },
       headers: { get: (name: string) => (name === 'host' ? host : null) },
-    }) as const;
+    }) as unknown as Parameters<typeof getSubdomainRewriteUrl>[0];
 
   it('rewrites root subdomain to /u/handle', () => {
     const result = getSubdomainRewriteUrl(makeRequest('/', 'alice.follio.me'));

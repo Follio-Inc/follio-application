@@ -2,6 +2,14 @@ import { extractHandleFromHost, isMainDomain } from '@/lib/url';
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 
+type SubdomainRewriteRequest = {
+  nextUrl: {
+    pathname: string;
+    clone(): URL;
+  };
+  headers: { get(name: string): string | null };
+};
+
 // Define protected routes that require authentication
 const isProtectedRoute = createRouteMatcher([
   '/dashboard(.*)',
@@ -27,10 +35,7 @@ const isPublicRoute = createRouteMatcher([
   '/sign-up/sso-callback',
 ]);
 
-export function getSubdomainRewriteUrl(req: {
-  nextUrl: URL;
-  headers: { get(name: string): string | null };
-}) {
+export function getSubdomainRewriteUrl(req: SubdomainRewriteRequest) {
   const pathname = req.nextUrl.pathname;
   const hostname = req.headers.get('host') || '';
 
