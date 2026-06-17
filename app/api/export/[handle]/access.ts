@@ -20,9 +20,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 
 import { db } from '@/lib/db';
+import { validateShareToken } from '@/lib/share-token';
 import { validateUnlistedKey } from '@/services/profile.service';
-
-import { validateShareToken } from '@/app/u/[handle]/access';
 
 /**
  * The minimal profile shape the access check needs. Both `getProfileByHandle`

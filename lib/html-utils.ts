@@ -9,7 +9,39 @@
  * the database (string[]) without losing formatting or double-escaping.
  */
 
-import DOMPurify from 'isomorphic-dompurify';
+import type DOMPurifyType from 'dompurify';
+
+type DOMPurifyInstance = Pick<
+  typeof DOMPurifyType,
+  'sanitize' | 'addHook' | 'removeHook' | 'removeAllHooks'
+>;
+
+let domPurifyInstance: DOMPurifyInstance | null = null;
+let domPurifyHookRegistered = false;
+
+/**
+ * Lazily initialize DOMPurify so serverless route handlers (e.g. PDF export)
+ * do not pull in jsdom at module load time — that can crash Vercel functions
+ * before the request handler runs.
+ */
+function getDOMPurify(): DOMPurifyInstance {
+  if (!domPurifyInstance) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    domPurifyInstance = require('isomorphic-dompurify') as DOMPurifyInstance;
+  }
+
+  if (!domPurifyHookRegistered) {
+    domPurifyInstance.addHook('afterSanitizeAttributes', (node) => {
+      if (node.tagName === 'A' && node.hasAttribute('href')) {
+        node.setAttribute('target', '_blank');
+        node.setAttribute('rel', 'noopener noreferrer');
+      }
+    });
+    domPurifyHookRegistered = true;
+  }
+
+  return domPurifyInstance;
+}
 
 // ─── HTML Detection ─────────────────────────────────────────────────────────
 
@@ -118,20 +150,6 @@ const ALLOWED_HTML_ATTRS = [
 const SAFE_URI_REGEXP = /^(?:https?|mailto|tel):|^(?:\/|#|\.)/i;
 
 /**
- * Harden anchors: every link is forced to open in a new tab with
- * `rel="noopener noreferrer"`, preventing reverse-tabnabbing and referrer
- * leaks. Applying this to all anchors (not just existing `target="_blank"`
- * ones) keeps behaviour deterministic regardless of how DOMPurify normalises
- * the `target` attribute. Registered once at module load.
- */
-DOMPurify.addHook('afterSanitizeAttributes', (node) => {
-  if (node.tagName === 'A' && node.hasAttribute('href')) {
-    node.setAttribute('target', '_blank');
-    node.setAttribute('rel', 'noopener noreferrer');
-  }
-});
-
-/**
  * Sanitize rich-text HTML that originates from user input (the Tiptap editor,
  * resume imports, etc.) before it is rendered via `dangerouslySetInnerHTML`.
  *
@@ -150,7 +168,7 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
 export function sanitizeRichHtml(html: string | null | undefined): string {
   if (!html) return '';
 
-  return DOMPurify.sanitize(html, {
+  return getDOMPurify().sanitize(html, {
     ALLOWED_TAGS: [...ALLOWED_HTML_TAGS],
     ALLOWED_ATTR: [...ALLOWED_HTML_ATTRS],
     ALLOWED_URI_REGEXP: SAFE_URI_REGEXP,

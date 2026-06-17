@@ -1,0 +1,64 @@
+---
+description: Keep code lint-clean and passing GitHub CI before finishing work
+alwaysApply: true
+---
+
+# CI & Quality Gates
+
+Every code change must pass the same checks that run on push/PR in GitHub Actions (`.github/workflows/ci.yml`). Do not leave work in a state that will fail CI.
+
+## What CI runs
+
+| Job | Command | Must pass |
+|-----|---------|-----------|
+| Lint & Type Check | `npm run lint` | Yes |
+| Lint & Type Check | `npm run typecheck` | Yes |
+| Lint & Type Check | `npm run format:check` | Yes |
+| Test | `npm run test:run` | Yes |
+| Build | `npm run build:ci` | Yes (for changes that affect build) |
+
+Pre-commit (Husky) runs Prettier on staged files via lint-staged. Commit messages are validated by commitlint.
+
+## Before finishing any code change
+
+1. **Fix lint and type errors in edited files**
+   - Use the linter diagnostics tool on files you changed.
+   - Resolve every error you introduced; do not ignore or suppress without good reason.
+
+2. **Run local checks for the scope of your change**
+   - After substantive edits, run the relevant commands and fix failures before responding:
+     ```bash
+     npm run lint
+     npm run typecheck
+     npm run format:check
+     ```
+   - If you changed logic, also run:
+     ```bash
+     npm run test:run
+     ```
+   - If you changed imports, config, env usage, Prisma schema, or anything that could break compilation, also run:
+     ```bash
+     npm run build:ci
+     ```
+   - Shortcut when many files changed: `npm run validate` (typecheck + lint + tests), then `npm run format:check`.
+
+3. **Match project style**
+   - Follow existing ESLint, Prettier, and TypeScript patterns in neighboring code.
+   - Do not disable lint rules to make checks pass unless the user explicitly asks.
+   - Prefer fixing the root cause over `@ts-ignore`, `eslint-disable`, or broad `any` types.
+
+4. **Update or add tests when behavior changes**
+   - If you change logic that is (or should be) covered by tests, update tests in the same change.
+   - New tests must pass under `npm run test:run`.
+
+## When checks fail
+
+- Read the full error output, fix the cause, and re-run the failing command.
+- Do not tell the user the work is done while lint, type, format, test, or build errors remain.
+- If a failure is unrelated to your change, say so clearly and still avoid introducing new failures.
+
+## Hard rules
+
+- Never skip running checks because a change "looks small."
+- Never commit code you know will fail CI.
+- Never weaken CI configuration to hide problems unless the user explicitly requests it.

@@ -1367,7 +1367,16 @@ export type PdfLayout = 'paged' | 'continuous';
 interface PdfOptions {
   /** @default 'paged' */
   layout?: PdfLayout;
-  origin?: string;
+}
+
+/**
+ * Sparticuz ships Linux-only Chromium binaries for Lambda/Vercel.
+ * Only use them on Linux in an actual serverless runtime — not when
+ * VERCEL/AWS_* env vars are set locally on macOS/Windows for simulation.
+ */
+function isServerlessChromiumRuntime(): boolean {
+  if (process.platform !== 'linux') return false;
+  return Boolean(process.env.VERCEL === '1' || process.env.AWS_LAMBDA_FUNCTION_NAME);
 }
 
 /**
@@ -1382,32 +1391,58 @@ interface PdfOptions {
  * In local development we fall back to the full `puppeteer` package, which
  * bundles its own Chromium and requires no extra system setup.
  */
-async function launchBrowser(origin?: string): Promise<Browser> {
-  const isServerless = Boolean(
-    process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.AWS_REGION
-  );
+async function launchBrowser(): Promise<Browser> {
+  const isServerless = isServerlessChromiumRuntime();
 
   if (isServerless) {
-    const [{ default: chromium }, puppeteerCore] = await Promise.all([
+    const [{ default: chromium }, puppeteerCore, fs, path, { execSync }] = await Promise.all([
       import('@sparticuz/chromium-min'),
       import('puppeteer-core'),
+      import('fs'),
+      import('path'),
+      import('child_process'),
     ]);
 
     const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
-    const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
-    const packUrl = origin
-      ? `${origin}/chromium-v147.0.0-pack.${arch}.tar${bypassSecret ? `?x-vercel-protection-bypass=${bypassSecret}` : ''}`
-      : `https://github.com/Sparticuz/chromium/releases/download/v147.0.0/chromium-v147.0.0-pack.${arch}.tar`;
+    const destDir = '/tmp/chromium-pack';
+    const tarName = `chromium-v147.0.0-pack.${arch}.tar`;
+    const tarPath = path.join(process.cwd(), 'public', tarName);
+    const packUrl = `https://github.com/Sparticuz/chromium/releases/download/v147.0.0/chromium-v147.0.0-pack.${arch}.tar`;
+
+    let chromiumPath: string;
+
+    try {
+      if (!fs.existsSync(destDir)) {
+        fs.mkdirSync(destDir, { recursive: true });
+      }
+
+      const markerFile = path.join(destDir, 'chromium.br');
+      if (!fs.existsSync(markerFile)) {
+        serviceLogger.info(`Extracting ${tarPath} to ${destDir}...`);
+        if (!fs.existsSync(tarPath)) {
+          throw new Error(`Chromium tarball not found at ${tarPath}`);
+        }
+        execSync(`tar -xf ${tarPath} -C ${destDir}`);
+        serviceLogger.info('Chromium extraction completed successfully.');
+      } else {
+        serviceLogger.info('Chromium pack already extracted in /tmp');
+      }
+
+      chromiumPath = await chromium.executablePath(destDir);
+    } catch (err: unknown) {
+      serviceLogger.error('Failed to extract local Chromium pack', err);
+      chromiumPath = await chromium.executablePath(packUrl);
+    }
 
     return puppeteerCore.launch({
       args: [...chromium.args, '--disable-dev-shm-usage'],
-      executablePath: await chromium.executablePath(packUrl),
+      executablePath: chromiumPath,
       headless: (chromium as any).headless,
       defaultViewport: (chromium as any).defaultViewport,
     });
   }
 
-  // Local development: use the full puppeteer package (bundled Chromium).
+  // Local / non-Linux: use the full puppeteer package (bundled Chromium).
   const { default: puppeteer } = await import('puppeteer');
   return puppeteer.launch({
     headless: true,
@@ -1427,11 +1462,11 @@ async function launchBrowser(origin?: string): Promise<Browser> {
  */
 export async function generateResumePDF(
   profile: FullProfile,
-  { layout = 'paged', origin }: PdfOptions = {}
+  { layout = 'paged' }: PdfOptions = {}
 ): Promise<Buffer> {
   const html = toPDFHtml(profile);
 
-  const browser = await launchBrowser(origin);
+  const browser = await launchBrowser();
 
   try {
     const page = await browser.newPage();
