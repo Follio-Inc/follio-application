@@ -32,6 +32,7 @@ import {
   useVelocity,
 } from 'framer-motion';
 import { ChevronDown, Shield } from 'lucide-react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
@@ -340,1146 +341,10 @@ export const STEPS = [
 ] as const;
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   Capability illustrations
-
-   House style — borrowed from Google's product spot illustrations:
-   playful, clear, functional. Bold rounded geometry, a restrained palette
-   built entirely from the teal `--primary` token plus neutral surface tokens,
-   generous negative space, and a single focal "moment" per scene. Every art
-   piece shares the same viewBox, stroke weights, corner radii, and palette so
-   the set reads as one family.
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-/** Shared drawing constants so every capability illustration stays on-model. */
-const ART_STROKE = 2.5;
-const ART_CLASS = {
-  /** Soft tinted backdrop blob. */
-  backdrop: 'fill-[hsl(var(--primary)/0.06)]',
-  /** Card / panel surfaces. */
-  surface: 'fill-[hsl(var(--card))]',
-  /** Hairline borders on surfaces. */
-  border: 'stroke-[hsl(var(--border))]',
-  /** Filled teal accent. */
-  accent: 'fill-[hsl(var(--primary))]',
-  /** Soft teal accent fill. */
-  accentSoft: 'fill-[hsl(var(--primary)/0.15)]',
-  /** Teal accent stroke. */
-  accentStroke: 'stroke-[hsl(var(--primary))]',
-  /** Neutral placeholder text bars. */
-  textBar: 'fill-[hsl(var(--muted-foreground)/0.22)]',
-  /** Fainter neutral bars. */
-  textBarFaint: 'fill-[hsl(var(--muted-foreground)/0.13)]',
-} as const;
-
-/**
- * Self-improving — the resume keeps watch on the market and surfaces the
- * skills you should add. The scene shows a resume card, a rising trend line,
- * and a suggested "+ skill" being offered up with a spark of intelligence.
- */
-function SelfImprovingArt() {
-  return (
-    <svg
-      viewBox="0 0 360 280"
-      role="img"
-      aria-label="A resume that watches market trends and suggests new skills to add"
-      className="h-full w-full"
-      fill="none"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      {/* Backdrop blob */}
-      <rect x="34" y="40" width="292" height="206" rx="32" className={ART_CLASS.backdrop} />
-
-      {/* ── Resume card ── */}
-      <rect
-        x="62"
-        y="72"
-        width="124"
-        height="156"
-        rx="14"
-        className={cn(ART_CLASS.surface, ART_CLASS.border)}
-        strokeWidth={ART_STROKE}
-      />
-
-      {/* Avatar tile + person glyph */}
-      <rect x="80" y="92" width="30" height="30" rx="9" className={ART_CLASS.accentSoft} />
-      <circle cx="95" cy="103" r="5.5" className={ART_CLASS.accent} />
-      <path
-        d="M85.5 116.5c0-4.4 4.3-7 9.5-7s9.5 2.6 9.5 7"
-        className={ART_CLASS.accentStroke}
-        strokeWidth={ART_STROKE}
-      />
-
-      {/* Name + role bars */}
-      <rect x="118" y="96" width="48" height="7" rx="3.5" className={ART_CLASS.textBar} />
-      <rect x="118" y="109" width="30" height="5" rx="2.5" className={ART_CLASS.textBarFaint} />
-
-      {/* Body content bars */}
-      <rect x="80" y="138" width="86" height="6" rx="3" className={ART_CLASS.textBarFaint} />
-      <rect x="80" y="152" width="72" height="6" rx="3" className={ART_CLASS.textBarFaint} />
-      <rect x="80" y="166" width="86" height="6" rx="3" className={ART_CLASS.textBarFaint} />
-      <rect x="80" y="180" width="58" height="6" rx="3" className={ART_CLASS.textBarFaint} />
-
-      {/* ── Trend panel (floating, overlapping the card) ── */}
-      <rect
-        x="190"
-        y="150"
-        width="116"
-        height="80"
-        rx="13"
-        className={cn(ART_CLASS.surface, ART_CLASS.border)}
-        strokeWidth={ART_STROKE}
-      />
-      {/* Baseline grid */}
-      <line
-        x1="204"
-        y1="214"
-        x2="292"
-        y2="214"
-        className="stroke-[hsl(var(--border))]"
-        strokeWidth="1.5"
-      />
-      <line
-        x1="204"
-        y1="194"
-        x2="292"
-        y2="194"
-        className="stroke-[hsl(var(--border)/0.6)]"
-        strokeWidth="1.5"
-        strokeDasharray="3 4"
-      />
-      <line
-        x1="204"
-        y1="174"
-        x2="292"
-        y2="174"
-        className="stroke-[hsl(var(--border)/0.6)]"
-        strokeWidth="1.5"
-        strokeDasharray="3 4"
-      />
-      {/* Rising trend line */}
-      <path
-        d="M206 208 L228 198 L250 202 L272 182 L290 166"
-        className={ART_CLASS.accentStroke}
-        strokeWidth={ART_STROKE + 0.5}
-      />
-      {/* Vertex dots */}
-      <circle cx="228" cy="198" r="3" className={ART_CLASS.accent} />
-      <circle cx="250" cy="202" r="3" className={ART_CLASS.accent} />
-      <circle cx="272" cy="182" r="3" className={ART_CLASS.accent} />
-      {/* Leading point with ring */}
-      <circle cx="290" cy="166" r="6.5" className={ART_CLASS.accentSoft} />
-      <circle cx="290" cy="166" r="3.5" className={ART_CLASS.accent} />
-      {/* Upward arrow head on the trend */}
-      <path
-        d="M283 168 L290 160 L297 168"
-        className={ART_CLASS.accentStroke}
-        strokeWidth={ART_STROKE}
-      />
-
-      {/* ── Suggested skill pill (the recommendation) ── */}
-      <rect x="168" y="58" width="112" height="30" rx="15" className={ART_CLASS.accent} />
-      <circle cx="184" cy="73" r="8" className="fill-[hsl(var(--primary-foreground))]" />
-      <path
-        d="M184 69.5v7M180.5 73h7"
-        className="stroke-[hsl(var(--primary))]"
-        strokeWidth={ART_STROKE}
-      />
-      <rect
-        x="199"
-        y="68"
-        width="46"
-        height="5.5"
-        rx="2.75"
-        className="fill-[hsl(var(--primary-foreground)/0.9)]"
-      />
-      <rect
-        x="199"
-        y="77"
-        width="30"
-        height="4.5"
-        rx="2.25"
-        className="fill-[hsl(var(--primary-foreground)/0.55)]"
-      />
-
-      {/* ── Intelligence sparkles ── */}
-      <path
-        d="M150 104c0 7-2 9-9 9 7 0 9 2 9 9 0-7 2-9 9-9-7 0-9-2-9-9Z"
-        className={ART_CLASS.accent}
-      />
-      <path
-        d="M298 108c0 4-1 5-5 5 4 0 5 1 5 5 0-4 1-5 5-5-4 0-5-1-5-5Z"
-        className={ART_CLASS.accentSoft}
-      />
-    </svg>
-  );
-}
-
-/**
- * Adaptive — the same profile rendered as many views, and the *viewer* decides
- * which one to see. Three fanned "view" cards sit behind a floating lens
- * switcher; a cursor (the recruiter's hand) is mid-click on the active lens,
- * making "the audience chooses" the focal moment.
- */
-function AdaptiveArt() {
-  return (
-    <svg
-      viewBox="0 0 360 280"
-      role="img"
-      aria-label="One profile shown as three different views, with a viewer choosing which one to see"
-      className="h-full w-full"
-      fill="none"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      {/* Backdrop blob */}
-      <rect x="34" y="40" width="292" height="206" rx="32" className={ART_CLASS.backdrop} />
-
-      {/* ── Left card: the visual / portfolio view (image grid) ── */}
-      <g transform="rotate(-11 132 168)">
-        <rect
-          x="84"
-          y="104"
-          width="96"
-          height="132"
-          rx="14"
-          className={cn(ART_CLASS.surface, ART_CLASS.border)}
-          strokeWidth={ART_STROKE}
-        />
-        {/* header band */}
-        <rect x="98" y="118" width="68" height="11" rx="5.5" className={ART_CLASS.accentSoft} />
-        {/* 2×2 image tiles */}
-        <rect x="98" y="138" width="30" height="26" rx="6" className={ART_CLASS.accentSoft} />
-        <rect x="136" y="138" width="30" height="26" rx="6" className={ART_CLASS.accentSoft} />
-        <rect x="98" y="172" width="30" height="26" rx="6" className={ART_CLASS.accentSoft} />
-        <rect x="136" y="172" width="30" height="26" rx="6" className={ART_CLASS.accentSoft} />
-        {/* caption bars */}
-        <rect x="98" y="208" width="56" height="5" rx="2.5" className={ART_CLASS.textBarFaint} />
-      </g>
-
-      {/* ── Right card: the snapshot view (donut stat) ── */}
-      <g transform="rotate(11 228 168)">
-        <rect
-          x="180"
-          y="104"
-          width="96"
-          height="132"
-          rx="14"
-          className={cn(ART_CLASS.surface, ART_CLASS.border)}
-          strokeWidth={ART_STROKE}
-        />
-        {/* donut ring */}
-        <circle
-          cx="216"
-          cy="150"
-          r="22"
-          className="stroke-[hsl(var(--border))]"
-          strokeWidth={ART_STROKE}
-        />
-        <path
-          d="M216 128 a22 22 0 0 1 19 33"
-          className={ART_CLASS.accentStroke}
-          strokeWidth={ART_STROKE + 1}
-        />
-        <circle cx="216" cy="150" r="6" className={ART_CLASS.accentSoft} />
-        {/* stat bars */}
-        <rect x="194" y="186" width="64" height="6" rx="3" className={ART_CLASS.textBarFaint} />
-        <rect x="194" y="200" width="44" height="6" rx="3" className={ART_CLASS.textBarFaint} />
-      </g>
-
-      {/* ── Center card: the resume view (selected, elevated) ── */}
-      <rect
-        x="132"
-        y="78"
-        width="96"
-        height="150"
-        rx="15"
-        className={ART_CLASS.surface}
-        stroke="hsl(var(--primary))"
-        strokeWidth={ART_STROKE}
-      />
-      {/* Avatar + identity */}
-      <circle cx="152" cy="102" r="11" className={ART_CLASS.accentSoft} />
-      <circle cx="152" cy="99" r="4.5" className={ART_CLASS.accent} />
-      <path
-        d="M144 110.5c0-3.6 3.6-5.5 8-5.5s8 1.9 8 5.5"
-        className={ART_CLASS.accentStroke}
-        strokeWidth="2"
-      />
-      <rect x="170" y="95" width="42" height="6" rx="3" className={ART_CLASS.textBar} />
-      <rect x="170" y="106" width="28" height="5" rx="2.5" className={ART_CLASS.textBarFaint} />
-      {/* divider */}
-      <line
-        x1="148"
-        y1="126"
-        x2="212"
-        y2="126"
-        className="stroke-[hsl(var(--border))]"
-        strokeWidth="1.5"
-      />
-      {/* body lines */}
-      <rect x="148" y="138" width="64" height="6" rx="3" className={ART_CLASS.textBarFaint} />
-      <rect x="148" y="152" width="52" height="6" rx="3" className={ART_CLASS.textBarFaint} />
-      <rect x="148" y="166" width="64" height="6" rx="3" className={ART_CLASS.textBarFaint} />
-      <rect x="148" y="180" width="40" height="6" rx="3" className={ART_CLASS.textBarFaint} />
-      <rect x="148" y="194" width="56" height="6" rx="3" className={ART_CLASS.textBarFaint} />
-
-      {/* ── Floating lens switcher (the control the viewer drives) ── */}
-      <rect
-        x="116"
-        y="44"
-        width="128"
-        height="34"
-        rx="17"
-        className={cn(ART_CLASS.surface, ART_CLASS.border)}
-        strokeWidth={ART_STROKE}
-      />
-      {/* active segment */}
-      <rect x="158" y="50" width="44" height="22" rx="11" className={ART_CLASS.accent} />
-      {/* segment glyphs: list (left) · grid (active, center) · chart (right) */}
-      <g className="stroke-[hsl(var(--muted-foreground)/0.5)]" strokeWidth="2.2">
-        <line x1="130" y1="57" x2="144" y2="57" />
-        <line x1="130" y1="65" x2="140" y2="65" />
-      </g>
-      <g className="stroke-[hsl(var(--primary-foreground))]" strokeWidth="2.2">
-        <rect
-          x="171"
-          y="55"
-          width="7"
-          height="7"
-          rx="1.5"
-          className="fill-[hsl(var(--primary-foreground))]"
-          stroke="none"
-        />
-        <rect
-          x="182"
-          y="55"
-          width="7"
-          height="7"
-          rx="1.5"
-          className="fill-[hsl(var(--primary-foreground))]"
-          stroke="none"
-        />
-        <rect
-          x="171"
-          y="62"
-          width="7"
-          height="6"
-          rx="1.5"
-          className="fill-[hsl(var(--primary-foreground)/0.6)]"
-          stroke="none"
-        />
-        <rect
-          x="182"
-          y="62"
-          width="7"
-          height="6"
-          rx="1.5"
-          className="fill-[hsl(var(--primary-foreground)/0.6)]"
-          stroke="none"
-        />
-      </g>
-      <g className="stroke-[hsl(var(--muted-foreground)/0.5)]" strokeWidth="2.2">
-        <line x1="218" y1="64" x2="218" y2="58" />
-        <line x1="224" y1="64" x2="224" y2="54" />
-        <line x1="230" y1="64" x2="230" y2="60" />
-      </g>
-
-      {/* ── Viewer's cursor, mid-click on the active lens ── */}
-      <g transform="translate(196 64)">
-        {/* click ripple */}
-        <circle
-          cx="0"
-          cy="0"
-          r="13"
-          className="stroke-[hsl(var(--primary)/0.4)]"
-          strokeWidth="2"
-          fill="none"
-        />
-        <path
-          d="M0 0 L0 21 L5.5 15.5 L9.5 24 L13 22.5 L9 14.5 L16 14.5 Z"
-          className="fill-[hsl(var(--foreground))] stroke-[hsl(var(--background))]"
-          strokeWidth="2"
-        />
-      </g>
-    </svg>
-  );
-}
-
-/**
- * Talking — your Follio answers questions on your behalf. The background pane
- * is the resume the viewer is reading; a compact chat docks in the bottom-right
- * corner, so the scene reads as "someone asking questions while viewing your
- * resume." The answer bubble is teal with an AI spark to mark it as the
- * profile speaking for itself.
- */
-function TalkingArt() {
-  return (
-    <svg
-      viewBox="0 0 360 280"
-      role="img"
-      aria-label="A resume being read with a chat docked in the corner asking it questions"
-      className="h-full w-full"
-      fill="none"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      {/* Backdrop blob */}
-      <rect x="34" y="40" width="292" height="206" rx="32" className={ART_CLASS.backdrop} />
-
-      {/* ── Resume pane (the page being read, fills the scene) ── */}
-      <rect
-        x="58"
-        y="52"
-        width="244"
-        height="184"
-        rx="16"
-        className={cn(ART_CLASS.surface, ART_CLASS.border)}
-        strokeWidth={ART_STROKE}
-      />
-
-      {/* Resume header: avatar + name + role */}
-      <circle cx="92" cy="86" r="15" className={ART_CLASS.accentSoft} />
-      <circle cx="92" cy="82" r="6" className={ART_CLASS.accent} />
-      <path
-        d="M81 95c0-5 5-7.5 11-7.5S103 90 103 95"
-        className={ART_CLASS.accentStroke}
-        strokeWidth="2.2"
-      />
-      <rect x="118" y="76" width="92" height="9" rx="4.5" className={ART_CLASS.textBar} />
-      <rect x="118" y="91" width="58" height="6" rx="3" className={ART_CLASS.textBarFaint} />
-
-      {/* Section divider */}
-      <line
-        x1="76"
-        y1="116"
-        x2="284"
-        y2="116"
-        className="stroke-[hsl(var(--border))]"
-        strokeWidth="1.5"
-      />
-
-      {/* Left column: section heading + body lines */}
-      <rect x="76" y="130" width="40" height="6" rx="3" className={ART_CLASS.accentSoft} />
-      <rect x="76" y="144" width="120" height="5.5" rx="2.75" className={ART_CLASS.textBarFaint} />
-      <rect x="76" y="156" width="134" height="5.5" rx="2.75" className={ART_CLASS.textBarFaint} />
-      <rect x="76" y="168" width="104" height="5.5" rx="2.75" className={ART_CLASS.textBarFaint} />
-
-      {/* Second section */}
-      <rect x="76" y="188" width="40" height="6" rx="3" className={ART_CLASS.accentSoft} />
-      <rect x="76" y="202" width="128" height="5.5" rx="2.75" className={ART_CLASS.textBarFaint} />
-      <rect x="76" y="214" width="96" height="5.5" rx="2.75" className={ART_CLASS.textBarFaint} />
-
-      {/* Right rail: skill chips */}
-      <rect x="226" y="130" width="58" height="14" rx="7" className={ART_CLASS.accentSoft} />
-      <rect x="226" y="150" width="46" height="14" rx="7" className={ART_CLASS.accentSoft} />
-      <rect x="226" y="170" width="52" height="14" rx="7" className={ART_CLASS.accentSoft} />
-
-      {/* ── Docked chat (bottom-right corner, overlapping the page) ── */}
-      <g>
-        {/* soft lift shadow */}
-        <rect
-          x="194"
-          y="118"
-          width="134"
-          height="140"
-          rx="16"
-          className="fill-[hsl(var(--foreground)/0.06)]"
-        />
-        <rect
-          x="190"
-          y="114"
-          width="134"
-          height="140"
-          rx="16"
-          className={cn(ART_CLASS.surface, ART_CLASS.border)}
-          strokeWidth={ART_STROKE}
-        />
-
-        {/* Chat header: small profile + live online dot */}
-        <circle cx="208" cy="132" r="7" className={ART_CLASS.accentSoft} />
-        <circle cx="208" cy="130" r="2.8" className={ART_CLASS.accent} />
-        <path
-          d="M202.5 136c0-2.4 2.5-3.6 5.5-3.6s5.5 1.2 5.5 3.6"
-          className={ART_CLASS.accentStroke}
-          strokeWidth="1.6"
-        />
-        <rect x="221" y="128" width="48" height="5" rx="2.5" className={ART_CLASS.textBar} />
-        <circle cx="312" cy="132" r="3.2" className={ART_CLASS.accent} />
-        <line
-          x1="198"
-          y1="146"
-          x2="316"
-          y2="146"
-          className="stroke-[hsl(var(--border))]"
-          strokeWidth="1.5"
-        />
-
-        {/* Question bubble — viewer's message, just sent (left, neutral) */}
-        <path
-          d="M202 154h52a8 8 0 0 1 8 8v7a8 8 0 0 1-8 8h-42l-9 6 1-6a8 8 0 0 1-8-8v-7a8 8 0 0 1 6-8Z"
-          className="fill-[hsl(var(--muted))] stroke-[hsl(var(--border))]"
-          strokeWidth="2"
-        />
-        <rect x="208" y="161" width="42" height="4.5" rx="2.25" className={ART_CLASS.textBar} />
-        <rect
-          x="208"
-          y="169"
-          width="28"
-          height="4.5"
-          rx="2.25"
-          className={ART_CLASS.textBarFaint}
-        />
-
-        {/* Answer bubble — resume replying RIGHT NOW (right, teal, typing dots) */}
-        <path
-          d="M268 190h44a8 8 0 0 1 8 8v5a8 8 0 0 1-8 8h-2l1 6-8-6h-35a8 8 0 0 1-8-8v-5a8 8 0 0 1 8-8Z"
-          className={ART_CLASS.accent}
-        />
-        {/* animated typing indicator */}
-        <g className="fill-[hsl(var(--primary-foreground))]">
-          <circle cx="278" cy="200.5" r="2.6">
-            <animate
-              attributeName="opacity"
-              values="0.3;1;0.3"
-              dur="1.2s"
-              begin="0s"
-              repeatCount="indefinite"
-            />
-          </circle>
-          <circle cx="289" cy="200.5" r="2.6">
-            <animate
-              attributeName="opacity"
-              values="0.3;1;0.3"
-              dur="1.2s"
-              begin="0.2s"
-              repeatCount="indefinite"
-            />
-          </circle>
-          <circle cx="300" cy="200.5" r="2.6">
-            <animate
-              attributeName="opacity"
-              values="0.3;1;0.3"
-              dur="1.2s"
-              begin="0.4s"
-              repeatCount="indefinite"
-            />
-          </circle>
-        </g>
-        {/* AI spark marking the reply as the profile speaking */}
-        <path
-          d="M252 188c0 4.5-1.5 6-6 6 4.5 0 6 1.5 6 6 0-4.5 1.5-6 6-6-4.5 0-6-1.5-6-6Z"
-          className={ART_CLASS.accent}
-        />
-
-        {/* Active input bar — viewer typing the next question (caret + send) */}
-        <rect
-          x="200"
-          y="226"
-          width="86"
-          height="22"
-          rx="11"
-          className={cn(ART_CLASS.surface, ART_CLASS.border)}
-          strokeWidth="2"
-        />
-        <rect x="210" y="234.5" width="48" height="5" rx="2.5" className={ART_CLASS.textBarFaint} />
-        {/* blinking caret to signal active typing */}
-        <line
-          x1="262"
-          y1="231"
-          x2="262"
-          y2="243"
-          className={ART_CLASS.accentStroke}
-          strokeWidth="2"
-        >
-          <animate attributeName="opacity" values="1;1;0;0" dur="1s" repeatCount="indefinite" />
-        </line>
-        {/* send button */}
-        <circle cx="304" cy="237" r="12" className={ART_CLASS.accent} />
-        <path
-          d="M299 237h9M304 232.5l4.5 4.5-4.5 4.5"
-          className="stroke-[hsl(var(--primary-foreground))]"
-          strokeWidth="2.2"
-        />
-      </g>
-    </svg>
-  );
-}
-
-/**
- * Parsable — every Follio is stored as clean, structured JSON rather than a
- * flattened page of pixels. The scene shows the rendered resume on the left
- * transforming, field by field, into tidy key/value JSON on the right — so
- * machines (ATS, exporters, APIs) read it perfectly every time.
- */
-function ParsableArt() {
-  return (
-    <svg
-      viewBox="0 0 360 280"
-      role="img"
-      aria-label="A resume converting cleanly into structured JSON data"
-      className="h-full w-full"
-      fill="none"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      {/* Backdrop blob */}
-      <rect x="34" y="40" width="292" height="206" rx="32" className={ART_CLASS.backdrop} />
-
-      {/* ── Rendered resume card (the human-readable source) ── */}
-      <rect
-        x="56"
-        y="66"
-        width="108"
-        height="148"
-        rx="14"
-        className={cn(ART_CLASS.surface, ART_CLASS.border)}
-        strokeWidth={ART_STROKE}
-      />
-      {/* avatar + identity */}
-      <circle cx="78" cy="90" r="11" className={ART_CLASS.accentSoft} />
-      <circle cx="78" cy="87" r="4.5" className={ART_CLASS.accent} />
-      <path
-        d="M70 98.5c0-3.6 3.6-5.5 8-5.5s8 1.9 8 5.5"
-        className={ART_CLASS.accentStroke}
-        strokeWidth="2"
-      />
-      <rect x="96" y="83" width="52" height="6.5" rx="3.25" className={ART_CLASS.textBar} />
-      <rect x="96" y="94" width="34" height="5" rx="2.5" className={ART_CLASS.textBarFaint} />
-      <line
-        x1="70"
-        y1="116"
-        x2="150"
-        y2="116"
-        className="stroke-[hsl(var(--border))]"
-        strokeWidth="1.5"
-      />
-      {/* body lines */}
-      <rect x="70" y="128" width="80" height="5.5" rx="2.75" className={ART_CLASS.textBarFaint} />
-      <rect x="70" y="140" width="66" height="5.5" rx="2.75" className={ART_CLASS.textBarFaint} />
-      <rect x="70" y="158" width="34" height="5.5" rx="2.75" className={ART_CLASS.accentSoft} />
-      <rect x="70" y="172" width="78" height="5.5" rx="2.75" className={ART_CLASS.textBarFaint} />
-      <rect x="70" y="184" width="58" height="5.5" rx="2.75" className={ART_CLASS.textBarFaint} />
-
-      {/* ── Transform arrow ── */}
-      <circle cx="180" cy="140" r="15" className={ART_CLASS.accentSoft} />
-      <path
-        d="M172 140h13M180 134l6 6-6 6"
-        className={ART_CLASS.accentStroke}
-        strokeWidth={ART_STROKE}
-      />
-
-      {/* ── JSON panel (the clean machine-readable output) ── */}
-      <rect
-        x="196"
-        y="66"
-        width="108"
-        height="148"
-        rx="14"
-        className={cn(ART_CLASS.surface, ART_CLASS.border)}
-        strokeWidth={ART_STROKE}
-      />
-      {/* window dots */}
-      <circle cx="208" cy="80" r="2.5" className={ART_CLASS.textBarFaint} />
-      <circle cx="217" cy="80" r="2.5" className={ART_CLASS.textBarFaint} />
-      <circle cx="226" cy="80" r="2.5" className={ART_CLASS.textBarFaint} />
-      <line
-        x1="196"
-        y1="92"
-        x2="304"
-        y2="92"
-        className="stroke-[hsl(var(--border))]"
-        strokeWidth="1.5"
-      />
-
-      {/* braces */}
-      <path
-        d="M212 104c-4 0-5 1-5 5v6c0 3-1 4-3 4 2 0 3 1 3 4v6c0 4 1 5 5 5"
-        className={ART_CLASS.accentStroke}
-        strokeWidth="2.2"
-      />
-      <path
-        d="M288 104c4 0 5 1 5 5v6c0 3 1 4 3 4-2 0-3 1-3 4v6c0 4-1 5-5 5"
-        className={ART_CLASS.accentStroke}
-        strokeWidth="2.2"
-      />
-
-      {/* key / value rows */}
-      {/* row 1 */}
-      <rect x="220" y="104" width="22" height="5.5" rx="2.75" className={ART_CLASS.accent} />
-      <rect x="247" y="104" width="34" height="5.5" rx="2.75" className={ART_CLASS.textBar} />
-      {/* row 2 */}
-      <rect x="220" y="120" width="18" height="5.5" rx="2.75" className={ART_CLASS.accent} />
-      <rect x="243" y="120" width="38" height="5.5" rx="2.75" className={ART_CLASS.textBar} />
-      {/* row 3 (nested) */}
-      <rect x="226" y="136" width="20" height="5.5" rx="2.75" className={ART_CLASS.accent} />
-      <rect x="251" y="136" width="30" height="5.5" rx="2.75" className={ART_CLASS.textBarFaint} />
-      {/* row 4 (nested) */}
-      <rect x="226" y="150" width="26" height="5.5" rx="2.75" className={ART_CLASS.accent} />
-      <rect x="257" y="150" width="24" height="5.5" rx="2.75" className={ART_CLASS.textBarFaint} />
-      {/* row 5 */}
-      <rect x="220" y="170" width="20" height="5.5" rx="2.75" className={ART_CLASS.accent} />
-      <rect x="245" y="170" width="36" height="5.5" rx="2.75" className={ART_CLASS.textBar} />
-      {/* row 6 */}
-      <rect x="220" y="186" width="16" height="5.5" rx="2.75" className={ART_CLASS.accent} />
-      <rect x="241" y="186" width="30" height="5.5" rx="2.75" className={ART_CLASS.textBar} />
-
-      {/* validation tick — parses cleanly */}
-      <circle cx="290" cy="206" r="13" className={ART_CLASS.accent} />
-      <path
-        d="M284 206l4 4 8-8"
-        className="stroke-[hsl(var(--primary-foreground))]"
-        strokeWidth={ART_STROKE}
-      />
-    </svg>
-  );
-}
-
-/**
- * Errorless — a backend of intelligent checks reviews the resume for far more
- * than typos: weak phrasing, design/spacing issues, and common rare mistakes.
- * The scene shows the resume under an inspecting lens with issues being caught
- * and resolved into green ticks.
- */
-function ErrorlessArt() {
-  return (
-    <svg
-      viewBox="0 0 360 280"
-      role="img"
-      aria-label="A resume being checked for writing, design, and content mistakes"
-      className="h-full w-full"
-      fill="none"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      {/* Backdrop blob */}
-      <rect x="34" y="40" width="292" height="206" rx="32" className={ART_CLASS.backdrop} />
-
-      {/* ── Resume under review ── */}
-      <rect
-        x="70"
-        y="56"
-        width="160"
-        height="176"
-        rx="15"
-        className={cn(ART_CLASS.surface, ART_CLASS.border)}
-        strokeWidth={ART_STROKE}
-      />
-      {/* identity */}
-      <circle cx="96" cy="84" r="13" className={ART_CLASS.accentSoft} />
-      <circle cx="96" cy="81" r="5" className={ART_CLASS.accent} />
-      <path
-        d="M86 92c0-4.2 4.5-6.5 10-6.5S106 87.8 106 92"
-        className={ART_CLASS.accentStroke}
-        strokeWidth="2.2"
-      />
-      <rect x="118" y="76" width="78" height="7" rx="3.5" className={ART_CLASS.textBar} />
-      <rect x="118" y="88" width="50" height="5.5" rx="2.75" className={ART_CLASS.textBarFaint} />
-      <line
-        x1="86"
-        y1="110"
-        x2="214"
-        y2="110"
-        className="stroke-[hsl(var(--border))]"
-        strokeWidth="1.5"
-      />
-
-      {/* Line 1 — checked clean (green tick) */}
-      <rect x="86" y="122" width="96" height="6" rx="3" className={ART_CLASS.textBarFaint} />
-      <circle cx="198" cy="125" r="8" className={ART_CLASS.accent} />
-      <path
-        d="M194 125l3 3 5-5"
-        className="stroke-[hsl(var(--primary-foreground))]"
-        strokeWidth="2.2"
-      />
-
-      {/* Line 2 — weak phrasing flagged (wavy underline) */}
-      <rect x="86" y="142" width="110" height="6" rx="3" className={ART_CLASS.textBar} />
-      <path
-        d="M86 153c4-3 8-3 12 0s8 3 12 0 8-3 12 0 8 3 12 0"
-        className="stroke-[hsl(var(--primary))]"
-        strokeWidth="2"
-      />
-
-      {/* Line 3 — spacing/design issue flagged (bracket marker) */}
-      <rect x="86" y="166" width="74" height="6" rx="3" className={ART_CLASS.textBarFaint} />
-      <rect
-        x="166"
-        y="164"
-        width="40"
-        height="10"
-        rx="3"
-        className="stroke-[hsl(var(--primary)/0.5)]"
-        strokeWidth="2"
-        strokeDasharray="4 3"
-      />
-
-      {/* Line 4 — checked clean */}
-      <rect x="86" y="186" width="100" height="6" rx="3" className={ART_CLASS.textBarFaint} />
-      <circle cx="198" cy="189" r="8" className={ART_CLASS.accent} />
-      <path
-        d="M194 189l3 3 5-5"
-        className="stroke-[hsl(var(--primary-foreground))]"
-        strokeWidth="2.2"
-      />
-
-      {/* Line 5 */}
-      <rect x="86" y="206" width="80" height="6" rx="3" className={ART_CLASS.textBarFaint} />
-
-      {/* ── Inspecting magnifier (the intelligent check) ── */}
-      <g>
-        <circle
-          cx="244"
-          cy="172"
-          r="34"
-          className="fill-[hsl(var(--card))] stroke-[hsl(var(--primary))]"
-          strokeWidth={ART_STROKE + 1}
-        />
-        <circle cx="244" cy="172" r="34" className="fill-[hsl(var(--primary)/0.05)]" />
-        {/* handle */}
-        <line
-          x1="268"
-          y1="196"
-          x2="288"
-          y2="216"
-          className={ART_CLASS.accentStroke}
-          strokeWidth={ART_STROKE + 2}
-        />
-        {/* big tick inside the lens — overall verdict */}
-        <path
-          d="M232 172l8 8 16-17"
-          className={ART_CLASS.accentStroke}
-          strokeWidth={ART_STROKE + 0.5}
-        />
-      </g>
-
-      {/* ── Floating check categories (writing · design · content) ── */}
-      <g>
-        {/* writing badge */}
-        <rect
-          x="222"
-          y="58"
-          width="76"
-          height="24"
-          rx="12"
-          className={cn(ART_CLASS.surface, ART_CLASS.border)}
-          strokeWidth="2"
-        />
-        <path
-          d="M236 70h2M242 66l3 8 3-8M252 70h6"
-          className={ART_CLASS.accentStroke}
-          strokeWidth="2"
-        />
-        <rect x="264" y="67" width="26" height="5" rx="2.5" className={ART_CLASS.textBarFaint} />
-        {/* design badge */}
-        <rect x="244" y="92" width="68" height="22" rx="11" className={ART_CLASS.accent} />
-        <rect
-          x="256"
-          y="100"
-          width="9"
-          height="6"
-          rx="1.5"
-          className="fill-[hsl(var(--primary-foreground))]"
-        />
-        <rect
-          x="269"
-          y="100"
-          width="34"
-          height="5"
-          rx="2.5"
-          className="fill-[hsl(var(--primary-foreground)/0.85)]"
-        />
-      </g>
-
-      {/* Intelligence spark */}
-      <path
-        d="M58 120c0 6-2 8-8 8 6 0 8 2 8 8 0-6 2-8 8-8-6 0-8-2-8-8Z"
-        className={ART_CLASS.accentSoft}
-      />
-    </svg>
-  );
-}
-
-/**
- * Shareable — one living source distributed by link, never by file. The scene
- * shows a single profile card at left feeding a central share hub, which hands
- * out two links: a public one (globe) and a private one (lock) — full access
- * control with nothing to download or version.
- */
-function ShareableArt() {
-  return (
-    <svg
-      viewBox="0 0 360 280"
-      role="img"
-      aria-label="A single profile shared through a public link and a private link"
-      className="h-full w-full"
-      fill="none"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      {/* Backdrop blob */}
-      <rect x="34" y="40" width="292" height="206" rx="32" className={ART_CLASS.backdrop} />
-
-      {/* ── Single source card (one living Follio) ── */}
-      <rect
-        x="48"
-        y="66"
-        width="104"
-        height="148"
-        rx="14"
-        className={cn(ART_CLASS.surface, ART_CLASS.border)}
-        strokeWidth={ART_STROKE}
-      />
-      {/* avatar + identity */}
-      <circle cx="70" cy="90" r="11" className={ART_CLASS.accentSoft} />
-      <circle cx="70" cy="87" r="4.5" className={ART_CLASS.accent} />
-      <path
-        d="M62 98.5c0-3.6 3.6-5.5 8-5.5s8 1.9 8 5.5"
-        className={ART_CLASS.accentStroke}
-        strokeWidth="2"
-      />
-      <rect x="88" y="83" width="50" height="6.5" rx="3.25" className={ART_CLASS.textBar} />
-      <rect x="88" y="94" width="32" height="5" rx="2.5" className={ART_CLASS.textBarFaint} />
-      <line
-        x1="62"
-        y1="116"
-        x2="138"
-        y2="116"
-        className="stroke-[hsl(var(--border))]"
-        strokeWidth="1.5"
-      />
-      {/* body lines */}
-      <rect x="62" y="128" width="76" height="5.5" rx="2.75" className={ART_CLASS.textBarFaint} />
-      <rect x="62" y="140" width="62" height="5.5" rx="2.75" className={ART_CLASS.textBarFaint} />
-      <rect x="62" y="158" width="32" height="5.5" rx="2.75" className={ART_CLASS.accentSoft} />
-      <rect x="62" y="172" width="74" height="5.5" rx="2.75" className={ART_CLASS.textBarFaint} />
-      <rect x="62" y="184" width="54" height="5.5" rx="2.75" className={ART_CLASS.textBarFaint} />
-
-      {/* ── Connectors from source to the two links ── */}
-      <path d="M196 134C206 118 200 98 214 98" className={ART_CLASS.accentStroke} strokeWidth="2" />
-      <path
-        d="M196 146C206 162 200 182 214 182"
-        className={ART_CLASS.accentStroke}
-        strokeWidth="2"
-      />
-
-      {/* ── Central share hub (chain link) ── */}
-      <circle cx="180" cy="140" r="16" className={ART_CLASS.accentSoft} />
-      <rect
-        x="170"
-        y="133"
-        width="12"
-        height="10"
-        rx="5"
-        className={ART_CLASS.accentStroke}
-        strokeWidth="2.2"
-      />
-      <rect
-        x="178"
-        y="137"
-        width="12"
-        height="10"
-        rx="5"
-        className={ART_CLASS.accentStroke}
-        strokeWidth="2.2"
-      />
-
-      {/* ── Public link pill (globe) ── */}
-      <rect
-        x="214"
-        y="78"
-        width="96"
-        height="40"
-        rx="20"
-        className={cn(ART_CLASS.surface, ART_CLASS.border)}
-        strokeWidth={ART_STROKE}
-      />
-      <circle cx="234" cy="98" r="11" className={ART_CLASS.accentSoft} />
-      <circle cx="234" cy="98" r="11" className={ART_CLASS.accentStroke} strokeWidth="1.8" />
-      <ellipse
-        cx="234"
-        cy="98"
-        rx="4.5"
-        ry="11"
-        className={ART_CLASS.accentStroke}
-        strokeWidth="1.8"
-      />
-      <line
-        x1="223"
-        y1="98"
-        x2="245"
-        y2="98"
-        className={ART_CLASS.accentStroke}
-        strokeWidth="1.8"
-      />
-      <rect x="252" y="91" width="46" height="6" rx="3" className={ART_CLASS.textBar} />
-      <rect x="252" y="102" width="30" height="5" rx="2.5" className={ART_CLASS.textBarFaint} />
-
-      {/* ── Private link pill (lock) ── */}
-      <rect
-        x="214"
-        y="162"
-        width="96"
-        height="40"
-        rx="20"
-        className={cn(ART_CLASS.surface, ART_CLASS.border)}
-        strokeWidth={ART_STROKE}
-      />
-      <path d="M229 180v-4a5 5 0 0 1 10 0v4" className={ART_CLASS.accentStroke} strokeWidth="2.2" />
-      <rect x="227" y="180" width="14" height="12" rx="2.5" className={ART_CLASS.accent} />
-      <circle cx="234" cy="185" r="1.8" className="fill-[hsl(var(--primary-foreground))]" />
-      <rect
-        x="233"
-        y="186"
-        width="2"
-        height="4"
-        rx="1"
-        className="fill-[hsl(var(--primary-foreground))]"
-      />
-      <rect x="252" y="175" width="46" height="6" rx="3" className={ART_CLASS.textBar} />
-      <rect x="252" y="186" width="30" height="5" rx="2.5" className={ART_CLASS.textBarFaint} />
-    </svg>
-  );
-}
-
-/**
- * Connected — the Follio pulls from the places your work already lives. A central
- * profile card syncs through a hub to three source pills (GitHub, Medium,
- * LinkedIn), with a refresh mark signalling it stays continuously up to date.
- */
-function ConnectedArt() {
-  const sources = [
-    { y: 64, label: 'GH' },
-    { y: 118, label: 'M' },
-    { y: 172, label: 'in' },
-  ];
-  return (
-    <svg
-      viewBox="0 0 360 280"
-      role="img"
-      aria-label="A Follio profile syncing with GitHub, Medium, and LinkedIn to stay up to date"
-      className="h-full w-full"
-      fill="none"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      {/* Backdrop blob */}
-      <rect x="34" y="40" width="292" height="206" rx="32" className={ART_CLASS.backdrop} />
-
-      {/* ── Central profile card (the living Follio) ── */}
-      <rect
-        x="44"
-        y="74"
-        width="104"
-        height="132"
-        rx="14"
-        className={cn(ART_CLASS.surface, ART_CLASS.border)}
-        strokeWidth={ART_STROKE}
-      />
-      {/* avatar + identity */}
-      <circle cx="66" cy="98" r="11" className={ART_CLASS.accentSoft} />
-      <circle cx="66" cy="95" r="4.5" className={ART_CLASS.accent} />
-      <path
-        d="M58 106.5c0-3.6 3.6-5.5 8-5.5s8 1.9 8 5.5"
-        className={ART_CLASS.accentStroke}
-        strokeWidth="2"
-      />
-      <rect x="84" y="91" width="50" height="6.5" rx="3.25" className={ART_CLASS.textBar} />
-      <rect x="84" y="102" width="32" height="5" rx="2.5" className={ART_CLASS.textBarFaint} />
-      <line
-        x1="58"
-        y1="124"
-        x2="134"
-        y2="124"
-        className="stroke-[hsl(var(--border))]"
-        strokeWidth="1.5"
-      />
-      {/* body lines */}
-      <rect x="58" y="136" width="76" height="5.5" rx="2.75" className={ART_CLASS.textBarFaint} />
-      <rect x="58" y="148" width="60" height="5.5" rx="2.75" className={ART_CLASS.textBarFaint} />
-      <rect x="58" y="166" width="34" height="5.5" rx="2.75" className={ART_CLASS.accentSoft} />
-      <rect x="58" y="178" width="72" height="5.5" rx="2.75" className={ART_CLASS.textBarFaint} />
-      <rect x="58" y="190" width="52" height="5.5" rx="2.75" className={ART_CLASS.textBarFaint} />
-
-      {/* ── Connectors: card → hub → each source pill ── */}
-      <line
-        x1="148"
-        y1="140"
-        x2="166"
-        y2="140"
-        className={ART_CLASS.accentStroke}
-        strokeWidth="2"
-      />
-      <path d="M194 132C206 116 200 90 220 86" className={ART_CLASS.accentStroke} strokeWidth="2" />
-      <line
-        x1="196"
-        y1="140"
-        x2="220"
-        y2="140"
-        className={ART_CLASS.accentStroke}
-        strokeWidth="2"
-      />
-      <path
-        d="M194 148C206 164 200 190 220 194"
-        className={ART_CLASS.accentStroke}
-        strokeWidth="2"
-      />
-
-      {/* ── Sync hub (refresh arrows) ── */}
-      <circle cx="180" cy="140" r="16" className={ART_CLASS.accentSoft} />
-      <path d="M174 135a7 7 0 0 1 12 1" className={ART_CLASS.accentStroke} strokeWidth="2.2" />
-      <path d="M186 130v6h-6" className={ART_CLASS.accentStroke} strokeWidth="2.2" />
-      <path d="M186 145a7 7 0 0 1-12-1" className={ART_CLASS.accentStroke} strokeWidth="2.2" />
-      <path d="M174 150v-6h6" className={ART_CLASS.accentStroke} strokeWidth="2.2" />
-
-      {/* ── Source pills (GitHub · Medium · LinkedIn) ── */}
-      {sources.map((s) => (
-        <g key={s.label}>
-          <rect
-            x="220"
-            y={s.y}
-            width="96"
-            height="40"
-            rx="12"
-            className={cn(ART_CLASS.surface, ART_CLASS.border)}
-            strokeWidth={ART_STROKE}
-          />
-          <rect
-            x={232}
-            y={s.y + 9}
-            width="22"
-            height="22"
-            rx="7"
-            className={ART_CLASS.accentSoft}
-          />
-          <text
-            x={243}
-            y={s.y + 24}
-            textAnchor="middle"
-            className="fill-[hsl(var(--primary))] font-sans text-[11px] font-bold"
-          >
-            {s.label}
-          </text>
-          <rect x={264} y={s.y + 12} width="40" height="6" rx="3" className={ART_CLASS.textBar} />
-          <rect
-            x={264}
-            y={s.y + 23}
-            width="26"
-            height="5"
-            rx="2.5"
-            className={ART_CLASS.textBarFaint}
-          />
-        </g>
-      ))}
-    </svg>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
    Capabilities — what makes a Follio different from a PDF
 
-   A vertical stack of alternating text / illustration rows. Each row pairs a
-   short claim with a bespoke Google-style spot illustration. Built to grow one
+   A scroll-locked stack of cards. Each card pairs a short claim with a spot
+   illustration (a square PNG in /public/illustrations). Built to grow one
    capability at a time; add entries to CAPABILITIES as their art is finished.
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -1487,8 +352,8 @@ type Capability = {
   id: string;
   eyebrow: string;
   title: string;
-  body: string;
-  Art: () => ReactNode;
+  /** Public path to the feature's spot illustration (square PNG). */
+  image: string;
 };
 
 const CAPABILITIES: readonly Capability[] = [
@@ -1496,50 +361,43 @@ const CAPABILITIES: readonly Capability[] = [
     id: 'adaptive',
     eyebrow: 'Adaptive',
     title: 'You build it once. Every viewer reads it their way.',
-    body: 'You are only the author of your resume — the people who open it are its real users. A PDF freezes them into the single layout you chose. Follio hands control back: the same profile becomes a recruiter-ready resume, a visual portfolio, or a quick snapshot, and each viewer picks the lens that fits them.',
-    Art: AdaptiveArt,
+    image: '/illustrations/Adaptive.png',
   },
   {
     id: 'talking',
     eyebrow: 'Talking',
     title: 'It answers questions — even when you are not there.',
-    body: 'A recruiter wonders whether you have shipped to production, led a team, or worked with a certain stack. Instead of guessing from a static page, they just ask. Follio answers in plain language, grounded only in what is actually on your profile.',
-    Art: TalkingArt,
+    image: '/illustrations/Talking.png',
   },
   {
     id: 'errorless',
     eyebrow: 'Errorless',
     title: 'It catches the mistakes that quietly cost you interviews.',
-    body: 'Intelligent checks review your Follio for far more than typos. They flag weak phrasing, inconsistent tense, vague bullet points, and design slips like uneven spacing or cramped sections — the common and easy-to-miss issues that make a resume look unpolished. You fix them before a recruiter ever sees them.',
-    Art: ErrorlessArt,
+    image: '/illustrations/Errorless.png',
   },
   {
     id: 'parsable',
     eyebrow: 'Parsable',
     title: 'Stored as clean data, so machines read it perfectly.',
-    body: 'Behind every view, your Follio lives as clean, structured JSON — not a flattened image of text. That means applicant tracking systems, exporters, and integrations read every field exactly right, with nothing lost to broken columns or unreadable PDFs.',
-    Art: ParsableArt,
+    image: '/illustrations/Parsable.png',
   },
   {
     id: 'connected',
     eyebrow: 'Connected',
     title: 'It plugs into where your work already lives.',
-    body: 'Link your GitHub, Medium, and LinkedIn and Follio pulls in your repositories, writing, and experience — then keeps them in sync. New project shipped or article published? Your Follio updates itself, so the version everyone sees is never out of date.',
-    Art: ConnectedArt,
+    image: '/illustrations/Connected.png',
   },
   {
     id: 'shareable',
     eyebrow: 'Shareable',
     title: 'One link to share — public or private, fully under your control.',
-    body: 'No more emailing PDFs or juggling “resume_final_v3” files. Share your Follio with a single link: make it public for the world, or keep it private for one recruiter. You decide exactly who gets in, change your mind any time, and everyone always sees the latest version — nothing to download, nothing to re-send.',
-    Art: ShareableArt,
+    image: '/illustrations/Shareable.png',
   },
   {
     id: 'self-improving',
     eyebrow: 'Skill-aware',
     title: 'It tracks the market and tells you which hot skills you’re missing.',
-    body: 'Follio watches live job-market trends and compares them to your profile, then flags the in-demand skills you don’t yet have and suggests exactly what to learn next. You always know where you stand — and what to add to stay competitive.',
-    Art: SelfImprovingArt,
+    image: '/illustrations/Skill-aware.png',
   },
 ] as const;
 
@@ -1575,58 +433,68 @@ function getStackedCapabilities(): readonly Capability[] {
   );
 }
 
-/** The shared visual shell for a card: opaque base + tint overlay + content. */
-function CapabilityCardShell({
-  card,
-  index,
-  total,
-}: {
-  card: Capability;
-  index: number;
-  total: number;
-}) {
-  const { Art } = card;
+/**
+ * The shared visual shell for a card: opaque base + tint overlay + content.
+ * The illustration alternates sides card-to-card so the stack reads with rhythm
+ * rather than a single static column.
+ */
+function CapabilityCardShell({ card, index }: { card: Capability; index: number }) {
+  const imageRight = index % 2 === 0;
+
   return (
     <div className="relative flex h-full flex-col overflow-hidden rounded-[28px] bg-card">
       {/* Tint layer — opaque card underneath guarantees full coverage. */}
       <div
         className={cn(
-          'pointer-events-none absolute inset-0 bg-gradient-to-br',
+          'pointer-events-none absolute inset-0 bg-gradient-to-br opacity-90',
           CAPABILITY_TINTS[card.id]
         )}
       />
 
-      <div className="relative grid h-full items-center gap-8 p-8 sm:gap-12 sm:p-12 lg:grid-cols-2 lg:gap-14 lg:p-14">
+      {/* Soft colour bloom behind the illustration for depth. */}
+      <div
+        className={cn(
+          'pointer-events-none absolute top-1/2 h-[520px] w-[520px] -translate-y-1/2 rounded-full bg-white/50 blur-[110px] dark:bg-white/[0.06]',
+          imageRight ? '-right-24' : '-left-24'
+        )}
+      />
+
+      {/* Crisp glassy edges: a hairline top highlight and a faint inset ring. */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent dark:via-white/15" />
+      <div className="pointer-events-none absolute inset-0 rounded-[28px] ring-1 ring-inset ring-black/[0.04] dark:ring-white/[0.06]" />
+
+      <div className="relative grid h-full items-center gap-6 p-8 sm:gap-10 sm:p-12 lg:grid-cols-2 lg:gap-14 lg:p-14">
         {/* Copy */}
-        <div className="order-2 lg:order-1">
-          <div className="mb-4 flex items-center gap-3">
-            <span className="font-mono text-sm font-medium text-primary">
-              {String(index + 1).padStart(2, '0')}
-            </span>
-            <span className="h-px w-8 bg-primary/40" />
-            <span className="font-mono text-xs uppercase tracking-[0.22em] text-muted-foreground">
+        <div className={cn('order-2', imageRight ? 'lg:order-1' : 'lg:order-2')}>
+          <div className="mb-5 inline-flex items-center gap-2.5 rounded-full border border-foreground/10 bg-background/40 px-3.5 py-1.5 backdrop-blur-sm">
+            <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+            <span className="font-mono text-xs uppercase tracking-[0.22em] text-foreground/70">
               {card.eyebrow}
             </span>
           </div>
-          <h3 className="text-3xl font-semibold leading-[1.1] tracking-tight sm:text-4xl lg:text-[2.6rem]">
+          <h3 className="max-w-md text-xl font-semibold leading-snug tracking-tight text-foreground sm:text-2xl lg:text-[1.9rem] lg:leading-[1.2]">
             {card.title}
           </h3>
-          <p className="mt-5 max-w-md text-base leading-relaxed text-muted-foreground sm:text-[17px]">
-            {card.body}
-          </p>
         </div>
 
         {/* Illustration */}
-        <div className="order-1 lg:order-2">
-          <div className="mx-auto aspect-[360/280] w-full max-w-sm rounded-2xl border border-border/40 bg-card/70 p-3 shadow-sm">
-            <Art />
+        <div
+          className={cn(
+            'order-1 flex items-center justify-center',
+            imageRight ? 'lg:order-2' : 'lg:order-1'
+          )}
+        >
+          <div className="relative aspect-square w-full max-w-[300px] sm:max-w-[340px] lg:max-w-[380px]">
+            <Image
+              src={card.image}
+              alt={card.eyebrow}
+              fill
+              priority={index === 0}
+              sizes="(max-width: 1024px) 340px, 380px"
+              className="object-contain drop-shadow-[0_20px_45px_rgba(0,0,0,0.12)]"
+            />
           </div>
         </div>
-      </div>
-
-      {/* Quiet step counter, bottom-right. */}
-      <div className="pointer-events-none absolute bottom-6 right-8 font-mono text-xs text-muted-foreground/60">
-        {String(index + 1).padStart(2, '0')} / {String(total).padStart(2, '0')}
       </div>
     </div>
   );
@@ -1663,7 +531,7 @@ function StackedCapabilityCard({
 
   return (
     <motion.div style={{ y, zIndex: index }} className="absolute inset-0">
-      <CapabilityCardShell card={card} index={index} total={total} />
+      <CapabilityCardShell card={card} index={index} />
     </motion.div>
   );
 }
@@ -1703,9 +571,9 @@ function StackedCapabilities() {
           {cards.map((card, i) => (
             <div
               key={card.id}
-              className="h-[480px] overflow-hidden rounded-[28px] border border-border/60 shadow-[0_40px_90px_-50px_rgb(0_0_0/0.5)]"
+              className="h-[480px] overflow-hidden rounded-[28px] border border-border/50 shadow-[0_50px_120px_-60px_rgba(0,0,0,0.55)] ring-1 ring-black/[0.03] dark:ring-white/[0.04]"
             >
-              <CapabilityCardShell card={card} index={i} total={cards.length} />
+              <CapabilityCardShell card={card} index={i} />
             </div>
           ))}
         </div>
@@ -1735,7 +603,7 @@ function StackedCapabilities() {
         </div>
 
         <div className="flex flex-1 items-center justify-center px-4 py-8 sm:px-6 lg:px-8">
-          <div className="relative h-full max-h-[480px] w-full max-w-5xl overflow-hidden rounded-[28px] border border-border/60 shadow-[0_40px_90px_-50px_rgb(0_0_0/0.5)]">
+          <div className="relative h-full max-h-[480px] w-full max-w-5xl overflow-hidden rounded-[28px] border border-border/50 shadow-[0_50px_120px_-60px_rgba(0,0,0,0.55)] ring-1 ring-black/[0.03] dark:ring-white/[0.04]">
             {cards.map((card, i) => (
               <StackedCapabilityCard
                 key={card.id}
