@@ -344,7 +344,7 @@ export const STEPS = [
    Capabilities — what makes a Follio different from a PDF
 
    A scroll-locked stack of cards. Each card pairs a short claim with a spot
-   illustration (a square PNG in /public/illustrations). Built to grow one
+   illustration (a square PNG in /public/illustrations_transparent). Built to grow one
    capability at a time; add entries to CAPABILITIES as their art is finished.
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -361,43 +361,43 @@ const CAPABILITIES: readonly Capability[] = [
     id: 'adaptive',
     eyebrow: 'Adaptive',
     title: 'You build it once. Every viewer reads it their way.',
-    image: '/illustrations/Adaptive.png',
+    image: '/illustrations_transparent/Adaptive.png',
   },
   {
     id: 'talking',
     eyebrow: 'Talking',
     title: 'It answers questions — even when you are not there.',
-    image: '/illustrations/Talking.png',
+    image: '/illustrations_transparent/Talking.png',
   },
   {
     id: 'errorless',
     eyebrow: 'Errorless',
     title: 'It catches the mistakes that quietly cost you interviews.',
-    image: '/illustrations/Errorless.png',
+    image: '/illustrations_transparent/Errorless.png',
   },
   {
     id: 'parsable',
     eyebrow: 'Parsable',
     title: 'Stored as clean data, so machines read it perfectly.',
-    image: '/illustrations/Parsable.png',
+    image: '/illustrations_transparent/Parsable.png',
   },
   {
     id: 'connected',
     eyebrow: 'Connected',
     title: 'It plugs into where your work already lives.',
-    image: '/illustrations/Connected.png',
+    image: '/illustrations_transparent/Connected.png',
   },
   {
     id: 'shareable',
     eyebrow: 'Shareable',
     title: 'One link to share — public or private, fully under your control.',
-    image: '/illustrations/Shareable.png',
+    image: '/illustrations_transparent/Shareable.png',
   },
   {
     id: 'self-improving',
     eyebrow: 'Skill-aware',
     title: 'It tracks the market and tells you which hot skills you’re missing.',
-    image: '/illustrations/Skill-aware.png',
+    image: '/illustrations_transparent/Skill-aware.png',
   },
 ] as const;
 
