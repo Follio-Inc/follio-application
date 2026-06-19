@@ -416,6 +416,10 @@ const CAPABILITY_TINTS: Record<string, string> = {
   connected: 'from-teal-100 to-emerald-50 dark:from-teal-900/40 dark:to-emerald-900/25',
 };
 
+/** Shared section heading — wraps on small screens; single-line on laptop+. */
+const CAPABILITIES_HEADING_CLASS =
+  'text-balance text-2xl font-semibold tracking-tight sm:text-3xl lg:whitespace-nowrap lg:text-4xl';
+
 /** Display order for the stacked cards — leads with the headline capability. */
 const CAPABILITY_STACK_ORDER = [
   'self-improving',
@@ -463,7 +467,7 @@ function CapabilityCardShell({ card, index }: { card: Capability; index: number 
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent dark:via-white/15" />
       <div className="pointer-events-none absolute inset-0 rounded-[28px] ring-1 ring-inset ring-black/[0.04] dark:ring-white/[0.06]" />
 
-      <div className="relative grid h-full items-center gap-6 p-8 sm:gap-10 sm:p-12 lg:grid-cols-2 lg:gap-14 lg:p-14">
+      <div className="relative grid h-full items-center gap-6 p-6 sm:gap-10 sm:p-12 lg:grid-cols-2 lg:gap-14 lg:p-14">
         {/* Copy */}
         <div className={cn('order-2', imageRight ? 'lg:order-1' : 'lg:order-2')}>
           <div className="mb-5 inline-flex items-center gap-2.5 rounded-full border border-foreground/10 bg-background/40 px-3.5 py-1.5 backdrop-blur-sm">
@@ -484,7 +488,7 @@ function CapabilityCardShell({ card, index }: { card: Capability; index: number 
             imageRight ? 'lg:order-2' : 'lg:order-1'
           )}
         >
-          <div className="relative aspect-square w-full max-w-[300px] sm:max-w-[340px] lg:max-w-[380px]">
+          <div className="relative aspect-square w-full max-w-[240px] sm:max-w-[340px] lg:max-w-[380px]">
             <Image
               src={card.image}
               alt={card.eyebrow}
@@ -544,6 +548,8 @@ function StackedCapabilityCard({
  */
 function StackedCapabilities() {
   const reduceMotion = useReducedMotion();
+  const isDesktop = useMediaQuery('(min-width: 1024px)');
+  const useScrollStack = isDesktop && !reduceMotion;
   const containerRef = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({
     target: containerRef,
@@ -556,22 +562,22 @@ function StackedCapabilities() {
   // Deadband [0, 0.05] ignores micro-scrolls; fully gone by 0.4 progress-units/s.
   const indicatorOpacity = useTransform(scrollVelocity, [0.05, 0.4], [1, 0]);
 
-  if (reduceMotion) {
+  if (!useScrollStack) {
     return (
-      <div className="mx-auto max-w-5xl px-4 pb-20 pt-20 sm:px-6 sm:pb-28 sm:pt-28 lg:px-8">
-        <div className="mb-12 sm:mb-16">
+      <div className="mx-auto max-w-5xl px-4 pb-16 pt-16 sm:px-6 sm:pb-28 sm:pt-28 lg:px-8">
+        <div className="mb-10 sm:mb-16">
           <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.2em] text-primary">
             More than a document
           </p>
-          <h2 className="whitespace-nowrap text-3xl font-semibold tracking-tight sm:text-4xl">
+          <h2 className={CAPABILITIES_HEADING_CLASS}>
             Your <RotatingWord /> resume that works for you.
           </h2>
         </div>
-        <div className="space-y-6 sm:space-y-8">
+        <div className="space-y-5 sm:space-y-8">
           {cards.map((card, i) => (
             <div
               key={card.id}
-              className="h-[480px] overflow-hidden rounded-[28px] border border-border/50 shadow-[0_50px_120px_-60px_rgba(0,0,0,0.55)] ring-1 ring-black/[0.03] dark:ring-white/[0.04]"
+              className="overflow-hidden rounded-[28px] border border-border/50 shadow-[0_50px_120px_-60px_rgba(0,0,0,0.55)] ring-1 ring-black/[0.03] dark:ring-white/[0.04]"
             >
               <CapabilityCardShell card={card} index={i} />
             </div>
@@ -596,7 +602,7 @@ function StackedCapabilities() {
             <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.2em] text-primary">
               More than a document
             </p>
-            <h2 className="whitespace-nowrap text-3xl font-semibold tracking-tight sm:text-4xl">
+            <h2 className={CAPABILITIES_HEADING_CLASS}>
               Your <RotatingWord /> resume that works for you.
             </h2>
           </div>
@@ -674,7 +680,8 @@ const RESUME_SURFACE_CLASS =
   'overflow-hidden rounded-lg border border-border/70 bg-white shadow-[0_24px_60px_-24px_rgb(0_0_0/0.3)] ring-1 ring-black/[0.02] dark:bg-gray-950';
 
 /** Fixed A4 sheet (210 × 297). Height drives layout; width follows the ratio. */
-const RESUME_A4_CLASS = 'aspect-[210/297] h-[80vh] max-h-[760px]';
+const RESUME_A4_CLASS =
+  'aspect-[210/297] h-[min(58vh,520px)] w-full max-w-[min(100%,340px)] lg:h-[80vh] lg:max-h-[760px] lg:max-w-none';
 
 /**
  * Static fallback used on small screens and when the visitor prefers reduced
@@ -684,14 +691,14 @@ const RESUME_A4_CLASS = 'aspect-[210/297] h-[80vh] max-h-[760px]';
 function ResumeShowcaseStatic() {
   return (
     <section className="border-t border-border/60 bg-muted/20">
-      <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-28 lg:px-8">
-        <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+      <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-28 lg:px-8">
+        <div className="grid items-center gap-10 sm:gap-12 lg:grid-cols-2 lg:gap-16">
           <FadeIn>
             <div className="max-w-xl">
               <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.2em] text-primary">
                 {RESUME_COPY.eyebrow}
               </p>
-              <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+              <h2 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl lg:text-4xl">
                 {RESUME_COPY.heading}
               </h2>
               <p className="mt-5 text-pretty text-[15px] leading-7 text-muted-foreground sm:text-base">
@@ -996,12 +1003,12 @@ function Hero() {
     <section className="relative flex min-h-[calc(100svh-3.5rem)] items-center overflow-hidden">
       <div className="pointer-events-none absolute left-1/2 top-0 -z-10 h-[520px] w-[900px] -translate-x-1/2 rounded-full bg-primary/[0.06] blur-3xl" />
 
-      <div className="mx-auto w-full max-w-5xl px-4 pb-16 pt-12 text-left sm:px-6 sm:pb-20 lg:px-8">
+      <div className="mx-auto w-full max-w-5xl px-4 pb-12 pt-8 text-left sm:px-6 sm:pb-20 sm:pt-12 lg:px-8">
         <motion.h1
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.05 }}
-          className="max-w-3xl text-balance text-4xl font-semibold leading-[1.18] tracking-tight text-foreground sm:text-5xl lg:text-6xl"
+          className="max-w-3xl text-balance text-[2rem] font-semibold leading-[1.2] tracking-tight text-foreground sm:text-5xl lg:text-6xl lg:leading-[1.18]"
         >
           A resume that does things a PDF never could.
         </motion.h1>
@@ -1010,7 +1017,7 @@ function Hero() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.15 }}
-          className="mt-6 max-w-3xl text-pretty text-[15px] leading-7 text-muted-foreground/90 sm:text-[18px] sm:leading-8"
+          className="mt-5 max-w-3xl text-pretty text-sm leading-6 text-muted-foreground/90 sm:mt-6 sm:text-[18px] sm:leading-8"
         >
           Follio is a web app for job seekers and professionals to build one living profile and
           share it as a resume, portfolio, or quick snapshot through a single link, with clean
@@ -1039,7 +1046,7 @@ function Hero() {
 
 export function LandingPage() {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen overflow-x-clip bg-background">
       <AppHeader
         tone="marketing"
         left={<Logo href="/" size="md" />}
@@ -1071,10 +1078,10 @@ export function LandingPage() {
 
       {/* ─── Final CTA ───────────────────────────────────────────────────── */}
       <section className="border-t border-border/60">
-        <div className="relative mx-auto max-w-5xl overflow-hidden px-4 py-24 text-center sm:px-6 sm:py-32 lg:px-8">
+        <div className="relative mx-auto max-w-5xl overflow-hidden px-4 py-16 text-center sm:px-6 sm:py-32 lg:px-8">
           <div className="pointer-events-none absolute inset-x-0 top-1/2 -z-10 mx-auto h-[300px] w-[600px] -translate-y-1/2 rounded-full bg-primary/[0.07] blur-3xl" />
           <FadeIn>
-            <h2 className="mx-auto max-w-2xl text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
+            <h2 className="mx-auto max-w-2xl text-balance text-2xl font-semibold tracking-tight sm:text-4xl">
               Stop sending PDFs, start sharing Follio links.
             </h2>
             <p className="mx-auto mt-4 max-w-md text-muted-foreground">
@@ -1107,7 +1114,7 @@ export function LandingPage() {
           </p>
         </div>
 
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 py-10 sm:flex-row sm:px-6 lg:px-8">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 py-8 sm:flex-row sm:px-6 sm:py-10 lg:px-8">
           <div className="flex items-center gap-2">
             <Logo size="sm" showText={false} />
             <span className="text-sm text-muted-foreground">
