@@ -467,16 +467,16 @@ function CapabilityCardShell({ card, index }: { card: Capability; index: number 
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent dark:via-white/15" />
       <div className="pointer-events-none absolute inset-0 rounded-[28px] ring-1 ring-inset ring-black/[0.04] dark:ring-white/[0.06]" />
 
-      <div className="relative grid h-full items-center gap-6 p-6 sm:gap-10 sm:p-12 lg:grid-cols-2 lg:gap-14 lg:p-14">
+      <div className="relative grid h-full items-center gap-5 p-6 text-center sm:gap-10 sm:p-12 lg:grid-cols-2 lg:gap-14 lg:p-14 lg:text-left">
         {/* Copy */}
         <div className={cn('order-2', imageRight ? 'lg:order-1' : 'lg:order-2')}>
-          <div className="mb-5 inline-flex items-center gap-2.5 rounded-full border border-foreground/10 bg-background/40 px-3.5 py-1.5 backdrop-blur-sm">
+          <div className="mb-4 inline-flex items-center gap-2.5 rounded-full border border-foreground/10 bg-background/40 px-3.5 py-1.5 backdrop-blur-sm sm:mb-5">
             <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-            <span className="font-mono text-xs uppercase tracking-[0.22em] text-foreground/70">
+            <span className="font-mono text-[11px] uppercase tracking-[0.22em] text-foreground/70 sm:text-xs">
               {card.eyebrow}
             </span>
           </div>
-          <h3 className="max-w-md text-xl font-semibold leading-snug tracking-tight text-foreground sm:text-2xl lg:text-[1.9rem] lg:leading-[1.2]">
+          <h3 className="mx-auto max-w-md text-pretty text-[1.35rem] font-semibold leading-snug tracking-tight text-foreground sm:text-2xl lg:mx-0 lg:text-[1.9rem] lg:leading-[1.2]">
             {card.title}
           </h3>
         </div>
@@ -488,13 +488,13 @@ function CapabilityCardShell({ card, index }: { card: Capability; index: number 
             imageRight ? 'lg:order-2' : 'lg:order-1'
           )}
         >
-          <div className="relative aspect-square w-full max-w-[240px] sm:max-w-[340px] lg:max-w-[380px]">
+          <div className="relative aspect-square w-full max-w-[190px] sm:max-w-[340px] lg:max-w-[380px]">
             <Image
               src={card.image}
               alt={card.eyebrow}
               fill
               priority={index === 0}
-              sizes="(max-width: 1024px) 340px, 380px"
+              sizes="(max-width: 640px) 190px, (max-width: 1024px) 340px, 380px"
               className="object-contain drop-shadow-[0_20px_45px_rgba(0,0,0,0.12)]"
             />
           </div>
@@ -564,8 +564,8 @@ function StackedCapabilities() {
 
   if (!useScrollStack) {
     return (
-      <div className="mx-auto max-w-5xl px-4 pb-16 pt-16 sm:px-6 sm:pb-28 sm:pt-28 lg:px-8">
-        <div className="mb-10 sm:mb-16">
+      <div className="mx-auto max-w-5xl px-5 pb-16 pt-16 sm:px-6 sm:pb-28 sm:pt-28 lg:px-8">
+        <div className="mb-8 sm:mb-16">
           <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.2em] text-primary">
             More than a document
           </p>
@@ -638,8 +638,8 @@ function Capabilities() {
 
 function HeroCTA() {
   return (
-    <Link href="/sign-up">
-      <Button size="lg" className="rounded-full px-6">
+    <Link href="/sign-up" className="block w-full sm:inline-block sm:w-auto">
+      <Button size="lg" className="h-12 w-full rounded-full px-6 text-base sm:h-11 sm:w-auto">
         Build Your Follio
       </Button>
     </Link>
@@ -679,9 +679,11 @@ const RESUME_COPY = {
 const RESUME_SURFACE_CLASS =
   'overflow-hidden rounded-lg border border-border/70 bg-white shadow-[0_24px_60px_-24px_rgb(0_0_0/0.3)] ring-1 ring-black/[0.02] dark:bg-gray-950';
 
-/** Fixed A4 sheet (210 × 297). Height drives layout; width follows the ratio. */
-const RESUME_A4_CLASS =
-  'aspect-[210/297] h-[min(58vh,520px)] w-full max-w-[min(100%,340px)] lg:h-[80vh] lg:max-h-[760px] lg:max-w-none';
+/**
+ * Fixed A4 sheet (210 × 297) for the desktop pinned showcase. Height drives
+ * layout; width follows the ratio. (Mobile uses its own teaser preview.)
+ */
+const RESUME_A4_CLASS = 'aspect-[210/297] h-[80vh] max-h-[760px]';
 
 /**
  * Static fallback used on small screens and when the visitor prefers reduced
@@ -691,22 +693,25 @@ const RESUME_A4_CLASS =
 function ResumeShowcaseStatic() {
   return (
     <section className="border-t border-border/60 bg-muted/20">
-      <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-28 lg:px-8">
+      <div className="mx-auto max-w-6xl px-5 py-16 sm:px-6 sm:py-28 lg:px-8">
         <div className="grid items-center gap-10 sm:gap-12 lg:grid-cols-2 lg:gap-16">
           <FadeIn>
-            <div className="max-w-xl">
+            <div className="max-w-xl text-center lg:text-left">
               <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.2em] text-primary">
                 {RESUME_COPY.eyebrow}
               </p>
               <h2 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl lg:text-4xl">
                 {RESUME_COPY.heading}
               </h2>
-              <p className="mt-5 text-pretty text-[15px] leading-7 text-muted-foreground sm:text-base">
+              <p className="mx-auto mt-4 max-w-md text-pretty text-[15px] leading-7 text-muted-foreground sm:mt-5 sm:text-base lg:mx-0 lg:max-w-none">
                 {RESUME_COPY.body}
               </p>
-              <div className="mt-8">
-                <Link href="/sign-up">
-                  <Button size="lg" className="rounded-full px-6">
+              <div className="mt-7 sm:mt-8">
+                <Link href="/sign-up" className="block w-full sm:inline-block sm:w-auto">
+                  <Button
+                    size="lg"
+                    className="h-12 w-full rounded-full px-6 text-base sm:h-11 sm:w-auto"
+                  >
                     Create yours
                   </Button>
                 </Link>
@@ -714,10 +719,22 @@ function ResumeShowcaseStatic() {
             </div>
           </FadeIn>
 
+          {/*
+            Mobile/tablet preview: a non-scrollable A4 teaser. The document is
+            top-aligned and clipped, with a fade at the bottom edge signalling
+            "there's more" — deliberately avoiding a nested scroll area, which
+            on touch devices traps the page scroll.
+          */}
           <FadeIn delay={0.1}>
             <div className="flex justify-center lg:justify-end">
-              <div className={cn(RESUME_SURFACE_CLASS, RESUME_A4_CLASS, 'overflow-y-auto')}>
+              <div
+                className={cn(
+                  RESUME_SURFACE_CLASS,
+                  'relative aspect-[210/297] w-full max-w-[300px] overflow-hidden sm:max-w-[360px]'
+                )}
+              >
                 <ResumeIllustration />
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-white to-transparent dark:from-gray-950" />
               </div>
             </div>
           </FadeIn>
@@ -1003,12 +1020,12 @@ function Hero() {
     <section className="relative flex min-h-[calc(100svh-3.5rem)] items-center overflow-hidden">
       <div className="pointer-events-none absolute left-1/2 top-0 -z-10 h-[520px] w-[900px] -translate-x-1/2 rounded-full bg-primary/[0.06] blur-3xl" />
 
-      <div className="mx-auto w-full max-w-5xl px-4 pb-12 pt-8 text-left sm:px-6 sm:pb-20 sm:pt-12 lg:px-8">
+      <div className="mx-auto w-full max-w-5xl px-5 pb-14 pt-6 text-left sm:px-6 sm:pb-20 sm:pt-12 lg:px-8">
         <motion.h1
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.05 }}
-          className="max-w-3xl text-balance text-[2rem] font-semibold leading-[1.2] tracking-tight text-foreground sm:text-5xl lg:text-6xl lg:leading-[1.18]"
+          className="max-w-3xl text-balance text-[2.05rem] font-semibold leading-[1.15] tracking-tight text-foreground sm:text-5xl lg:text-6xl lg:leading-[1.18]"
         >
           A resume that does things a PDF never could.
         </motion.h1>
@@ -1017,12 +1034,19 @@ function Hero() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.15 }}
-          className="mt-5 max-w-3xl text-pretty text-sm leading-6 text-muted-foreground/90 sm:mt-6 sm:text-[18px] sm:leading-8"
+          className="mt-5 max-w-3xl text-pretty text-[15px] leading-7 text-muted-foreground/90 sm:mt-6 sm:text-[18px] sm:leading-8"
         >
-          Follio is a web app for job seekers and professionals to build one living profile and
-          share it as a resume, portfolio, or quick snapshot through a single link, with clean
-          formatting, viewer-adaptive presentation, and AI assistance that helps answer recruiter
-          questions and suggest skills based on market trends.
+          {/* Mobile: a tight, scannable promise. Desktop: the full positioning. */}
+          <span className="sm:hidden">
+            Build one living profile and share it as a resume, portfolio, or quick snapshot — all
+            from a single link.
+          </span>
+          <span className="hidden sm:inline">
+            Follio is a web app for job seekers and professionals to build one living profile and
+            share it as a resume, portfolio, or quick snapshot through a single link, with clean
+            formatting, viewer-adaptive presentation, and AI assistance that helps answer recruiter
+            questions and suggest skills based on market trends.
+          </span>
         </motion.p>
 
         <motion.div
@@ -1078,18 +1102,21 @@ export function LandingPage() {
 
       {/* ─── Final CTA ───────────────────────────────────────────────────── */}
       <section className="border-t border-border/60">
-        <div className="relative mx-auto max-w-5xl overflow-hidden px-4 py-16 text-center sm:px-6 sm:py-32 lg:px-8">
+        <div className="relative mx-auto max-w-5xl overflow-hidden px-5 py-16 text-center sm:px-6 sm:py-32 lg:px-8">
           <div className="pointer-events-none absolute inset-x-0 top-1/2 -z-10 mx-auto h-[300px] w-[600px] -translate-y-1/2 rounded-full bg-primary/[0.07] blur-3xl" />
           <FadeIn>
             <h2 className="mx-auto max-w-2xl text-balance text-2xl font-semibold tracking-tight sm:text-4xl">
               Stop sending PDFs, start sharing Follio links.
             </h2>
-            <p className="mx-auto mt-4 max-w-md text-muted-foreground">
+            <p className="mx-auto mt-4 max-w-md text-pretty text-muted-foreground">
               Set up your Follio in a few minutes. Free to start, no credit card.
             </p>
             <div className="mt-8 flex items-center justify-center">
-              <Link href="/sign-up">
-                <Button size="lg" className="rounded-full px-6">
+              <Link href="/sign-up" className="block w-full sm:inline-block sm:w-auto">
+                <Button
+                  size="lg"
+                  className="h-12 w-full rounded-full px-6 text-base sm:h-11 sm:w-auto"
+                >
                   Create your Follio
                 </Button>
               </Link>
@@ -1100,7 +1127,7 @@ export function LandingPage() {
 
       {/* ─── Footer ──────────────────────────────────────────────────────── */}
       <footer className="border-t border-border/60">
-        <div className="mx-auto max-w-6xl px-4 pt-10 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-6xl px-5 pt-10 sm:px-6 lg:px-8">
           <p className="max-w-3xl text-xs leading-6 text-muted-foreground/80">
             Follio helps you build a living, shareable professional resume and portfolio. When you
             sign in with Google, we use the basic profile information provided by Google — your
@@ -1114,7 +1141,7 @@ export function LandingPage() {
           </p>
         </div>
 
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 py-8 sm:flex-row sm:px-6 sm:py-10 lg:px-8">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-5 py-8 sm:flex-row sm:px-6 sm:py-10 lg:px-8">
           <div className="flex items-center gap-2">
             <Logo size="sm" showText={false} />
             <span className="text-sm text-muted-foreground">
