@@ -536,6 +536,13 @@
   .resume-bullets li {
     margin-bottom: 3px;
     padding-left: 4px;
+    /* Match the editor's `defaultAlignment: 'justify'` and the `.rich-text-bullets`
+       path so legacy plain-text bullets (stored in `bullets[]` with no `bulletsHtml`)
+       render justified by default — not the document's left default. Without this,
+       freshly onboarded resumes look unjustified until the highlights editor is
+       opened (which regenerates `bulletsHtml` with inline justify). Explicit
+       per-bullet alignment still wins via the inline-style rules below. */
+    text-align: justify;
   }
 
   /* Inline formatting within bullets (from rich text editor) */
