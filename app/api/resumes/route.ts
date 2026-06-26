@@ -117,6 +117,32 @@ async function setActiveProfile(
   });
 }
 
+/**
+ * Resolve a human-friendly base for a new resume's handle.
+ *
+ * Resumes are keyed by a globally-unique `handle`, but the auto-generated resume
+ * *title* ("My Resume 20260625_2348") produces ugly URLs like
+ * `my-resume-20260625-2348-hw81h`. Prefer the user's name (taken from their
+ * oldest existing profile) so additional resumes read like
+ * `shobhit-srivastava-hw81h`, falling back to the email local-part.
+ */
+async function resolveHandleBase(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  email: string
+): Promise<string> {
+  const existing = await tx.profile.findFirst({
+    where: { userId },
+    orderBy: { createdAt: 'asc' },
+    select: { firstName: true, lastName: true },
+  });
+
+  const nameBase = [existing?.firstName, existing?.lastName].filter(Boolean).join(' ').trim();
+  if (nameBase) return nameBase;
+
+  return email.split('@')[0] ?? 'resume';
+}
+
 async function generateUniqueHandle(
   tx: Prisma.TransactionClient,
   base: string,
@@ -205,7 +231,8 @@ async function createBlankProfile(
 ): Promise<{ id: string; handle: string; resumeTitle: string }> {
   const emailPrefix = user.email.split('@')[0] ?? 'resume';
   const resumeTitle = await generateUniqueResumeTitle(tx, user.id, title);
-  const generatedHandle = await generateUniqueHandle(tx, resumeTitle, emailPrefix);
+  const handleBase = await resolveHandleBase(tx, user.id, user.email);
+  const generatedHandle = await generateUniqueHandle(tx, handleBase, emailPrefix);
 
   const profile = await tx.profile.create({
     data: {
@@ -238,9 +265,10 @@ async function cloneProfile(
 ): Promise<{ id: string; handle: string; resumeTitle: string }> {
   const rawCloneTitle = title?.trim() || `${source.resumeTitle} Copy`;
   const cloneTitle = await generateUniqueResumeTitle(tx, user.id, rawCloneTitle);
+  const handleBase = await resolveHandleBase(tx, user.id, user.email);
   const generatedHandle = await generateUniqueHandle(
     tx,
-    cloneTitle,
+    handleBase,
     user.email.split('@')[0] ?? 'resume'
   );
 

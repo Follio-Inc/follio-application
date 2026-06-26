@@ -42,6 +42,7 @@ import {
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 import { containsHtmlFormatting, sanitizeRichHtml, stripHtmlTags } from '@/lib/html-utils';
+import { ONBOARDING_TEMPLATE_KEY } from '@/lib/portfolio/templates/onboarding';
 import { toMonthInputFormat } from '@/lib/utils';
 
 // IndexedDB helpers for retrieving large uploaded photos
@@ -804,6 +805,9 @@ function ReviewPageContent() {
       const storedParsed = sessionStorage.getItem('onboarding_parsed_resume');
       const resumeFileName = storedParsed ? JSON.parse(storedParsed)?._resumeFileName : null;
 
+      // Template the user picked during onboarding (falls back to server default)
+      const selectedTemplateId = sessionStorage.getItem(ONBOARDING_TEMPLATE_KEY) || undefined;
+
       // Retrieve gallery photos from IndexedDB
       const galleryPhotoRefs: string[] = storedParsed
         ? JSON.parse(storedParsed)?.galleryPhotos || []
@@ -833,6 +837,8 @@ function ReviewPageContent() {
           originalAvatarDataUrl: originalAvatarDataUrl || undefined,
           // When adding a new resume from builder, target the specific blank profile
           targetProfileId: sessionStorage.getItem('importTargetProfileId') || undefined,
+          // Starting template chosen during onboarding
+          templateId: selectedTemplateId,
           reviewedData: {
             profile: profileForApi,
             experiences: data.experiences,
@@ -879,6 +885,7 @@ function ReviewPageContent() {
       sessionStorage.removeItem('onboarding_parsed_resume');
       sessionStorage.removeItem('onboarding_handle');
       sessionStorage.removeItem('importTargetProfileId');
+      sessionStorage.removeItem(ONBOARDING_TEMPLATE_KEY);
       await clearPhotosFromIndexedDB();
 
       // Check if there's a return URL (e.g., coming from builder's "New resume from upload")

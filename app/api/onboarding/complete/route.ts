@@ -243,6 +243,7 @@ export async function POST(request: NextRequest) {
       galleryPhotos,
       originalAvatarDataUrl,
       targetProfileId,
+      templateId,
     } = body as {
       importedData?: Record<string, NormalizedImportResult | undefined>;
       reviewedData?: ReviewedData;
@@ -257,6 +258,8 @@ export async function POST(request: NextRequest) {
       originalAvatarDataUrl?: string;
       /** When creating a new resume from the builder, this targets the specific blank profile */
       targetProfileId?: string;
+      /** Starting portfolio template chosen during onboarding */
+      templateId?: string;
     };
 
     console.log('[Onboarding Complete] Has reviewedData:', !!reviewedData);
@@ -793,8 +796,11 @@ export async function POST(request: NextRequest) {
     // Generate AI-enriched portfolio (fire and forget - don't block the response)
     const profileId = user.profile?.id;
     if (profileId) {
+      const startingTemplateId = typeof templateId === 'string' ? templateId : undefined;
       import('@/services/portfolio/enhanced-generation.service')
-        .then(({ generateEnhancedPortfolio }) => generateEnhancedPortfolio(profileId))
+        .then(({ generateEnhancedPortfolio }) =>
+          generateEnhancedPortfolio(profileId, { templateId: startingTemplateId })
+        )
         .then((result) => {
           console.log('[Onboarding Complete] Portfolio generated:', result.portfolioId);
         })

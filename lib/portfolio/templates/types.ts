@@ -56,6 +56,88 @@ export interface TemplatePortfolio {
    * Optional: portfolios generated without AI will have this as null.
    */
   enrichment: TemplateAIEnrichment | null;
+
+  /**
+   * User-controlled overrides for media that would otherwise come from the
+   * normalized profile (avatar, project images). Stored inside the plan so the
+   * entire portfolio presentation — including images — can be drafted and
+   * published atomically without mutating the underlying profile/resume data.
+   *
+   * Optional: portfolios that have never been edited will have this absent.
+   */
+  overrides?: TemplatePortfolioOverrides | null;
+}
+
+/**
+ * Media + presentation overrides applied on top of the normalized profile data
+ * at render time. These let a user tailor the portfolio's imagery without
+ * touching the canonical profile (which also powers their resume).
+ */
+export interface TemplatePortfolioOverrides {
+  /**
+   * Portfolio avatar override.
+   * - `string` → use this image URL for the portrait
+   * - `null` → explicitly hide the portrait
+   * - absent (key omitted) → fall back to the profile's avatar
+   */
+  avatarUrl?: string | null;
+
+  /**
+   * Per-project image overrides, keyed by project id.
+   * - `string` → use this image URL for the project card
+   * - `null` → explicitly show no image (clean text-forward card)
+   * - absent (key omitted) → fall back to the project's own imageUrl
+   */
+  projectImages?: Record<string, string | null>;
+
+  /**
+   * Hero portrait preset (Minimal Studio). Each style is a full composition —
+   * size, shape, and placement — not separate toggles.
+   */
+  portraitStyle?: PortraitStyle;
+
+  /** @deprecated Use `portraitStyle`. Kept for draft migration only. */
+  portraitLayout?: PortraitLayout;
+
+  /**
+   * Projects/work layout preset (Minimal Studio). Each option is a complete
+   * grid composition — see `WORK_STYLES` for the available layouts.
+   */
+  workStyle?: WorkStyle;
+
+  /**
+   * About section layout preset (Minimal Studio). See `ABOUT_STYLES`.
+   */
+  aboutStyle?: AboutStyle;
+
+  /**
+   * Skills section layout preset (Minimal Studio). See `SKILLS_STYLES`.
+   */
+  skillsStyle?: SkillsStyle;
+}
+
+/** Editorial portrait preset for the Minimal Studio hero. */
+export type PortraitStyle = 'style-1' | 'style-2' | 'style-3' | 'style-4' | 'style-5';
+
+/** Projects/work layout preset for the Minimal Studio template. */
+export type WorkStyle = 'editorial' | 'grid' | 'gallery';
+
+/** About layout preset for the Minimal Studio template. */
+export type AboutStyle = 'sidebar' | 'centered' | 'statement';
+
+/** Skills layout preset for the Minimal Studio template. */
+export type SkillsStyle = 'rows' | 'inline' | 'columns';
+
+/** @deprecated Replaced by `PortraitStyle` presets. */
+export type PortraitSize = 'small' | 'medium' | 'large';
+
+/** @deprecated Replaced by `PortraitStyle` presets. */
+export type PortraitAlign = 'left' | 'right';
+
+/** @deprecated Replaced by `PortraitStyle` presets. */
+export interface PortraitLayout {
+  size: PortraitSize;
+  align: PortraitAlign;
 }
 
 /**
@@ -127,6 +209,18 @@ export interface TemplateCopy {
 
   /** A memorable pull-quote or personal motto, if inferrable from data */
   pullQuote?: string | null;
+
+  /**
+   * Per-section heading overrides — the small eyebrow label and the large
+   * section title (e.g. "Selected Work" / "Things I've made"). Lets the user
+   * rewrite section headings the template would otherwise hardcode.
+   *
+   * Keyed by section type. Either field may be omitted or blank, in which case
+   * the template's default heading for that section is used. The `about` and
+   * `contact` sections keep their dedicated copy fields and only use the
+   * `eyebrow` here.
+   */
+  sectionHeadings?: Partial<Record<TemplateSectionType, { eyebrow?: string; title?: string }>>;
 }
 
 /**
@@ -289,6 +383,13 @@ export interface TemplateKitMeta {
 
   /** Sections this template supports */
   supportedSections: TemplateSectionType[];
+
+  /**
+   * Default headings (eyebrow + title) for the template's content sections.
+   * Used as render-time fallbacks and as placeholders in the editor's
+   * "heading" fields. Only sections listed here expose editable headings.
+   */
+  defaultSectionHeadings?: Partial<Record<TemplateSectionType, { eyebrow: string; title: string }>>;
 
   /**
    * Navbar theme — tells the Follio top bar how to blend with this template.

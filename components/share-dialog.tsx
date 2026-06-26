@@ -72,15 +72,9 @@ type VisibilityOption = {
   badgeVariant: 'default' | 'secondary' | 'outline';
 };
 
+// A resume contains personal contact details, so it deliberately has no
+// openly-public mode — only a secure (unguessable) link or fully private.
 const VISIBILITY_OPTIONS: VisibilityOption[] = [
-  {
-    value: 'PUBLIC',
-    label: 'Public',
-    description: 'Anyone with the link can view',
-    icon: Globe,
-    color: 'text-green-600',
-    badgeVariant: 'default',
-  },
   {
     value: 'UNLISTED',
     label: 'Unlisted',
@@ -272,6 +266,14 @@ const WEBMAIL_PROVIDERS: Record<string, WebmailProvider> = {
   },
 };
 
+/**
+ * Legacy PUBLIC resumes are surfaced as UNLISTED since the resume no longer
+ * supports an openly-public mode.
+ */
+function normalizeResumeVisibility(v: ContentVisibility | null | undefined): ContentVisibility {
+  return v === 'PUBLIC' ? 'UNLISTED' : (v ?? 'PRIVATE');
+}
+
 /** Detect webmail provider from an email address. Returns null for unsupported domains. */
 function detectWebmailProvider(email: string | null | undefined): WebmailProvider | null {
   if (!email) return null;
@@ -312,9 +314,9 @@ export function ShareDialog({
   const open = controlledOpen ?? internalOpen;
   const setOpen = onOpenChange ?? setInternalOpen;
 
-  // Visibility state
+  // Visibility state.
   const [resumeVisibility, setResumeVisibility] = useState<ContentVisibility>(
-    profile.resumeVisibility ?? 'PRIVATE'
+    normalizeResumeVisibility(profile.resumeVisibility)
   );
   const [savingVisibility, setSavingVisibility] = useState(false);
   const [savedVisibility, setSavedVisibility] = useState(false);
@@ -362,7 +364,7 @@ export function ShareDialog({
   useEffect(() => {
     if (open) {
       // Reset visibility state when opening with a (possibly) different profile
-      setResumeVisibility(profile.resumeVisibility ?? 'PRIVATE');
+      setResumeVisibility(normalizeResumeVisibility(profile.resumeVisibility));
       setShowRegenConfirm(false);
       setSavedVisibility(false);
 
@@ -505,7 +507,7 @@ export function ShareDialog({
   // ── Current visibility info ──────────────────────────────────────────
 
   const currentVisibility =
-    VISIBILITY_OPTIONS.find((v) => v.value === resumeVisibility) ?? VISIBILITY_OPTIONS[1];
+    VISIBILITY_OPTIONS.find((v) => v.value === resumeVisibility) ?? VISIBILITY_OPTIONS[0];
   const CurrentIcon = currentVisibility.icon;
 
   // ── Render ───────────────────────────────────────────────────────────

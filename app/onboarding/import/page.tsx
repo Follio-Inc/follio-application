@@ -31,6 +31,7 @@ import Cropper from 'react-easy-crop';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
+import { OnboardingTemplateChoice } from '@/components/portfolio/onboarding-template-choice';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
@@ -2595,6 +2596,17 @@ export default function OnboardingImportPage() {
                     )}
                 </motion.div>
               </div>
+
+              {/* Starting template picker — choice persists to the review/complete flow.
+                  Placed outside the narrow summary column so previews have room. */}
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 1.3 }}
+                className="mx-auto mt-8 max-w-2xl border-t pt-6"
+              >
+                <OnboardingTemplateChoice />
+              </motion.div>
             </motion.div>
           )}
         </AnimatePresence>

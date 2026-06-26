@@ -299,6 +299,12 @@ export async function PATCH(request: NextRequest) {
 
     const shouldSyncAvatarToClerk = body.syncAvatarToClerk !== false;
 
+    // A resume is a PII document and has no openly-public mode. Coerce any
+    // attempt to set the resume to PUBLIC down to UNLISTED so it always stays
+    // behind an unguessable share link (portfolio visibility is unaffected).
+    const safeResumeVisibility =
+      body.resumeVisibility === 'PUBLIC' ? 'UNLISTED' : body.resumeVisibility;
+
     // Update profile
     const profile = await db.profile.update({
       where: { id: existingProfile.id },
@@ -312,7 +318,7 @@ export async function PATCH(request: NextRequest) {
         location: body.location,
         avatarUrl: body.avatarUrl,
         status: body.status,
-        ...(body.resumeVisibility && { resumeVisibility: body.resumeVisibility }),
+        ...(safeResumeVisibility && { resumeVisibility: safeResumeVisibility }),
         ...(body.portfolioVisibility && { portfolioVisibility: body.portfolioVisibility }),
         ...(body.linksVisibility && { linksVisibility: body.linksVisibility }),
         ...(typeof body.resumeShowPhoto === 'boolean' && { resumeShowPhoto: body.resumeShowPhoto }),

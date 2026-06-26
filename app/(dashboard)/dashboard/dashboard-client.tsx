@@ -1,15 +1,28 @@
 'use client';
 
-import { ArrowRight, Check, Copy, ExternalLink, Globe, Link2, Lock, Share2 } from 'lucide-react';
+import {
+  ArrowRight,
+  Check,
+  Copy,
+  ExternalLink,
+  Globe,
+  LayoutTemplate,
+  Link2,
+  Lock,
+  Pencil,
+  Share2,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useState } from 'react';
 
+import type { TemplateOption } from '@/components/portfolio/template-option-card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { getPortfolioUrl } from '@/lib/url';
 
 import { DashboardResumesSection, type DashboardResumeItem } from './dashboard-resumes-section';
 import { PortfolioThumbnail } from './portfolio-thumbnail';
+import { TemplateGallery } from './template-gallery';
 
 // ─── Types ────────────────────────────────────────────────────────
 
@@ -29,6 +42,10 @@ export interface DashboardData {
   resumes: DashboardResumeItem[];
   activeProfileId: string | null;
   primaryProfileId: string | null;
+  /** Template currently powering the portfolio, if any. */
+  currentTemplateId: string | null;
+  /** Templates available to switch between. */
+  templates: TemplateOption[];
 }
 
 interface DashboardClientProps {
@@ -46,7 +63,14 @@ const VISIBILITY_CONFIG: Record<string, { label: string; icon: typeof Globe }> =
 // ─── Component ────────────────────────────────────────────────────
 
 export function DashboardClient({ data }: DashboardClientProps) {
-  const { portfolioProfile, resumes, activeProfileId, primaryProfileId } = data;
+  const {
+    portfolioProfile,
+    resumes,
+    activeProfileId,
+    primaryProfileId,
+    currentTemplateId,
+    templates,
+  } = data;
   const [copied, setCopied] = useState<string | null>(null);
 
   const portfolioUrl = getPortfolioUrl(portfolioProfile.handle);
@@ -78,6 +102,24 @@ export function DashboardClient({ data }: DashboardClientProps) {
 
           {/* Overlay action bar — always visible, highlighted on hover */}
           <div className="absolute inset-x-0 bottom-0 z-10 flex items-center justify-center gap-2 bg-gradient-to-t from-background via-background/90 to-transparent px-4 pb-4 pt-10 transition-all duration-200 group-hover/portfolio:from-background group-hover/portfolio:via-background/95">
+            <Button size="sm" className="h-8 gap-1.5 rounded-lg px-3 text-xs shadow-sm" asChild>
+              <Link href="/dashboard/portfolio/edit">
+                <Pencil className="h-3.5 w-3.5" />
+                Edit
+              </Link>
+            </Button>
+            {templates.length > 1 && (
+              <TemplateGallery templates={templates} currentTemplateId={currentTemplateId}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="h-8 gap-1.5 rounded-lg px-3 text-xs shadow-sm"
+                >
+                  <LayoutTemplate className="h-3.5 w-3.5" />
+                  Template
+                </Button>
+              </TemplateGallery>
+            )}
             <Button
               variant="secondary"
               size="sm"

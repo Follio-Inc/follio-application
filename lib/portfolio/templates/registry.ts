@@ -15,9 +15,14 @@ import type { TemplateKit, TemplateKitMeta } from './types';
 // ============================================================================
 
 import { META as devDarkMeta } from './developer-dark/meta';
+import { META as minimalStudioMeta } from './minimal-studio/meta';
 
+// Registration order matters: the first entry is the default template
+// (see getDefaultTemplateId). Keep developer-dark first to preserve the
+// existing default for onboarding and generation.
 const META_REGISTRY = new Map<string, TemplateKitMeta>();
 META_REGISTRY.set(devDarkMeta.id, devDarkMeta);
+META_REGISTRY.set(minimalStudioMeta.id, minimalStudioMeta);
 
 /**
  * Get template metadata by ID (no CSS/React dependency).
@@ -60,6 +65,11 @@ function ensureKitRegistry(): Map<string, TemplateKit> {
       developerDarkKit: TemplateKit;
     };
     KIT_REGISTRY.set(developerDarkKit.meta.id, developerDarkKit);
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { minimalStudioKit } = require('./minimal-studio') as {
+      minimalStudioKit: TemplateKit;
+    };
+    KIT_REGISTRY.set(minimalStudioKit.meta.id, minimalStudioKit);
   }
   return KIT_REGISTRY;
 }

@@ -39,8 +39,9 @@ export function ShareSection({ profile }: ShareSectionProps) {
   const [copiedPortfolio, setCopiedPortfolio] = useState(false);
   const [copiedResume, setCopiedResume] = useState(false);
   const [isExporting, setIsExporting] = useState<string | null>(null);
+  // A resume has no openly-public mode; treat any legacy PUBLIC value as UNLISTED.
   const [resumeVisibility, setResumeVisibility] = useState<'PUBLIC' | 'UNLISTED' | 'PRIVATE'>(
-    profile.resumeVisibility || 'UNLISTED'
+    profile.resumeVisibility === 'PRIVATE' ? 'PRIVATE' : 'UNLISTED'
   );
   const [portfolioVisibility, setPortfolioVisibility] = useState<'PUBLIC' | 'UNLISTED' | 'PRIVATE'>(
     profile.portfolioVisibility || 'PUBLIC'
@@ -358,18 +359,12 @@ export function ShareSection({ profile }: ShareSectionProps) {
           {/* Visibility badge */}
           <div className="absolute right-3 top-3 z-20">
             <Badge variant="secondary" className="gap-1.5 bg-background/80 backdrop-blur-sm">
-              {resumeVisibility === 'PUBLIC' ? (
-                <Globe className="h-3 w-3 text-green-600" />
-              ) : resumeVisibility === 'UNLISTED' ? (
-                <Lock className="h-3 w-3 text-yellow-600" />
-              ) : (
+              {resumeVisibility === 'PRIVATE' ? (
                 <EyeOff className="h-3 w-3 text-muted-foreground" />
+              ) : (
+                <Lock className="h-3 w-3 text-yellow-600" />
               )}
-              {resumeVisibility === 'PUBLIC'
-                ? 'Public'
-                : resumeVisibility === 'UNLISTED'
-                  ? 'Unlisted'
-                  : 'Private'}
+              {resumeVisibility === 'PRIVATE' ? 'Private' : 'Unlisted'}
             </Badge>
           </div>
         </div>
@@ -409,16 +404,6 @@ export function ShareSection({ profile }: ShareSectionProps) {
             </Button>
             <div className="flex gap-1.5">
               <Button
-                variant={resumeVisibility === 'PUBLIC' ? 'default' : 'outline'}
-                size="sm"
-                className="h-8 gap-1.5 text-xs"
-                onClick={() => handleVisibilityChange('resume', 'PUBLIC')}
-                disabled={savingVisibility}
-              >
-                <Globe className="h-3 w-3" />
-                Public
-              </Button>
-              <Button
                 variant={resumeVisibility === 'UNLISTED' ? 'default' : 'outline'}
                 size="sm"
                 className="h-8 gap-1.5 text-xs"
@@ -441,11 +426,9 @@ export function ShareSection({ profile }: ShareSectionProps) {
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
-            {resumeVisibility === 'PUBLIC'
-              ? 'Anyone can view your resume. A direct link appears on your portfolio.'
-              : resumeVisibility === 'UNLISTED'
-                ? 'Only people with a share link can view your resume. Visitors see a \"Request Access\" option on your portfolio.'
-                : 'Only you can view your resume. No one else has access.'}
+            {resumeVisibility === 'PRIVATE'
+              ? 'Only you can view your resume. No one else has access.'
+              : 'Only people with the secure link can view your resume. Visitors see a "Request Access" option on your portfolio.'}
           </p>
         </CardContent>
       </Card>

@@ -63,25 +63,26 @@ export default async function ResumePage({ params, searchParams }: ResumePagePro
     getViewerAuthState(handle),
   ]);
 
-  if (!profile || profile.status === 'DRAFT') {
+  if (!profile) {
     notFound();
   }
 
-  // For PRIVATE profiles, require a share token or unlisted key (unless owner)
-  if (profile.status === 'PRIVATE' && authState !== 'owner') {
-    const isValidToken = token ? await validateShareToken(handle, token, 'resume') : false;
-    const isValidKey = key ? await validateUnlistedKey(handle, key) : false;
-    if (!isValidToken && !isValidKey) {
+  const isOwner = authState === 'owner';
+  const resumeVisibility = profile.resumeVisibility || 'PRIVATE';
+
+  // Resume access model — a resume is a PII document, so there is no openly
+  // "public" mode (which would let anyone discover it by guessing handles like
+  // adam1, adam2, …). Access is intentionally decoupled from the portfolio's
+  // publish `status`:
+  //   - Owner: always allowed (even while the profile is still a DRAFT).
+  //   - PRIVATE: owner only.
+  //   - UNLISTED (and any legacy PUBLIC rows): only with a valid share token or
+  //     unlisted key, so the resume can never be enumerated.
+  if (!isOwner) {
+    if (resumeVisibility === 'PRIVATE') {
       notFound();
     }
-  }
 
-  // Check resume-specific visibility
-  const resumeVisibility = profile.resumeVisibility || 'PRIVATE';
-  if (resumeVisibility === 'PRIVATE' && authState !== 'owner') {
-    notFound();
-  }
-  if (resumeVisibility === 'UNLISTED' && authState !== 'owner') {
     const isValidToken = token ? await validateShareToken(handle, token, 'resume') : false;
     const isValidKey = key ? await validateUnlistedKey(handle, key) : false;
     if (!isValidToken && !isValidKey) {

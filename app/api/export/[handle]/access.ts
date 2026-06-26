@@ -2,17 +2,14 @@
  * Shared access-control for the resume export routes
  * (`/api/export/[handle]/{pdf,json,text}`).
  *
- * All three routes previously duplicated a visibility check that only blocked
- * `UNLISTED` resumes and silently allowed `PRIVATE` ones — even though
- * `resumeVisibility` defaults to `PRIVATE`. That let any non-owner download a
- * private resume. This module centralises the check so it stays in lockstep
- * with the canonical viewer logic in `app/u/[handle]/resume/page.tsx`:
+ * This module centralises the resume download access check so it stays in
+ * lockstep with the canonical viewer logic in `app/u/[handle]/resume/page.tsx`.
+ * A resume is a PII document, so there is no openly-public mode:
  *
  *   - Owner: always allowed.
- *   - Profile `status === 'DRAFT'`: never downloadable by non-owners.
- *   - `resumeVisibility === 'PUBLIC'`: downloadable by anyone (on a PUBLIC profile).
- *   - `resumeVisibility === 'UNLISTED' | 'PRIVATE'`: only with a valid share
- *     token or unlisted key.
+ *   - `resumeVisibility === 'PRIVATE'`: owner only.
+ *   - `resumeVisibility === 'UNLISTED'` (and any legacy `PUBLIC`): only with a
+ *     valid share token or unlisted key, so resumes can never be enumerated.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -68,23 +65,18 @@ export async function assertResumeExportAccess(
     return { allowed: true, isOwner };
   }
 
-  // Draft profiles are never visible to non-owners.
-  if (profile.status === 'DRAFT') {
+  const resumeVisibility = profile.resumeVisibility ?? 'PRIVATE';
+
+  // PRIVATE resumes are never downloadable by non-owners.
+  if (resumeVisibility === 'PRIVATE') {
     return {
       allowed: false,
-      response: NextResponse.json({ error: 'Profile not found' }, { status: 404 }),
+      response: NextResponse.json({ error: 'Resume is not publicly accessible' }, { status: 403 }),
     };
   }
 
-  const resumeVisibility = profile.resumeVisibility ?? 'PRIVATE';
-
-  // Public resumes on a non-draft profile are downloadable by anyone.
-  if (resumeVisibility === 'PUBLIC' && profile.status === 'PUBLIC') {
-    return { allowed: true, isOwner };
-  }
-
-  // UNLISTED or PRIVATE (or PUBLIC visibility on a PRIVATE profile) require a
-  // valid share token or unlisted key.
+  // UNLISTED (and any legacy PUBLIC) resumes require a valid share token or
+  // unlisted key — there is no openly-public resume mode.
   const token = request.nextUrl.searchParams.get('token');
   const key = request.nextUrl.searchParams.get('key');
 

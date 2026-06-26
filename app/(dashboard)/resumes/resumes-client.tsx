@@ -93,11 +93,13 @@ const VISIBILITY_CONFIG: Record<
     icon: typeof Globe;
   }
 > = {
+  // Resumes have no openly-public mode; any legacy PUBLIC value is shown (and
+  // treated server-side) as "Visible with Link".
   PUBLIC: {
-    label: 'Public',
-    description: 'Visible to everyone and listed on your profile',
-    variant: 'default',
-    icon: Globe,
+    label: 'Visible with Link',
+    description: 'Only people with the direct link can view this resume',
+    variant: 'secondary',
+    icon: Link2,
   },
   UNLISTED: {
     label: 'Visible with Link',

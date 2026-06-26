@@ -104,8 +104,11 @@ export function SettingsSection({ profile }: SettingsSectionProps) {
   const [profileViewAlerts, setProfileViewAlerts] = useState(false);
 
   // Visibility state
+  // A resume has no openly-public mode; treat any legacy PUBLIC value as UNLISTED.
   const [resumeVisibility, setResumeVisibility] = useState<'PUBLIC' | 'UNLISTED' | 'PRIVATE'>(
-    profile.resumeVisibility || 'PRIVATE'
+    profile.resumeVisibility === 'UNLISTED' || profile.resumeVisibility === 'PUBLIC'
+      ? 'UNLISTED'
+      : 'PRIVATE'
   );
   const [portfolioVisibility, setPortfolioVisibility] = useState<'PUBLIC' | 'UNLISTED' | 'PRIVATE'>(
     profile.portfolioVisibility || 'PUBLIC'
@@ -398,16 +401,6 @@ export function SettingsSection({ profile }: SettingsSectionProps) {
             </div>
             <div className="flex gap-2">
               <Button
-                variant={resumeVisibility === 'PUBLIC' ? 'default' : 'outline'}
-                size="sm"
-                className="gap-1.5"
-                onClick={() => handleVisibilityChange('resume', 'PUBLIC')}
-                disabled={savingVisibility}
-              >
-                <Globe className="h-3.5 w-3.5" />
-                Public
-              </Button>
-              <Button
                 variant={resumeVisibility === 'UNLISTED' ? 'default' : 'outline'}
                 size="sm"
                 className="gap-1.5"
@@ -429,11 +422,9 @@ export function SettingsSection({ profile }: SettingsSectionProps) {
               </Button>
             </div>
             <p className="mt-2 text-xs text-muted-foreground">
-              {resumeVisibility === 'PUBLIC'
-                ? 'Anyone can view your resume. A direct link will appear on your portfolio.'
-                : resumeVisibility === 'UNLISTED'
-                  ? 'Only people with the link or share token can view your resume. Visitors to your portfolio will see a "Request Access" option.'
-                  : 'Only you can view your resume. No one else has access.'}
+              {resumeVisibility === 'PRIVATE'
+                ? 'Only you can view your resume. No one else has access.'
+                : 'Only people with the secure link can view your resume. Visitors to your portfolio will see a "Request Access" option.'}
             </p>
 
             {/* Resume Photo Toggle */}
