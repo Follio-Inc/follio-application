@@ -19,7 +19,6 @@ import {
   Phone,
   Pin,
   Plus,
-  Sparkles,
   Star,
   Trash2,
   User,
@@ -1441,54 +1440,54 @@ function ReviewPageContent() {
   if (isAutoMode && !error) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-6 px-4 text-center">
-        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
-          <Sparkles className="h-8 w-8 text-primary" />
-        </div>
-        <div className="space-y-1">
-          <h2 className="text-xl font-semibold">Creating your profile</h2>
+        <Spinner size="lg" />
+        <div className="space-y-1.5">
+          <h2 className="text-display text-xl">Creating your profile</h2>
           <p className="text-sm text-muted-foreground">
             Setting everything up — this will only take a moment.
           </p>
         </div>
-        <Spinner size="lg" />
       </div>
     );
   }
 
+  const editableSteps = STEPS.slice(0, -1);
+
   return (
     <>
-      {/* Progress bar */}
-      <div className="fixed left-0 right-0 top-16 z-40 h-1 bg-muted">
+      {/* Progress bar — sits just beneath the app header */}
+      <div className="fixed left-0 right-0 top-16 z-40 h-0.5 bg-muted">
         <motion.div
           className="h-full bg-primary"
           initial={{ width: 0 }}
           animate={{ width: `${progress}%` }}
-          transition={{ duration: 0.3 }}
+          transition={{ duration: 0.4, ease: 'easeOut' }}
         />
       </div>
 
-      {/* Step indicators */}
-      <div className="fixed left-0 right-0 top-20 z-30">
-        <div className="mx-auto flex max-w-md justify-center gap-2 px-4">
-          {STEPS.slice(0, -1).map((step, index) => (
-            <button
-              key={step}
-              onClick={() => setCurrentStep(step)}
-              className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-medium transition-all ${
-                index < currentStepIndex
-                  ? 'bg-primary text-primary-foreground'
-                  : index === currentStepIndex
-                    ? 'bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2'
-                    : 'bg-muted text-muted-foreground'
-              }`}
-            >
-              {index < currentStepIndex ? <Check className="h-4 w-4" /> : index + 1}
-            </button>
-          ))}
+      <div className="mx-auto max-w-2xl px-4 pb-16 pt-12 sm:px-6">
+        {/* Step indicator — segmented track */}
+        <div className="mb-10 flex items-center gap-1.5" aria-label="Review steps">
+          {editableSteps.map((step, index) => {
+            const reachable = index <= currentStepIndex;
+            return (
+              <button
+                key={step}
+                type="button"
+                aria-label={STEP_INFO[step].title}
+                aria-current={index === currentStepIndex ? 'step' : undefined}
+                disabled={!reachable}
+                onClick={() => {
+                  if (reachable) setCurrentStep(step);
+                }}
+                className={`h-1 flex-1 rounded-full transition-colors duration-200 ${
+                  index <= currentStepIndex ? 'bg-primary' : 'bg-muted'
+                } ${reachable ? 'cursor-pointer' : 'cursor-default'}`}
+              />
+            );
+          })}
         </div>
-      </div>
 
-      <div className="mx-auto max-w-2xl px-4 pb-16 pt-20">
         <AnimatePresence mode="wait">
           {/* Profile Step */}
           {currentStep === 'profile' && (
@@ -1678,7 +1677,7 @@ function ReviewPageContent() {
 
                   {/* Error message */}
                   {emailError && (
-                    <div className="mb-3 rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800 dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200">
+                    <div className="mb-3 rounded-lg border border-border bg-muted/50 p-3 text-sm text-foreground">
                       {emailError}
                       <Button
                         variant="ghost"
@@ -1725,7 +1724,7 @@ function ReviewPageContent() {
                                     {item.verified ? (
                                       <Badge
                                         variant="outline"
-                                        className="border-green-300 bg-green-50 text-xs text-green-700 dark:border-green-700 dark:bg-green-900/20 dark:text-green-300"
+                                        className="border-primary/30 bg-primary/10 text-xs text-primary"
                                       >
                                         <Check className="mr-1 h-3 w-3" />
                                         Verified
@@ -1733,14 +1732,14 @@ function ReviewPageContent() {
                                     ) : item.clerkEmailId ? (
                                       <Badge
                                         variant="outline"
-                                        className="border-yellow-300 bg-yellow-50 text-xs text-yellow-700 dark:border-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300"
+                                        className="border-border bg-muted text-xs text-muted-foreground"
                                       >
                                         Pending Verification
                                       </Badge>
                                     ) : (
                                       <Badge
                                         variant="outline"
-                                        className="border-gray-300 text-xs text-gray-500"
+                                        className="border-border text-xs text-muted-foreground"
                                       >
                                         Not Added
                                       </Badge>
@@ -1999,7 +1998,10 @@ function ReviewPageContent() {
                                 </p>
                                 <div className="mt-0.5 flex items-center gap-2">
                                   {!hasCountryCode && (
-                                    <Badge variant="outline" className="text-xs text-amber-600">
+                                    <Badge
+                                      variant="outline"
+                                      className="text-xs text-muted-foreground"
+                                    >
                                       No country code
                                     </Badge>
                                   )}
@@ -2327,22 +2329,22 @@ function ReviewPageContent() {
           {/* Complete Step */}
           {currentStep === 'complete' && (
             <StepContainer key="complete">
-              <div className="py-8 text-center">
+              <div className="py-6">
                 <motion.div
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  transition={{ type: 'spring', duration: 0.5 }}
-                  className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-primary/10"
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ duration: 0.25, ease: 'easeOut' }}
+                  className="mb-6 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10"
                 >
-                  <Sparkles className="h-10 w-10 text-primary" />
+                  <Check className="h-6 w-6 text-primary" />
                 </motion.div>
 
-                <h2 className="mb-2 text-2xl font-bold">You&apos;re All Set!</h2>
-                <p className="mb-8 text-muted-foreground">
-                  Your profile is ready to be created. Here&apos;s a summary:
+                <h2 className="text-display text-2xl sm:text-3xl">You&apos;re all set</h2>
+                <p className="mt-3 text-base text-muted-foreground">
+                  Here&apos;s a quick summary before we create your profile.
                 </p>
 
-                <div className="mb-8 grid grid-cols-2 gap-4 text-left">
+                <div className="mb-8 mt-8 grid grid-cols-2 gap-3 text-left sm:grid-cols-3">
                   <SummaryCard
                     label="Profile"
                     value={
@@ -2363,25 +2365,30 @@ function ReviewPageContent() {
                 </div>
 
                 {error && (
-                  <div className="mb-4 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+                  <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
                     {error}
                   </div>
                 )}
 
-                <div className="flex gap-3">
-                  <Button variant="outline" onClick={goToPreviousStep} className="flex-1">
+                <div className="flex items-center justify-between border-t border-border/60 pt-6">
+                  <Button variant="ghost" onClick={goToPreviousStep}>
                     <ArrowLeft className="mr-2 h-4 w-4" />
                     Back
                   </Button>
-                  <Button onClick={handleSaveProfile} disabled={isSaving} className="flex-1 gap-2">
+                  <Button
+                    onClick={handleSaveProfile}
+                    disabled={isSaving}
+                    size="lg"
+                    className="gap-2 px-8"
+                  >
                     {isSaving ? (
                       <>
                         <Spinner size="sm" />
-                        Creating...
+                        Creating…
                       </>
                     ) : (
                       <>
-                        Create My Follio
+                        Create my Follio
                         <ArrowRight className="h-4 w-4" />
                       </>
                     )}
@@ -2430,30 +2437,26 @@ function StepContainer({ children }: { children: React.ReactNode }) {
 }
 
 function StepHeader({
-  icon: Icon,
   title,
   description,
   count,
 }: {
-  icon: typeof User;
+  icon?: typeof User;
   title: string;
   description: string;
   count?: number;
 }) {
   return (
-    <div className="text-center">
-      <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10">
-        <Icon className="h-7 w-7 text-primary" />
-      </div>
-      <h2 className="mb-1 text-xl font-semibold">
-        {title}
+    <div className="pb-2">
+      <div className="flex items-center gap-2.5">
+        <h2 className="text-display text-2xl">{title}</h2>
         {count !== undefined && (
-          <Badge variant="secondary" className="ml-2">
+          <Badge variant="secondary" className="font-medium">
             {count}
           </Badge>
         )}
-      </h2>
-      <p className="text-sm text-muted-foreground">{description}</p>
+      </div>
+      <p className="mt-2 text-base text-muted-foreground">{description}</p>
     </div>
   );
 }
@@ -2472,7 +2475,7 @@ function StepNavigation({
   showSkip?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between pt-6">
+    <div className="mt-2 flex items-center justify-between border-t border-border/60 pt-6">
       <Button variant="ghost" onClick={onBack}>
         <ArrowLeft className="mr-2 h-4 w-4" />
         {backLabel}
@@ -2502,8 +2505,8 @@ function EmptyState({
   addLabel: string;
 }) {
   return (
-    <div className="rounded-lg border border-dashed p-8 text-center">
-      <p className="mb-4 text-muted-foreground">{message}</p>
+    <div className="rounded-xl border border-dashed border-border/60 bg-muted/30 px-6 py-10 text-center">
+      <p className="mb-4 text-sm text-muted-foreground">{message}</p>
       <Button variant="outline" onClick={onAdd} className="gap-2">
         <Plus className="h-4 w-4" />
         {addLabel}
@@ -2587,7 +2590,7 @@ function ExperienceCard({
                   endDate: e.target.checked ? undefined : experience.endDate,
                 })
               }
-              className="h-4 w-4 rounded border-gray-300"
+              className="h-4 w-4 rounded border-border"
             />
             <label htmlFor={`current-${experience.id}`} className="text-sm">
               I currently work here
@@ -2952,7 +2955,7 @@ function ProjectCard({
                 </Badge>
               )}
               {project.ghPinned && (
-                <Badge variant="outline" className="shrink-0 gap-1 border-amber-300 text-amber-600">
+                <Badge variant="outline" className="shrink-0 gap-1">
                   <Pin className="h-3 w-3" />
                   Pinned
                 </Badge>
@@ -2964,7 +2967,7 @@ function ProjectCard({
               <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
                 {project.ghStars !== undefined && project.ghStars > 0 && (
                   <span className="flex items-center gap-1">
-                    <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                    <Star className="h-3 w-3 fill-muted-foreground text-muted-foreground" />
                     {project.ghStars}
                   </span>
                 )}
@@ -3110,11 +3113,9 @@ function ProjectCard({
 
 function SummaryCard({ label, value }: { label: string; value: string }) {
   return (
-    <Card>
-      <CardContent className="p-4">
-        <p className="text-xs text-muted-foreground">{label}</p>
-        <p className="font-medium">{value}</p>
-      </CardContent>
-    </Card>
+    <div className="rounded-lg border border-border/60 bg-card p-4">
+      <p className="text-eyebrow">{label}</p>
+      <p className="mt-1.5 font-medium text-foreground">{value}</p>
+    </div>
   );
 }

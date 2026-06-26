@@ -260,25 +260,25 @@ export function AccountSection({
   }, []);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <Card>
         <CardHeader>
-          <CardTitle>Account</CardTitle>
-          <CardDescription>Manage your identity and account details</CardDescription>
+          <CardTitle>Profile</CardTitle>
+          <CardDescription>Your identity and account details</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="flex items-center gap-4">
-            <Avatar className="h-16 w-16 ring-2 ring-border">
+          <div className="flex items-center gap-4 border-b border-border/60 pb-6">
+            <Avatar className="h-16 w-16 border border-border/60">
               <AvatarImage src={avatarUrl} alt={displayName} />
-              <AvatarFallback className="bg-primary/10 text-lg font-semibold text-primary">
+              <AvatarFallback className="bg-muted text-lg font-semibold text-muted-foreground">
                 {initials}
               </AvatarFallback>
             </Avatar>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-lg font-semibold">{displayName || 'Your Name'}</p>
+              <p className="truncate text-base font-semibold">{displayName || 'Your Name'}</p>
               <p className="truncate text-sm text-muted-foreground">{email}</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Photo is managed by your sign-in provider
+              <p className="mt-1 text-xs text-muted-foreground">
+                Photo is managed by your sign-in provider.
               </p>
             </div>
           </div>
@@ -311,7 +311,7 @@ export function AccountSection({
               </span>
             )}
             {!nameSaving && nameSaved && (
-              <span className="inline-flex items-center gap-1 text-green-600">
+              <span className="inline-flex items-center gap-1 text-primary">
                 <Check className="h-3 w-3" /> Account details saved
               </span>
             )}

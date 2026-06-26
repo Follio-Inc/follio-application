@@ -16,7 +16,6 @@ import {
   Pencil,
   Plus,
   RotateCcw,
-  Sparkles,
   Trash2,
   Upload,
   User,
@@ -1447,7 +1446,7 @@ export default function OnboardingImportPage() {
   }) => {
     if (status === 'success' || status === 'added') {
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+        <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
           <CheckCircle2 className="h-3 w-3" />
           {status === 'added' ? 'Added' : message || 'Done'}
         </span>
@@ -1455,14 +1454,14 @@ export default function OnboardingImportPage() {
     }
     if (status === 'importing') {
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+        <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
           <Loader2 className="h-3 w-3 animate-spin" /> Importing...
         </span>
       );
     }
     if (status === 'error') {
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2.5 py-0.5 text-xs font-medium text-red-500">
+        <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2.5 py-0.5 text-xs font-medium text-destructive">
           <AlertCircle className="h-3 w-3" /> {message || 'Error'}
         </span>
       );
@@ -1486,50 +1485,57 @@ export default function OnboardingImportPage() {
   return (
     <>
       {/* Progress bar */}
-      <div className="fixed left-0 right-0 top-16 z-40 h-1 bg-muted/50">
+      <div className="fixed left-0 right-0 top-16 z-40 h-0.5 bg-muted">
         <motion.div
-          className="h-full bg-gradient-to-r from-primary to-primary/70"
+          className="h-full bg-primary"
           initial={{ width: '0%' }}
           animate={{ width: `${progressPercent}%` }}
           transition={{ duration: 0.4, ease: 'easeOut' }}
         />
       </div>
 
-      <div className="relative mx-auto max-w-2xl px-4 pb-24 pt-10 sm:px-6">
-        {/* Step indicator pills */}
-        <div className="mb-8 flex items-center justify-center gap-2">
-          {STEPS.map((step, idx) => (
-            <button
-              key={step}
-              onClick={() => {
-                // Allow clicking on previous/current steps
-                if (idx <= currentStepIndex) setCurrentStep(step);
-              }}
-              className={`h-2 rounded-full transition-all duration-300 ${
-                idx === currentStepIndex
-                  ? 'w-8 bg-primary'
-                  : idx < currentStepIndex
-                    ? 'w-2 bg-primary/50 hover:bg-primary/70'
-                    : 'w-2 bg-muted'
-              }`}
-            />
-          ))}
+      <div className="relative mx-auto max-w-2xl px-4 pb-24 pt-12 sm:px-6">
+        {/* Step indicator — segmented track with current-step label */}
+        <div className="mb-10">
+          <div className="flex items-center gap-1.5" role="list" aria-label="Onboarding steps">
+            {STEPS.map((step, idx) => {
+              const reachable = idx <= currentStepIndex;
+              return (
+                <button
+                  key={step}
+                  type="button"
+                  aria-label={STEP_META[step].title}
+                  aria-current={idx === currentStepIndex ? 'step' : undefined}
+                  disabled={!reachable}
+                  onClick={() => {
+                    if (reachable) setCurrentStep(step);
+                  }}
+                  className={`h-1 flex-1 rounded-full transition-colors duration-200 ${
+                    idx <= currentStepIndex ? 'bg-primary' : 'bg-muted'
+                  } ${reachable ? 'cursor-pointer' : 'cursor-default'}`}
+                />
+              );
+            })}
+          </div>
         </div>
 
         {/* Step header */}
         <AnimatePresence mode="wait">
           <motion.div
             key={currentStep}
-            initial={{ opacity: 0, y: 16 }}
+            initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -16 }}
-            transition={{ duration: 0.3 }}
-            className="mb-8 text-center"
+            exit={{ opacity: 0, y: -12 }}
+            transition={{ duration: 0.25, ease: 'easeOut' }}
+            className="mb-10"
           >
-            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+            <p className="text-eyebrow">
+              Step {currentStepIndex + 1} of {STEPS.length}
+            </p>
+            <h1 className="text-display mt-3 text-2xl sm:text-3xl">
               {STEP_META[currentStep].title}
             </h1>
-            <p className="mt-1.5 text-sm text-muted-foreground">
+            <p className="mt-3 text-base text-muted-foreground">
               {STEP_META[currentStep].subtitle}
             </p>
           </motion.div>
@@ -1558,7 +1564,7 @@ export default function OnboardingImportPage() {
                   isDraggingResume
                     ? 'scale-[1.02] border-primary bg-primary/5'
                     : resumeFileName
-                      ? 'border-emerald-500/30 bg-emerald-500/5'
+                      ? 'border-primary/30 bg-muted/30'
                       : 'border-border/60 bg-card/50 hover:border-primary/30'
                 }`}
               >
@@ -1586,9 +1592,9 @@ export default function OnboardingImportPage() {
                             />
                           </div>
                         ) : (
-                          <div className="flex h-48 w-36 flex-col items-center justify-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 shadow-md">
-                            <FileText className="h-12 w-12 text-emerald-500" />
-                            <span className="text-[10px] font-medium uppercase tracking-wide text-emerald-600">
+                          <div className="flex h-48 w-36 flex-col items-center justify-center gap-2 rounded-lg border border-border/40 bg-muted/50 shadow-md">
+                            <FileText className="h-12 w-12 text-muted-foreground" />
+                            <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                               PDF
                             </span>
                           </div>
@@ -1628,7 +1634,7 @@ export default function OnboardingImportPage() {
                           <motion.p
                             initial={{ opacity: 0, scale: 0.9 }}
                             animate={{ opacity: 1, scale: 1 }}
-                            className="mt-1 text-xs text-emerald-600 dark:text-emerald-400"
+                            className="mt-1 text-xs text-primary"
                           >
                             <CheckCircle2 className="mr-1 inline h-3 w-3" />
                             {imports.resume.message}
@@ -1701,7 +1707,7 @@ export default function OnboardingImportPage() {
                 </AnimatePresence>
 
                 {imports.resume.status === 'error' && imports.resume.message && (
-                  <p className="mt-4 text-sm text-red-500">{imports.resume.message}</p>
+                  <p className="mt-4 text-sm text-destructive">{imports.resume.message}</p>
                 )}
 
                 <input
@@ -1860,7 +1866,7 @@ export default function OnboardingImportPage() {
                   </div>
                 )}
 
-                {error && <p className="mt-4 text-center text-sm text-red-500">{error}</p>}
+                {error && <p className="mt-4 text-center text-sm text-destructive">{error}</p>}
 
                 <input
                   id="photo-upload"
@@ -1886,8 +1892,8 @@ export default function OnboardingImportPage() {
               {/* LinkedIn */}
               <div className="rounded-xl border border-border/40 bg-card/80 p-5 backdrop-blur-sm">
                 <div className="flex items-start gap-4">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#0A66C2]/10">
-                    <Linkedin className="h-6 w-6 text-[#0A66C2]" />
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-muted">
+                    <Linkedin className="h-6 w-6 text-foreground" />
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center justify-between">
@@ -1964,15 +1970,17 @@ export default function OnboardingImportPage() {
                           {linkedinConnecting ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
                           ) : (
-                            <Linkedin className="h-3.5 w-3.5 text-[#0A66C2]" />
+                            <Linkedin className="h-3.5 w-3.5" />
                           )}
                           {linkedinConnecting ? 'Connecting...' : 'Connect LinkedIn'}
                         </Button>
                       )}
                     </div>
-                    {linkedinError && <p className="mt-2 text-xs text-red-500">{linkedinError}</p>}
+                    {linkedinError && (
+                      <p className="mt-2 text-xs text-destructive">{linkedinError}</p>
+                    )}
                     {imports.linkedin.status === 'error' && imports.linkedin.message && (
-                      <p className="mt-2 text-xs text-red-500">{imports.linkedin.message}</p>
+                      <p className="mt-2 text-xs text-destructive">{imports.linkedin.message}</p>
                     )}
                   </div>
                 </div>
@@ -1981,8 +1989,8 @@ export default function OnboardingImportPage() {
               {/* GitHub */}
               <div className="rounded-xl border border-border/40 bg-card/80 p-5 backdrop-blur-sm">
                 <div className="flex items-start gap-4">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gray-100 dark:bg-gray-800">
-                    <Github className="h-6 w-6 text-[#24292e] dark:text-white" />
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-muted">
+                    <Github className="h-6 w-6 text-foreground" />
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center justify-between">
@@ -2074,9 +2082,9 @@ export default function OnboardingImportPage() {
                         </Button>
                       )}
                     </div>
-                    {githubError && <p className="mt-2 text-xs text-red-500">{githubError}</p>}
+                    {githubError && <p className="mt-2 text-xs text-destructive">{githubError}</p>}
                     {imports.github.status === 'error' && imports.github.message && (
-                      <p className="mt-2 text-xs text-red-500">{imports.github.message}</p>
+                      <p className="mt-2 text-xs text-destructive">{imports.github.message}</p>
                     )}
                   </div>
                 </div>
@@ -2085,7 +2093,7 @@ export default function OnboardingImportPage() {
               {/* Facebook */}
               <div className="rounded-xl border border-border/40 bg-card/80 p-5 backdrop-blur-sm">
                 <div className="flex items-start gap-4">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#1877F2]/10">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-muted">
                     <FacebookIcon className="h-6 w-6" />
                   </div>
                   <div className="flex-1">
@@ -2151,7 +2159,9 @@ export default function OnboardingImportPage() {
                         </Button>
                       )}
                     </div>
-                    {facebookError && <p className="mt-2 text-xs text-red-500">{facebookError}</p>}
+                    {facebookError && (
+                      <p className="mt-2 text-xs text-destructive">{facebookError}</p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2171,7 +2181,7 @@ export default function OnboardingImportPage() {
               {/* YouTube */}
               <div className="rounded-xl border border-border/40 bg-card/80 p-5 backdrop-blur-sm">
                 <div className="flex items-start gap-4">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-500/10">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
                     <YouTubeIcon className="h-5 w-5" />
                   </div>
                   <div className="flex-1">
@@ -2207,7 +2217,7 @@ export default function OnboardingImportPage() {
                       </Button>
                     </div>
                     {imports.youtube.status === 'error' && imports.youtube.message && (
-                      <p className="mt-2 flex items-center gap-1 text-xs text-red-500">
+                      <p className="mt-2 flex items-center gap-1 text-xs text-destructive">
                         <AlertCircle className="h-3 w-3 shrink-0" />
                         {imports.youtube.message}
                       </p>
@@ -2219,7 +2229,7 @@ export default function OnboardingImportPage() {
               {/* Medium */}
               <div className="rounded-xl border border-border/40 bg-card/80 p-5 backdrop-blur-sm">
                 <div className="flex items-start gap-4">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-foreground/[0.06]">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
                     <MediumIcon className="h-5 w-5" />
                   </div>
                   <div className="flex-1">
@@ -2255,7 +2265,7 @@ export default function OnboardingImportPage() {
                       </Button>
                     </div>
                     {imports.medium.status === 'error' && imports.medium.message && (
-                      <p className="mt-2 flex items-center gap-1 text-xs text-red-500">
+                      <p className="mt-2 flex items-center gap-1 text-xs text-destructive">
                         <AlertCircle className="h-3 w-3 shrink-0" />
                         {imports.medium.message}
                       </p>
@@ -2267,7 +2277,7 @@ export default function OnboardingImportPage() {
               {/* Substack */}
               <div className="rounded-xl border border-border/40 bg-card/80 p-5 backdrop-blur-sm">
                 <div className="flex items-start gap-4">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#FF6719]/10">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
                     <SubstackIcon className="h-5 w-5" />
                   </div>
                   <div className="flex-1">
@@ -2305,7 +2315,7 @@ export default function OnboardingImportPage() {
                       </Button>
                     </div>
                     {imports.substack.status === 'error' && imports.substack.message && (
-                      <p className="mt-2 flex items-center gap-1 text-xs text-red-500">
+                      <p className="mt-2 flex items-center gap-1 text-xs text-destructive">
                         <AlertCircle className="h-3 w-3 shrink-0" />
                         {imports.substack.message}
                       </p>
@@ -2317,8 +2327,8 @@ export default function OnboardingImportPage() {
               {/* Links */}
               <div className="rounded-xl border border-border/40 bg-card/80 p-5 backdrop-blur-sm">
                 <div className="flex items-start gap-4">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-500/10">
-                    <Link2 className="h-5 w-5 text-blue-500" />
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
+                    <Link2 className="h-5 w-5 text-muted-foreground" />
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center justify-between">
@@ -2411,8 +2421,8 @@ export default function OnboardingImportPage() {
                               <Trash2 className="h-4 w-4" />
                             </button>
                           </div>
-                          <div className="absolute bottom-2 right-2 rounded-full bg-emerald-500 p-1 opacity-0 shadow-sm group-hover:opacity-0">
-                            <CheckCircle2 className="h-3 w-3 text-white" />
+                          <div className="absolute bottom-2 right-2 rounded-full bg-primary p-1 opacity-0 shadow-sm group-hover:opacity-0">
+                            <CheckCircle2 className="h-3 w-3 text-primary-foreground" />
                           </div>
                         </div>
                       ) : (
@@ -2440,7 +2450,7 @@ export default function OnboardingImportPage() {
                   showcase.
                 </p>
 
-                {error && <p className="mt-2 text-center text-sm text-red-500">{error}</p>}
+                {error && <p className="mt-2 text-center text-sm text-destructive">{error}</p>}
 
                 <input
                   id="gallery-upload"
@@ -2470,7 +2480,7 @@ export default function OnboardingImportPage() {
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
                   transition={{ type: 'spring', stiffness: 200, damping: 15, delay: 0.2 }}
-                  className="mx-auto flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-emerald-500/20 shadow-lg shadow-primary/5"
+                  className="mx-auto flex h-20 w-20 items-center justify-center rounded-2xl bg-primary/10"
                 >
                   <motion.div
                     initial={{ scale: 0, rotate: -180 }}
@@ -2504,16 +2514,16 @@ export default function OnboardingImportPage() {
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: 0.7 }}
-                      className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm"
+                      className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-3 text-sm"
                     >
                       {imports.resume.status === 'added' && resumeParsingPromise ? (
-                        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-amber-500" />
+                        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
                       ) : (
-                        <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+                        <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
                       )}
                       <span className="flex-1">Resume: {resumeFileName}</span>
                       {imports.resume.status === 'added' && resumeParsingPromise && (
-                        <span className="text-xs text-amber-500">Processing...</span>
+                        <span className="text-xs text-muted-foreground">Processing...</span>
                       )}
                     </motion.div>
                   )}
@@ -2522,9 +2532,9 @@ export default function OnboardingImportPage() {
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: 0.8 }}
-                      className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm"
+                      className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-3 text-sm"
                     >
-                      <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                      <CheckCircle2 className="h-4 w-4 text-primary" />
                       <span>Profile photo uploaded</span>
                     </motion.div>
                   )}
@@ -2533,9 +2543,9 @@ export default function OnboardingImportPage() {
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: 0.9 }}
-                      className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm"
+                      className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-3 text-sm"
                     >
-                      <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                      <CheckCircle2 className="h-4 w-4 text-primary" />
                       <span>LinkedIn: {linkedinName || 'Connected'}</span>
                     </motion.div>
                   )}
@@ -2544,9 +2554,9 @@ export default function OnboardingImportPage() {
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: 1.0 }}
-                      className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm"
+                      className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-3 text-sm"
                     >
-                      <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                      <CheckCircle2 className="h-4 w-4 text-primary" />
                       <span>GitHub: @{githubUsernameFromAccount || githubUsername}</span>
                     </motion.div>
                   )}
@@ -2555,9 +2565,9 @@ export default function OnboardingImportPage() {
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: 1.1 }}
-                      className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm"
+                      className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-3 text-sm"
                     >
-                      <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                      <CheckCircle2 className="h-4 w-4 text-primary" />
                       <span>Facebook: {facebookName || 'Connected'}</span>
                     </motion.div>
                   )}
@@ -2566,9 +2576,9 @@ export default function OnboardingImportPage() {
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: 1.2 }}
-                      className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm"
+                      className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-3 text-sm"
                     >
-                      <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                      <CheckCircle2 className="h-4 w-4 text-primary" />
                       <span>
                         {galleryPhotos.length} portfolio photo
                         {galleryPhotos.length !== 1 ? 's' : ''}
@@ -2624,7 +2634,7 @@ export default function OnboardingImportPage() {
 
         {/* Navigation */}
         <motion.div
-          className="mt-10 flex items-center justify-between"
+          className="mt-12 flex items-center justify-between border-t border-border/60 pt-6"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.3 }}
@@ -2663,7 +2673,7 @@ export default function OnboardingImportPage() {
                 <Button
                   onClick={() => handleGoToReview({ skipReview: true })}
                   disabled={isWaitingForParsing}
-                  className="gap-2 bg-gradient-to-r from-primary to-primary/80 px-8 shadow-lg shadow-primary/25 transition-all hover:shadow-xl hover:shadow-primary/30"
+                  className="gap-2 px-8"
                   size="lg"
                 >
                   {isWaitingForParsing ? (
@@ -2673,7 +2683,6 @@ export default function OnboardingImportPage() {
                     </>
                   ) : (
                     <>
-                      <Sparkles className="h-4 w-4" />
                       Go to Dashboard
                       <ArrowRight className="h-4 w-4" />
                     </>
@@ -2681,12 +2690,7 @@ export default function OnboardingImportPage() {
                 </Button>
               </div>
             ) : isLastDataStep ? (
-              <Button
-                onClick={goNext}
-                className="gap-2 bg-gradient-to-r from-primary to-primary/80 px-6 shadow-lg shadow-primary/20 transition-all hover:shadow-xl hover:shadow-primary/25"
-                size="lg"
-              >
-                <Sparkles className="h-4 w-4" />
+              <Button onClick={goNext} className="gap-2 px-6" size="lg">
                 Review
                 <ArrowRight className="h-4 w-4" />
               </Button>
@@ -2710,34 +2714,29 @@ export default function OnboardingImportPage() {
             className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm"
           >
             <motion.div
-              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              initial={{ scale: 0.98, opacity: 0, y: 12 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-              className="mx-4 max-w-sm space-y-6 rounded-2xl border bg-card p-8 text-center shadow-2xl"
+              exit={{ scale: 0.98, opacity: 0, y: 12 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              className="surface-raised mx-4 max-w-sm space-y-6 p-8 text-center"
             >
-              {/* Animated circular spinner */}
-              <div className="relative mx-auto h-20 w-20">
-                <div className="absolute inset-0 rounded-full border-4 border-muted" />
+              {/* Single calm spinner */}
+              <div className="relative mx-auto h-12 w-12">
+                <div className="absolute inset-0 rounded-full border-2 border-border" />
                 <motion.div
-                  className="absolute inset-0 rounded-full border-4 border-primary border-t-transparent"
+                  className="absolute inset-0 rounded-full border-2 border-primary border-t-transparent"
                   animate={{ rotate: 360 }}
-                  transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                />
-                <motion.div
-                  className="absolute inset-2 rounded-full border-4 border-primary/30 border-b-transparent"
-                  animate={{ rotate: -360 }}
-                  transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
+                  transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
                 />
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <FileText className="h-7 w-7 text-primary" />
+                  <FileText className="h-5 w-5 text-muted-foreground" />
                 </div>
               </div>
 
-              <div>
-                <h3 className="text-lg font-semibold">Analyzing your resume</h3>
-                <p className="mt-1.5 text-sm text-muted-foreground">
-                  Our AI is extracting experience, skills, and education
+              <div className="space-y-1.5">
+                <h3 className="text-section-title text-lg">Reading your resume</h3>
+                <p className="text-sm text-muted-foreground">
+                  Extracting experience, skills, and education
                   {resumeFileName && (
                     <>
                       {' '}
@@ -2749,15 +2748,15 @@ export default function OnboardingImportPage() {
 
               {/* Animated progress bar */}
               <div className="space-y-2">
-                <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
                   <motion.div
-                    className="h-full rounded-full bg-gradient-to-r from-primary to-primary/60"
+                    className="h-full rounded-full bg-primary"
                     initial={{ width: '5%' }}
                     animate={{ width: ['5%', '40%', '65%', '85%', '92%'] }}
                     transition={{ duration: 15, ease: 'easeOut', times: [0, 0.2, 0.5, 0.8, 1] }}
                   />
                 </div>
-                <p className="text-xs text-muted-foreground">This usually takes 10–30 seconds…</p>
+                <p className="text-xs text-muted-foreground">This usually takes 10–30 seconds.</p>
               </div>
             </motion.div>
           </motion.div>

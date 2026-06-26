@@ -118,7 +118,7 @@ function EmailListItem({
 }: EmailListItemProps) {
   return (
     <div
-      className={`rounded-lg border p-3 transition-colors ${
+      className={`rounded-xl border p-3.5 transition-colors ${
         isPrimary ? 'border-primary/30 bg-primary/5' : 'border-border bg-background'
       }`}
     >
@@ -132,22 +132,16 @@ function EmailListItem({
                 {item.source.toLowerCase()}
               </Badge>
               {item.verified ? (
-                <Badge
-                  variant="outline"
-                  className="border-green-300 bg-green-50 text-xs text-green-700 dark:border-green-700 dark:bg-green-900/20 dark:text-green-300"
-                >
+                <Badge variant="outline" className="text-xs text-primary">
                   <Check className="mr-1 h-3 w-3" />
                   Verified
                 </Badge>
               ) : item.clerkEmailId ? (
-                <Badge
-                  variant="outline"
-                  className="border-yellow-300 bg-yellow-50 text-xs text-yellow-700 dark:border-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300"
-                >
+                <Badge variant="outline" className="text-xs text-muted-foreground">
                   Pending Verification
                 </Badge>
               ) : (
-                <Badge variant="outline" className="border-gray-300 text-xs text-gray-500">
+                <Badge variant="outline" className="text-xs text-muted-foreground">
                   Not Added
                 </Badge>
               )}
@@ -279,7 +273,7 @@ function PhoneListItem({
 
   if (isEditing) {
     return (
-      <div className="rounded-lg border border-primary p-3">
+      <div className="rounded-xl border border-primary p-3.5">
         <div className="space-y-2">
           <PhoneInput
             value={editingValue}
@@ -303,7 +297,7 @@ function PhoneListItem({
 
   return (
     <div
-      className={`flex items-center justify-between rounded-lg border p-3 transition-colors ${
+      className={`flex items-center justify-between rounded-xl border p-3.5 transition-colors ${
         isPrimary
           ? 'border-primary/30 bg-primary/5'
           : 'border-border bg-background hover:bg-muted/30'
@@ -315,7 +309,7 @@ function PhoneListItem({
           <p className={`text-sm ${isPrimary ? 'font-medium' : ''}`}>{displayPhone}</p>
           <div className="mt-0.5 flex items-center gap-2">
             {!hasCountryCode && (
-              <Badge variant="outline" className="text-xs text-amber-600">
+              <Badge variant="outline" className="text-xs text-muted-foreground">
                 No country code
               </Badge>
             )}
@@ -446,12 +440,12 @@ export function ContactSection({
   };
 
   const content = (
-    <div className="space-y-6">
+    <div className="space-y-10">
       {/* Emails Section */}
       <div>
-        <div className="mb-3 flex items-center gap-2 text-sm font-medium">
-          <Mail className="h-4 w-4" />
-          Email Addresses
+        <div className="mb-1.5 flex items-center gap-2">
+          <Mail className="h-4 w-4 text-muted-foreground" />
+          <span className="text-section-title">Email addresses</span>
           {onEmailPublicChange && (
             <button
               type="button"
@@ -460,8 +454,8 @@ export function ContactSection({
                 e.preventDefault();
                 onEmailPublicChange(!emailPublic);
               }}
-              className={`ml-auto rounded-md p-1 transition-colors hover:bg-muted ${
-                emailPublic ? '' : 'text-muted-foreground'
+              className={`ml-auto rounded-md p-1.5 transition-colors hover:bg-muted ${
+                emailPublic ? 'text-foreground' : 'text-muted-foreground'
               }`}
               title={
                 emailPublic ? 'Hide primary email from resume' : 'Show primary email on resume'
@@ -471,16 +465,21 @@ export function ContactSection({
             </button>
           )}
         </div>
-        <p className="mb-3 text-xs text-muted-foreground">
-          Manage your email addresses. The primary email is used for login and will be displayed on
-          your profile. Emails must be verified before they can be set as primary.
+        <p className="mb-4 text-sm leading-6 text-muted-foreground">
+          The primary email is used for login and shown on your profile. Emails must be verified
+          before they can be set as primary.
         </p>
 
         {/* Error message */}
         {emailError && (
-          <div className="mb-3 rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800 dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200">
-            {emailError}
-            <Button variant="ghost" size="sm" className="ml-2 h-5 px-1" onClick={clearEmailError}>
+          <div className="mb-3 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+            <span className="flex-1">{emailError}</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-5 shrink-0 px-1 text-destructive hover:text-destructive"
+              onClick={clearEmailError}
+            >
               <X className="h-3 w-3" />
             </Button>
           </div>
@@ -526,8 +525,8 @@ export function ContactSection({
             })}
           </div>
         ) : (
-          <div className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
-            No email addresses found. Add one below.
+          <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+            No email addresses yet. Add one below.
           </div>
         )}
 
@@ -584,9 +583,9 @@ export function ContactSection({
 
       {/* Phones Section */}
       <div>
-        <div className="mb-3 flex items-center gap-2 text-sm font-medium">
-          <Phone className="h-4 w-4" />
-          Contact Phone
+        <div className="mb-1.5 flex items-center gap-2">
+          <Phone className="h-4 w-4 text-muted-foreground" />
+          <span className="text-section-title">Contact phone</span>
           {onPhonePublicChange && (
             <button
               type="button"
@@ -595,8 +594,8 @@ export function ContactSection({
                 e.preventDefault();
                 onPhonePublicChange(!phonePublic);
               }}
-              className={`ml-auto rounded-md p-1 transition-colors hover:bg-muted ${
-                phonePublic ? '' : 'text-muted-foreground'
+              className={`ml-auto rounded-md p-1.5 transition-colors hover:bg-muted ${
+                phonePublic ? 'text-foreground' : 'text-muted-foreground'
               }`}
               title={
                 phonePublic ? 'Hide primary phone from resume' : 'Show primary phone on resume'
@@ -606,7 +605,7 @@ export function ContactSection({
             </button>
           )}
         </div>
-        <p className="mb-3 text-xs text-muted-foreground">
+        <p className="mb-4 text-sm leading-6 text-muted-foreground">
           Choose which phone number to display on your public profile.
         </p>
 
@@ -637,8 +636,8 @@ export function ContactSection({
             })}
           </div>
         ) : (
-          <div className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
-            No phone numbers found. Add one below.
+          <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+            No phone numbers yet. Add one below.
           </div>
         )}
 

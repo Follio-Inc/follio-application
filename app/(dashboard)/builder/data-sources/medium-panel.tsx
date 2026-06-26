@@ -209,7 +209,7 @@ export function MediumSourcePanel({
         {/* Status messages */}
         {refreshMessage && (
           <CardContent className="pt-0">
-            <div className="flex items-center gap-2 rounded-md bg-green-50 p-3 text-sm text-green-700 dark:bg-green-950/30 dark:text-green-400">
+            <div className="flex items-center gap-2 rounded-md bg-primary/10 p-3 text-sm text-primary">
               <CheckCircle2 className="h-4 w-4" />
               {refreshMessage}
             </div>

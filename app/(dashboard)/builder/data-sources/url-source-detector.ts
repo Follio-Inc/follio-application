@@ -59,8 +59,7 @@ const PLATFORM_PATTERNS: PlatformPattern[] = [
     source: {
       description: 'Blog posts from Medium',
       icon: 'BookOpen',
-      colorClass: 'from-gray-500/10 to-neutral-500/10 ring-gray-500/20',
-      iconColorClass: 'text-gray-700 dark:text-gray-300',
+      iconColorClass: 'text-muted-foreground',
       requiresOAuth: false,
       dataSource: 'BLOG',
       builtIn: false,
@@ -80,8 +79,7 @@ const PLATFORM_PATTERNS: PlatformPattern[] = [
     source: {
       description: 'Blog posts from Dev.to',
       icon: 'BookOpen',
-      colorClass: 'from-gray-800/10 to-gray-600/10 ring-gray-700/20',
-      iconColorClass: 'text-gray-800 dark:text-gray-200',
+      iconColorClass: 'text-muted-foreground',
       requiresOAuth: false,
       dataSource: 'BLOG',
       builtIn: false,
@@ -101,8 +99,7 @@ const PLATFORM_PATTERNS: PlatformPattern[] = [
     source: {
       description: 'Newsletter posts from Substack',
       icon: 'BookOpen',
-      colorClass: 'from-orange-500/10 to-orange-400/10 ring-orange-500/20',
-      iconColorClass: 'text-orange-500',
+      iconColorClass: 'text-muted-foreground',
       requiresOAuth: false,
       dataSource: 'BLOG',
       builtIn: false,
@@ -122,8 +119,7 @@ const PLATFORM_PATTERNS: PlatformPattern[] = [
     source: {
       description: 'Blog posts from Hashnode',
       icon: 'BookOpen',
-      colorClass: 'from-blue-600/10 to-blue-500/10 ring-blue-600/20',
-      iconColorClass: 'text-blue-600',
+      iconColorClass: 'text-muted-foreground',
       requiresOAuth: false,
       dataSource: 'BLOG',
       builtIn: false,
@@ -144,8 +140,7 @@ const PLATFORM_PATTERNS: PlatformPattern[] = [
     source: {
       description: 'Videos from YouTube',
       icon: 'Youtube',
-      colorClass: 'from-red-500/10 to-red-600/10 ring-red-500/20',
-      iconColorClass: 'text-red-500',
+      iconColorClass: 'text-foreground',
       requiresOAuth: false,
       dataSource: 'YOUTUBE',
       builtIn: false,

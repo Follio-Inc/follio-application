@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -68,105 +67,92 @@ export default function OnboardingPurposePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
-      {/* Progress bar */}
-      <div className="fixed left-0 right-0 top-0 h-1 bg-muted">
+    <>
+      {/* Progress bar — sits just beneath the app header */}
+      <div className="fixed left-0 right-0 top-16 z-40 h-0.5 bg-muted">
         <motion.div
           className="h-full bg-primary"
           initial={{ width: '0%' }}
           animate={{ width: '33%' }}
-          transition={{ duration: 0.3 }}
+          transition={{ duration: 0.4, ease: 'easeOut' }}
         />
       </div>
 
-      <div className="mx-auto max-w-lg px-4 py-16">
-        {/* Header */}
-        <motion.div
-          className="mb-8 text-center"
-          initial={{ opacity: 0, y: 20 }}
+      <div className="mx-auto max-w-xl px-4 pb-24 pt-16 sm:px-6">
+        {/* Step header */}
+        <motion.header
+          className="mb-10"
+          initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
+          transition={{ duration: 0.4, ease: 'easeOut' }}
         >
-          <div className="mb-4 inline-flex h-14 w-14 items-center justify-center rounded-xl bg-primary">
-            <span className="text-2xl font-bold text-primary-foreground">F</span>
+          <p className="text-eyebrow">Welcome to Follio</p>
+          <h1 className="text-display mt-3 text-3xl sm:text-4xl">What brings you here?</h1>
+          <p className="mt-3 text-base text-muted-foreground">
+            A quick note to help us tailor your profile. You can change this anytime in settings.
+          </p>
+        </motion.header>
+
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.08, ease: 'easeOut' }}
+          className="space-y-8"
+        >
+          <div className="space-y-2">
+            <Label htmlFor="purpose">Main purpose</Label>
+            <Select value={purpose} onValueChange={setPurpose}>
+              <SelectTrigger id="purpose" className="h-11 w-full">
+                <SelectValue placeholder="Select your main purpose…" />
+              </SelectTrigger>
+              <SelectContent>
+                {PURPOSE_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    <div className="flex flex-col items-start">
+                      <span>{option.label}</span>
+                      <span className="text-xs text-muted-foreground">{option.description}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">Optional — pick the closest match.</p>
           </div>
-          <h1 className="text-3xl font-bold">Welcome to Follio</h1>
-          <p className="mt-2 text-muted-foreground">Let&apos;s personalize your experience</p>
-        </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
-        >
-          <Card>
-            <CardHeader>
-              <CardTitle>What brings you to Follio?</CardTitle>
-              <CardDescription>
-                This helps us customize your profile. You can change this anytime.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="purpose">Main purpose (optional)</Label>
-                <Select value={purpose} onValueChange={setPurpose}>
-                  <SelectTrigger id="purpose" className="w-full">
-                    <SelectValue placeholder="Select your main purpose..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PURPOSE_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        <div className="flex flex-col items-start">
-                          <span>{option.label}</span>
-                          <span className="text-xs text-muted-foreground">
-                            {option.description}
-                          </span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+          {error && (
+            <div
+              role="alert"
+              className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+            >
+              {error}
+            </div>
+          )}
 
-              {error && (
-                <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
-                  {error}
-                </div>
+          <div className="flex items-center justify-between border-t border-border/60 pt-6">
+            <Button
+              variant="ghost"
+              onClick={handleSkip}
+              disabled={isLoading}
+              className="text-muted-foreground"
+            >
+              Skip for now
+            </Button>
+            <Button onClick={handleContinue} disabled={isLoading} className="gap-2" size="lg">
+              {isLoading ? (
+                <>
+                  <Spinner size="sm" />
+                  Continuing…
+                </>
+              ) : (
+                <>
+                  Continue
+                  <ArrowRight className="h-4 w-4" />
+                </>
               )}
-
-              <div className="flex flex-col gap-3 pt-2">
-                <Button onClick={handleContinue} disabled={isLoading} className="gap-2" size="lg">
-                  {isLoading ? (
-                    <>
-                      <Spinner size="sm" />
-                      Continuing...
-                    </>
-                  ) : (
-                    <>
-                      Continue
-                      <ArrowRight className="h-4 w-4" />
-                    </>
-                  )}
-                </Button>
-                <Button
-                  variant="ghost"
-                  onClick={handleSkip}
-                  disabled={isLoading}
-                  className="text-muted-foreground"
-                >
-                  Skip
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+            </Button>
+          </div>
         </motion.div>
-
-        {/* Progress indicator */}
-        <div className="mt-8 flex justify-center gap-2">
-          <div className="h-2 w-8 rounded-full bg-primary" />
-          <div className="h-2 w-8 rounded-full bg-muted" />
-        </div>
       </div>
-    </div>
+    </>
   );
 }

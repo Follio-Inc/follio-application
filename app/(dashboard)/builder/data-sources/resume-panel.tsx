@@ -211,25 +211,18 @@ export function ResumeSourcePanel({
     <div className="space-y-6">
       {/* ── Pending session banner ── */}
       {hasPendingSession && !previewOpen && (
-        <Card className="border-amber-200 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/20">
+        <Card className="border-border bg-muted/50">
           <CardContent className="flex items-center justify-between py-4">
             <div className="flex items-center gap-3">
-              <FileText className="h-5 w-5 text-amber-600" />
+              <FileText className="h-5 w-5 text-muted-foreground" />
               <div>
-                <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
-                  You have suggested updates waiting for review
-                </p>
-                <p className="text-xs text-amber-700 dark:text-amber-400">
+                <p className="text-sm font-medium">You have suggested updates waiting for review</p>
+                <p className="text-xs text-muted-foreground">
                   Your profile hasn&apos;t changed — review when you&apos;re ready.
                 </p>
               </div>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPreviewOpen(true)}
-              className="border-amber-300 text-amber-800 hover:bg-amber-100 dark:border-amber-800 dark:text-amber-300"
-            >
+            <Button variant="outline" size="sm" onClick={() => setPreviewOpen(true)}>
               Review Updates
             </Button>
           </CardContent>
@@ -240,7 +233,7 @@ export function ResumeSourcePanel({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5 text-orange-500" />
+            <FileText className="h-5 w-5 text-muted-foreground" />
             Resume
           </CardTitle>
           <CardDescription>
@@ -258,7 +251,7 @@ export function ResumeSourcePanel({
         <CardContent className="space-y-4">
           {/* Status messages */}
           {status === 'success' && message && (
-            <div className="rounded-md bg-green-50 p-3 text-sm text-green-700 dark:bg-green-950/30 dark:text-green-400">
+            <div className="rounded-md bg-primary/10 p-3 text-sm text-primary">
               <CheckCircle2 className="mb-0.5 mr-1 inline h-4 w-4" />
               {message}
             </div>
@@ -328,11 +321,11 @@ export function ResumeSourcePanel({
                   {/* Dot */}
                   <div className="relative z-10 mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border bg-background">
                     {entry.status === 'APPLIED' ? (
-                      <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                      <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
                     ) : entry.status === 'DISCARDED' ? (
                       <XCircle className="h-3.5 w-3.5 text-muted-foreground" />
                     ) : entry.status === 'PENDING_REVIEW' ? (
-                      <Clock className="h-3.5 w-3.5 text-amber-500" />
+                      <Clock className="h-3.5 w-3.5 text-muted-foreground" />
                     ) : (
                       <FileText className="h-3.5 w-3.5 text-muted-foreground" />
                     )}
@@ -360,10 +353,7 @@ export function ResumeSourcePanel({
                         </Badge>
                       )}
                       {entry.status === 'PENDING_REVIEW' && (
-                        <Badge
-                          variant="outline"
-                          className="h-4 border-amber-300 text-[10px] text-amber-600 dark:border-amber-800 dark:text-amber-400"
-                        >
+                        <Badge variant="outline" className="h-4 text-[10px] text-muted-foreground">
                           pending review
                         </Badge>
                       )}

@@ -80,7 +80,7 @@ const VISIBILITY_OPTIONS: VisibilityOption[] = [
     label: 'Unlisted',
     description: 'Only people with the secure link',
     icon: Link2,
-    color: 'text-yellow-600',
+    color: 'text-foreground',
     badgeVariant: 'secondary',
   },
   {
@@ -538,10 +538,7 @@ export function ShareDialog({
 
       <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-[480px]">
         <DialogHeader className="px-5 pb-3 pt-5">
-          <DialogTitle className="flex items-center gap-2 text-base">
-            <Share2 className="h-4 w-4 text-primary" />
-            Share Resume
-          </DialogTitle>
+          <DialogTitle className="text-base">Share Resume</DialogTitle>
           <DialogDescription className="text-xs">
             Control access and share your resume.
           </DialogDescription>
@@ -595,7 +592,7 @@ export function ShareDialog({
                 </span>
               )}
               {savedVisibility && !savingVisibility && (
-                <span className="flex items-center gap-1 text-[11px] text-green-600">
+                <span className="flex items-center gap-1 text-[11px] text-primary">
                   <Check className="h-2.5 w-2.5" />
                   Saved
                 </span>
@@ -642,7 +639,7 @@ export function ShareDialog({
                     className="h-7 shrink-0 gap-1 px-2 text-xs"
                   >
                     {copiedLink ? (
-                      <Check className="h-3 w-3 text-green-600" />
+                      <Check className="h-3 w-3 text-primary" />
                     ) : (
                       <Copy className="h-3 w-3" />
                     )}
@@ -763,7 +760,7 @@ export function ShareDialog({
                     className="h-7 gap-1.5 px-3 text-xs"
                   >
                     {copiedMessage ? (
-                      <Check className="h-3 w-3 text-green-600" />
+                      <Check className="h-3 w-3 text-primary" />
                     ) : (
                       <ClipboardCopy className="h-3 w-3" />
                     )}

@@ -93,7 +93,7 @@ export function LinksSourcePanel({ links, onSyncStatusRefreshAction }: LinksSour
         <CardContent className="space-y-4">
           {/* Status messages */}
           {status === 'success' && message && (
-            <div className="rounded-md bg-green-50 p-3 text-sm text-green-700 dark:bg-green-950/30 dark:text-green-400">
+            <div className="rounded-md bg-primary/10 p-3 text-sm text-primary">
               <CheckCircle2 className="mb-0.5 mr-1 inline h-4 w-4" />
               {message}
             </div>

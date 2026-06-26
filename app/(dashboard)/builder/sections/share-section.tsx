@@ -5,12 +5,10 @@ import {
   Copy,
   Download,
   ExternalLink,
-  Eye,
   EyeOff,
   FileJson,
   FileText,
   Globe,
-  Grid3X3,
   Lock,
   QrCode,
 } from 'lucide-react';
@@ -186,11 +184,9 @@ export function ShareSection({ profile }: ShareSectionProps) {
   return (
     <div className="space-y-6 rounded-xl bg-muted/40 p-4">
       {/* Portfolio Card */}
-      <Card className="overflow-hidden border-primary/20">
+      <Card className="overflow-hidden border-border">
         {/* Cropped iframe snapshot of portfolio page */}
         <div className="relative h-[220px] w-full overflow-hidden bg-muted">
-          {/* Accent top bar */}
-          <div className="absolute inset-x-0 top-0 z-20 h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500" />
           {/*
             Zoom into the center content, skip nav/top bars:
             - Scale the page to 50% so more content is visible
@@ -218,8 +214,7 @@ export function ShareSection({ profile }: ShareSectionProps) {
           <div className="absolute inset-x-0 bottom-0 z-10 h-16 bg-gradient-to-t from-background to-transparent" />
           {/* Overlay badge */}
           <div className="absolute left-3 top-3 z-20">
-            <Badge variant="secondary" className="gap-1.5 bg-background/80 backdrop-blur-sm">
-              <Grid3X3 className="h-3 w-3 text-primary" />
+            <Badge variant="secondary" className="bg-background/80 backdrop-blur-sm">
               Portfolio
             </Badge>
           </div>
@@ -227,9 +222,9 @@ export function ShareSection({ profile }: ShareSectionProps) {
           <div className="absolute right-3 top-3 z-20">
             <Badge variant="secondary" className="gap-1.5 bg-background/80 backdrop-blur-sm">
               {portfolioVisibility === 'PUBLIC' ? (
-                <Globe className="h-3 w-3 text-green-600" />
+                <Globe className="h-3 w-3 text-muted-foreground" />
               ) : portfolioVisibility === 'UNLISTED' ? (
-                <Lock className="h-3 w-3 text-yellow-600" />
+                <Lock className="h-3 w-3 text-muted-foreground" />
               ) : (
                 <EyeOff className="h-3 w-3 text-muted-foreground" />
               )}
@@ -270,7 +265,6 @@ export function ShareSection({ profile }: ShareSectionProps) {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <Button variant="outline" size="sm" asChild className="gap-2">
               <a href={portfolioUrl} target="_blank" rel="noopener">
-                <Eye className="h-4 w-4" />
                 Preview
                 <ExternalLink className="h-3 w-3" />
               </a>
@@ -279,31 +273,28 @@ export function ShareSection({ profile }: ShareSectionProps) {
               <Button
                 variant={portfolioVisibility === 'PUBLIC' ? 'default' : 'outline'}
                 size="sm"
-                className="h-8 gap-1.5 text-xs"
+                className="h-8 text-xs"
                 onClick={() => handleVisibilityChange('portfolio', 'PUBLIC')}
                 disabled={savingVisibility}
               >
-                <Globe className="h-3 w-3" />
                 Public
               </Button>
               <Button
                 variant={portfolioVisibility === 'UNLISTED' ? 'default' : 'outline'}
                 size="sm"
-                className="h-8 gap-1.5 text-xs"
+                className="h-8 text-xs"
                 onClick={() => handleVisibilityChange('portfolio', 'UNLISTED')}
                 disabled={savingVisibility}
               >
-                <Lock className="h-3 w-3" />
                 Unlisted
               </Button>
               <Button
                 variant={portfolioVisibility === 'PRIVATE' ? 'default' : 'outline'}
                 size="sm"
-                className="h-8 gap-1.5 text-xs"
+                className="h-8 text-xs"
                 onClick={() => handleVisibilityChange('portfolio', 'PRIVATE')}
                 disabled={savingVisibility}
               >
-                <EyeOff className="h-3 w-3" />
                 Private
               </Button>
             </div>
@@ -319,11 +310,9 @@ export function ShareSection({ profile }: ShareSectionProps) {
       </Card>
 
       {/* Resume Card */}
-      <Card className="overflow-hidden border-amber-500/20">
+      <Card className="overflow-hidden border-border">
         {/* Cropped iframe snapshot of resume page */}
         <div className="relative h-[220px] w-full overflow-hidden bg-muted">
-          {/* Accent top bar */}
-          <div className="absolute inset-x-0 top-0 z-20 h-1 bg-gradient-to-r from-amber-400 via-orange-500 to-red-500" />
           {/*
             Zoom into the center content, skip nav/top bars:
             - Scale the page to 50% so more content is visible
@@ -352,7 +341,7 @@ export function ShareSection({ profile }: ShareSectionProps) {
           {/* Overlay badge */}
           <div className="absolute left-3 top-3 z-20">
             <Badge variant="secondary" className="gap-1.5 bg-background/80 backdrop-blur-sm">
-              <FileText className="h-3 w-3 text-amber-600" />
+              <FileText className="h-3 w-3 text-muted-foreground" />
               Resume
             </Badge>
           </div>
@@ -362,7 +351,7 @@ export function ShareSection({ profile }: ShareSectionProps) {
               {resumeVisibility === 'PRIVATE' ? (
                 <EyeOff className="h-3 w-3 text-muted-foreground" />
               ) : (
-                <Lock className="h-3 w-3 text-yellow-600" />
+                <Lock className="h-3 w-3 text-muted-foreground" />
               )}
               {resumeVisibility === 'PRIVATE' ? 'Private' : 'Unlisted'}
             </Badge>
@@ -397,7 +386,6 @@ export function ShareSection({ profile }: ShareSectionProps) {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <Button variant="outline" size="sm" asChild className="gap-2">
               <a href={resumeUrl} target="_blank" rel="noopener">
-                <Eye className="h-4 w-4" />
                 Preview
                 <ExternalLink className="h-3 w-3" />
               </a>
@@ -406,21 +394,19 @@ export function ShareSection({ profile }: ShareSectionProps) {
               <Button
                 variant={resumeVisibility === 'UNLISTED' ? 'default' : 'outline'}
                 size="sm"
-                className="h-8 gap-1.5 text-xs"
+                className="h-8 text-xs"
                 onClick={() => handleVisibilityChange('resume', 'UNLISTED')}
                 disabled={savingVisibility}
               >
-                <Lock className="h-3 w-3" />
                 Unlisted
               </Button>
               <Button
                 variant={resumeVisibility === 'PRIVATE' ? 'default' : 'outline'}
                 size="sm"
-                className="h-8 gap-1.5 text-xs"
+                className="h-8 text-xs"
                 onClick={() => handleVisibilityChange('resume', 'PRIVATE')}
                 disabled={savingVisibility}
               >
-                <EyeOff className="h-3 w-3" />
                 Private
               </Button>
             </div>
@@ -474,7 +460,7 @@ export function ShareSection({ profile }: ShareSectionProps) {
                   to find your profile quickly.
                 </p>
                 {profile.status === 'PRIVATE' && (
-                  <p className="text-xs text-yellow-600">
+                  <p className="text-xs text-muted-foreground">
                     Note: This QR code contains your share token. Generate a new link if you want to
                     revoke access.
                   </p>
@@ -513,7 +499,7 @@ export function ShareSection({ profile }: ShareSectionProps) {
               onClick={handleExportPDF}
               disabled={isExporting === 'pdf'}
             >
-              <FileText className="h-8 w-8 text-red-500" />
+              <FileText className="h-5 w-5 text-muted-foreground" />
               <div className="text-left">
                 <div className="font-medium">Export as PDF</div>
                 <div className="text-xs text-muted-foreground">Download a printable resume</div>
@@ -525,7 +511,7 @@ export function ShareSection({ profile }: ShareSectionProps) {
               onClick={handleExportJSON}
               disabled={isExporting === 'json'}
             >
-              <FileJson className="h-8 w-8 text-yellow-500" />
+              <FileJson className="h-5 w-5 text-muted-foreground" />
               <div className="text-left">
                 <div className="font-medium">Export as JSON</div>
                 <div className="text-xs text-muted-foreground">Backup your profile data</div>

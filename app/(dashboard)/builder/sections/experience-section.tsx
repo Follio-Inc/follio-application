@@ -295,11 +295,11 @@ export function ExperienceSection({
   const renderInlineForm = () => (
     <div
       ref={editingFormRef}
-      className="space-y-4 rounded-lg border-2 border-primary/30 bg-muted/30 p-4 shadow-md ring-2 ring-primary/10"
+      className="space-y-4 rounded-lg border border-primary/20 bg-card p-4 ring-1 ring-primary/10"
     >
       {/* Editing mode banner */}
-      <div className="flex items-center gap-2 rounded-md bg-primary/10 px-3 py-2 text-sm font-medium text-primary">
-        <div className="h-2 w-2 animate-pulse rounded-full bg-primary" />
+      <div className="flex items-center gap-2 rounded-md bg-primary/5 px-3 py-2 text-xs font-medium text-primary">
+        <div className="h-1.5 w-1.5 rounded-full bg-primary" />
         {editingId === 'new' ? 'Adding new experience' : 'Editing experience'} — save or discard to
         continue
       </div>

@@ -42,10 +42,6 @@ interface ConnectionConfig {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   brandColor: string;
-  bgGradient: string;
-  ringColor: string;
-  hoverBg: string;
-  connectedBg: string;
   oauthStrategy: string;
 }
 
@@ -54,12 +50,7 @@ const CONNECTIONS: ConnectionConfig[] = [
     key: 'github',
     label: 'GitHub',
     icon: Github,
-    brandColor: 'text-[#24292e] dark:text-white',
-    bgGradient: 'from-gray-50 to-slate-50 dark:from-gray-900/50 dark:to-slate-900/50',
-    ringColor: 'ring-gray-200 dark:ring-gray-700',
-    hoverBg:
-      'hover:from-gray-100 hover:to-slate-100 dark:hover:from-gray-800/60 dark:hover:to-slate-800/60',
-    connectedBg: 'from-gray-50 to-slate-50 dark:from-gray-900/40 dark:to-slate-900/40',
+    brandColor: 'text-foreground',
     oauthStrategy: 'oauth_github',
   },
   {
@@ -67,11 +58,6 @@ const CONNECTIONS: ConnectionConfig[] = [
     label: 'LinkedIn',
     icon: Linkedin,
     brandColor: 'text-[#0A66C2]',
-    bgGradient: 'from-blue-50 to-sky-50 dark:from-blue-950/30 dark:to-sky-950/30',
-    ringColor: 'ring-blue-200 dark:ring-blue-800',
-    hoverBg:
-      'hover:from-blue-100 hover:to-sky-100 dark:hover:from-blue-900/40 dark:hover:to-sky-900/40',
-    connectedBg: 'from-blue-50/80 to-sky-50/80 dark:from-blue-950/20 dark:to-sky-950/20',
     oauthStrategy: 'oauth_linkedin_oidc',
   },
   {
@@ -79,13 +65,6 @@ const CONNECTIONS: ConnectionConfig[] = [
     label: 'Google',
     icon: GoogleIcon,
     brandColor: 'text-[#4285F4]',
-    bgGradient:
-      'from-red-50/50 via-yellow-50/50 to-blue-50/50 dark:from-red-950/20 dark:via-yellow-950/20 dark:to-blue-950/20',
-    ringColor: 'ring-gray-200 dark:ring-gray-700',
-    hoverBg:
-      'hover:from-red-100/50 hover:via-yellow-100/50 hover:to-blue-100/50 dark:hover:from-red-900/20 dark:hover:via-yellow-900/20 dark:hover:to-blue-900/20',
-    connectedBg:
-      'from-red-50/40 via-yellow-50/40 to-blue-50/40 dark:from-red-950/10 dark:via-yellow-950/10 dark:to-blue-950/10',
     oauthStrategy: 'oauth_google',
   },
 ];
@@ -411,15 +390,7 @@ export function ConnectionCards({
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: CONNECTIONS.indexOf(config) * 0.08 }}
             >
-              <div
-                className={cn(
-                  'group relative overflow-hidden rounded-2xl border bg-gradient-to-br p-5 transition-all duration-300',
-                  config.ringColor,
-                  connected ? config.connectedBg : config.bgGradient,
-                  !connected && config.hoverBg,
-                  'hover:shadow-md hover:shadow-black/5 dark:hover:shadow-black/20'
-                )}
-              >
+              <div className="group relative overflow-hidden rounded-xl border border-border bg-card p-5 transition-all duration-300 hover:shadow-sm">
                 {/* Connected indicator */}
                 <AnimatePresence>
                   {connected && (
@@ -429,8 +400,8 @@ export function ConnectionCards({
                       exit={{ scale: 0, opacity: 0 }}
                       className="absolute right-3 top-3 z-10"
                     >
-                      <div className="flex h-5 w-5 items-center justify-center rounded-full bg-green-500 shadow-sm">
-                        <CheckCircle2 className="h-3.5 w-3.5 text-white" />
+                      <div className="flex h-5 w-5 items-center justify-center rounded-full bg-success shadow-sm">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-success-foreground" />
                       </div>
                     </motion.div>
                   )}
@@ -449,7 +420,7 @@ export function ConnectionCards({
                         className="relative"
                       >
                         {/* User avatar - large */}
-                        <div className="relative h-20 w-20 overflow-hidden rounded-full ring-2 ring-white/80 dark:ring-gray-800/80">
+                        <div className="relative h-20 w-20 overflow-hidden rounded-full ring-2 ring-background">
                           <Image
                             src={avatarUrl}
                             alt={info.displayName || config.label}
@@ -459,11 +430,7 @@ export function ConnectionCards({
                           />
                         </div>
                         {/* Provider badge - small, overlaid */}
-                        <div
-                          className={cn(
-                            'absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-white shadow-sm dark:border-gray-800 dark:bg-gray-800'
-                          )}
-                        >
+                        <div className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-background bg-background shadow-sm">
                           <config.icon className={cn('h-3.5 w-3.5', config.brandColor)} />
                         </div>
                       </motion.div>
@@ -474,9 +441,7 @@ export function ConnectionCards({
                         animate={{ scale: 1, opacity: 1 }}
                         exit={{ scale: 0.8, opacity: 0 }}
                         transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-                        className={cn(
-                          'flex h-16 w-16 items-center justify-center rounded-2xl bg-white/80 shadow-sm dark:bg-gray-800/80'
-                        )}
+                        className="flex h-16 w-16 items-center justify-center rounded-xl bg-muted"
                       >
                         <config.icon className={cn('h-8 w-8', config.brandColor)} />
                       </motion.div>

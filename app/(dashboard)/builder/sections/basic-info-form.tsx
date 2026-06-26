@@ -104,10 +104,8 @@ export function BasicInfoForm({ profile, onUpdate, embedded }: BasicInfoFormProp
 
   if (embedded) {
     return (
-      <div className="space-y-3">
-        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
-          Name &amp; Headline
-        </p>
+      <div className="space-y-4">
+        <p className="text-eyebrow">Name &amp; Headline</p>
         {formFields}
       </div>
     );

@@ -1,8 +1,9 @@
-import { ArrowRight, Mail, Scale, Shield, Sparkles, Users } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 
+import { AppHeader } from '@/components/app-header';
+import { Logo } from '@/components/Logo';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 const CONTACT_CHANNELS = [
   {
@@ -33,6 +34,11 @@ const RESPONSE_GUIDANCE = [
   'For security reports, share reproduction steps only if you can do so safely and without exposing user data.',
 ] as const;
 
+const OFFICE_HOURS = [
+  { label: 'Typical reply', value: '1–2 business days' },
+  { label: 'Urgent security', value: 'security@follio.dev' },
+] as const;
+
 export const metadata = {
   title: 'Contact Us - Follio',
   description: 'Contact Follio for support, legal, privacy, security, and partnership requests.',
@@ -40,176 +46,124 @@ export const metadata = {
 
 export default function ContactPage() {
   return (
-    <main className="relative min-h-screen overflow-hidden bg-background">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(46,212,174,0.14),transparent_32%),radial-gradient(circle_at_80%_20%,rgba(46,212,174,0.08),transparent_24%),linear-gradient(to_bottom,rgba(250,250,250,0.8),transparent_22%)] dark:bg-[radial-gradient(circle_at_top_left,rgba(46,212,174,0.16),transparent_32%),radial-gradient(circle_at_80%_20%,rgba(46,212,174,0.09),transparent_24%),linear-gradient(to_bottom,rgba(255,255,255,0.03),transparent_22%)]" />
-      <div className="pointer-events-none absolute left-1/2 top-0 h-[28rem] w-[28rem] -translate-x-1/2 rounded-full bg-primary/10 blur-3xl" />
-
-      <div className="relative mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-6 sm:px-6 lg:px-8">
-        <header className="flex items-center justify-between border-b border-border/60 pb-5">
-          <Link href="/" className="group inline-flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border/70 bg-card shadow-sm transition-transform duration-200 group-hover:-translate-y-0.5">
-              <Sparkles className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold tracking-tight text-foreground">Follio</p>
-              <p className="text-xs text-muted-foreground">Professional identity platform</p>
-            </div>
+    <main className="min-h-screen bg-background">
+      <AppHeader
+        tone="marketing"
+        left={<Logo href="/" size="md" />}
+        right={
+          <Link
+            href="/privacy"
+            className="inline-flex h-8 items-center rounded-full px-3 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+          >
+            Privacy
           </Link>
+        }
+      />
 
-          <Button asChild variant="outline" size="sm" className="hidden sm:inline-flex">
-            <Link href="/privacy">Privacy</Link>
-          </Button>
-        </header>
+      {/* ─── Hero ──────────────────────────────────────────────────────────── */}
+      <section className="border-b border-border/60">
+        <div className="mx-auto max-w-3xl px-5 py-20 text-center sm:px-6 sm:py-28 lg:px-8">
+          <p className="text-eyebrow">Contact</p>
+          <h1 className="text-display mx-auto mt-4 max-w-2xl text-balance text-4xl text-foreground sm:text-5xl">
+            Reach the right team for support, legal, and partnership requests.
+          </h1>
+          <p className="mx-auto mt-5 max-w-xl text-pretty text-[15px] leading-7 text-muted-foreground sm:text-lg sm:leading-8">
+            Use the addresses below to get your message routed quickly — for customer support,
+            privacy matters, legal notices, security reports, and other business inquiries.
+          </p>
+          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-4">
+            <Button asChild size="lg" className="w-full gap-2 rounded-full px-6 sm:w-auto">
+              <a href="mailto:support@follio.dev">
+                Email support
+                <ArrowRight className="h-4 w-4" />
+              </a>
+            </Button>
+            <Button
+              asChild
+              variant="outline"
+              size="lg"
+              className="w-full rounded-full px-6 sm:w-auto"
+            >
+              <Link href="/terms">View terms</Link>
+            </Button>
+          </div>
+        </div>
+      </section>
 
-        <section className="grid flex-1 items-center gap-10 py-12 lg:grid-cols-[1.15fr_0.85fr] lg:py-16">
-          <div className="relative space-y-8">
-            <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-              <Mail className="h-3.5 w-3.5" />
-              Contact us
+      {/* ─── Contact routes ────────────────────────────────────────────────── */}
+      <section className="mx-auto max-w-4xl px-5 py-16 sm:px-6 sm:py-24 lg:px-8">
+        <div className="max-w-2xl">
+          <p className="text-eyebrow">Where to write</p>
+          <h2 className="text-display mt-3 text-2xl text-foreground sm:text-3xl">
+            Pick the destination that matches your request.
+          </h2>
+          <p className="mt-4 text-pretty text-[15px] leading-7 text-muted-foreground">
+            Each inbox is monitored by the team that owns it, so routing your message correctly is
+            the fastest path to an answer.
+          </p>
+        </div>
+
+        <div className="mt-10 grid gap-4 sm:grid-cols-2">
+          {CONTACT_CHANNELS.map((channel) => (
+            <div key={channel.email} className="surface-raised flex flex-col p-5">
+              <p className="text-section-title">{channel.label}</p>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">{channel.description}</p>
+              <a
+                href={`mailto:${channel.email}`}
+                className="mt-4 inline-flex w-fit items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 transition-colors hover:underline"
+              >
+                {channel.email}
+                <ArrowRight className="h-3.5 w-3.5" />
+              </a>
             </div>
+          ))}
+        </div>
+      </section>
 
-            <div className="space-y-5">
-              <h1 className="max-w-2xl text-4xl font-semibold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
-                Reach the right team for support, legal, and partnership requests.
-              </h1>
-              <p className="max-w-xl text-base leading-7 text-muted-foreground sm:text-lg">
-                Use the addresses below to get your message routed quickly. This page is for
-                customer support, privacy matters, legal notices, security reports, and other
-                business inquiries.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-              <Button asChild size="lg" className="gap-2 rounded-full px-6">
-                <a href="mailto:support@follio.dev">
-                  Email support
-                  <ArrowRight className="h-4 w-4" />
-                </a>
-              </Button>
-              <Button asChild variant="outline" size="lg" className="rounded-full px-6">
-                <Link href="/terms">View terms</Link>
-              </Button>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-2xl border border-border/70 bg-card/80 p-4 shadow-sm backdrop-blur">
-                <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Support</p>
-                <p className="mt-2 text-sm text-foreground">Product help and account issues</p>
-              </div>
-              <div className="rounded-2xl border border-border/70 bg-card/80 p-4 shadow-sm backdrop-blur">
-                <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Legal</p>
-                <p className="mt-2 text-sm text-foreground">Privacy, takedowns, and notices</p>
-              </div>
-              <div className="rounded-2xl border border-border/70 bg-card/80 p-4 shadow-sm backdrop-blur">
-                <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Security</p>
-                <p className="mt-2 text-sm text-foreground">Responsible vulnerability reports</p>
-              </div>
-            </div>
+      {/* ─── Guidance + availability ───────────────────────────────────────── */}
+      <section className="border-t border-border/60 bg-muted/30">
+        <div className="mx-auto grid max-w-4xl gap-12 px-5 py-16 sm:px-6 sm:py-24 lg:grid-cols-2 lg:gap-16 lg:px-8">
+          <div>
+            <p className="text-eyebrow">Before you write</p>
+            <h2 className="text-display mt-3 text-xl text-foreground sm:text-2xl">
+              What to include
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">
+              A little context up front helps us respond faster and more accurately.
+            </p>
+            <ul className="mt-6 space-y-4">
+              {RESPONSE_GUIDANCE.map((item, index) => (
+                <li key={item} className="flex gap-3">
+                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-border/70 bg-card text-[11px] font-medium tabular-nums text-muted-foreground">
+                    {index + 1}
+                  </span>
+                  <p className="text-sm leading-6 text-muted-foreground">{item}</p>
+                </li>
+              ))}
+            </ul>
           </div>
 
-          <Card className="relative overflow-hidden border-border/70 bg-card/90 shadow-[0_24px_80px_-28px_rgb(0_0_0/0.35)] backdrop-blur">
-            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-primary/60 to-transparent" />
-            <CardHeader className="space-y-3 pb-4">
-              <CardTitle className="text-2xl">Contact routes</CardTitle>
-              <CardDescription>
-                Pick the destination that matches your request so we can route it correctly.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {CONTACT_CHANNELS.map((channel) => (
+          <div>
+            <p className="text-eyebrow">Availability</p>
+            <h2 className="text-display mt-3 text-xl text-foreground sm:text-2xl">Office hours</h2>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">
+              We don&apos;t publish a physical office address. Email is the fastest way to reach the
+              right owner.
+            </p>
+            <dl className="mt-6 divide-y divide-border/60 overflow-hidden rounded-xl border border-border/60 bg-card">
+              {OFFICE_HOURS.map((row) => (
                 <div
-                  key={channel.email}
-                  className="rounded-2xl border border-border/70 bg-background/70 p-4 transition-colors hover:border-primary/30 hover:bg-primary/5"
+                  key={row.label}
+                  className="flex items-center justify-between gap-4 px-4 py-3.5"
                 >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="space-y-1">
-                      <p className="font-medium text-foreground">{channel.label}</p>
-                      <p className="text-sm leading-6 text-muted-foreground">
-                        {channel.description}
-                      </p>
-                    </div>
-                    <a
-                      href={`mailto:${channel.email}`}
-                      className="shrink-0 rounded-full border border-border/70 bg-card px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:border-primary/30 hover:text-primary"
-                    >
-                      {channel.email}
-                    </a>
-                  </div>
+                  <dt className="text-eyebrow">{row.label}</dt>
+                  <dd className="text-sm font-medium text-foreground">{row.value}</dd>
                 </div>
               ))}
-
-              <div className="grid gap-3 border-t border-border/60 pt-4 sm:grid-cols-3">
-                <div className="rounded-xl bg-muted/40 p-3">
-                  <Shield className="h-4 w-4 text-primary" />
-                  <p className="mt-2 text-sm font-medium text-foreground">Security first</p>
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                    Handle sensitive reports privately and carefully.
-                  </p>
-                </div>
-                <div className="rounded-xl bg-muted/40 p-3">
-                  <Scale className="h-4 w-4 text-primary" />
-                  <p className="mt-2 text-sm font-medium text-foreground">Legal requests</p>
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                    Include the page, profile handle, or policy reference.
-                  </p>
-                </div>
-                <div className="rounded-xl bg-muted/40 p-3">
-                  <Users className="h-4 w-4 text-primary" />
-                  <p className="mt-2 text-sm font-medium text-foreground">Other inquiries</p>
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                    Partnership and press requests are routed separately.
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </section>
-
-        <section className="grid gap-4 pb-10 lg:grid-cols-[0.95fr_1.05fr]">
-          <Card className="border-border/70 bg-card/80 shadow-sm backdrop-blur">
-            <CardHeader>
-              <CardTitle className="text-lg">What to include</CardTitle>
-              <CardDescription>
-                A little context up front helps us respond faster and more accurately.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {RESPONSE_GUIDANCE.map((item) => (
-                <div key={item} className="flex gap-3 rounded-xl bg-muted/40 p-3">
-                  <div className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-primary" />
-                  <p className="text-sm leading-6 text-muted-foreground">{item}</p>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-
-          <Card className="border-border/70 bg-card/80 shadow-sm backdrop-blur">
-            <CardHeader>
-              <CardTitle className="text-lg">Office hours</CardTitle>
-              <CardDescription>
-                We do not publish a physical office address here. Email is the fastest way to reach
-                the right owner.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-2xl border border-border/70 bg-background/70 p-4">
-                  <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                    Typical reply
-                  </p>
-                  <p className="mt-2 text-sm text-foreground">1-2 business days</p>
-                </div>
-                <div className="rounded-2xl border border-border/70 bg-background/70 p-4">
-                  <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                    Urgent security
-                  </p>
-                  <p className="mt-2 text-sm text-foreground">Use security@follio.dev</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </section>
-      </div>
+            </dl>
+          </div>
+        </div>
+      </section>
     </main>
   );
 }

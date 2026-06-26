@@ -129,7 +129,7 @@ export function PortfolioThumbnail({ handle, className }: PortfolioThumbnailProp
   return (
     <div
       ref={containerRef}
-      className={`relative w-full overflow-hidden rounded-xl bg-muted/30 ${className ?? ''}`}
+      className={`relative w-full overflow-hidden bg-muted/30 ${className ?? ''}`}
       style={{
         aspectRatio: `${ASPECT_RATIO}`,
         maxHeight: `${MAX_HEIGHT}px`,
