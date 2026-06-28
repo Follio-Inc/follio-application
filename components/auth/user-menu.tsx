@@ -234,7 +234,9 @@ export function UserMenu() {
                 </div>
                 <div className="flex flex-col">
                   <span className="text-sm font-medium">Resumes</span>
-                  <span className="text-[11px] text-muted-foreground">Create and manage resumes</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    Create and manage resumes
+                  </span>
                 </div>
               </Link>
             </DropdownMenuItem>
