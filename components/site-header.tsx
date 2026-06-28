@@ -10,9 +10,9 @@
  * person looking at it, not the person being looked at.*
  *
  *   1. Logged-in viewer (owner OR authenticated user)
- *      → Identical workspace chrome to `/dashboard`. Home, Resumes,
- *        Settings, avatar. The user never loses their navigation
- *        context just because they clicked into someone's resume.
+ *      → Identical workspace chrome to `/dashboard`. Logo, Dashboard
+ *        link, avatar. The user never loses their navigation context
+ *        just because they clicked into someone's resume.
  *        This mirrors how LinkedIn, Notion, and Linear behave: the
  *        signed-in nav follows you everywhere.
  *

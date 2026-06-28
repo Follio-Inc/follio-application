@@ -5,12 +5,13 @@ import { resolvePrimaryProfileContextOrNull } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { normalizeProfileForTemplate } from '@/lib/portfolio/templates/normalizer';
 import { getDraftPlan } from '@/lib/portfolio/templates/overrides';
-import { getTemplateMeta } from '@/lib/portfolio/templates/registry';
+import { getAllTemplates, getTemplateMeta } from '@/lib/portfolio/templates/registry';
 import { getPublicProfile } from '@/services/profile.service';
 
 import { PortfolioEditorClient } from './editor-client';
 import { PortfolioEditorEmptyState } from './empty-state';
 
+import type { TemplateOption } from '@/components/portfolio/template-option-card';
 import type { TemplatePortfolio } from '@/lib/portfolio/templates/types';
 
 export const dynamic = 'force-dynamic';
@@ -79,12 +80,22 @@ export default async function PortfolioEditPage() {
   const normalizedProfile = normalizeProfileForTemplate(profile, { githubProfile });
   const draftPlan = getDraftPlan(generatedPortfolio?.userOverrides) ?? publishedPlan;
 
+  const templates: TemplateOption[] = getAllTemplates().map((t) => ({
+    id: t.id,
+    name: t.name,
+    description: t.description,
+    tags: t.tags,
+    accentColors: t.compatibleAccentColors,
+  }));
+
   return (
     <PortfolioEditorClient
       handle={profileRecord.handle}
       publishedPlan={publishedPlan}
       initialDraft={draftPlan}
       profile={normalizedProfile}
+      currentTemplateId={publishedPlan.templateId}
+      templates={templates}
       template={{
         id: templateMeta.id,
         name: templateMeta.name,

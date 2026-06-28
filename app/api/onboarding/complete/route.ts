@@ -359,7 +359,8 @@ export async function POST(request: NextRequest) {
         providedLastName,
         clerkUserForReview?.imageUrl,
         galleryPhotos,
-        originalAvatarDataUrl
+        originalAvatarDataUrl,
+        typeof templateId === 'string' ? templateId : undefined
       );
 
       // Create ImportLog so this import appears in the builder's Import History timeline
@@ -833,7 +834,8 @@ async function handleReviewedData(
   providedLastName?: string,
   clerkAvatarUrl?: string | null,
   galleryPhotos?: string[],
-  originalAvatarDataUrl?: string
+  originalAvatarDataUrl?: string,
+  templateId?: string
 ) {
   console.log('[handleReviewedData] Starting with reviewed data');
   console.log('[handleReviewedData] Experiences count:', reviewedData.experiences?.length || 0);
@@ -1356,7 +1358,10 @@ async function handleReviewedData(
     try {
       const { generateEnhancedPortfolio } =
         await import('@/services/portfolio/enhanced-generation.service');
-      const result = await generateEnhancedPortfolio(profileId);
+      const startingTemplateId = typeof templateId === 'string' ? templateId : undefined;
+      const result = await generateEnhancedPortfolio(profileId, {
+        templateId: startingTemplateId,
+      });
       console.log('[handleReviewedData] Portfolio generated:', result.portfolioId);
     } catch (err) {
       // Don't fail onboarding if portfolio generation fails — user can regenerate later

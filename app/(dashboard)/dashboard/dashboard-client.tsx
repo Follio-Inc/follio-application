@@ -6,23 +6,28 @@ import {
   Copy,
   ExternalLink,
   Globe,
-  LayoutTemplate,
   Link2,
   Lock,
+  MoreVertical,
   Pencil,
   Share2,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useState } from 'react';
 
-import type { TemplateOption } from '@/components/portfolio/template-option-card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { getPortfolioUrl } from '@/lib/url';
 
 import { DashboardResumesSection, type DashboardResumeItem } from './dashboard-resumes-section';
 import { PortfolioThumbnail } from './portfolio-thumbnail';
-import { TemplateGallery } from './template-gallery';
 
 // ─── Types ────────────────────────────────────────────────────────
 
@@ -42,10 +47,6 @@ export interface DashboardData {
   resumes: DashboardResumeItem[];
   activeProfileId: string | null;
   primaryProfileId: string | null;
-  /** Template currently powering the portfolio, if any. */
-  currentTemplateId: string | null;
-  /** Templates available to switch between. */
-  templates: TemplateOption[];
 }
 
 interface DashboardClientProps {
@@ -63,15 +64,8 @@ const VISIBILITY_CONFIG: Record<string, { label: string; icon: typeof Globe }> =
 // ─── Component ────────────────────────────────────────────────────
 
 export function DashboardClient({ data }: DashboardClientProps) {
-  const {
-    portfolioProfile,
-    resumes,
-    activeProfileId,
-    primaryProfileId,
-    currentTemplateId,
-    templates,
-  } = data;
-  const [copied, setCopied] = useState<string | null>(null);
+  const { portfolioProfile, resumes, activeProfileId, primaryProfileId } = data;
+  const [copied, setCopied] = useState(false);
 
   const portfolioUrl = getPortfolioUrl(portfolioProfile.handle);
   const displayUrl = portfolioUrl.replace(/^https?:\/\//, '');
@@ -79,15 +73,27 @@ export function DashboardClient({ data }: DashboardClientProps) {
     .filter(Boolean)
     .join(' ');
 
-  const handleCopy = useCallback(async (url: string, key: string) => {
+  const handleCopy = useCallback(async () => {
     try {
-      await navigator.clipboard.writeText(url);
-      setCopied(key);
-      setTimeout(() => setCopied(null), 2000);
+      await navigator.clipboard.writeText(portfolioUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     } catch {
       // Clipboard API not available
     }
-  }, []);
+  }, [portfolioUrl]);
+
+  const handleShare = useCallback(async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: 'My Portfolio', url: portfolioUrl });
+      } catch {
+        // User dismissed share sheet
+      }
+      return;
+    }
+    await handleCopy();
+  }, [portfolioUrl, handleCopy]);
 
   return (
     <div className="space-y-12">
@@ -115,76 +121,101 @@ export function DashboardClient({ data }: DashboardClientProps) {
         <div className="surface-raised overflow-hidden">
           <PortfolioThumbnail handle={portfolioProfile.handle} />
 
-          {/* Action bar — calm, persistent, no overlay */}
-          <div className="flex flex-col gap-3 border-t border-border/60 p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-muted-foreground">
+          {/* Action bar */}
+          <div className="space-y-3 border-t border-border/60 p-4">
+            {/* URL row */}
+            <div className="flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground">
               <Globe className="h-4 w-4 shrink-0" />
-              <span className="truncate font-medium text-foreground">{displayUrl}</span>
-              <Button variant="outline" size="sm" className="gap-1.5 shrink-0" asChild>
-                <Link href={`/u/${portfolioProfile.handle}`} target="_blank">
-                  <ExternalLink className="h-3.5 w-3.5" />
-                  View live site
-                </Link>
-              </Button>
+              <span className="min-w-0 truncate font-medium text-foreground">{displayUrl}</span>
+              <TooltipProvider delayDuration={300}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 shrink-0 text-muted-foreground"
+                      onClick={() => void handleCopy()}
+                      aria-label={copied ? 'Copied' : 'Copy link'}
+                    >
+                      {copied ? (
+                        <Check className="h-4 w-4 text-success" />
+                      ) : (
+                        <Copy className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="text-xs">
+                    {copied ? 'Copied!' : 'Copy link'}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            {/* Primary actions */}
+            <div className="flex items-center gap-2">
               <Button size="sm" className="gap-1.5" asChild>
                 <Link href="/dashboard/portfolio/edit">
                   <Pencil className="h-3.5 w-3.5" />
                   Edit
                 </Link>
               </Button>
-              {templates.length > 1 && (
-                <TemplateGallery templates={templates} currentTemplateId={currentTemplateId}>
-                  <Button variant="outline" size="sm" className="gap-1.5">
-                    <LayoutTemplate className="h-3.5 w-3.5" />
-                    Template
+              <Button size="sm" className="gap-1.5" asChild>
+                <Link href={`/u/${portfolioProfile.handle}`} target="_blank">
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  View
+                </Link>
+              </Button>
+              <Button size="sm" className="gap-1.5" onClick={() => void handleShare()}>
+                <Share2 className="h-3.5 w-3.5" />
+                Share
+              </Button>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="ml-auto h-8 w-8 shrink-0"
+                    aria-label="More portfolio actions"
+                  >
+                    <MoreVertical className="h-4 w-4" />
                   </Button>
-                </TemplateGallery>
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5"
-                onClick={() => {
-                  if (navigator.share) {
-                    void navigator.share({ title: 'My Portfolio', url: portfolioUrl });
-                  } else {
-                    void handleCopy(portfolioUrl, 'portfolio-share');
-                  }
-                }}
-              >
-                {copied === 'portfolio-share' ? (
-                  <>
-                    <Check className="h-3.5 w-3.5 text-success" />
-                    Shared
-                  </>
-                ) : (
-                  <>
-                    <Share2 className="h-3.5 w-3.5" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem asChild>
+                    <Link href="/dashboard/portfolio/edit" className="gap-2">
+                      <Pencil className="h-4 w-4 text-muted-foreground" />
+                      Edit
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href={`/u/${portfolioProfile.handle}`} target="_blank" className="gap-2">
+                      <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                      View
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="gap-2"
+                    onSelect={(event) => {
+                      event.preventDefault();
+                      void handleShare();
+                    }}
+                  >
+                    <Share2 className="h-4 w-4 text-muted-foreground" />
                     Share
-                  </>
-                )}
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="gap-1.5"
-                onClick={() => void handleCopy(portfolioUrl, 'portfolio')}
-              >
-                {copied === 'portfolio' ? (
-                  <>
-                    <Check className="h-3.5 w-3.5 text-success" />
-                    Copied
-                  </>
-                ) : (
-                  <>
-                    <Copy className="h-3.5 w-3.5" />
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="gap-2"
+                    onSelect={(event) => {
+                      event.preventDefault();
+                      void handleCopy();
+                    }}
+                  >
+                    <Copy className="h-4 w-4 text-muted-foreground" />
                     Copy link
-                  </>
-                )}
-              </Button>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </div>

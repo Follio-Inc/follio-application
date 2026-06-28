@@ -382,7 +382,7 @@ const CAPABILITIES: readonly Capability[] = [
   {
     id: 'parsable',
     eyebrow: 'Parsable',
-    title: 'Stored as clean data, so machines read it perfectly.',
+    title: 'Stored as clean data, so job portals read it perfectly.',
     image: '/illustrations_transparent/Parsable.png',
   },
   {
@@ -409,15 +409,15 @@ const CAPABILITIES: readonly Capability[] = [
 const CAPABILITIES_HEADING_CLASS =
   'text-display text-balance text-2xl text-foreground sm:text-3xl lg:whitespace-nowrap lg:text-[2.5rem]';
 
-/** Display order for the stacked cards — leads with the headline capability. */
+/** Display order for the stacked cards — leads with parsable (structured data story). */
 const CAPABILITY_STACK_ORDER = [
+  'parsable',
   'self-improving',
   'adaptive',
   'talking',
   'connected',
   'shareable',
   'errorless',
-  'parsable',
 ] as const;
 
 function getStackedCapabilities(): readonly Capability[] {

@@ -1,9 +1,18 @@
 'use client';
 
-import { ArrowLeft, Check, CloudUpload, ExternalLink, Loader2, RotateCcw } from 'lucide-react';
+import {
+  ArrowLeft,
+  Check,
+  CloudUpload,
+  ExternalLink,
+  LayoutTemplate,
+  Loader2,
+  RotateCcw,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import type { TemplateOption } from '@/components/portfolio/template-option-card';
 import { Button } from '@/components/ui/button';
 import {
   PREVIEW_DRAFT,
@@ -11,6 +20,7 @@ import {
   type PreviewDraftMessage,
 } from '@/lib/portfolio/preview-messages';
 
+import { TemplateGallery } from '../../template-gallery';
 import { SectionsAccordion } from './sections-accordion';
 
 import type { EditorTemplateInfo } from './types';
@@ -28,6 +38,8 @@ interface PortfolioEditorClientProps {
   publishedPlan: TemplatePortfolio;
   initialDraft: TemplatePortfolio;
   profile: TemplateProfileData;
+  currentTemplateId: string;
+  templates: TemplateOption[];
   template: EditorTemplateInfo;
 }
 
@@ -40,6 +52,8 @@ export function PortfolioEditorClient({
   publishedPlan,
   initialDraft,
   profile,
+  currentTemplateId,
+  templates,
   template,
 }: PortfolioEditorClientProps) {
   const [draft, setDraft] = useState<TemplatePortfolio>(initialDraft);
@@ -208,6 +222,25 @@ export function PortfolioEditorClient({
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         {/* Controls — section-wise accordion (mirrors the resume builder) */}
         <div className="flex w-full shrink-0 flex-col border-b md:w-[400px] md:border-b-0 md:border-r">
+          {templates.length > 1 && (
+            <div className="shrink-0 border-b p-4">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Template
+              </p>
+              <TemplateGallery templates={templates} currentTemplateId={currentTemplateId}>
+                <Button
+                  variant="outline"
+                  className="h-auto w-full justify-between gap-2 px-3 py-2.5"
+                >
+                  <span className="flex items-center gap-2 text-sm font-medium">
+                    <LayoutTemplate className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    Change template
+                  </span>
+                  <span className="truncate text-sm text-muted-foreground">{template.name}</span>
+                </Button>
+              </TemplateGallery>
+            </div>
+          )}
           <div className="min-h-0 flex-1 overflow-auto p-4">
             <SectionsAccordion
               draft={draft}

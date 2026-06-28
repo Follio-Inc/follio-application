@@ -3,8 +3,6 @@ import { redirect } from 'next/navigation';
 
 import { ensurePrimaryProfile, makeProfilePortfolioReady } from '@/lib/active-profile';
 import { db } from '@/lib/db';
-import { getAllTemplates } from '@/lib/portfolio/templates/registry';
-import type { TemplateOption } from '@/components/portfolio/template-option-card';
 
 import { DashboardClient, type DashboardData } from './dashboard-client';
 
@@ -121,14 +119,6 @@ export default async function DashboardPage() {
     }
   }
 
-  const templates: TemplateOption[] = getAllTemplates().map((t) => ({
-    id: t.id,
-    name: t.name,
-    description: t.description,
-    tags: t.tags,
-    accentColors: t.compatibleAccentColors,
-  }));
-
   // Serialize for client
   const resumes = rawProfiles.map((r) => ({
     id: r.id,
@@ -158,8 +148,6 @@ export default async function DashboardPage() {
     resumes,
     activeProfileId: user.profile?.id ?? null,
     primaryProfileId: portfolioProfile.id,
-    currentTemplateId,
-    templates,
   };
 
   return (
