@@ -72,21 +72,15 @@ type VisibilityOption = {
   badgeVariant: 'default' | 'secondary' | 'outline';
 };
 
+// A resume contains personal contact details, so it deliberately has no
+// openly-public mode — only a secure (unguessable) link or fully private.
 const VISIBILITY_OPTIONS: VisibilityOption[] = [
-  {
-    value: 'PUBLIC',
-    label: 'Public',
-    description: 'Anyone with the link can view',
-    icon: Globe,
-    color: 'text-green-600',
-    badgeVariant: 'default',
-  },
   {
     value: 'UNLISTED',
     label: 'Unlisted',
     description: 'Only people with the secure link',
     icon: Link2,
-    color: 'text-yellow-600',
+    color: 'text-foreground',
     badgeVariant: 'secondary',
   },
   {
@@ -272,6 +266,14 @@ const WEBMAIL_PROVIDERS: Record<string, WebmailProvider> = {
   },
 };
 
+/**
+ * Legacy PUBLIC resumes are surfaced as UNLISTED since the resume no longer
+ * supports an openly-public mode.
+ */
+function normalizeResumeVisibility(v: ContentVisibility | null | undefined): ContentVisibility {
+  return v === 'PUBLIC' ? 'UNLISTED' : (v ?? 'PRIVATE');
+}
+
 /** Detect webmail provider from an email address. Returns null for unsupported domains. */
 function detectWebmailProvider(email: string | null | undefined): WebmailProvider | null {
   if (!email) return null;
@@ -312,9 +314,9 @@ export function ShareDialog({
   const open = controlledOpen ?? internalOpen;
   const setOpen = onOpenChange ?? setInternalOpen;
 
-  // Visibility state
+  // Visibility state.
   const [resumeVisibility, setResumeVisibility] = useState<ContentVisibility>(
-    profile.resumeVisibility ?? 'PRIVATE'
+    normalizeResumeVisibility(profile.resumeVisibility)
   );
   const [savingVisibility, setSavingVisibility] = useState(false);
   const [savedVisibility, setSavedVisibility] = useState(false);
@@ -362,7 +364,7 @@ export function ShareDialog({
   useEffect(() => {
     if (open) {
       // Reset visibility state when opening with a (possibly) different profile
-      setResumeVisibility(profile.resumeVisibility ?? 'PRIVATE');
+      setResumeVisibility(normalizeResumeVisibility(profile.resumeVisibility));
       setShowRegenConfirm(false);
       setSavedVisibility(false);
 
@@ -505,7 +507,7 @@ export function ShareDialog({
   // ── Current visibility info ──────────────────────────────────────────
 
   const currentVisibility =
-    VISIBILITY_OPTIONS.find((v) => v.value === resumeVisibility) ?? VISIBILITY_OPTIONS[1];
+    VISIBILITY_OPTIONS.find((v) => v.value === resumeVisibility) ?? VISIBILITY_OPTIONS[0];
   const CurrentIcon = currentVisibility.icon;
 
   // ── Render ───────────────────────────────────────────────────────────
@@ -536,10 +538,7 @@ export function ShareDialog({
 
       <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-[480px]">
         <DialogHeader className="px-5 pb-3 pt-5">
-          <DialogTitle className="flex items-center gap-2 text-base">
-            <Share2 className="h-4 w-4 text-primary" />
-            Share Resume
-          </DialogTitle>
+          <DialogTitle className="text-base">Share Resume</DialogTitle>
           <DialogDescription className="text-xs">
             Control access and share your resume.
           </DialogDescription>
@@ -593,7 +592,7 @@ export function ShareDialog({
                 </span>
               )}
               {savedVisibility && !savingVisibility && (
-                <span className="flex items-center gap-1 text-[11px] text-green-600">
+                <span className="flex items-center gap-1 text-[11px] text-primary">
                   <Check className="h-2.5 w-2.5" />
                   Saved
                 </span>
@@ -640,7 +639,7 @@ export function ShareDialog({
                     className="h-7 shrink-0 gap-1 px-2 text-xs"
                   >
                     {copiedLink ? (
-                      <Check className="h-3 w-3 text-green-600" />
+                      <Check className="h-3 w-3 text-primary" />
                     ) : (
                       <Copy className="h-3 w-3" />
                     )}
@@ -761,7 +760,7 @@ export function ShareDialog({
                     className="h-7 gap-1.5 px-3 text-xs"
                   >
                     {copiedMessage ? (
-                      <Check className="h-3 w-3 text-green-600" />
+                      <Check className="h-3 w-3 text-primary" />
                     ) : (
                       <ClipboardCopy className="h-3 w-3" />
                     )}

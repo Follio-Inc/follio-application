@@ -177,10 +177,14 @@ function FollioViewMock() {
 
 function PortfolioViewMock() {
   const projects = [
-    { title: 'Cascade', tag: 'Open Source', tone: 'from-primary/30 to-primary/5' },
-    { title: 'Atlas DB', tag: 'Work', tone: 'from-indigo-500/25 to-indigo-500/5' },
-    { title: 'Vellum', tag: 'Side project', tone: 'from-amber-500/25 to-amber-500/5' },
-    { title: 'Ledger', tag: 'Work', tone: 'from-rose-500/20 to-rose-500/5' },
+    { title: 'Cascade', tag: 'Open Source', tone: 'from-primary/20 to-primary/5' },
+    { title: 'Atlas DB', tag: 'Work', tone: 'from-foreground/10 to-foreground/5' },
+    {
+      title: 'Vellum',
+      tag: 'Side project',
+      tone: 'from-muted-foreground/15 to-muted-foreground/5',
+    },
+    { title: 'Ledger', tag: 'Work', tone: 'from-foreground/10 to-foreground/5' },
   ];
   return (
     <div className="h-[460px] overflow-hidden p-8 sm:p-10">
@@ -378,7 +382,7 @@ const CAPABILITIES: readonly Capability[] = [
   {
     id: 'parsable',
     eyebrow: 'Parsable',
-    title: 'Stored as clean data, so machines read it perfectly.',
+    title: 'Stored as clean data, so job portals read it perfectly.',
     image: '/illustrations_transparent/Parsable.png',
   },
   {
@@ -401,34 +405,19 @@ const CAPABILITIES: readonly Capability[] = [
   },
 ] as const;
 
-/**
- * Per-capability surface tint. A calm two-stop gradient laid over an opaque
- * `bg-card` base so cards always fully cover the one beneath them — no bleed —
- * while still reading as distinct, colourful surfaces. Keyed by capability id.
- */
-const CAPABILITY_TINTS: Record<string, string> = {
-  'self-improving': 'from-rose-100 to-orange-50 dark:from-rose-900/40 dark:to-orange-900/25',
-  shareable: 'from-cyan-100 to-blue-50 dark:from-cyan-900/40 dark:to-blue-900/25',
-  adaptive: 'from-sky-100 to-indigo-50 dark:from-sky-900/40 dark:to-indigo-900/25',
-  talking: 'from-violet-100 to-fuchsia-50 dark:from-violet-900/40 dark:to-fuchsia-900/25',
-  errorless: 'from-emerald-100 to-teal-50 dark:from-emerald-900/40 dark:to-teal-900/25',
-  parsable: 'from-amber-100 to-orange-50 dark:from-amber-900/40 dark:to-orange-900/25',
-  connected: 'from-teal-100 to-emerald-50 dark:from-teal-900/40 dark:to-emerald-900/25',
-};
-
 /** Shared section heading — wraps on small screens; single-line on laptop+. */
 const CAPABILITIES_HEADING_CLASS =
-  'text-balance text-2xl font-semibold tracking-tight sm:text-3xl lg:whitespace-nowrap lg:text-4xl';
+  'text-display text-balance text-2xl text-foreground sm:text-3xl lg:whitespace-nowrap lg:text-[2.5rem]';
 
-/** Display order for the stacked cards — leads with the headline capability. */
+/** Display order for the stacked cards — leads with parsable (structured data story). */
 const CAPABILITY_STACK_ORDER = [
+  'parsable',
   'self-improving',
   'adaptive',
   'talking',
   'connected',
   'shareable',
   'errorless',
-  'parsable',
 ] as const;
 
 function getStackedCapabilities(): readonly Capability[] {
@@ -438,45 +427,36 @@ function getStackedCapabilities(): readonly Capability[] {
 }
 
 /**
- * The shared visual shell for a card: opaque base + tint overlay + content.
- * The illustration alternates sides card-to-card so the stack reads with rhythm
- * rather than a single static column.
+ * The shared visual shell for a capability card — clean, flat, editorial.
+ * No per-card colour tints, no bloom blobs. The surface is a quiet `bg-card`
+ * with a soft border; the illustration alternates sides for visual rhythm.
+ * A large typographic index number floats in the background for depth.
  */
 function CapabilityCardShell({ card, index }: { card: Capability; index: number }) {
   const imageRight = index % 2 === 0;
 
   return (
-    <div className="relative flex h-full flex-col overflow-hidden rounded-[28px] bg-card">
-      {/* Tint layer — opaque card underneath guarantees full coverage. */}
-      <div
-        className={cn(
-          'pointer-events-none absolute inset-0 bg-gradient-to-br opacity-90',
-          CAPABILITY_TINTS[card.id]
-        )}
-      />
+    <div className="relative flex h-full flex-col overflow-hidden rounded-[28px] border border-border/50 bg-card">
+      {/* Background index — texture, not noise */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute select-none font-bold leading-none tracking-tighter text-foreground/[0.028] dark:text-foreground/[0.04]"
+        style={{
+          fontSize: 'clamp(140px, 22vw, 260px)',
+          right: imageRight ? 'auto' : '-0.05em',
+          left: imageRight ? '-0.05em' : 'auto',
+          top: '-0.12em',
+          lineHeight: 1,
+        }}
+      >
+        {String(index + 1).padStart(2, '0')}
+      </span>
 
-      {/* Soft colour bloom behind the illustration for depth. */}
-      <div
-        className={cn(
-          'pointer-events-none absolute top-1/2 h-[520px] w-[520px] -translate-y-1/2 rounded-full bg-white/50 blur-[110px] dark:bg-white/[0.06]',
-          imageRight ? '-right-24' : '-left-24'
-        )}
-      />
-
-      {/* Crisp glassy edges: a hairline top highlight and a faint inset ring. */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent dark:via-white/15" />
-      <div className="pointer-events-none absolute inset-0 rounded-[28px] ring-1 ring-inset ring-black/[0.04] dark:ring-white/[0.06]" />
-
-      <div className="relative grid h-full items-center gap-6 p-6 sm:gap-10 sm:p-12 lg:grid-cols-2 lg:gap-14 lg:p-14">
+      <div className="relative grid h-full items-center gap-5 p-6 text-center sm:gap-10 sm:p-12 lg:grid-cols-2 lg:gap-14 lg:p-14 lg:text-left">
         {/* Copy */}
         <div className={cn('order-2', imageRight ? 'lg:order-1' : 'lg:order-2')}>
-          <div className="mb-5 inline-flex items-center gap-2.5 rounded-full border border-foreground/10 bg-background/40 px-3.5 py-1.5 backdrop-blur-sm">
-            <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-            <span className="font-mono text-xs uppercase tracking-[0.22em] text-foreground/70">
-              {card.eyebrow}
-            </span>
-          </div>
-          <h3 className="max-w-md text-xl font-semibold leading-snug tracking-tight text-foreground sm:text-2xl lg:text-[1.9rem] lg:leading-[1.2]">
+          <p className="text-eyebrow mb-3 text-primary sm:mb-4">{card.eyebrow}</p>
+          <h3 className="mx-auto max-w-md text-pretty text-[1.35rem] font-semibold leading-snug tracking-tight text-foreground sm:text-2xl lg:mx-0 lg:text-[1.9rem] lg:leading-[1.2]">
             {card.title}
           </h3>
         </div>
@@ -488,14 +468,14 @@ function CapabilityCardShell({ card, index }: { card: Capability; index: number 
             imageRight ? 'lg:order-2' : 'lg:order-1'
           )}
         >
-          <div className="relative aspect-square w-full max-w-[240px] sm:max-w-[340px] lg:max-w-[380px]">
+          <div className="relative aspect-square w-full max-w-[190px] sm:max-w-[320px] lg:max-w-[360px]">
             <Image
               src={card.image}
               alt={card.eyebrow}
               fill
               priority={index === 0}
-              sizes="(max-width: 1024px) 340px, 380px"
-              className="object-contain drop-shadow-[0_20px_45px_rgba(0,0,0,0.12)]"
+              sizes="(max-width: 640px) 190px, (max-width: 1024px) 320px, 360px"
+              className="object-contain drop-shadow-[0_8px_24px_rgba(0,0,0,0.08)] dark:drop-shadow-[0_8px_24px_rgba(0,0,0,0.2)]"
             />
           </div>
         </div>
@@ -564,11 +544,9 @@ function StackedCapabilities() {
 
   if (!useScrollStack) {
     return (
-      <div className="mx-auto max-w-5xl px-4 pb-16 pt-16 sm:px-6 sm:pb-28 sm:pt-28 lg:px-8">
-        <div className="mb-10 sm:mb-16">
-          <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.2em] text-primary">
-            More than a document
-          </p>
+      <div className="mx-auto max-w-5xl px-5 pb-16 pt-16 sm:px-6 sm:pb-28 sm:pt-28 lg:px-8">
+        <div className="mb-8 sm:mb-16">
+          <p className="text-eyebrow mb-4">More than a document</p>
           <h2 className={CAPABILITIES_HEADING_CLASS}>
             Your <RotatingWord /> resume that works for you.
           </h2>
@@ -599,9 +577,7 @@ function StackedCapabilities() {
       <div className="sticky top-0 flex h-screen flex-col overflow-hidden">
         <div className="mx-auto w-full max-w-5xl px-4 pt-20 sm:px-6 sm:pt-24 lg:px-8">
           <div>
-            <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.2em] text-primary">
-              More than a document
-            </p>
+            <p className="text-eyebrow mb-4">More than a document</p>
             <h2 className={CAPABILITIES_HEADING_CLASS}>
               Your <RotatingWord /> resume that works for you.
             </h2>
@@ -638,8 +614,8 @@ function Capabilities() {
 
 function HeroCTA() {
   return (
-    <Link href="/sign-up">
-      <Button size="lg" className="rounded-full px-6">
+    <Link href="/sign-up" className="block w-full sm:inline-block sm:w-auto">
+      <Button size="lg" className="h-12 w-full rounded-full px-6 text-base sm:h-11 sm:w-auto">
         Build Your Follio
       </Button>
     </Link>
@@ -679,9 +655,11 @@ const RESUME_COPY = {
 const RESUME_SURFACE_CLASS =
   'overflow-hidden rounded-lg border border-border/70 bg-white shadow-[0_24px_60px_-24px_rgb(0_0_0/0.3)] ring-1 ring-black/[0.02] dark:bg-gray-950';
 
-/** Fixed A4 sheet (210 × 297). Height drives layout; width follows the ratio. */
-const RESUME_A4_CLASS =
-  'aspect-[210/297] h-[min(58vh,520px)] w-full max-w-[min(100%,340px)] lg:h-[80vh] lg:max-h-[760px] lg:max-w-none';
+/**
+ * Fixed A4 sheet (210 × 297) for the desktop pinned showcase. Height drives
+ * layout; width follows the ratio. (Mobile uses its own teaser preview.)
+ */
+const RESUME_A4_CLASS = 'aspect-[210/297] h-[80vh] max-h-[760px]';
 
 /**
  * Static fallback used on small screens and when the visitor prefers reduced
@@ -691,22 +669,23 @@ const RESUME_A4_CLASS =
 function ResumeShowcaseStatic() {
   return (
     <section className="border-t border-border/60 bg-muted/20">
-      <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-28 lg:px-8">
+      <div className="mx-auto max-w-6xl px-5 py-16 sm:px-6 sm:py-28 lg:px-8">
         <div className="grid items-center gap-10 sm:gap-12 lg:grid-cols-2 lg:gap-16">
           <FadeIn>
-            <div className="max-w-xl">
-              <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.2em] text-primary">
-                {RESUME_COPY.eyebrow}
-              </p>
-              <h2 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl lg:text-4xl">
+            <div className="max-w-xl text-center lg:text-left">
+              <p className="text-eyebrow mb-4">{RESUME_COPY.eyebrow}</p>
+              <h2 className="text-display text-balance text-2xl text-foreground sm:text-3xl lg:text-[2.5rem]">
                 {RESUME_COPY.heading}
               </h2>
-              <p className="mt-5 text-pretty text-[15px] leading-7 text-muted-foreground sm:text-base">
+              <p className="mx-auto mt-4 max-w-md text-pretty text-[15px] leading-7 text-muted-foreground sm:mt-5 sm:text-base lg:mx-0 lg:max-w-none">
                 {RESUME_COPY.body}
               </p>
-              <div className="mt-8">
-                <Link href="/sign-up">
-                  <Button size="lg" className="rounded-full px-6">
+              <div className="mt-7 sm:mt-8">
+                <Link href="/sign-up" className="block w-full sm:inline-block sm:w-auto">
+                  <Button
+                    size="lg"
+                    className="h-12 w-full rounded-full px-6 text-base sm:h-11 sm:w-auto"
+                  >
                     Create yours
                   </Button>
                 </Link>
@@ -714,10 +693,22 @@ function ResumeShowcaseStatic() {
             </div>
           </FadeIn>
 
+          {/*
+            Mobile/tablet preview: a non-scrollable A4 teaser. The document is
+            top-aligned and clipped, with a fade at the bottom edge signalling
+            "there's more" — deliberately avoiding a nested scroll area, which
+            on touch devices traps the page scroll.
+          */}
           <FadeIn delay={0.1}>
             <div className="flex justify-center lg:justify-end">
-              <div className={cn(RESUME_SURFACE_CLASS, RESUME_A4_CLASS, 'overflow-y-auto')}>
+              <div
+                className={cn(
+                  RESUME_SURFACE_CLASS,
+                  'relative aspect-[210/297] w-full max-w-[300px] overflow-hidden sm:max-w-[360px]'
+                )}
+              >
                 <ResumeIllustration />
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-white to-transparent dark:from-gray-950" />
               </div>
             </div>
           </FadeIn>
@@ -822,10 +813,8 @@ function ResumeShowcase() {
         <div className="mx-auto grid w-full max-w-6xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-2 lg:gap-16 lg:px-8">
           {/* ── Copy + CTA ── */}
           <div className="max-w-xl">
-            <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.2em] text-primary">
-              {RESUME_COPY.eyebrow}
-            </p>
-            <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+            <p className="text-eyebrow mb-4">{RESUME_COPY.eyebrow}</p>
+            <h2 className="text-display text-3xl text-foreground sm:text-[2.5rem]">
               {RESUME_COPY.heading}
             </h2>
             <p className="mt-5 text-pretty text-[15px] leading-7 text-muted-foreground sm:text-base">
@@ -1000,15 +989,22 @@ function Hero() {
   const scrollIndicatorOpacity = useTransform(scrollY, [80, 160], [1, 0]);
 
   return (
-    <section className="relative flex min-h-[calc(100svh-3.5rem)] items-center overflow-hidden">
-      <div className="pointer-events-none absolute left-1/2 top-0 -z-10 h-[520px] w-[900px] -translate-x-1/2 rounded-full bg-primary/[0.06] blur-3xl" />
+    <section className="relative flex min-h-[calc(100svh-3.5rem)] items-center overflow-hidden border-b border-border/60">
+      <div className="mx-auto w-full max-w-5xl px-5 pb-16 pt-8 text-left sm:px-6 sm:pb-24 sm:pt-16 lg:px-8">
+        <motion.p
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          className="text-eyebrow"
+        >
+          The living resume
+        </motion.p>
 
-      <div className="mx-auto w-full max-w-5xl px-4 pb-12 pt-8 text-left sm:px-6 sm:pb-20 sm:pt-12 lg:px-8">
         <motion.h1
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.05 }}
-          className="max-w-3xl text-balance text-[2rem] font-semibold leading-[1.2] tracking-tight text-foreground sm:text-5xl lg:text-6xl lg:leading-[1.18]"
+          transition={{ duration: 0.6, delay: 0.06 }}
+          className="text-display mt-4 max-w-3xl text-balance text-[2.4rem] text-foreground sm:mt-5 sm:text-[3.5rem] lg:text-[4rem]"
         >
           A resume that does things a PDF never could.
         </motion.h1>
@@ -1016,22 +1012,35 @@ function Hero() {
         <motion.p
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.15 }}
-          className="mt-5 max-w-3xl text-pretty text-sm leading-6 text-muted-foreground/90 sm:mt-6 sm:text-[18px] sm:leading-8"
+          transition={{ duration: 0.6, delay: 0.14 }}
+          className="mt-5 max-w-2xl text-pretty text-[15px] leading-7 text-muted-foreground sm:mt-6 sm:text-lg sm:leading-8"
         >
-          Follio is a web app for job seekers and professionals to build one living profile and
-          share it as a resume, portfolio, or quick snapshot through a single link, with clean
-          formatting, viewer-adaptive presentation, and AI assistance that helps answer recruiter
-          questions and suggest skills based on market trends.
+          {/* Mobile: a tight, scannable promise. Desktop: the full positioning. */}
+          <span className="sm:hidden">
+            Build one living profile and share it as a resume, portfolio, or quick snapshot — all
+            from a single link.
+          </span>
+          <span className="hidden sm:inline">
+            Follio is a web app for job seekers and professionals to build one living profile and
+            share it as a resume, portfolio, or quick snapshot through a single link, with clean
+            formatting, viewer-adaptive presentation, and AI assistance that helps answer recruiter
+            questions and suggest skills based on market trends.
+          </span>
         </motion.p>
 
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.25 }}
-          className="mt-8 flex items-center"
+          transition={{ duration: 0.6, delay: 0.22 }}
+          className="mt-9 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:gap-4"
         >
           <HeroCTA />
+          <Link
+            href="/sign-in"
+            className="inline-flex h-12 items-center justify-center rounded-full px-5 text-base font-medium text-foreground transition-colors hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 sm:h-11 sm:text-[15px]"
+          >
+            Sign in
+          </Link>
         </motion.div>
       </div>
 
@@ -1077,19 +1086,22 @@ export function LandingPage() {
       <ResumeShowcase />
 
       {/* ─── Final CTA ───────────────────────────────────────────────────── */}
-      <section className="border-t border-border/60">
-        <div className="relative mx-auto max-w-5xl overflow-hidden px-4 py-16 text-center sm:px-6 sm:py-32 lg:px-8">
-          <div className="pointer-events-none absolute inset-x-0 top-1/2 -z-10 mx-auto h-[300px] w-[600px] -translate-y-1/2 rounded-full bg-primary/[0.07] blur-3xl" />
+      <section className="border-t border-border/60 bg-muted/30">
+        <div className="mx-auto max-w-3xl px-5 py-20 text-center sm:px-6 sm:py-32 lg:px-8">
           <FadeIn>
-            <h2 className="mx-auto max-w-2xl text-balance text-2xl font-semibold tracking-tight sm:text-4xl">
+            <p className="text-eyebrow">Get started</p>
+            <h2 className="text-display mx-auto mt-4 max-w-2xl text-balance text-3xl text-foreground sm:text-[2.75rem]">
               Stop sending PDFs, start sharing Follio links.
             </h2>
-            <p className="mx-auto mt-4 max-w-md text-muted-foreground">
+            <p className="mx-auto mt-5 max-w-md text-pretty text-[15px] leading-7 text-muted-foreground sm:text-base">
               Set up your Follio in a few minutes. Free to start, no credit card.
             </p>
-            <div className="mt-8 flex items-center justify-center">
-              <Link href="/sign-up">
-                <Button size="lg" className="rounded-full px-6">
+            <div className="mt-9 flex items-center justify-center">
+              <Link href="/sign-up" className="block w-full sm:inline-block sm:w-auto">
+                <Button
+                  size="lg"
+                  className="h-12 w-full rounded-full px-6 text-base sm:h-11 sm:w-auto"
+                >
                   Create your Follio
                 </Button>
               </Link>
@@ -1100,45 +1112,50 @@ export function LandingPage() {
 
       {/* ─── Footer ──────────────────────────────────────────────────────── */}
       <footer className="border-t border-border/60">
-        <div className="mx-auto max-w-6xl px-4 pt-10 sm:px-6 lg:px-8">
-          <p className="max-w-3xl text-xs leading-6 text-muted-foreground/80">
+        <div className="mx-auto max-w-6xl px-5 py-12 sm:px-6 sm:py-14 lg:px-8">
+          <p className="max-w-3xl text-xs leading-6 text-muted-foreground">
             Follio helps you build a living, shareable professional resume and portfolio. When you
             sign in with Google, we use the basic profile information provided by Google — your
             name, email address, and profile picture — to create and secure your account and
             personalize your workspace. We do not access Gmail, Drive, Contacts, or other Google
             services. For full details, see our{' '}
-            <Link href="/privacy" className="underline transition-colors hover:text-foreground">
+            <Link
+              href="/privacy"
+              className="text-foreground underline-offset-4 transition-colors hover:text-primary"
+            >
               Privacy Policy
             </Link>
             .
           </p>
         </div>
 
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 py-8 sm:flex-row sm:px-6 sm:py-10 lg:px-8">
-          <div className="flex items-center gap-2">
-            <Logo size="sm" showText={false} />
-            <span className="text-sm text-muted-foreground">
-              &copy; {new Date().getFullYear()} Follio
-            </span>
-          </div>
-          <div className="flex items-center gap-6 text-sm text-muted-foreground">
-            <Link href="/privacy" className="transition-colors hover:text-foreground">
-              Privacy
-            </Link>
-            <Link href="/terms" className="transition-colors hover:text-foreground">
-              Terms
-            </Link>
-            <Link href="/contact" className="transition-colors hover:text-foreground">
-              Contact
-            </Link>
-            <Link
-              href="/admin/sign-in"
-              className="transition-colors hover:text-foreground"
-              aria-label="Admin"
-              title="Admin"
-            >
-              <Shield className="h-3.5 w-3.5" />
-            </Link>
+        <div className="border-t border-border/60">
+          <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-5 py-8 sm:flex-row sm:px-6 lg:px-8">
+            <div className="flex items-center gap-2.5">
+              <Logo size="sm" showText={false} />
+              <span className="text-sm text-muted-foreground">
+                &copy; {new Date().getFullYear()} Follio
+              </span>
+            </div>
+            <div className="flex items-center gap-6 text-sm text-muted-foreground">
+              <Link href="/privacy" className="transition-colors hover:text-foreground">
+                Privacy
+              </Link>
+              <Link href="/terms" className="transition-colors hover:text-foreground">
+                Terms
+              </Link>
+              <Link href="/contact" className="transition-colors hover:text-foreground">
+                Contact
+              </Link>
+              <Link
+                href="/admin/sign-in"
+                className="transition-colors hover:text-foreground"
+                aria-label="Admin"
+                title="Admin"
+              >
+                <Shield className="h-3.5 w-3.5" />
+              </Link>
+            </div>
           </div>
         </div>
       </footer>

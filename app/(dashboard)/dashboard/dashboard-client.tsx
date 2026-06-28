@@ -1,11 +1,29 @@
 'use client';
 
-import { ArrowRight, Check, Copy, ExternalLink, Globe, Link2, Lock, Share2 } from 'lucide-react';
+import {
+  ArrowRight,
+  Check,
+  Copy,
+  ExternalLink,
+  Globe,
+  Link2,
+  Lock,
+  MoreVertical,
+  Pencil,
+  Share2,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { getPortfolioUrl } from '@/lib/url';
 
 import { DashboardResumesSection, type DashboardResumeItem } from './dashboard-resumes-section';
@@ -47,114 +65,180 @@ const VISIBILITY_CONFIG: Record<string, { label: string; icon: typeof Globe }> =
 
 export function DashboardClient({ data }: DashboardClientProps) {
   const { portfolioProfile, resumes, activeProfileId, primaryProfileId } = data;
-  const [copied, setCopied] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const portfolioUrl = getPortfolioUrl(portfolioProfile.handle);
+  const displayUrl = portfolioUrl.replace(/^https?:\/\//, '');
+  const ownerName = [portfolioProfile.firstName, portfolioProfile.lastName]
+    .filter(Boolean)
+    .join(' ');
 
-  const handleCopy = useCallback(async (url: string, key: string) => {
+  const handleCopy = useCallback(async () => {
     try {
-      await navigator.clipboard.writeText(url);
-      setCopied(key);
-      setTimeout(() => setCopied(null), 2000);
+      await navigator.clipboard.writeText(portfolioUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     } catch {
       // Clipboard API not available
     }
-  }, []);
+  }, [portfolioUrl]);
+
+  const handleShare = useCallback(async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: 'My Portfolio', url: portfolioUrl });
+      } catch {
+        // User dismissed share sheet
+      }
+      return;
+    }
+    await handleCopy();
+  }, [portfolioUrl, handleCopy]);
 
   return (
-    <div className="space-y-16">
+    <div className="space-y-12">
       {/* ═══════════════════════════════════════════════════════════
-          SECTION 1 — Portfolio
+          Page header
           ═══════════════════════════════════════════════════════════ */}
-      <section>
+      <header className="space-y-1.5">
+        <p className="text-eyebrow">Workspace</p>
+        <h1 className="text-display text-2xl text-foreground sm:text-3xl">
+          {ownerName ? `Welcome back, ${portfolioProfile.firstName}` : 'Dashboard'}
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Manage your live portfolio and tailored resumes, all in one place.
+        </p>
+      </header>
+
+      {/* ═══════════════════════════════════════════════════════════
+          Portfolio
+          ═══════════════════════════════════════════════════════════ */}
+      <section className="space-y-4">
         <SectionHeader title="Portfolio">
           <VisibilityBadge visibility={portfolioProfile.portfolioVisibility} />
         </SectionHeader>
 
-        <div className="group/portfolio relative mt-4 overflow-hidden rounded-2xl border bg-muted/10 transition-all hover:border-foreground/15 hover:shadow-sm">
+        <div className="surface-raised overflow-hidden">
           <PortfolioThumbnail handle={portfolioProfile.handle} />
-          {/* Soft bottom fade */}
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-background/80 to-transparent" />
 
-          {/* Overlay action bar — always visible, highlighted on hover */}
-          <div className="absolute inset-x-0 bottom-0 z-10 flex items-center justify-center gap-2 bg-gradient-to-t from-background via-background/90 to-transparent px-4 pb-4 pt-10 transition-all duration-200 group-hover/portfolio:from-background group-hover/portfolio:via-background/95">
-            <Button
-              variant="secondary"
-              size="sm"
-              className="h-8 gap-1.5 rounded-lg px-3 text-xs shadow-sm"
-              onClick={() => {
-                if (navigator.share) {
-                  void navigator.share({ title: 'My Portfolio', url: portfolioUrl });
-                } else {
-                  void handleCopy(portfolioUrl, 'portfolio-share');
-                }
-              }}
-            >
-              {copied === 'portfolio-share' ? (
-                <>
-                  <Check className="h-3.5 w-3.5 text-emerald-600" />
-                  <span className="text-emerald-600">Shared</span>
-                </>
-              ) : (
-                <>
-                  <Share2 className="h-3.5 w-3.5" />
-                  Share
-                </>
-              )}
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              className="h-8 gap-1.5 rounded-lg px-3 text-xs shadow-sm"
-              onClick={() => void handleCopy(portfolioUrl, 'portfolio')}
-            >
-              {copied === 'portfolio' ? (
-                <>
-                  <Check className="h-3.5 w-3.5 text-emerald-600" />
-                  <span className="text-emerald-600">Copied</span>
-                </>
-              ) : (
-                <>
-                  <Copy className="h-3.5 w-3.5" />
-                  Copy Link
-                </>
-              )}
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              className="h-8 gap-1.5 rounded-lg px-3 text-xs shadow-sm"
-              asChild
-            >
-              <Link href={`/u/${portfolioProfile.handle}`} target="_blank">
-                <ExternalLink className="h-3.5 w-3.5" />
-                View
-              </Link>
-            </Button>
+          {/* Action bar */}
+          <div className="space-y-3 border-t border-border/60 p-4">
+            {/* URL row */}
+            <div className="flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground">
+              <Globe className="h-4 w-4 shrink-0" />
+              <span className="min-w-0 truncate font-medium text-foreground">{displayUrl}</span>
+              <TooltipProvider delayDuration={300}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 shrink-0 text-muted-foreground"
+                      onClick={() => void handleCopy()}
+                      aria-label={copied ? 'Copied' : 'Copy link'}
+                    >
+                      {copied ? (
+                        <Check className="h-4 w-4 text-success" />
+                      ) : (
+                        <Copy className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="text-xs">
+                    {copied ? 'Copied!' : 'Copy link'}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+
+            {/* Primary actions */}
+            <div className="flex items-center gap-2">
+              <Button size="sm" className="gap-1.5" asChild>
+                <Link href="/dashboard/portfolio/edit">
+                  <Pencil className="h-3.5 w-3.5" />
+                  Edit
+                </Link>
+              </Button>
+              <Button size="sm" className="gap-1.5" asChild>
+                <Link href={`/u/${portfolioProfile.handle}`} target="_blank">
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  View
+                </Link>
+              </Button>
+              <Button size="sm" className="gap-1.5" onClick={() => void handleShare()}>
+                <Share2 className="h-3.5 w-3.5" />
+                Share
+              </Button>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="ml-auto h-8 w-8 shrink-0"
+                    aria-label="More portfolio actions"
+                  >
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem asChild>
+                    <Link href="/dashboard/portfolio/edit" className="gap-2">
+                      <Pencil className="h-4 w-4 text-muted-foreground" />
+                      Edit
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href={`/u/${portfolioProfile.handle}`} target="_blank" className="gap-2">
+                      <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                      View
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="gap-2"
+                    onSelect={(event) => {
+                      event.preventDefault();
+                      void handleShare();
+                    }}
+                  >
+                    <Share2 className="h-4 w-4 text-muted-foreground" />
+                    Share
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="gap-2"
+                    onSelect={(event) => {
+                      event.preventDefault();
+                      void handleCopy();
+                    }}
+                  >
+                    <Copy className="h-4 w-4 text-muted-foreground" />
+                    Copy link
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
         </div>
       </section>
 
       {/* ═══════════════════════════════════════════════════════════
-          SECTION 2 — Resumes
+          Resumes
           ═══════════════════════════════════════════════════════════ */}
-      <section>
+      <section className="space-y-4">
         <SectionHeader title="Resumes" count={resumes.length}>
-          <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-xs" asChild>
+          <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" asChild>
             <Link href="/resumes">
-              Manage
-              <ArrowRight className="h-3 w-3" />
+              Manage all
+              <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </Button>
         </SectionHeader>
 
-        <div className="mt-5">
-          <DashboardResumesSection
-            initialResumes={resumes}
-            initialActiveProfileId={activeProfileId}
-            initialPrimaryProfileId={primaryProfileId}
-          />
-        </div>
+        <DashboardResumesSection
+          initialResumes={resumes}
+          initialActiveProfileId={activeProfileId}
+          initialPrimaryProfileId={primaryProfileId}
+        />
       </section>
     </div>
   );
@@ -162,7 +246,7 @@ export function DashboardClient({ data }: DashboardClientProps) {
 
 // ─── Sub-components ───────────────────────────────────────────────
 
-/** Section heading with optional right-side controls. */
+/** Section heading with optional count and right-side controls. */
 function SectionHeader({
   title,
   count,
@@ -173,11 +257,11 @@ function SectionHeader({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between">
+    <div className="flex items-center justify-between gap-3">
       <div className="flex items-center gap-2.5">
-        <h2 className="text-sm font-medium uppercase tracking-wide text-foreground/60">{title}</h2>
+        <h2 className="text-section-title">{title}</h2>
         {count !== undefined && (
-          <span className="rounded-full bg-muted/60 px-2 py-0.5 text-[10px] font-medium tabular-nums leading-none text-muted-foreground">
+          <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular-nums leading-none text-muted-foreground">
             {count}
           </span>
         )}
@@ -192,11 +276,8 @@ function VisibilityBadge({ visibility }: { visibility: string }) {
   const config = VISIBILITY_CONFIG[visibility] ?? VISIBILITY_CONFIG.PRIVATE;
   const Icon = config.icon;
   return (
-    <Badge
-      variant="outline"
-      className="h-6 gap-1 border-transparent bg-muted/50 px-1.5 text-[10px] font-normal text-muted-foreground"
-    >
-      <Icon className="h-2.5 w-2.5" />
+    <Badge variant="outline" className="gap-1.5 border-border/60 font-normal text-muted-foreground">
+      <Icon className="h-3 w-3" />
       {config.label}
     </Badge>
   );

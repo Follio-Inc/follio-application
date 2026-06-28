@@ -13,7 +13,6 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
 
 /**
  * ShareLinkDialog
@@ -117,7 +116,7 @@ export function ShareLinkDialog({
               type="button"
               onClick={handleCopy}
               variant={copied ? 'default' : 'outline'}
-              className={cn('shrink-0 gap-2', copied && 'bg-green-600 hover:bg-green-600')}
+              className="shrink-0 gap-2"
             >
               {copied ? (
                 <>

@@ -1,16 +1,12 @@
 import { UserMenu } from '@/components/auth/user-menu';
 import { DashboardTopbar } from '@/components/dashboard-sidebar';
-import { ResumeSwitcher } from './builder/components/resume-switcher';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-muted/30">
       {/* Top navigation bar */}
       <DashboardTopbar>
-        <div className="flex items-center gap-2">
-          <ResumeSwitcher />
-          <UserMenu />
-        </div>
+        <UserMenu />
       </DashboardTopbar>
 
       {/* Page content */}

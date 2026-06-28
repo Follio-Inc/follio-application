@@ -129,6 +129,45 @@ export async function ensurePrimaryProfile(
 }
 
 /**
+ * Make a profile fully usable as the user's portfolio.
+ *
+ * The public portfolio surface (`/u/[handle]`) only renders when the profile is
+ * out of `DRAFT` and has an active, template-based `GeneratedPortfolio`. New and
+ * cloned resumes have neither, so simply pointing `primaryProfile` at one would
+ * yield a "portfolio not found" page. This helper closes that gap and is safe to
+ * call repeatedly — it is a no-op once the profile is already portfolio-ready.
+ *
+ * It performs two idempotent steps:
+ *   1. Promote `status` out of `DRAFT` (to `PUBLIC`) so the page stops 404ing.
+ *      `PRIVATE`/`PUBLIC` are left untouched to respect an explicit user choice.
+ *   2. Ensure an active template-based portfolio exists, generating a
+ *      deterministic one (no AI) when missing.
+ */
+export async function makeProfilePortfolioReady(profileId: string): Promise<void> {
+  const profile = await db.profile.findUnique({
+    where: { id: profileId },
+    select: { status: true },
+  });
+
+  if (!profile) {
+    throw new AppError('Profile not found', ErrorCode.NOT_FOUND, 404);
+  }
+
+  if (profile.status === 'DRAFT') {
+    await db.profile.update({
+      where: { id: profileId },
+      data: { status: 'PUBLIC' },
+    });
+  }
+
+  // Imported lazily to avoid pulling the AI-generation module (and its heavy
+  // dependency graph) into every consumer of the active-profile helpers.
+  const { ensureActiveTemplatePortfolio } =
+    await import('@/services/portfolio/enhanced-generation.service');
+  await ensureActiveTemplatePortfolio(profileId);
+}
+
+/**
  * Resolve the user's primary (portfolio) profile, lazily assigning one when the
  * user has profiles but no primary yet.
  *

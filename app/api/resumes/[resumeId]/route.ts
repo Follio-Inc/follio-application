@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
+import { makeProfilePortfolioReady } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { handleApiError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
@@ -172,6 +173,13 @@ export async function DELETE(_request: Request, context: RouteContext) {
       });
 
       if (nextProfile) {
+        // The replacement portfolio profile may be a DRAFT resume with no
+        // generated portfolio — make it renderable before it becomes primary so
+        // the portfolio link keeps working after deletion.
+        if (wasPrimary) {
+          await makeProfilePortfolioReady(nextProfile.id);
+        }
+
         await db.user.update({
           where: { id: user.id },
           data: {

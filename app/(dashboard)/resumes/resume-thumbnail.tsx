@@ -38,9 +38,11 @@ interface ResumeThumbnailProps {
   profileId: string;
   /** CSS class applied to the outer container. */
   className?: string;
+  /** Override the maximum visible height (px). Defaults to 260. */
+  maxHeight?: number;
 }
 
-export function ResumeThumbnail({ profileId, className }: ResumeThumbnailProps) {
+export function ResumeThumbnail({ profileId, className, maxHeight }: ResumeThumbnailProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [loaded, setLoaded] = useState(false);
   const [errored, setErrored] = useState(false);
@@ -96,32 +98,32 @@ export function ResumeThumbnail({ profileId, className }: ResumeThumbnailProps) 
       className={`relative w-full overflow-hidden bg-white shadow-[inset_0_0_0_1px_hsl(var(--border)/0.5)] ${className ?? ''}`}
       style={{
         aspectRatio: `${ASPECT_RATIO}`,
-        maxHeight: `${MAX_HEIGHT}px`,
+        maxHeight: `${maxHeight ?? MAX_HEIGHT}px`,
       }}
     >
       {/* Loading skeleton — visible until iframe loads or errors */}
       {showSkeleton && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-          <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-gray-50 to-gray-100" />
-          <div className="relative flex flex-col items-center gap-2">
-            <FileText className="h-8 w-8 text-gray-300" />
-            <div className="flex flex-col items-center gap-1.5">
-              <div className="h-2 w-24 rounded-full bg-gray-200" />
-              <div className="h-2 w-16 rounded-full bg-gray-200" />
-            </div>
+        <div className="absolute inset-0 animate-pulse bg-muted/40">
+          {/* Faux document lines for a calmer, paper-like skeleton */}
+          <div className="flex h-full flex-col gap-2.5 p-6">
+            <div className="h-2.5 w-1/2 rounded-full bg-muted-foreground/15" />
+            <div className="h-2 w-1/3 rounded-full bg-muted-foreground/10" />
+            <div className="mt-3 h-2 w-full rounded-full bg-muted-foreground/10" />
+            <div className="h-2 w-11/12 rounded-full bg-muted-foreground/10" />
+            <div className="h-2 w-4/5 rounded-full bg-muted-foreground/10" />
           </div>
         </div>
       )}
 
       {/* Error fallback with retry */}
       {errored && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-gray-50/80">
-          <FileText className="h-8 w-8 text-gray-300" />
-          <p className="text-xs text-gray-400">Preview unavailable</p>
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-muted/20">
+          <FileText className="h-7 w-7 text-muted-foreground" strokeWidth={1.5} />
+          <p className="text-xs text-muted-foreground">Preview unavailable</p>
           <button
             type="button"
             onClick={handleRetry}
-            className="pointer-events-auto flex items-center gap-1 rounded-md px-2 py-1 text-xs text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
+            className="pointer-events-auto flex items-center gap-1.5 rounded-md border border-border/60 bg-card px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             <RefreshCw className="h-3 w-3" />
             Retry

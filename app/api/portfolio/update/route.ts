@@ -1,30 +1,30 @@
 /**
  * PATCH /api/portfolio/update
  *
- * Update the active template portfolio's configuration.
- * Handles: section toggling, reordering, copy edits, style changes.
+ * Save the portfolio editor's working draft. The full TemplatePortfolio draft
+ * is stored in `GeneratedPortfolio.userOverrides.draftPlan` so the public `plan`
+ * (and therefore the live site) only changes when the user publishes.
  *
  * Request body:
- *   sections?: TemplateSectionConfig[]   — Updated section configurations
- *   copy?: Partial<TemplateCopy>         — Updated copy fields
- *   style?: Partial<TemplateStyleConfig> — Updated style fields
+ *   draft: TemplatePortfolio  — the complete working draft to persist
+ *
+ * The draft is keyed to the user's PRIMARY profile, which is the profile that
+ * backs the public portfolio (decoupled from the active resume in the builder).
  */
 
 import { Prisma } from '@prisma/client';
+import { ZodError } from 'zod';
 
-import { resolveActiveProfileContext } from '@/lib/active-profile';
+import { resolvePrimaryProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { AppError, ErrorCode, handleApiError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { parseTemplatePortfolio } from '@/lib/portfolio/templates/validation';
 import { auth } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 
-import type {
-  TemplateCopy,
-  TemplatePortfolio,
-  TemplateSectionConfig,
-  TemplateStyleConfig,
-} from '@/lib/portfolio/templates/types';
+import type { PortfolioUserState } from '@/lib/portfolio/templates/overrides';
+import type { TemplatePortfolio } from '@/lib/portfolio/templates/types';
 
 const updateLogger = logger.child({ source: 'api-portfolio-update' });
 
@@ -35,9 +35,8 @@ export async function PATCH(request: NextRequest) {
       throw new AppError('Unauthorized', ErrorCode.UNAUTHORIZED, 401);
     }
 
-    const context = await resolveActiveProfileContext(userId);
+    const context = await resolvePrimaryProfileContext(userId);
 
-    // Find the active portfolio
     const portfolio = await db.generatedPortfolio.findFirst({
       where: {
         profileId: context.profileId,
@@ -45,7 +44,7 @@ export async function PATCH(request: NextRequest) {
         status: { in: ['PUBLISHED', 'DRAFT'] },
       },
       orderBy: { version: 'desc' },
-      select: { id: true, plan: true },
+      select: { id: true, plan: true, userOverrides: true },
     });
 
     if (!portfolio) {
@@ -53,109 +52,47 @@ export async function PATCH(request: NextRequest) {
     }
 
     const plan = portfolio.plan as unknown as TemplatePortfolio;
-
-    // Validate this is a template-based portfolio
     if (!plan || typeof plan.templateId !== 'string') {
       throw new AppError(
-        'Portfolio is not template-based and cannot be updated via this endpoint',
+        'Portfolio is not template-based and cannot be edited',
         ErrorCode.BAD_REQUEST,
         400
       );
     }
 
-    // Parse update body
     const body = await request.json();
-    let updated = false;
-
-    // Update sections
-    if (Array.isArray(body.sections)) {
-      const sections = body.sections as TemplateSectionConfig[];
-      // Validate section structure
-      for (const section of sections) {
-        if (
-          !section.id ||
-          !section.type ||
-          typeof section.enabled !== 'boolean' ||
-          typeof section.order !== 'number'
-        ) {
-          throw new AppError('Invalid section configuration', ErrorCode.VALIDATION_ERROR, 400);
-        }
-      }
-      plan.sections = sections;
-      updated = true;
+    if (!body?.draft || typeof body.draft !== 'object') {
+      throw new AppError('Missing draft payload', ErrorCode.VALIDATION_ERROR, 400);
     }
 
-    // Update copy (partial merge)
-    if (body.copy && typeof body.copy === 'object') {
-      const copyUpdates = body.copy as Partial<TemplateCopy>;
-
-      // Core string fields — always string type
-      const coreFields = [
-        'heroHeadline',
-        'heroSubtext',
-        'aboutTitle',
-        'aboutText',
-        'contactTitle',
-        'contactSubtext',
-        'primaryCtaLabel',
-        'seoTitle',
-        'seoDescription',
-      ] as const;
-
-      for (const field of coreFields) {
-        if (field in copyUpdates && typeof copyUpdates[field] === 'string') {
-          plan.copy[field] = copyUpdates[field];
-        }
+    let draft: TemplatePortfolio;
+    try {
+      draft = parseTemplatePortfolio(body.draft);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        throw new AppError('Invalid portfolio draft', ErrorCode.VALIDATION_ERROR, 400);
       }
-
-      // Extended nullable string fields from AI pipeline
-      const extendedFields = [
-        'experienceNarrative',
-        'githubNarrative',
-        'writingNarrative',
-        'pullQuote',
-      ] as const;
-
-      for (const field of extendedFields) {
-        if (field in copyUpdates && typeof copyUpdates[field] === 'string') {
-          plan.copy[field] = copyUpdates[field];
-        }
-      }
-      updated = true;
+      throw error;
     }
 
-    // Update style (partial merge)
-    if (body.style && typeof body.style === 'object') {
-      const styleUpdates = body.style as Partial<TemplateStyleConfig>;
-      if (typeof styleUpdates.accentColor === 'string') {
-        plan.style.accentColor = styleUpdates.accentColor;
-      }
-      if (typeof styleUpdates.fontFamily === 'string') {
-        plan.style.fontFamily = styleUpdates.fontFamily;
-      }
-      updated = true;
-    }
+    // The template itself is switched via /api/portfolio/switch-template, never
+    // through the editor. Pin the draft's templateId to the published one.
+    draft.templateId = plan.templateId;
 
-    if (!updated) {
-      return NextResponse.json({ success: true, message: 'No changes to apply' });
-    }
+    const existingState = (portfolio.userOverrides ?? {}) as PortfolioUserState;
+    const nextState: PortfolioUserState = { ...existingState, draftPlan: draft };
 
-    // Save to database
     await db.generatedPortfolio.update({
       where: { id: portfolio.id },
-      data: { plan: plan as unknown as Prisma.InputJsonValue },
+      data: { userOverrides: nextState as unknown as Prisma.InputJsonValue },
     });
 
-    updateLogger.info('Portfolio updated', {
+    updateLogger.info('Portfolio draft saved', {
       portfolioId: portfolio.id,
       profileId: context.profileId,
-      updatedFields: Object.keys(body).filter((k) => body[k] !== undefined),
     });
 
-    return NextResponse.json({
-      success: true,
-      plan,
-    });
+    return NextResponse.json({ success: true, draft });
   } catch (error) {
     return handleApiError(error, { method: 'PATCH', path: '/api/portfolio/update' });
   }

@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 
+import { makeProfilePortfolioReady } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { handleApiError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
@@ -48,6 +49,11 @@ export async function PATCH(_request: Request, context: RouteContext) {
     if (!targetProfile) {
       return NextResponse.json({ error: 'Resume not found' }, { status: 404 });
     }
+
+    // Guarantee the target is renderable as a portfolio BEFORE repointing the
+    // pointer, so we never expose a "portfolio not found" page. If this fails we
+    // surface the error and leave the existing portfolio untouched.
+    await makeProfilePortfolioReady(targetProfile.id);
 
     await db.user.update({
       where: { id: user.id },

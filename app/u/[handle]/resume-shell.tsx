@@ -8,10 +8,9 @@
  * and provide consistent layout around the `<CleanResumeView>`.
  */
 
-import Link from 'next/link';
 import { useEffect } from 'react';
 
-import { SiteHeader } from '@/components/site-header';
+import { PublicProfileChrome, useEffectiveAuthState } from '@/components/public-profile-chrome';
 
 import { CleanResumeView } from './views/clean-resume-view';
 
@@ -24,6 +23,28 @@ interface ResumeShellProps {
   resumeVisibility: ContentVisibility;
 }
 
+function ResumeShellBody({
+  profile,
+  authState,
+  profileHandle,
+}: Pick<ResumeShellProps, 'profile' | 'authState' | 'profileHandle'>) {
+  const effectiveAuthState = useEffectiveAuthState(authState);
+
+  return (
+    <main>
+      <div className="mx-auto max-w-5xl px-4 pb-24 pt-6 sm:px-6">
+        <div className="relative mx-auto w-full max-w-[816px]">
+          <CleanResumeView
+            profile={profile}
+            profileHandle={profileHandle}
+            authState={effectiveAuthState}
+          />
+        </div>
+      </div>
+    </main>
+  );
+}
+
 export function ResumeShell({ profile, authState, profileHandle }: ResumeShellProps) {
   useEffect(() => {
     if (typeof document === 'undefined') return;
@@ -34,31 +55,8 @@ export function ResumeShell({ profile, authState, profileHandle }: ResumeShellPr
   }, [profile.firstName, profile.middleName, profile.lastName]);
 
   return (
-    <div className="min-h-screen bg-background">
-      <SiteHeader profileHandle={profileHandle} authState={authState} />
-
-      <main>
-        <div className="mx-auto max-w-5xl px-4 pb-24 pt-6 sm:px-6">
-          <div className="relative mx-auto w-full max-w-[816px]">
-            <CleanResumeView
-              profile={profile}
-              profileHandle={profileHandle}
-              authState={authState}
-            />
-          </div>
-        </div>
-        <footer className="border-t border-border/50 bg-background py-6">
-          <div className="container text-center text-sm text-muted-foreground">
-            <p>
-              Built with{' '}
-              <Link href="/" className="font-medium text-primary hover:underline">
-                Follio
-              </Link>{' '}
-              — Your professional identity, everywhere.
-            </p>
-          </div>
-        </footer>
-      </main>
-    </div>
+    <PublicProfileChrome authState={authState} profileHandle={profileHandle}>
+      <ResumeShellBody profile={profile} authState={authState} profileHandle={profileHandle} />
+    </PublicProfileChrome>
   );
 }

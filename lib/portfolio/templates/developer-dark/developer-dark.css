@@ -135,19 +135,12 @@
    ============================================================================ */
 
 /*
- * The Follio ProfileNavbar (sticky, h-14 = 3.5rem) sits above the template.
- * The template nav must sit below it, so we offset by --dd-nav-top.
- * The hero also gets extra top padding to clear both bars.
+ * Sticky (not fixed) so the nav scrolls up with the Follio workspace bar,
+ * then pins to the viewport top once that chrome has scrolled away.
  */
-[data-template='developer-dark'] {
-  --dd-nav-top: 3.5rem;
-}
-
 [data-template='developer-dark'] .dd-nav {
-  position: fixed;
-  top: var(--dd-nav-top);
-  left: 0;
-  right: 0;
+  position: sticky;
+  top: 0;
   z-index: 40;
   padding: 1rem 0;
   background-color: rgba(11, 15, 25, 0.85);
@@ -235,10 +228,7 @@
 /* Mobile nav overlay */
 [data-template='developer-dark'] .dd-nav-mobile {
   position: fixed;
-  top: var(--dd-nav-top);
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   z-index: 39;
   background-color: rgba(11, 15, 25, 0.98);
   backdrop-filter: blur(12px);
@@ -266,7 +256,7 @@
    ============================================================================ */
 
 [data-template='developer-dark'] .dd-hero {
-  padding-top: 10.5rem;
+  padding-top: 4rem;
   padding-bottom: 4rem;
   min-height: 100vh;
   display: flex;
@@ -1050,7 +1040,7 @@
 
   [data-template='developer-dark'] .dd-hero {
     min-height: auto;
-    padding-top: 8.5rem;
+    padding-top: 3rem;
     padding-bottom: 2rem;
   }
 

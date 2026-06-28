@@ -202,9 +202,7 @@ export function AddSourceDialog({ activeSources, onAddSourceAction }: AddSourceD
                 {(() => {
                   const Icon = ICON_MAP[detected.source.icon] || Globe;
                   return (
-                    <div
-                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br ${detected.source.colorClass}`}
-                    >
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border bg-muted">
                       <Icon className={`h-5 w-5 ${detected.source.iconColorClass}`} />
                     </div>
                   );
@@ -241,13 +239,11 @@ export function AddSourceDialog({ activeSources, onAddSourceAction }: AddSourceD
           {/* Success State */}
           {state === 'success' && detected && fetchResult && (
             <div className="space-y-3">
-              <div className="flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-950/30">
-                <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+              <div className="flex items-center gap-3 rounded-lg border border-success/30 bg-success/5 p-4">
+                <CheckCircle2 className="h-5 w-5 text-success" />
                 <div>
-                  <p className="font-medium text-green-700 dark:text-green-300">
-                    Import successful!
-                  </p>
-                  <p className="text-sm text-green-600 dark:text-green-400">
+                  <p className="font-medium text-foreground">Import successful!</p>
+                  <p className="text-sm text-muted-foreground">
                     {((fetchResult as Record<string, unknown>).message as string) ||
                       `Data imported from ${detected.label}`}
                   </p>

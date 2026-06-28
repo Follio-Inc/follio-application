@@ -984,15 +984,13 @@ function ProfileFillCard({
   return (
     <Card
       className={`transition-colors ${
-        decision.choice !== 'current'
-          ? 'border-green-200 bg-green-50/50 dark:border-green-900 dark:bg-green-950/20'
-          : 'border-border'
+        decision.choice !== 'current' ? 'border-success/40 bg-success/5' : 'border-border'
       }`}
     >
       <CardContent className="p-4">
         <div className="mb-2 flex items-center justify-between">
           <span className="text-sm font-medium text-muted-foreground">{field.label}</span>
-          <Badge variant="outline" className="text-xs text-green-600">
+          <Badge variant="outline" className="text-xs text-success">
             <Plus className="mr-1 h-3 w-3" />
             New
           </Badge>
@@ -1092,7 +1090,7 @@ function ProfileUpdateCard({
       <CardContent className="p-0">
         <div className="flex items-center justify-between px-4 pb-2 pt-3">
           <span className="text-sm font-medium text-muted-foreground">{field.label}</span>
-          <Badge variant="outline" className="text-xs text-blue-600">
+          <Badge variant="outline" className="text-xs text-primary">
             Different in resume
           </Badge>
         </div>
@@ -1293,7 +1291,7 @@ function ListReviewSection<T>({
                 key={originalIndex}
                 className={`transition-colors ${
                   decision?.include
-                    ? 'border-blue-200 bg-blue-50/30 dark:border-blue-900 dark:bg-blue-950/10'
+                    ? 'border-primary/30 bg-primary/5'
                     : 'border-muted bg-muted/20 opacity-60'
                 }`}
               >
@@ -1304,7 +1302,7 @@ function ListReviewSection<T>({
                     <>
                       {renderItem(item)}
                       {reason && (
-                        <p className="mt-1.5 flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400">
+                        <p className="mt-1.5 flex items-center gap-1 text-xs text-primary">
                           <RefreshCw className="h-3 w-3" />
                           {reason}
                         </p>
@@ -1312,7 +1310,7 @@ function ListReviewSection<T>({
                       <div className="mt-2 flex items-center gap-2">
                         {decision?.include ? (
                           <>
-                            <span className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 dark:text-blue-400">
+                            <span className="inline-flex items-center gap-1 text-xs font-medium text-primary">
                               <CheckCircle2 className="h-3.5 w-3.5" />
                               Updated
                             </span>
@@ -1376,9 +1374,7 @@ function ListReviewSection<T>({
               <Card
                 key={originalIndex}
                 className={`transition-colors ${
-                  decision?.include
-                    ? 'border-green-200 bg-green-50/30 dark:border-green-900 dark:bg-green-950/10'
-                    : 'border-border opacity-60'
+                  decision?.include ? 'border-success/30 bg-success/5' : 'border-border opacity-60'
                 }`}
               >
                 <CardContent className="p-4">
@@ -1484,7 +1480,7 @@ function SkillsReviewSection({
                   onClick={() => onToggle(originalIndex)}
                   className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-sm font-medium transition-all ${
                     decision?.include
-                      ? 'border-green-300 bg-green-50 text-green-800 dark:border-green-800 dark:bg-green-950/30 dark:text-green-300'
+                      ? 'border-success/50 bg-success/10 text-success'
                       : 'border-border bg-background text-muted-foreground hover:bg-muted/50'
                   }`}
                 >

@@ -1,10 +1,8 @@
 'use client';
 
 import { MotionConfig } from 'framer-motion';
-import Link from 'next/link';
 
-import { SiteHeader } from '@/components/site-header';
-import { getTemplateMeta } from '@/lib/portfolio/templates/registry';
+import { PublicProfileChrome, useEffectiveAuthState } from '@/components/public-profile-chrome';
 
 import { AIPortfolioView } from './views/ai-portfolio-view';
 import { PortfolioView } from './views/portfolio-view';
@@ -45,6 +43,60 @@ interface ProfileViewerProps {
   } | null;
 }
 
+function ProfileViewerBody({
+  profile,
+  authState,
+  profileHandle,
+  resumeVisibility,
+  embed,
+  generatedPlan,
+  generatedOverrides,
+  templatePortfolio,
+  githubProfile,
+}: ProfileViewerProps) {
+  const effectiveAuthState = useEffectiveAuthState(authState);
+
+  const renderPortfolioView = () => {
+    if (templatePortfolio) {
+      return (
+        <TemplatePortfolioView
+          profile={profile}
+          templateData={templatePortfolio}
+          githubProfile={githubProfile}
+        />
+      );
+    }
+
+    if (generatedPlan) {
+      return (
+        <AIPortfolioView
+          plan={generatedPlan}
+          overrides={generatedOverrides}
+          isPreview={embed}
+          isOwner={effectiveAuthState === 'owner'}
+        />
+      );
+    }
+
+    return (
+      <PortfolioView
+        profile={profile}
+        profileHandle={profileHandle}
+        resumeVisibility={resumeVisibility}
+        authState={effectiveAuthState}
+      />
+    );
+  };
+
+  const hasFullPagePortfolio = !!(templatePortfolio || generatedPlan);
+
+  return (
+    <main className={hasFullPagePortfolio ? '' : 'container max-w-5xl py-8 pb-24'}>
+      {renderPortfolioView()}
+    </main>
+  );
+}
+
 export function ProfileViewer({
   profile,
   authState,
@@ -56,73 +108,41 @@ export function ProfileViewer({
   templatePortfolio = null,
   githubProfile = null,
 }: ProfileViewerProps) {
-  /** Render the traditional portfolio view — uses template, AI-generated, or default. */
-  const renderPortfolioView = () => {
-    // Priority 1: Template-based portfolio
-    if (templatePortfolio) {
-      return (
-        <TemplatePortfolioView
-          profile={profile}
-          templateData={templatePortfolio}
-          githubProfile={githubProfile}
-        />
-      );
-    }
-    // Priority 2: Legacy AI-generated portfolio
-    if (generatedPlan) {
-      return (
-        <AIPortfolioView
-          plan={generatedPlan}
-          overrides={generatedOverrides}
-          isPreview={embed}
-          isOwner={authState === 'owner'}
-        />
-      );
-    }
-    // Fallback: Default portfolio view
+  if (embed) {
     return (
-      <PortfolioView
-        profile={profile}
-        profileHandle={profileHandle}
-        resumeVisibility={resumeVisibility}
-        authState={authState}
-      />
+      <MotionConfig reducedMotion="always">
+        <div className="min-h-screen bg-background">
+          <ProfileViewerBody
+            profile={profile}
+            authState={authState}
+            profileHandle={profileHandle}
+            resumeVisibility={resumeVisibility}
+            embed={embed}
+            generatedPlan={generatedPlan}
+            generatedOverrides={generatedOverrides}
+            templatePortfolio={templatePortfolio}
+            githubProfile={githubProfile}
+          />
+        </div>
+      </MotionConfig>
     );
-  };
-
-  const hasFullPagePortfolio = !!(templatePortfolio || generatedPlan);
-
-  // Look up the template's navbar theme so the top bar blends with the portfolio
-  const navbarTheme = templatePortfolio
-    ? (getTemplateMeta(templatePortfolio.templateId)?.navbarTheme ?? null)
-    : null;
+  }
 
   return (
-    <MotionConfig reducedMotion={embed ? 'always' : 'never'}>
-      <div className="min-h-screen bg-background">
-        {!embed && (
-          <SiteHeader
-            profileHandle={profileHandle}
-            authState={authState}
-            navbarTheme={navbarTheme}
-          />
-        )}
-        <main className={hasFullPagePortfolio ? '' : 'container max-w-5xl py-8 pb-24'}>
-          {renderPortfolioView()}
-        </main>
-        {!embed && !hasFullPagePortfolio && (
-          <footer className="border-t border-border/50 bg-background py-6">
-            <div className="container text-center text-sm text-muted-foreground">
-              <p>
-                Built with{' '}
-                <Link href="/" className="font-medium text-primary hover:underline">
-                  Follio
-                </Link>
-              </p>
-            </div>
-          </footer>
-        )}
-      </div>
+    <MotionConfig reducedMotion="never">
+      <PublicProfileChrome authState={authState} profileHandle={profileHandle}>
+        <ProfileViewerBody
+          profile={profile}
+          authState={authState}
+          profileHandle={profileHandle}
+          resumeVisibility={resumeVisibility}
+          embed={embed}
+          generatedPlan={generatedPlan}
+          generatedOverrides={generatedOverrides}
+          templatePortfolio={templatePortfolio}
+          githubProfile={githubProfile}
+        />
+      </PublicProfileChrome>
     </MotionConfig>
   );
 }

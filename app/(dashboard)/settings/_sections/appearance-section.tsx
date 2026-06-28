@@ -4,7 +4,6 @@ import { Monitor, Moon, Sun } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
 
-import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 
@@ -68,44 +67,36 @@ export function AppearanceSection() {
         <CardDescription>Choose how Follio looks for you</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="space-y-3">
-          <Label className="sr-only">Select theme</Label>
-          <div className="grid gap-3 sm:grid-cols-3">
-            {THEME_OPTIONS.map((option) => {
-              const Icon = option.icon;
-              const isSelected = theme === option.value;
+        <Label className="sr-only">Select theme</Label>
+        <div role="radiogroup" aria-label="Theme" className="grid gap-3 sm:grid-cols-3">
+          {THEME_OPTIONS.map((option) => {
+            const Icon = option.icon;
+            const isSelected = theme === option.value;
 
-              return (
-                <button
-                  key={option.value}
-                  onClick={() => setTheme(option.value)}
-                  className={`relative flex flex-col items-center gap-2 rounded-lg border-2 p-4 transition-all hover:border-primary/50 ${
-                    isSelected ? 'border-primary bg-primary/5' : 'border-muted'
+            return (
+              <button
+                key={option.value}
+                role="radio"
+                aria-checked={isSelected}
+                onClick={() => setTheme(option.value)}
+                className={`flex items-start gap-3 rounded-lg border p-4 text-left transition-colors duration-150 ${
+                  isSelected
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border/60 hover:border-border hover:bg-muted/40'
+                }`}
+              >
+                <Icon
+                  className={`mt-0.5 h-5 w-5 shrink-0 ${
+                    isSelected ? 'text-primary' : 'text-muted-foreground'
                   }`}
-                >
-                  {isSelected && (
-                    <Badge className="absolute -right-2 -top-2 h-5 w-5 rounded-full p-0">
-                      <span className="sr-only">Selected</span>
-                      <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
-                        <path
-                          fillRule="evenodd"
-                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                    </Badge>
-                  )}
-                  <Icon
-                    className={`h-6 w-6 ${isSelected ? 'text-primary' : 'text-muted-foreground'}`}
-                  />
-                  <div className="text-center">
-                    <div className="font-medium">{option.label}</div>
-                    <div className="text-xs text-muted-foreground">{option.description}</div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+                />
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-foreground">{option.label}</div>
+                  <div className="text-xs text-muted-foreground">{option.description}</div>
+                </div>
+              </button>
+            );
+          })}
         </div>
       </CardContent>
     </Card>

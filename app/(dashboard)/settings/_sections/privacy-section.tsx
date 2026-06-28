@@ -1,7 +1,7 @@
 'use client';
 
 import { useClerk } from '@clerk/nextjs';
-import { AlertTriangle, Download, Loader2, Shield, Trash2 } from 'lucide-react';
+import { AlertTriangle, Download, Loader2, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 import {
@@ -130,14 +130,11 @@ export function PrivacySection({ profile }: PrivacySectionProps) {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Data Management */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Shield className="h-5 w-5" />
-            Your Data
-          </CardTitle>
+          <CardTitle>Your data</CardTitle>
           <CardDescription>Export or manage your profile data</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -148,7 +145,7 @@ export function PrivacySection({ profile }: PrivacySectionProps) {
           <Button variant="outline" size="sm" className="gap-2" asChild>
             <a href={`/api/export/${profile.handle}/json`} download>
               <Download className="h-4 w-4" />
-              Export All Data
+              Export all data
             </a>
           </Button>
         </CardContent>
@@ -157,17 +154,14 @@ export function PrivacySection({ profile }: PrivacySectionProps) {
       {/* Danger Zone */}
       <Card className="border-destructive/30">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-destructive">
-            <AlertTriangle className="h-5 w-5" />
-            Danger Zone
-          </CardTitle>
+          <CardTitle className="text-destructive">Danger zone</CardTitle>
           <CardDescription>Irreversible actions. Proceed with caution.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="font-medium">Delete Account</p>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm font-medium">Delete account</p>
+              <p className="mt-1 text-sm text-muted-foreground">
                 Permanently delete your account, profile, and all associated data. This cannot be
                 undone.
               </p>

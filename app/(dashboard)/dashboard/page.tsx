@@ -1,7 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 
-import { ensurePrimaryProfile } from '@/lib/active-profile';
+import { ensurePrimaryProfile, makeProfilePortfolioReady } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 
 import { DashboardClient, type DashboardData } from './dashboard-client';
@@ -86,6 +86,39 @@ export default async function DashboardPage() {
     redirect('/onboarding');
   }
 
+  // Resolve the template currently powering the portfolio (primary profile).
+  const resolveCurrentTemplateId = async (): Promise<string | null> => {
+    const portfolio = await db.generatedPortfolio
+      .findFirst({
+        where: {
+          profileId: portfolioProfile.id,
+          isActive: true,
+          status: { in: ['PUBLISHED', 'DRAFT'] },
+        },
+        orderBy: { version: 'desc' },
+        select: { plan: true },
+      })
+      .catch(() => null);
+
+    const templateId = (portfolio?.plan as Record<string, unknown> | null)?.templateId;
+    return typeof templateId === 'string' ? templateId : null;
+  };
+
+  let currentTemplateId = await resolveCurrentTemplateId();
+
+  // Self-heal: a primary profile can reach this page without a renderable
+  // portfolio (e.g. legacy data, or a resume whose generation hasn't finished).
+  // Repair it on the owner's own dashboard so the public link never 404s. Guard
+  // against failures so a generation error can never break the dashboard.
+  if (!currentTemplateId || portfolioProfile.status === 'DRAFT') {
+    try {
+      await makeProfilePortfolioReady(portfolioProfile.id);
+      currentTemplateId = await resolveCurrentTemplateId();
+    } catch {
+      // Leave the dashboard usable; the portfolio simply stays as-is for now.
+    }
+  }
+
   // Serialize for client
   const resumes = rawProfiles.map((r) => ({
     id: r.id,
@@ -118,7 +151,7 @@ export default async function DashboardPage() {
   };
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-12 lg:px-8">
       <DashboardClient data={data} />
     </div>
   );

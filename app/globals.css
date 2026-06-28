@@ -4,62 +4,94 @@
 
 @layer base {
   :root {
+    /* ── Surface ── */
     --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
+    --foreground: 222 47% 11%;
+
+    /* ── Card / Popover ── */
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
+    --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
-    --primary: 170 70% 50%;
+    --popover-foreground: 222 47% 11%;
+
+    /* ── Single accent — refined deep indigo (Stripe-like) ── */
+    --primary: 235 64% 52%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 170 30% 96%;
-    --secondary-foreground: 170 70% 50%;
-    --muted: 170 5% 96%;
-    --muted-foreground: 170 4% 46%;
-    --accent: 170 30% 96%;
-    --accent-foreground: 170 70% 50%;
+
+    /* ── Neutral surfaces — true gray, no teal tint ── */
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
+    --accent: 220 14% 96%;
+    --accent-foreground: 222 47% 11%;
+
+    /* ── Feedback ── */
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
-    --border: 170 6% 90%;
-    --input: 170 6% 90%;
-    --ring: 170 70% 50%;
-    --radius: 0.75rem;
+    --success: 152 47% 38%;
+    --success-foreground: 0 0% 100%;
+    --warning: 35 84% 44%;
+    --warning-foreground: 0 0% 100%;
 
-    /* Follio brand colors */
-    --follio-teal: 170 70% 50%;
-    --follio-teal-light: 170 70% 60%;
-    --follio-teal-dark: 170 70% 40%;
-    --follio-mint: 165 65% 55%;
-    --follio-cyan: 175 65% 55%;
+    /* ── Chrome ── */
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 235 64% 52%;
+
+    /* ── Shape — 8px, Stripe-precision ── */
+    --radius: 0.5rem;
+
+    /* ── Follio accent family (remapped to indigo; keys kept for compat) ── */
+    --follio-teal: 235 64% 52%;
+    --follio-teal-light: 235 64% 64%;
+    --follio-teal-dark: 235 64% 40%;
+    --follio-mint: 235 50% 60%;
+    --follio-cyan: 240 70% 60%;
   }
 
   .dark {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 10% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 170 70% 55%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 170 30% 15%;
-    --secondary-foreground: 170 70% 65%;
-    --muted: 170 4% 16%;
-    --muted-foreground: 170 5% 65%;
-    --accent: 170 30% 20%;
-    --accent-foreground: 170 70% 65%;
-    --destructive: 0 62% 30%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 170 4% 16%;
-    --input: 170 4% 16%;
-    --ring: 170 70% 55%;
+    /* ── Surface ── */
+    --background: 220 15% 9%;
+    --foreground: 213 31% 91%;
 
-    /* Follio brand colors - dark mode */
-    --follio-teal: 170 70% 55%;
-    --follio-teal-light: 170 70% 65%;
-    --follio-teal-dark: 170 70% 45%;
-    --follio-mint: 165 65% 60%;
-    --follio-cyan: 175 65% 60%;
+    /* ── Card / Popover — slightly elevated surface ── */
+    --card: 220 15% 11%;
+    --card-foreground: 213 31% 91%;
+    --popover: 220 15% 11%;
+    --popover-foreground: 213 31% 91%;
+
+    /* ── Single accent — brighter indigo for dark bg ── */
+    --primary: 235 65% 66%;
+    --primary-foreground: 0 0% 100%;
+
+    /* ── Neutral surfaces ── */
+    --secondary: 220 15% 15%;
+    --secondary-foreground: 213 31% 91%;
+    --muted: 220 15% 15%;
+    --muted-foreground: 215 16% 57%;
+    --accent: 220 15% 15%;
+    --accent-foreground: 213 31% 91%;
+
+    /* ── Feedback ── */
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 0 0% 98%;
+    --success: 152 42% 50%;
+    --success-foreground: 152 60% 8%;
+    --warning: 38 88% 58%;
+    --warning-foreground: 38 60% 10%;
+
+    /* ── Chrome ── */
+    --border: 220 15% 17%;
+    --input: 220 15% 17%;
+    --ring: 235 65% 66%;
+
+    /* ── Follio accent family — dark mode ── */
+    --follio-teal: 235 65% 66%;
+    --follio-teal-light: 235 65% 76%;
+    --follio-teal-dark: 235 65% 55%;
+    --follio-mint: 235 50% 70%;
+    --follio-cyan: 240 70% 72%;
   }
 }
 
@@ -77,48 +109,48 @@
  */
 @layer base {
   [data-navbar-theme='dark'] {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 10% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 170 70% 55%;
+    --background: 220 15% 9%;
+    --foreground: 213 31% 91%;
+    --card: 220 15% 11%;
+    --card-foreground: 213 31% 91%;
+    --popover: 220 15% 11%;
+    --popover-foreground: 213 31% 91%;
+    --primary: 235 65% 66%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 170 30% 15%;
-    --secondary-foreground: 170 70% 65%;
-    --muted: 170 4% 16%;
-    --muted-foreground: 170 5% 65%;
-    --accent: 170 30% 20%;
-    --accent-foreground: 170 70% 65%;
-    --destructive: 0 62% 30%;
+    --secondary: 220 15% 15%;
+    --secondary-foreground: 213 31% 91%;
+    --muted: 220 15% 15%;
+    --muted-foreground: 215 16% 57%;
+    --accent: 220 15% 15%;
+    --accent-foreground: 213 31% 91%;
+    --destructive: 0 63% 31%;
     --destructive-foreground: 0 0% 98%;
-    --border: 170 4% 16%;
-    --input: 170 4% 16%;
-    --ring: 170 70% 55%;
+    --border: 220 15% 17%;
+    --input: 220 15% 17%;
+    --ring: 235 65% 66%;
     color-scheme: dark;
   }
 
   [data-navbar-theme='light'] {
     --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
+    --foreground: 222 47% 11%;
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
+    --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
-    --primary: 170 70% 50%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 235 64% 52%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 170 30% 96%;
-    --secondary-foreground: 170 70% 50%;
-    --muted: 170 5% 96%;
-    --muted-foreground: 170 4% 46%;
-    --accent: 170 30% 96%;
-    --accent-foreground: 170 70% 50%;
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
+    --accent: 220 14% 96%;
+    --accent-foreground: 222 47% 11%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
-    --border: 170 6% 90%;
-    --input: 170 6% 90%;
-    --ring: 170 70% 50%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 235 64% 52%;
     color-scheme: light;
   }
 }
@@ -128,10 +160,26 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
     font-feature-settings:
       'rlig' 1,
-      'calt' 1;
+      'calt' 1,
+      'ss01' 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Editorial heading rhythm — tight, confident tracking on display sizes,
+     loosening back toward 0 as text shrinks. Mirrors Stripe/Linear. */
+  h1,
+  h2,
+  h3 {
+    @apply tracking-tight;
+  }
+
+  ::selection {
+    background-color: hsl(var(--primary) / 0.16);
   }
 }
 
@@ -139,6 +187,50 @@
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+
+  /* Display heading treatment — editorial, tight tracking */
+  .text-display {
+    font-weight: 600;
+    letter-spacing: -0.028em;
+    line-height: 1.05;
+  }
+
+  /* Eyebrow / overline label — small, uppercase, spaced. Used above headings. */
+  .text-eyebrow {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    @apply text-muted-foreground;
+  }
+
+  /* Section heading — the workhorse for in-app panel titles. */
+  .text-section-title {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    @apply text-foreground;
+  }
+
+  /* Hairline divider that respects the token border color at low opacity. */
+  .hairline {
+    @apply border-border/60;
+  }
+
+  /* Premium surface — used for elevated panels/cards that need more presence
+     than the default card (e.g. floating toolbars, popovers, dialogs). */
+  .surface-raised {
+    @apply rounded-xl border border-border/60 bg-card;
+    box-shadow:
+      0 1px 2px -1px rgb(0 0 0 / 0.08),
+      0 4px 16px -4px rgb(0 0 0 / 0.08);
+  }
+  .dark .surface-raised {
+    box-shadow:
+      0 1px 2px -1px rgb(0 0 0 / 0.4),
+      0 8px 24px -6px rgb(0 0 0 / 0.5);
   }
 
   /* Remove card backgrounds/borders/shadows inside flat-cards containers */
@@ -536,6 +628,13 @@
   .resume-bullets li {
     margin-bottom: 3px;
     padding-left: 4px;
+    /* Match the editor's `defaultAlignment: 'justify'` and the `.rich-text-bullets`
+       path so legacy plain-text bullets (stored in `bullets[]` with no `bulletsHtml`)
+       render justified by default — not the document's left default. Without this,
+       freshly onboarded resumes look unjustified until the highlights editor is
+       opened (which regenerates `bulletsHtml` with inline justify). Explicit
+       per-bullet alignment still wins via the inline-style rules below. */
+    text-align: justify;
   }
 
   /* Inline formatting within bullets (from rich text editor) */

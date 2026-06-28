@@ -16,6 +16,7 @@ import type { TemplatePortfolio } from '@/lib/portfolio/templates/types';
 import type { PublicProfile } from '@/types';
 
 import { normalizeProfileForTemplate } from '@/lib/portfolio/templates/normalizer';
+import { applyPortfolioOverrides } from '@/lib/portfolio/templates/overrides';
 import { getTemplate } from '@/lib/portfolio/templates/registry';
 
 interface TemplatePortfolioViewProps {
@@ -43,10 +44,16 @@ export function TemplatePortfolioView({
   // Look up the template kit
   const kit = getTemplate(templateData.templateId);
 
-  // Normalize profile data for the template
+  // Normalize profile data for the template, then apply the portfolio's media
+  // overrides (avatar / project images) so published image choices take effect
+  // without mutating the underlying profile.
   const normalizedProfile = useMemo(
-    () => normalizeProfileForTemplate(profile, { githubProfile }),
-    [profile, githubProfile]
+    () =>
+      applyPortfolioOverrides(
+        normalizeProfileForTemplate(profile, { githubProfile }),
+        templateData.overrides
+      ),
+    [profile, githubProfile, templateData.overrides]
   );
 
   if (!kit) {

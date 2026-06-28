@@ -166,7 +166,7 @@ export function LinkedInSourcePanel({
 
           {/* Status messages */}
           {status === 'success' && message && (
-            <div className="rounded-md bg-green-50 p-3 text-sm text-green-700 dark:bg-green-950/30 dark:text-green-400">
+            <div className="rounded-md bg-primary/10 p-3 text-sm text-primary">
               <CheckCircle2 className="mb-0.5 mr-1 inline h-4 w-4" />
               {message}
             </div>
@@ -195,7 +195,7 @@ export function LinkedInSourcePanel({
               </Button>
             ) : (
               <div className="flex items-center gap-3">
-                <Badge variant="secondary" className="bg-green-500/10 text-green-600">
+                <Badge variant="secondary" className="bg-primary/10 text-primary">
                   <CheckCircle2 className="mr-1 h-3 w-3" />
                   Connected
                 </Badge>

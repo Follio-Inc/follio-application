@@ -58,14 +58,15 @@ export function SettingsPageClient({ profile }: SettingsPageClientProps) {
   }, []);
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8 lg:py-12">
       {/* Page header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-        <p className="mt-1 text-muted-foreground">
-          Manage your account, preferences, data sources, and privacy
+      <header className="mb-10 border-b border-border/60 pb-8">
+        <p className="text-eyebrow">Settings</p>
+        <h1 className="text-display mt-3 text-3xl">Manage your account</h1>
+        <p className="mt-3 text-base text-muted-foreground">
+          Update your profile, appearance, connected data sources, and privacy preferences.
         </p>
-      </div>
+      </header>
 
       {/* Mobile tabs (shown above content on smaller screens) */}
       <div className="lg:hidden">
@@ -73,7 +74,7 @@ export function SettingsPageClient({ profile }: SettingsPageClientProps) {
       </div>
 
       {/* Desktop: sidebar + content */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-8">
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[14rem_minmax(0,1fr)] lg:gap-12">
         {/* Desktop sidebar */}
         <div className="hidden lg:block">
           <SettingsDesktopNav activeTab={activeTab} onTabChange={setActiveTab} />

@@ -27,7 +27,7 @@ import { DownloadDialog } from '@/app/(dashboard)/builder/components/download-di
 import { ShareDialog } from '@/components/share-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardFooter } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { MAX_RESUMES_PER_USER } from '@/lib/validations';
 
 import {
@@ -48,11 +48,15 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  NewResumeCloneDialog,
+  NewResumeGhostCard,
+  NewResumeMenuButton,
+  useNewResumeActions,
+} from './new-resume-options';
 import { ResumeThumbnail } from './resume-thumbnail';
 
 // ─── Types ────────────────────────────────────────────────────────
-
-type CreateStrategy = 'BLANK' | 'CLONE' | 'UPLOAD';
 
 export interface ResumeItem {
   id: string;
@@ -93,11 +97,13 @@ const VISIBILITY_CONFIG: Record<
     icon: typeof Globe;
   }
 > = {
+  // Resumes have no openly-public mode; any legacy PUBLIC value is shown (and
+  // treated server-side) as "Visible with Link".
   PUBLIC: {
-    label: 'Public',
-    description: 'Visible to everyone and listed on your profile',
-    variant: 'default',
-    icon: Globe,
+    label: 'Visible with Link',
+    description: 'Only people with the direct link can view this resume',
+    variant: 'secondary',
+    icon: Link2,
   },
   UNLISTED: {
     label: 'Visible with Link',
@@ -236,12 +242,6 @@ export function ResumeDashboardClient({
   const [isMutating, setIsMutating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Create dialog state
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [createStrategy, setCreateStrategy] = useState<CreateStrategy>('BLANK');
-  const [createTitle, setCreateTitle] = useState('');
-  const [cloneSourceId, setCloneSourceId] = useState<string | null>(null);
-
   // Inline rename state
   const [renamingResumeId, setRenamingResumeId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
@@ -277,6 +277,13 @@ export function ResumeDashboardClient({
     }
   }, []);
 
+  const newResume = useNewResumeActions({
+    onRefresh: refreshResumes,
+    onError: setError,
+  });
+
+  const isBusy = isMutating || newResume.isMutating;
+
   // ─── Handlers ─────────────────────────────────────────────────
 
   /**
@@ -308,83 +315,6 @@ export function ResumeDashboardClient({
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to set portfolio');
-    } finally {
-      setIsMutating(false);
-    }
-  };
-
-  /** Create a blank resume and navigate straight to the builder. */
-  const handleCreateBlankAndOpen = async () => {
-    setIsMutating(true);
-    setError(null);
-
-    try {
-      const response = await fetch('/api/resumes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ strategy: 'BLANK' }),
-      });
-
-      if (!response.ok) throw new Error('Failed to create resume');
-
-      // Navigate to builder with ?new=1 to trigger the import suggestion popup
-      router.push('/builder?new=1');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create resume');
-      setIsMutating(false);
-    }
-  };
-
-  const openCreateDialog = (strategy: CreateStrategy, sourceId?: string) => {
-    setCreateStrategy(strategy);
-    setCloneSourceId(sourceId ?? null);
-    setCreateTitle('');
-    setShowCreateDialog(true);
-  };
-
-  const handleCreate = async () => {
-    setShowCreateDialog(false);
-    setIsMutating(true);
-    setError(null);
-
-    try {
-      const payload: {
-        strategy: CreateStrategy;
-        sourceProfileId?: string;
-        title?: string;
-      } = {
-        strategy: createStrategy,
-        title: createTitle.trim() || undefined,
-      };
-
-      if (createStrategy === 'CLONE' && cloneSourceId) {
-        payload.sourceProfileId = cloneSourceId;
-      }
-
-      const response = await fetch('/api/resumes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) throw new Error('Failed to create resume');
-
-      const data = (await response.json()) as {
-        resume: { id: string; handle: string; resumeTitle: string };
-        nextAction: 'UPLOAD_RESUME' | 'OPEN_BUILDER';
-      };
-
-      if (data.nextAction === 'UPLOAD_RESUME') {
-        sessionStorage.setItem('importTargetProfileId', data.resume.id);
-        router.push('/onboarding/import?from=builder&resume=new');
-        return;
-      }
-
-      // Reload to show new resume
-      await refreshResumes();
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create resume');
     } finally {
       setIsMutating(false);
     }
@@ -528,44 +458,52 @@ export function ResumeDashboardClient({
 
   // ─── Render ───────────────────────────────────────────────────
 
+  const atResumeLimit = resumes.length >= MAX_RESUMES_PER_USER;
+
   return (
-    <div className="flat-cards space-y-8">
+    <div className="space-y-8">
       {/* Page header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">My Resumes</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Create and manage multiple tailored resumes for different roles.
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="space-y-1.5">
+          <p className="text-eyebrow">Library</p>
+          <h1 className="text-display text-2xl text-foreground sm:text-3xl">Resumes</h1>
+          <p className="text-sm text-muted-foreground">
+            Create and manage tailored resumes for different roles.
           </p>
         </div>
 
         {/* Create new */}
-        <div className="flex items-center gap-2">
-          <TooltipProvider delayDuration={0}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span>
-                  <Button
-                    disabled={isMutating || resumes.length >= MAX_RESUMES_PER_USER}
-                    onClick={() => void handleCreateBlankAndOpen()}
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    New Resume
+        <TooltipProvider delayDuration={0}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="self-start sm:self-auto">
+                {atResumeLimit ? (
+                  <Button className="gap-1.5" disabled>
+                    <Plus className="h-4 w-4" />
+                    New resume
                   </Button>
-                </span>
-              </TooltipTrigger>
-              {resumes.length >= MAX_RESUMES_PER_USER && (
-                <TooltipContent side="bottom">
-                  <p>
-                    Maximum {MAX_RESUMES_PER_USER} resumes per user. Delete one to create a new
-                    resume.
-                  </p>
-                </TooltipContent>
-              )}
-            </Tooltip>
-          </TooltipProvider>
-        </div>
-      </div>
+                ) : (
+                  <NewResumeMenuButton
+                    disabled={atResumeLimit}
+                    isMutating={isBusy}
+                    onBlank={() => void newResume.createBlank()}
+                    onUpload={() => void newResume.startUpload()}
+                    onClone={() => newResume.openCloneDialog()}
+                  />
+                )}
+              </span>
+            </TooltipTrigger>
+            {atResumeLimit && (
+              <TooltipContent side="bottom">
+                <p>
+                  Maximum {MAX_RESUMES_PER_USER} resumes per user. Delete one to create a new
+                  resume.
+                </p>
+              </TooltipContent>
+            )}
+          </Tooltip>
+        </TooltipProvider>
+      </header>
 
       {/* Error banner */}
       {error && (
@@ -583,49 +521,50 @@ export function ResumeDashboardClient({
 
       {/* Resume cards grid */}
       {resumes.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed py-16 text-center">
-          <FileText className="mx-auto h-12 w-12 text-muted-foreground/40" />
-          <h2 className="mt-4 text-lg font-semibold">No resumes yet</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Create your first resume to get started.
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/60 bg-muted/10 px-6 py-20 text-center">
+          <FileText className="h-8 w-8 text-muted-foreground" strokeWidth={1.5} />
+          <h2 className="mt-4 text-base font-semibold text-foreground">No resumes yet</h2>
+          <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+            Create your first resume and we&apos;ll open it in the builder so you can start editing
+            right away.
           </p>
-          <Button
-            className="mt-6"
-            disabled={isMutating}
-            onClick={() => void handleCreateBlankAndOpen()}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Create Resume
-          </Button>
+          <div className="mt-6">
+            <NewResumeMenuButton
+              isMutating={isBusy}
+              onBlank={() => void newResume.createBlank()}
+              onUpload={() => void newResume.startUpload()}
+              onClone={() => newResume.openCloneDialog()}
+            />
+          </div>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {resumes.map((resume) => {
             const displayName = getDisplayName(resume);
 
             return (
               <Card
                 key={resume.id}
-                className="group relative overflow-hidden transition-shadow hover:shadow-md"
+                className="group relative flex flex-col overflow-hidden transition-all duration-200 hover:border-border hover:shadow-md"
               >
                 {/* Resume thumbnail preview */}
                 <button
                   type="button"
-                  className="relative block w-full cursor-pointer border-b border-border/60"
+                  className="relative block w-full cursor-pointer border-b border-border/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   onClick={() => void handleOpenInBuilder(resume.id)}
                   disabled={isMutating}
                   aria-label={`Open ${resume.resumeTitle} in builder`}
                 >
-                  <ResumeThumbnail profileId={resume.id} className="rounded-t-2xl" />
+                  <ResumeThumbnail profileId={resume.id} />
                   {resume.id === primaryProfileId && (
-                    <Badge className="absolute left-2 top-2 z-10 gap-1 text-[10px] shadow-sm">
+                    <Badge className="absolute left-2.5 top-2.5 z-10 gap-1 text-[10px] shadow-sm">
                       <Star className="h-2.5 w-2.5" />
                       Portfolio
                     </Badge>
                   )}
                 </button>
 
-                <CardContent className="pb-2 pt-3">
+                <div className="flex flex-1 flex-col gap-3 p-4">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       {renamingResumeId === resume.id ? (
@@ -641,12 +580,12 @@ export function ResumeDashboardClient({
                           onCancel={cancelInlineRename}
                         />
                       ) : (
-                        <h3 className="truncate text-sm font-semibold">{resume.resumeTitle}</h3>
+                        <h3 className="truncate text-sm font-semibold leading-tight text-foreground">
+                          {resume.resumeTitle}
+                        </h3>
                       )}
                       {displayName && (
-                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                          {displayName}
-                        </p>
+                        <p className="mt-1 truncate text-xs text-muted-foreground">{displayName}</p>
                       )}
                     </div>
 
@@ -656,7 +595,7 @@ export function ResumeDashboardClient({
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 data-[state=open]:opacity-100"
+                          className="-mr-1.5 -mt-1.5 h-7 w-7 shrink-0 text-muted-foreground opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
                         >
                           <MoreHorizontal className="h-4 w-4" />
                           <span className="sr-only">Resume actions</span>
@@ -687,8 +626,8 @@ export function ResumeDashboardClient({
                           Rename
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                          onClick={() => openCreateDialog('CLONE', resume.id)}
-                          disabled={resumes.length >= MAX_RESUMES_PER_USER}
+                          onClick={() => newResume.openCloneDialog()}
+                          disabled={atResumeLimit}
                         >
                           <Copy className="mr-2 h-4 w-4" />
                           Clone
@@ -714,76 +653,9 @@ export function ResumeDashboardClient({
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
-                </CardContent>
-
-                <CardFooter className="flex-col gap-2 border-t pb-3 pt-2">
-                  {/* Quick action buttons */}
-                  <div className="flex w-full items-center gap-2">
-                    <Button
-                      variant="default"
-                      size="sm"
-                      className="h-7 flex-1 gap-1.5 text-xs"
-                      onClick={() => handleOpenInBuilder(resume.id)}
-                      disabled={isMutating}
-                    >
-                      <Pencil className="h-3 w-3" />
-                      Edit
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 flex-1 gap-1.5 text-xs"
-                      asChild
-                    >
-                      <Link href={`/u/${resume.handle}/resume`} target="_blank">
-                        <ExternalLink className="h-3 w-3" />
-                        View
-                      </Link>
-                    </Button>
-                    <TooltipProvider delayDuration={0}>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 gap-1.5 text-xs"
-                            onClick={() => handleOpenShareDialog(resume)}
-                            disabled={isMutating}
-                          >
-                            <Share2 className="h-3 w-3" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom">
-                          <p>Share resume</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                    <TooltipProvider delayDuration={0}>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 gap-1.5 text-xs"
-                            onClick={() => openCreateDialog('CLONE', resume.id)}
-                            disabled={resumes.length >= MAX_RESUMES_PER_USER || isMutating}
-                          >
-                            <Copy className="h-3 w-3" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom">
-                          <p>
-                            {resumes.length >= MAX_RESUMES_PER_USER
-                              ? `Maximum ${MAX_RESUMES_PER_USER} resumes`
-                              : 'Clone resume'}
-                          </p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </div>
 
                   {/* Visibility & timestamp row */}
-                  <div className="flex w-full items-center gap-3 text-xs text-muted-foreground">
+                  <div className="mt-auto flex items-center gap-2 text-xs text-muted-foreground">
                     {(() => {
                       const config =
                         VISIBILITY_CONFIG[resume.resumeVisibility] ?? VISIBILITY_CONFIG.PRIVATE;
@@ -792,13 +664,10 @@ export function ResumeDashboardClient({
                         <TooltipProvider delayDuration={0}>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <Badge
-                                variant={config.variant}
-                                className="cursor-default gap-1 text-[10px]"
-                              >
-                                <Icon className="h-2.5 w-2.5" />
+                              <span className="inline-flex cursor-default items-center gap-1">
+                                <Icon className="h-3 w-3" />
                                 {config.label}
-                              </Badge>
+                              </span>
                             </TooltipTrigger>
                             <TooltipContent side="bottom">
                               <p>{config.description}</p>
@@ -807,69 +676,65 @@ export function ResumeDashboardClient({
                         </TooltipProvider>
                       );
                     })()}
-                    <span className="flex items-center gap-1">
+                    <span aria-hidden className="text-border">
+                      •
+                    </span>
+                    <span className="inline-flex items-center gap-1">
                       <Clock className="h-3 w-3" />
                       {formatRelativeDate(resume.updatedAt)}
                     </span>
                   </div>
-                </CardFooter>
+
+                  {/* Primary actions */}
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      className="flex-1 gap-1.5"
+                      onClick={() => handleOpenInBuilder(resume.id)}
+                      disabled={isMutating}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      Edit
+                    </Button>
+                    <Button variant="outline" size="sm" className="flex-1 gap-1.5" asChild>
+                      <Link href={`/u/${resume.handle}/resume`} target="_blank">
+                        <ExternalLink className="h-3.5 w-3.5" />
+                        View
+                      </Link>
+                    </Button>
+                  </div>
+                </div>
               </Card>
             );
           })}
 
           {/* "New resume" ghost card — hidden when at limit */}
-          {resumes.length < MAX_RESUMES_PER_USER && (
-            <button
-              type="button"
-              onClick={() => void handleCreateBlankAndOpen()}
-              disabled={isMutating}
-              className="flex min-h-[180px] flex-col items-center justify-center gap-2 rounded-2xl border border-dashed text-muted-foreground transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
-            >
-              <Plus className="h-8 w-8" />
-              <span className="text-sm font-medium">New Resume</span>
-            </button>
+          {!atResumeLimit && (
+            <NewResumeGhostCard
+              className="min-h-[260px]"
+              disabled={atResumeLimit}
+              isMutating={isBusy}
+              onBlank={() => void newResume.createBlank()}
+              onUpload={() => void newResume.startUpload()}
+              onClone={() => newResume.openCloneDialog()}
+            />
           )}
         </div>
       )}
 
-      {/* ─── Create Dialog ──────────────────────────────────────── */}
-      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Clone Resume</DialogTitle>
-            <DialogDescription>
-              Create a copy of an existing resume with all its data.
-            </DialogDescription>
-          </DialogHeader>
-
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void handleCreate();
-            }}
-          >
-            <Input
-              autoFocus
-              value={createTitle}
-              onChange={(e) => setCreateTitle(e.target.value)}
-              placeholder="e.g., Software Engineer Resume"
-              maxLength={120}
-            />
-
-            <DialogFooter className="mt-4">
-              <DialogClose asChild>
-                <Button type="button" variant="ghost">
-                  Cancel
-                </Button>
-              </DialogClose>
-              <Button type="submit" disabled={isMutating}>
-                {isMutating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Create
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <NewResumeCloneDialog
+        open={newResume.showCloneDialog}
+        onOpenChange={newResume.setShowCloneDialog}
+        view={newResume.cloneView}
+        resumes={resumes}
+        cloneSourceId={newResume.cloneSourceId}
+        cloneTitle={newResume.cloneTitle}
+        onCloneTitleChange={newResume.setCloneTitle}
+        onSelectSource={newResume.selectCloneSource}
+        onBack={newResume.backToClonePick}
+        onConfirm={() => void newResume.confirmClone()}
+        isMutating={isBusy}
+      />
 
       {/* ─── Delete Confirmation Dialog ─────────────────────────── */}
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
@@ -957,7 +822,7 @@ export function ResumeDashboardClient({
       )}
 
       {/* Loading overlay */}
-      {isMutating && (
+      {isBusy && (
         <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-background/30">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>

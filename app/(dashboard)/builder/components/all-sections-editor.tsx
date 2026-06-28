@@ -19,30 +19,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { AnimatePresence, motion } from 'framer-motion';
-import {
-  ArrowLeft,
-  Award,
-  BadgeCheck,
-  BookOpen,
-  Briefcase,
-  ChevronDown,
-  Code,
-  Contact,
-  Eye,
-  EyeOff,
-  FileText,
-  FolderKanban,
-  Globe,
-  GraduationCap,
-  GripVertical,
-  Heart,
-  Image as ImageIcon,
-  LayoutGrid,
-  Link as LinkIcon,
-  Plus,
-  Sparkles,
-  User,
-} from 'lucide-react';
+import { ArrowLeft, ChevronDown, Eye, EyeOff, GripVertical, Plus } from 'lucide-react';
 import { useCallback, useId, useMemo, useRef, useState } from 'react';
 
 import {
@@ -92,7 +69,6 @@ import type {
   FullProfile,
   ProfileSection,
   Project,
-  SectionType,
   WorkExperience,
 } from '@/types';
 
@@ -121,26 +97,6 @@ const SECTION_TITLES: Record<string, string> = {
   LANGUAGES: 'Languages',
   INTERESTS: 'Interests',
   CUSTOM: 'Custom Section',
-};
-
-/** Icons for each section type */
-const SECTION_ICONS: Record<SectionType, React.ComponentType<{ className?: string }>> = {
-  BASIC_INFO: User,
-  CONTACT: Contact,
-  PHOTOS: ImageIcon,
-  SUMMARY: FileText,
-  EXPERIENCE: Briefcase,
-  EDUCATION: GraduationCap,
-  SKILLS: Code,
-  PROJECTS: FolderKanban,
-  LINKS: LinkIcon,
-  AWARDS: Award,
-  CERTIFICATIONS: BadgeCheck,
-  PUBLICATIONS: BookOpen,
-  VOLUNTEERING: Heart,
-  LANGUAGES: Globe,
-  INTERESTS: Sparkles,
-  CUSTOM: LayoutGrid,
 };
 
 /** Sections that render as entry cards when expanded (click entry → focused edit panel) */
@@ -660,7 +616,7 @@ export function AllSectionsEditor() {
                 entryId: 'new',
               })
             }
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border/30 py-8 text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border/60 py-8 text-sm text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
           >
             <Plus className="h-4 w-4" />
             Add {singularName}
@@ -673,7 +629,7 @@ export function AllSectionsEditor() {
       const dndId = `entry-dnd-${section.id}`;
 
       return (
-        <div className="space-y-1">
+        <div className="space-y-2">
           <DndContext
             id={dndId}
             sensors={sectionSensors}
@@ -682,14 +638,14 @@ export function AllSectionsEditor() {
             modifiers={[restrictToVerticalAxis, restrictToParentElement]}
           >
             <SortableContext items={entryIds} strategy={verticalListSortingStrategy}>
-              <div className="space-y-1 pl-5">
+              <div className="space-y-1.5 pl-5">
                 {entries.map((entry) => {
                   const entryHidden = entry.isVisible === false;
                   return (
                     <SortableEntryCard key={entry.id} id={entry.id}>
                       <div
                         className={cn(
-                          'group/entry flex w-full items-center gap-3 rounded-lg border border-border/30 bg-background px-3 py-2.5 text-left transition-colors hover:border-border/50 hover:shadow-sm',
+                          'group/entry flex w-full items-center gap-3 rounded-lg border border-border/60 bg-card px-3.5 py-3 text-left transition-colors hover:border-border hover:bg-muted/40',
                           entryHidden && 'opacity-50'
                         )}
                       >
@@ -755,8 +711,9 @@ export function AllSectionsEditor() {
                             })
                           }
                           className="shrink-0"
+                          aria-label="Edit entry"
                         >
-                          <ChevronDown className="h-3 w-3 text-muted-foreground/20 transition-transform duration-150 group-hover/entry:-rotate-90" />
+                          <ChevronDown className="h-3.5 w-3.5 -rotate-90 text-muted-foreground/40 transition-colors group-hover/entry:text-muted-foreground" />
                         </button>
                       </div>
                     </SortableEntryCard>
@@ -774,7 +731,7 @@ export function AllSectionsEditor() {
                 entryId: 'new',
               })
             }
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border/20 py-2.5 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border/60 py-2.5 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
           >
             <Plus className="h-3.5 w-3.5" />
             Add {singularName}
@@ -856,16 +813,16 @@ export function AllSectionsEditor() {
     switch (type) {
       case 'BASIC_INFO':
         return (
-          <div className="space-y-5">
+          <div className="space-y-6">
             <PhotosSection
               profile={draftProfile}
               onUpdateAction={handleProfileUpdate}
               onInlineUpdate={handleInlineUpdate}
               embedded
             />
-            <div className="border-t border-border/30" />
+            <div className="border-t border-border/60" />
             <BasicInfoForm profile={draftProfile} onUpdate={handleProfileUpdate} embedded />
-            <div className="border-t border-border/30" />
+            <div className="border-t border-border/60" />
             <ContactDetailsSection
               profile={draftProfile}
               onProfileUpdate={handleProfileUpdate}
@@ -1050,7 +1007,6 @@ export function AllSectionsEditor() {
   // ── Full-panel edit mode: show only the focused entry editor ──
   if (editingEntry) {
     const section = orderedSections.find((s) => s.id === editingEntry.sectionId);
-    const Icon = SECTION_ICONS[editingEntry.sectionType as SectionType] || LayoutGrid;
     const title = SECTION_TITLES[editingEntry.sectionType] || section?.title || 'Edit';
 
     return (
@@ -1058,15 +1014,12 @@ export function AllSectionsEditor() {
         <button
           type="button"
           onClick={handleEditComplete}
-          className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left transition-colors duration-200 hover:bg-muted/50"
+          className="-ml-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium text-muted-foreground transition-colors duration-150 hover:text-foreground"
         >
-          <ArrowLeft className="h-4 w-4 text-muted-foreground" />
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <Icon className="h-4 w-4" />
-          </div>
-          <span className="flex-1 text-sm font-semibold">{title}</span>
+          <ArrowLeft className="h-4 w-4 shrink-0" />
+          <span>Back to {title}</span>
         </button>
-        <div className="mt-4">
+        <div className="mt-5">
           {renderSectionEditor(editingEntry.sectionType, editingEntry.entryId)}
         </div>
       </div>
@@ -1079,7 +1032,6 @@ export function AllSectionsEditor() {
   const renderSectionCard = (section: ProfileSection) => {
     const isExpanded = expandedSection === section.id;
     const sectionHidden = section.isVisible === false;
-    const Icon = SECTION_ICONS[section.type] || LayoutGrid;
     const title =
       section.type === 'CUSTOM'
         ? section.title || section.customName || 'Custom Section'
@@ -1096,10 +1048,10 @@ export function AllSectionsEditor() {
         {/* Unified section container — header + content share one visual card */}
         <div
           className={cn(
-            'overflow-hidden rounded-xl border transition-all duration-200',
+            'overflow-hidden rounded-lg border transition-colors duration-150',
             isExpanded
-              ? 'border-border/50 bg-background ring-1 ring-primary/10'
-              : 'border-border/30 bg-background/70 hover:border-border/50 hover:bg-background',
+              ? 'border-border bg-card ring-1 ring-primary/15'
+              : 'border-border/60 bg-card hover:border-border',
             sectionHidden && 'opacity-50'
           )}
         >
@@ -1107,19 +1059,16 @@ export function AllSectionsEditor() {
           <button
             type="button"
             onClick={() => toggleSection(section.id)}
-            className="flex w-full items-center gap-3.5 px-5 py-3.5 text-left transition-colors"
+            className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors"
           >
-            <div
+            <span
               className={cn(
-                'flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors duration-200',
-                isExpanded
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground group-hover/section:text-primary'
+                'flex-1 text-sm font-medium transition-colors duration-150',
+                isExpanded ? 'text-foreground' : 'text-foreground/90'
               )}
             >
-              <Icon className="h-4 w-4" />
-            </div>
-            <span className="flex-1 text-sm font-medium">{title}</span>
+              {title}
+            </span>
             {showVisibilityToggle && (
               <span
                 role="button"
@@ -1145,8 +1094,8 @@ export function AllSectionsEditor() {
             )}
             <ChevronDown
               className={cn(
-                'h-3.5 w-3.5 shrink-0 text-muted-foreground/30 transition-transform duration-200',
-                isExpanded && '-rotate-180 text-primary/60'
+                'h-4 w-4 shrink-0 text-muted-foreground/50 transition-transform duration-200',
+                isExpanded && '-rotate-180 text-primary'
               )}
             />
           </button>
@@ -1161,7 +1110,7 @@ export function AllSectionsEditor() {
                 transition={{ duration: 0.2, ease: 'easeInOut' }}
                 className="overflow-hidden"
               >
-                <div className="rounded-b-xl border-t border-border/20 bg-muted/50 px-5 pb-5 pt-4">
+                <div className="rounded-b-lg border-t border-border/60 bg-muted/30 px-4 pb-5 pt-4">
                   {ENTRY_SECTIONS.has(section.type)
                     ? renderEntryList(section)
                     : renderSection(section)}
@@ -1202,7 +1151,7 @@ export function AllSectionsEditor() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <div className="space-y-2.5 pl-5">
+      <div className="space-y-3 pl-5">
         {/* Pinned sections (BASIC_INFO) — always at top, not draggable */}
         {pinnedSections.map((section) => renderSectionCard(section))}
 
@@ -1215,7 +1164,7 @@ export function AllSectionsEditor() {
           modifiers={[restrictToVerticalAxis, restrictToParentElement]}
         >
           <SortableContext items={draggableSectionIds} strategy={verticalListSortingStrategy}>
-            <div className="space-y-2.5">
+            <div className="space-y-3">
               {draggableSections.map((section) => (
                 <SortableSectionCard key={section.id} id={section.id}>
                   {renderSectionCard(section)}
@@ -1225,23 +1174,6 @@ export function AllSectionsEditor() {
           </SortableContext>
         </DndContext>
       </div>
-      <AlertDialog
-        open={showDiscardWarning}
-        onOpenChange={(open) => !open && handleCancelDiscard()}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Discard unsaved changes?</AlertDialogTitle>
-            <AlertDialogDescription>
-              You have unsaved edits in this section. Discarding will permanently remove them.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={handleCancelDiscard}>Keep Editing</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmDiscard}>Discard Changes</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 }

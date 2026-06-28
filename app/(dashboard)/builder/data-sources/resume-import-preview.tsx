@@ -443,7 +443,7 @@ export function ResumeImportPreview({
         {/* Header */}
         <DialogHeader className="px-6 pb-4 pt-6">
           <DialogTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5 text-orange-500" />
+            <FileText className="h-5 w-5 text-muted-foreground" />
             Suggested Updates from Your Resume
           </DialogTitle>
           <DialogDescription>
@@ -452,13 +452,11 @@ export function ResumeImportPreview({
           </DialogDescription>
 
           {/* ── Safety banner ── */}
-          <div className="mt-3 flex items-start gap-3 rounded-lg border border-green-200 bg-green-50/50 px-4 py-3 dark:border-green-900 dark:bg-green-950/20">
-            <ShieldCheck className="mt-0.5 h-5 w-5 flex-shrink-0 text-green-600 dark:text-green-400" />
+          <div className="mt-3 flex items-start gap-3 rounded-lg border border-success/30 bg-success/5 px-4 py-3">
+            <ShieldCheck className="mt-0.5 h-5 w-5 flex-shrink-0 text-success" />
             <div className="space-y-1">
-              <p className="text-sm font-medium text-green-800 dark:text-green-300">
-                Your profile is safe
-              </p>
-              <p className="text-xs text-green-700 dark:text-green-400">
+              <p className="text-sm font-medium text-foreground">Your profile is safe</p>
+              <p className="text-xs text-muted-foreground">
                 Nothing will change until you review and click &quot;Apply selected changes&quot;.
                 New items are pre-selected; changes to existing data are off by default.
               </p>
@@ -468,16 +466,16 @@ export function ResumeImportPreview({
           {/* Summary badges */}
           <div className="mt-3 flex flex-wrap gap-2">
             {preview.summary.totalNew > 0 && (
-              <Badge variant="default" className="bg-green-600 hover:bg-green-700">
+              <Badge
+                variant="default"
+                className="bg-success text-success-foreground hover:bg-success/90"
+              >
                 <Plus className="mr-1 h-3 w-3" />
                 {preview.summary.totalNew} new
               </Badge>
             )}
             {updateCount > 0 && (
-              <Badge
-                variant="outline"
-                className="border-blue-300 text-blue-700 dark:border-blue-800 dark:text-blue-400"
-              >
+              <Badge variant="outline" className="border-primary/40 text-primary">
                 <ArrowLeftRight className="mr-1 h-3 w-3" />
                 {updateCount} suggested {updateCount === 1 ? 'change' : 'changes'}
               </Badge>
@@ -755,7 +753,7 @@ function PreviewSection({
         </div>
         <div className="flex items-center gap-2">
           {count > 0 && (
-            <Badge variant="default" className="bg-green-600 text-xs">
+            <Badge variant="default" className="bg-success text-xs text-success-foreground">
               {count} new
             </Badge>
           )}
@@ -790,21 +788,18 @@ function ProfileFieldRow({
     <div
       className={`flex items-start justify-between rounded-lg border px-4 py-3 ${
         isSkipped ? 'opacity-60' : ''
-      } ${isUpdate && selected ? 'border-blue-200 bg-blue-50/30 dark:border-blue-900/50 dark:bg-blue-950/10' : ''}`}
+      } ${isUpdate && selected ? 'border-primary/30 bg-primary/5' : ''}`}
     >
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium">{field.label}</span>
           {isFill && (
-            <Badge variant="default" className="bg-green-600 text-xs">
+            <Badge variant="default" className="bg-success text-xs text-success-foreground">
               New
             </Badge>
           )}
           {isUpdate && (
-            <Badge
-              variant="outline"
-              className="border-blue-300 text-xs text-blue-700 dark:border-blue-800 dark:text-blue-400"
-            >
+            <Badge variant="outline" className="border-primary/40 text-xs text-primary">
               <ArrowLeftRight className="mr-1 h-3 w-3" />
               Suggested change
             </Badge>
@@ -827,12 +822,10 @@ function ProfileFieldRow({
               <p className="text-xs">{truncate(field.currentValue, 120)}</p>
             </div>
             <div className="space-y-1">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-primary">
                 From resume
               </span>
-              <p className="text-xs text-blue-700 dark:text-blue-300">
-                {truncate(field.incomingValue, 120)}
-              </p>
+              <p className="text-xs text-primary">{truncate(field.incomingValue, 120)}</p>
             </div>
           </div>
         )}
@@ -840,9 +833,7 @@ function ProfileFieldRow({
         {/* Simple display for fill (new fields) */}
         {isFill && (
           <div className="text-xs">
-            <span className="text-green-700 dark:text-green-400">
-              {truncate(field.incomingValue, 120)}
-            </span>
+            <span className="text-success">{truncate(field.incomingValue, 120)}</span>
           </div>
         )}
 
@@ -906,7 +897,7 @@ function ExperienceRow({
               Exists
             </Badge>
           ) : (
-            <Badge variant="default" className="bg-green-600 text-xs">
+            <Badge variant="default" className="bg-success text-xs text-success-foreground">
               New
             </Badge>
           )}
@@ -984,7 +975,7 @@ function EducationRow({
               Exists
             </Badge>
           ) : (
-            <Badge variant="default" className="bg-green-600 text-xs">
+            <Badge variant="default" className="bg-success text-xs text-success-foreground">
               New
             </Badge>
           )}
@@ -1037,7 +1028,7 @@ function SkillChip({
         isSkipped
           ? 'cursor-not-allowed bg-muted/30 text-muted-foreground opacity-60'
           : selected
-            ? 'border-green-600 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950/30 dark:text-green-400'
+            ? 'border-success/50 bg-success/10 text-success'
             : 'border-border bg-background text-muted-foreground hover:bg-muted'
       }`}
     >
@@ -1095,7 +1086,7 @@ function ProjectRow({
               Exists
             </Badge>
           ) : (
-            <Badge variant="default" className="bg-green-600 text-xs">
+            <Badge variant="default" className="bg-success text-xs text-success-foreground">
               New
             </Badge>
           )}
@@ -1163,7 +1154,7 @@ function LinkRow({
               Exists
             </Badge>
           ) : (
-            <Badge variant="default" className="bg-green-600 text-xs">
+            <Badge variant="default" className="bg-success text-xs text-success-foreground">
               New
             </Badge>
           )}
@@ -1195,7 +1186,7 @@ function InlineEditExperience({
   const [form, setForm] = useState<SyncExperience>({ ...item });
 
   return (
-    <div className="space-y-3 rounded-lg border-2 border-blue-200 bg-blue-50/30 p-4 dark:border-blue-900 dark:bg-blue-950/20">
+    <div className="space-y-3 rounded-lg border-2 border-primary/30 bg-primary/5 p-4">
       <div className="grid grid-cols-2 gap-3">
         <div>
           <Label className="text-xs">Company</Label>
@@ -1288,7 +1279,7 @@ function InlineEditEducation({
   const [form, setForm] = useState<SyncEducation>({ ...item });
 
   return (
-    <div className="space-y-3 rounded-lg border-2 border-blue-200 bg-blue-50/30 p-4 dark:border-blue-900 dark:bg-blue-950/20">
+    <div className="space-y-3 rounded-lg border-2 border-primary/30 bg-primary/5 p-4">
       <div className="grid grid-cols-2 gap-3">
         <div>
           <Label className="text-xs">Institution</Label>
@@ -1366,7 +1357,7 @@ function InlineEditProject({
   const [techInput, setTechInput] = useState('');
 
   return (
-    <div className="space-y-3 rounded-lg border-2 border-blue-200 bg-blue-50/30 p-4 dark:border-blue-900 dark:bg-blue-950/20">
+    <div className="space-y-3 rounded-lg border-2 border-primary/30 bg-primary/5 p-4">
       <div className="grid grid-cols-2 gap-3">
         <div>
           <Label className="text-xs">Title</Label>

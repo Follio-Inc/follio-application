@@ -68,6 +68,11 @@ export function ResumePreviewPanel() {
 
   return (
     <div className="relative flex h-full flex-col">
+      {/* ── Slim panel header — labels the column, keeps the surface calm ── */}
+      <div className="flex h-12 shrink-0 items-center border-b border-border/60 px-6">
+        <span className="text-eyebrow">Preview</span>
+      </div>
+
       {/* ── Scrollable preview area ─────────────────────────────────── */}
       <div
         ref={containerRef}
@@ -145,10 +150,10 @@ export function ResumePreviewPanel() {
                     aria-label="Justify all text"
                     className={cn(
                       'flex h-9 w-9 items-center justify-center rounded-full',
-                      'border border-red-500/40 bg-red-500/10 text-red-600 shadow-sm backdrop-blur-md',
+                      'border border-destructive/40 bg-destructive/10 text-destructive shadow-sm backdrop-blur-md',
                       'opacity-80 transition-all duration-200',
-                      'hover:bg-red-500/20 hover:opacity-100 hover:shadow-md dark:text-red-400',
-                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40'
+                      'hover:bg-destructive/20 hover:opacity-100 hover:shadow-md',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40'
                     )}
                   >
                     <AlignLeft className="h-[18px] w-[18px]" />

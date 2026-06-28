@@ -30,7 +30,7 @@ function ToolbarButton({ icon, label, text, onClick, disabled }: ToolbarButtonPr
         <Button
           variant="ghost"
           size="sm"
-          className="h-8 gap-1.5 px-2.5 text-xs text-muted-foreground hover:text-foreground disabled:opacity-40"
+          className="h-8 gap-1.5 rounded-md px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground disabled:opacity-40"
           onClick={onClick}
           disabled={disabled}
         >
@@ -47,7 +47,7 @@ function ToolbarButton({ icon, label, text, onClick, disabled }: ToolbarButtonPr
 }
 
 function ToolbarSeparator() {
-  return <Separator orientation="vertical" className="mx-1 h-5" />;
+  return <Separator orientation="vertical" className="mx-0.5 h-5 bg-border/60" />;
 }
 
 // ─── Main Toolbar ─────────────────────────────────────────────────
@@ -69,7 +69,7 @@ export function BuilderToolbar() {
   return (
     <>
       <div className="flex w-full items-center justify-center px-4 py-1.5">
-        <div className="flex items-center gap-0.5 rounded-xl border border-border/60 bg-background/80 px-3 py-1 shadow-sm backdrop-blur-sm">
+        <div className="surface-raised flex items-center gap-1 px-2 py-1">
           {/* Download — opens dialog with layout options */}
           <DownloadDialog
             handle={handle}

@@ -118,7 +118,7 @@ export function GenericSourcePanel({ source, onRemoveSourceAction }: GenericSour
               </div>
             )}
             {saved && (
-              <div className="rounded-md bg-green-50 p-2 text-xs text-green-700 dark:bg-green-950/30 dark:text-green-400">
+              <div className="rounded-md bg-primary/10 p-2 text-xs text-primary">
                 Link saved successfully!
               </div>
             )}

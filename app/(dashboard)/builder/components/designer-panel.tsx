@@ -6,10 +6,8 @@ import {
   AlignLeft,
   AlignRight,
   Minus,
-  Palette,
   Pencil,
   RotateCcw,
-  Type,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -268,8 +266,8 @@ function JustifyAllButton() {
           className={cn(
             'h-8 w-full gap-1.5 text-xs transition-colors',
             allJustified
-              ? 'cursor-default border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-              : 'border-red-500/40 bg-red-500/10 text-red-600 hover:bg-red-500/20 dark:text-red-400 dark:hover:bg-red-500/20'
+              ? 'cursor-default border-primary/30 bg-primary/10 text-primary'
+              : 'border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20'
           )}
           onClick={handleJustifyAll}
           disabled={allJustified}
@@ -370,13 +368,10 @@ export function DesignerPanel() {
       <ResumeFontLoader fontFamily={design.fontFamily} />
 
       {/* Header */}
-      <div className="flex items-center justify-between border-b px-4 py-3">
-        <div className="flex items-center gap-2">
-          <Palette className="h-4 w-4 text-primary" />
-          <h2 className="text-sm font-semibold">Designer</h2>
-        </div>
+      <div className="flex h-12 shrink-0 items-center justify-between border-b border-border/60 px-5">
+        <span className="text-eyebrow">Design</span>
         <div className="flex items-center gap-1">
-          {isSaving && <span className="mr-1 text-[10px] text-muted-foreground">Saving…</span>}
+          {isSaving && <span className="mr-1 text-[11px] text-muted-foreground">Saving…</span>}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={handleReset}>
@@ -393,13 +388,10 @@ export function DesignerPanel() {
 
       {/* Scrollable Content */}
       <ScrollArea className="flex-1">
-        <div className="space-y-6 p-4">
+        <div className="space-y-6 p-5">
           {/* ── Section: Colors ── */}
           <section className="space-y-4">
-            <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-foreground">
-              <Palette className="h-3 w-3" />
-              Colors
-            </h3>
+            <h3 className="text-eyebrow">Colors</h3>
 
             <ColorPicker
               label="Heading Color"
@@ -418,10 +410,7 @@ export function DesignerPanel() {
 
           {/* ── Section: Typography ── */}
           <section className="space-y-4">
-            <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-foreground">
-              <Type className="h-3 w-3" />
-              Typography
-            </h3>
+            <h3 className="text-eyebrow">Typography</h3>
 
             <div className="space-y-2">
               <Label className="text-xs font-medium text-muted-foreground">Font Family</Label>
@@ -468,10 +457,7 @@ export function DesignerPanel() {
 
           {/* ── Section: Layout ── */}
           <section className="space-y-4">
-            <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-foreground">
-              <AlignCenter className="h-3 w-3" />
-              Layout
-            </h3>
+            <h3 className="text-eyebrow">Layout</h3>
 
             <AlignmentSelector
               value={design.headerAlignment}

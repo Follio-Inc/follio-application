@@ -203,7 +203,7 @@ function ProfileMenu({ profileHandle }: { profileHandle?: string } = {}) {
         >
           <Avatar className="h-8 w-8 ring-1 ring-border/60 transition-all group-hover:ring-border group-data-[state=open]:ring-foreground/30">
             <AvatarImage src={user.imageUrl} alt={displayName} />
-            <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/5 text-xs font-semibold text-primary">
+            <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
               {initials}
             </AvatarFallback>
           </Avatar>
@@ -216,16 +216,16 @@ function ProfileMenu({ profileHandle }: { profileHandle?: string } = {}) {
       </DropdownMenuTrigger>
 
       <DropdownMenuContent
-        className="w-80 overflow-hidden rounded-xl border-border/50 bg-background/95 p-0 shadow-xl backdrop-blur-xl"
+        className="w-72 overflow-hidden rounded-xl border border-border/60 bg-background p-0 shadow-lg"
         align="end"
         sideOffset={8}
       >
         {/* Profile Header */}
-        <div className="bg-gradient-to-br from-primary/5 via-transparent to-transparent px-4 py-4">
+        <div className="border-b border-border/60 px-4 py-4">
           <div className="flex items-center gap-3">
-            <Avatar className="h-12 w-12 shadow-md ring-2 ring-background">
+            <Avatar className="h-11 w-11 ring-1 ring-border/60">
               <AvatarImage src={user.imageUrl} alt={displayName} />
-              <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/5 text-sm font-semibold text-primary">
+              <AvatarFallback className="bg-primary/10 text-sm font-semibold text-primary">
                 {initials}
               </AvatarFallback>
             </Avatar>
@@ -240,27 +240,15 @@ function ProfileMenu({ profileHandle }: { profileHandle?: string } = {}) {
         {follioUrl && handle && (
           <>
             <div className="px-4 py-3">
-              <div className="mb-2 flex items-center gap-2">
-                <div className="h-px flex-1 bg-gradient-to-r from-border to-transparent" />
-                <span className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
-                  Share
-                </span>
-                <div className="h-px flex-1 bg-gradient-to-l from-border to-transparent" />
-              </div>
+              <p className="text-eyebrow mb-2">Your links</p>
 
               {/* Portfolio Link */}
               <button
                 onClick={() => handleCopyLink(follioUrl, 'portfolio')}
-                className="group relative mb-2 w-full overflow-hidden rounded-lg border border-border/60 bg-gradient-to-r from-muted/30 to-muted/10 p-3 text-left transition-all duration-300 hover:border-primary/30 hover:from-primary/5 hover:to-transparent hover:shadow-sm"
+                className="group mb-2 w-full rounded-lg border border-border/60 bg-muted/20 p-3 text-left transition-colors hover:border-border hover:bg-muted/40"
               >
                 <div className="flex items-center gap-3">
-                  <div
-                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all duration-300 ${
-                      portfolioVisibility === 'PUBLIC'
-                        ? 'bg-emerald-500/10 text-emerald-500'
-                        : 'bg-amber-500/10 text-amber-500'
-                    }`}
-                  >
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
                     <Globe className="h-4 w-4" />
                   </div>
                   <div className="min-w-0 flex-1">
@@ -272,9 +260,9 @@ function ProfileMenu({ profileHandle }: { profileHandle?: string } = {}) {
                     </span>
                   </div>
                   <div
-                    className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-all duration-300 ${
+                    className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
                       copiedType === 'portfolio'
-                        ? 'bg-emerald-500/10 text-emerald-600'
+                        ? 'bg-primary/10 text-primary'
                         : 'bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary'
                     }`}
                   >
@@ -296,16 +284,10 @@ function ProfileMenu({ profileHandle }: { profileHandle?: string } = {}) {
               {/* Resume Link */}
               <button
                 onClick={() => resumeUrl && handleCopyLink(resumeUrl, 'resume')}
-                className="group relative w-full overflow-hidden rounded-lg border border-border/60 bg-gradient-to-r from-muted/30 to-muted/10 p-3 text-left transition-all duration-300 hover:border-primary/30 hover:from-primary/5 hover:to-transparent hover:shadow-sm"
+                className="group w-full rounded-lg border border-border/60 bg-muted/20 p-3 text-left transition-colors hover:border-border hover:bg-muted/40"
               >
                 <div className="flex items-center gap-3">
-                  <div
-                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all duration-300 ${
-                      resumeVisibility === 'UNLISTED'
-                        ? 'bg-amber-500/10 text-amber-500'
-                        : 'bg-emerald-500/10 text-emerald-500'
-                    }`}
-                  >
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
                     {resumeVisibility === 'UNLISTED' ? (
                       <Lock className="h-4 w-4" />
                     ) : (
@@ -321,9 +303,9 @@ function ProfileMenu({ profileHandle }: { profileHandle?: string } = {}) {
                     </span>
                   </div>
                   <div
-                    className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-all duration-300 ${
+                    className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
                       copiedType === 'resume'
-                        ? 'bg-emerald-500/10 text-emerald-600'
+                        ? 'bg-primary/10 text-primary'
                         : 'bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary'
                     }`}
                   >
@@ -345,7 +327,7 @@ function ProfileMenu({ profileHandle }: { profileHandle?: string } = {}) {
           </>
         )}
 
-        <DropdownMenuSeparator className="my-0 opacity-50" />
+        <DropdownMenuSeparator className="my-0 bg-border/60" />
 
         {/* Primary navigation — the workspace surface a signed-in
             visitor or owner needs to reach from any profile page. */}
@@ -366,7 +348,7 @@ function ProfileMenu({ profileHandle }: { profileHandle?: string } = {}) {
           </DropdownMenuItem>
         </DropdownMenuGroup>
 
-        <DropdownMenuSeparator className="my-0 opacity-50" />
+        <DropdownMenuSeparator className="my-0 bg-border/60" />
 
         {/* Footer — quieter, account-level actions. Settings and
             sign-out share the same compact row treatment so they sit
