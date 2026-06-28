@@ -269,8 +269,9 @@ export function NewResumeGhostCard({
   return (
     <div
       className={cn(
-        'group/new-resume relative rounded-lg border border-dashed border-border/60 bg-muted/10 text-muted-foreground transition-colors duration-200',
-        !isDisabled && 'hover:border-primary/40 hover:bg-muted/30',
+        'group/new-resume relative overflow-hidden rounded-lg border border-dashed border-border/60 bg-muted/10 text-muted-foreground transition-colors duration-200',
+        !isDisabled && 'hover:border-primary/40 hover:bg-card',
+        showOptions && !isDisabled && 'border-primary/40 bg-card',
         className
       )}
     >
@@ -280,7 +281,9 @@ export function NewResumeGhostCard({
         onClick={() => setIsExpanded((current) => !current)}
         className={cn(
           'flex h-full w-full flex-col items-center justify-center gap-2.5 p-4 transition-opacity duration-200',
-          showOptions ? 'pointer-events-none opacity-0' : 'opacity-100',
+          showOptions
+            ? 'pointer-events-none opacity-0'
+            : 'opacity-100 group-hover/new-resume:pointer-events-none group-hover/new-resume:opacity-0',
           isDisabled && 'cursor-not-allowed opacity-50'
         )}
         aria-label="Create new resume"
@@ -294,7 +297,7 @@ export function NewResumeGhostCard({
 
       <div
         className={cn(
-          'absolute inset-0 flex flex-col justify-center gap-2 p-3 transition-opacity duration-200',
+          'absolute inset-0 z-10 flex flex-col justify-center gap-2 bg-card p-3 transition-opacity duration-200',
           showOptions
             ? 'pointer-events-auto opacity-100'
             : 'pointer-events-none opacity-0 group-hover/new-resume:pointer-events-auto group-hover/new-resume:opacity-100',

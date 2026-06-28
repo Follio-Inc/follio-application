@@ -24,7 +24,6 @@ import { getPublicProfile } from '@/services/profile.service';
 import { PreviewLive } from './preview-live';
 
 import type { TemplatePortfolio } from '@/lib/portfolio/templates/types';
-import type { CSSProperties } from 'react';
 
 export const dynamic = 'force-dynamic';
 
@@ -91,11 +90,8 @@ export default async function PortfolioPreviewPage() {
 
   const draftPlan = getDraftPlan(generatedPortfolio?.userOverrides) ?? publishedPlan;
 
-  // Pull the template nav flush to the top since the Follio navbar is absent here.
-  const wrapperStyle = { '--ms-nav-top': '0px' } as CSSProperties;
-
   return (
-    <div style={wrapperStyle}>
+    <div>
       <PreviewLive profile={profile} initialDraft={draftPlan} githubProfile={githubProfile} />
     </div>
   );

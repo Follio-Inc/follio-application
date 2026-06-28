@@ -49,12 +49,19 @@ function DashboardLink({ isActive }: { isActive: boolean }) {
 
 /* ──────────────────────── Main Component ────────────────────────── */
 
-export function DashboardTopbar({ children }: { children?: React.ReactNode }) {
+export function DashboardTopbar({
+  children,
+  className,
+}: {
+  children?: React.ReactNode;
+  className?: string;
+}) {
   const pathname = usePathname();
   const isDashboard = pathname === '/dashboard';
 
   return (
     <AppHeader
+      className={className}
       left={<Logo href="/dashboard" size="md" />}
       right={
         <div className="flex items-center gap-2">

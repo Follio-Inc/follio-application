@@ -30,7 +30,6 @@
   --ms-font-serif: 'Fraunces', Georgia, 'Times New Roman', serif;
   --ms-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 
-  --ms-nav-top: 3.5rem; /* clears the Follio ProfileNavbar */
   --ms-ease: cubic-bezier(0.2, 0.6, 0.2, 1);
 
   font-family: var(--ms-font-sans);
@@ -243,11 +242,15 @@
    NAVIGATION
    ============================================================================ */
 
+/*
+ * Sticky (not fixed) so the nav scrolls up with the Follio workspace bar,
+ * then pins to the viewport top once that chrome has scrolled away.
+ * External/visitor views have no Follio bar above — sticky top: 0 behaves
+ * the same from the first pixel of scroll.
+ */
 [data-template='minimal-studio'] .ms-nav {
-  position: fixed;
-  top: var(--ms-nav-top);
-  left: 0;
-  right: 0;
+  position: sticky;
+  top: 0;
   z-index: 40;
   transition:
     background-color 0.35s var(--ms-ease),
@@ -396,7 +399,7 @@
 
 [data-template='minimal-studio'] .ms-nav-overlay {
   position: fixed;
-  inset: var(--ms-nav-top) 0 0 0;
+  inset: 0;
   z-index: 39;
   background: var(--ms-paper);
   display: flex;
@@ -430,15 +433,9 @@
   text-decoration: none;
 }
 
-/* Push page content below the fixed template nav (sits under the Follio bar). */
+/* Nav sits in document flow above main — no extra offset padding needed. */
 [data-template='minimal-studio'] .ms-main {
-  padding-top: 10rem;
-}
-
-@media (max-width: 767px) {
-  [data-template='minimal-studio'] .ms-main {
-    padding-top: 8.5rem;
-  }
+  padding-top: 0;
 }
 
 /* ============================================================================

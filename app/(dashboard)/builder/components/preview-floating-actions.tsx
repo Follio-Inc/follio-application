@@ -90,7 +90,7 @@ export function PreviewFloatingActions({
       },
       {
         key: 'view-external',
-        label: 'View as visitor',
+        label: 'View in Full Window',
         icon: <ExternalLink />,
         onClick: handleViewExternal,
       },

@@ -5,17 +5,18 @@ import {
   Check,
   ChevronDown,
   Copy,
+  ExternalLink,
+  FileText,
   Globe,
   LayoutDashboard,
   Lock,
   LogOut,
   Settings,
-  User,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
-import { getDisplayHost, getPortfolioPath, getPortfolioUrl } from '@/lib/url';
+import { getPortfolioPath, getPortfolioUrl } from '@/lib/url';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -149,11 +150,8 @@ export function UserMenu() {
             <>
               <div className="px-4 py-3">
                 <p className="text-eyebrow mb-2">Your link</p>
-                <button
-                  onClick={handleCopyLink}
-                  className="group w-full rounded-lg border border-border/60 bg-muted/20 p-3 text-left transition-colors hover:border-border hover:bg-muted/40"
-                >
-                  <div className="flex items-center gap-3">
+                <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
+                  <div className="flex items-start gap-3">
                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
                       {profileStatus === 'PUBLIC' ? (
                         <Globe className="h-4 w-4" />
@@ -162,42 +160,55 @@ export function UserMenu() {
                       )}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <span className="block truncate font-mono text-[13px] font-medium tracking-tight text-foreground">
-                        {getDisplayHost(handle)}
-                      </span>
-                      <span className="text-[11px] text-muted-foreground">
+                      <p className="break-all font-mono text-[13px] font-medium leading-snug tracking-tight text-foreground">
+                        {follioUrl}
+                      </p>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
                         {profileStatus === 'PUBLIC' ? 'Public profile' : 'Private link'}
-                      </span>
+                      </p>
                     </div>
-                    <div
-                      className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+                  </div>
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={handleCopyLink}
+                      className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
                         copied
                           ? 'bg-primary/10 text-primary'
-                          : 'bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary'
+                          : 'bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary'
                       }`}
                     >
                       {copied ? (
                         <>
                           <Check className="h-3.5 w-3.5" />
-                          <span>Copied!</span>
+                          Copied!
                         </>
                       ) : (
                         <>
                           <Copy className="h-3.5 w-3.5" />
-                          <span>Copy</span>
+                          Copy
                         </>
                       )}
-                    </div>
+                    </button>
+                    <Link
+                      href={getPortfolioPath(handle)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-muted px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      View
+                    </Link>
                   </div>
-                </button>
+                </div>
               </div>
             </>
           )}
 
           <DropdownMenuSeparator className="my-0 bg-border/60" />
 
-          {/* Primary navigation — the two surfaces a signed-in user
-              actually moves between from anywhere in the app. */}
+          {/* Primary navigation — workspace surfaces a signed-in user
+              moves between from anywhere in the app. */}
           <DropdownMenuGroup className="p-2">
             <DropdownMenuItem asChild>
               <Link
@@ -209,26 +220,24 @@ export function UserMenu() {
                 </div>
                 <div className="flex flex-col">
                   <span className="text-sm font-medium">Dashboard</span>
-                  <span className="text-[11px] text-muted-foreground">Manage your resumes</span>
+                  <span className="text-[11px] text-muted-foreground">Your portfolio overview</span>
                 </div>
               </Link>
             </DropdownMenuItem>
-            {handle && (
-              <DropdownMenuItem asChild>
-                <Link
-                  href={getPortfolioPath(handle)}
-                  className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 transition-colors"
-                >
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/50">
-                    <User className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-sm font-medium">View profile</span>
-                    <span className="text-[11px] text-muted-foreground">See your public page</span>
-                  </div>
-                </Link>
-              </DropdownMenuItem>
-            )}
+            <DropdownMenuItem asChild>
+              <Link
+                href="/resumes"
+                className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 transition-colors"
+              >
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/50">
+                  <FileText className="h-4 w-4 text-muted-foreground" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium">Resumes</span>
+                  <span className="text-[11px] text-muted-foreground">Create and manage resumes</span>
+                </div>
+              </Link>
+            </DropdownMenuItem>
           </DropdownMenuGroup>
 
           <DropdownMenuSeparator className="my-0 bg-border/60" />

@@ -90,14 +90,9 @@ export default function TemplatePreviewPage() {
 
   return (
     <div style={{ minHeight: '100vh' }}>
-      {/* Faux Follio top bar — mimics the real ProfileNavbar offset (h-14).
-          In embed mode we keep the spacer/background but drop the switcher. */}
+      {/* Faux Follio top bar — in document flow so template sticky nav scrolls with it. */}
       <div
         style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
           height: '3.5rem',
           zIndex: 60,
           display: 'flex',

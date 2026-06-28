@@ -1628,7 +1628,7 @@ export function PortfolioNavigation({
   if (config.variant === 'none') return null;
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-[hsl(var(--p-border)/0.3)] bg-[hsl(var(--p-background)/0.8)] backdrop-blur-xl">
+    <nav className="sticky top-0 z-50 border-b border-[hsl(var(--p-border)/0.3)] bg-[hsl(var(--p-background)/0.95)] backdrop-blur-xl supports-[backdrop-filter]:bg-[hsl(var(--p-background)/0.8)]">
       <div className="p-section flex items-center justify-between py-3.5">
         <span className="p-h3 text-base font-semibold tracking-tight">{config.userName}</span>
         {config.items.length > 0 && (
