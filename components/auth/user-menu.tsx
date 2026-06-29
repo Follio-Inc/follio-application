@@ -16,9 +16,9 @@ import {
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
-import { getPortfolioPath, getPortfolioUrl } from '@/lib/url';
-
+import { AppThemeModeSwitch } from '@/components/app-theme-mode-switch';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { getPortfolioPath, getPortfolioUrl } from '@/lib/url';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -241,6 +241,10 @@ export function UserMenu() {
               </Link>
             </DropdownMenuItem>
           </DropdownMenuGroup>
+
+          <DropdownMenuSeparator className="my-0 bg-border/60" />
+
+          <AppThemeModeSwitch />
 
           <DropdownMenuSeparator className="my-0 bg-border/60" />
 

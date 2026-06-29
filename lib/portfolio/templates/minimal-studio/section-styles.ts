@@ -108,4 +108,4 @@ export function isSkillsStyleId(value: unknown): value is SkillsStyleId {
   return typeof value === 'string' && SKILLS_STYLE_IDS.has(value);
 }
 
-export const DEFAULT_SKILLS_STYLE: SkillsStyleId = 'rows';
+export const DEFAULT_SKILLS_STYLE: SkillsStyleId = 'columns';

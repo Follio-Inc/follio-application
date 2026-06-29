@@ -40,6 +40,7 @@ interface PortfolioEditorClientProps {
   profile: TemplateProfileData;
   currentTemplateId: string;
   templates: TemplateOption[];
+  templatesById: Record<string, EditorTemplateInfo>;
   template: EditorTemplateInfo;
 }
 
@@ -54,17 +55,22 @@ export function PortfolioEditorClient({
   profile,
   currentTemplateId,
   templates,
+  templatesById,
   template,
 }: PortfolioEditorClientProps) {
   const [draft, setDraft] = useState<TemplatePortfolio>(initialDraft);
   const [published, setPublished] = useState<TemplatePortfolio>(publishedPlan);
+  const [activeTemplateId, setActiveTemplateId] = useState(currentTemplateId);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [publishing, setPublishing] = useState(false);
   const [publishedToast, setPublishedToast] = useState(false);
 
   const isFirstRender = useRef(true);
+  const skipNextAutosave = useRef(false);
   const previewFrameRef = useRef<HTMLIFrameElement>(null);
   const previewReadyRef = useRef(false);
+
+  const activeTemplate = templatesById[activeTemplateId] ?? template;
 
   const dirty = useMemo(
     () => JSON.stringify(draft) !== JSON.stringify(published),
@@ -126,10 +132,23 @@ export function PortfolioEditorClient({
       isFirstRender.current = false;
       return;
     }
+    if (skipNextAutosave.current) {
+      skipNextAutosave.current = false;
+      return;
+    }
     setSaveStatus('saving');
     const timer = setTimeout(() => void save(draft), 700);
     return () => clearTimeout(timer);
   }, [draft, save]);
+
+  const handleTemplateApplied = useCallback((plan: TemplatePortfolio) => {
+    const next = clone(plan);
+    skipNextAutosave.current = true;
+    setDraft(next);
+    setPublished(next);
+    setActiveTemplateId(plan.templateId);
+    setSaveStatus('saved');
+  }, []);
 
   const handlePublish = useCallback(async () => {
     setPublishing(true);
@@ -187,7 +206,9 @@ export function PortfolioEditorClient({
           </Button>
           <div className="hidden min-w-0 sm:block">
             <span className="block truncate text-sm font-semibold">Edit portfolio</span>
-            <span className="block truncate text-xs text-muted-foreground">{template.name}</span>
+            <span className="block truncate text-xs text-muted-foreground">
+              {activeTemplate.name}
+            </span>
           </div>
         </div>
 
@@ -227,7 +248,11 @@ export function PortfolioEditorClient({
               <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Template
               </p>
-              <TemplateGallery templates={templates} currentTemplateId={currentTemplateId}>
+              <TemplateGallery
+                templates={templates}
+                currentTemplateId={activeTemplateId}
+                onTemplateApplied={handleTemplateApplied}
+              >
                 <Button
                   variant="outline"
                   className="h-auto w-full justify-between gap-2 px-3 py-2.5"
@@ -236,7 +261,9 @@ export function PortfolioEditorClient({
                     <LayoutTemplate className="h-4 w-4 shrink-0 text-muted-foreground" />
                     Change template
                   </span>
-                  <span className="truncate text-sm text-muted-foreground">{template.name}</span>
+                  <span className="truncate text-sm text-muted-foreground">
+                    {activeTemplate.name}
+                  </span>
                 </Button>
               </TemplateGallery>
             </div>
@@ -245,7 +272,7 @@ export function PortfolioEditorClient({
             <SectionsAccordion
               draft={draft}
               profile={profile}
-              template={template}
+              template={activeTemplate}
               emptyByType={emptyByType}
               onSections={onSections}
               onCopy={onCopy}

@@ -60,6 +60,7 @@ export async function POST(request: NextRequest) {
       success: true,
       portfolioId: result.portfolioId,
       templateId: result.templateId,
+      plan: result.plan,
       unchanged: result.unchanged,
       isAIGenerated: result.isAIGenerated,
     });

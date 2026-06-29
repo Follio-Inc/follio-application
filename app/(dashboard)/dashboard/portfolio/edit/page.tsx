@@ -13,6 +13,7 @@ import { PortfolioEditorEmptyState } from './empty-state';
 
 import type { TemplateOption } from '@/components/portfolio/template-option-card';
 import type { TemplatePortfolio } from '@/lib/portfolio/templates/types';
+import type { EditorTemplateInfo } from './types';
 
 export const dynamic = 'force-dynamic';
 
@@ -88,6 +89,20 @@ export default async function PortfolioEditPage() {
     accentColors: t.compatibleAccentColors,
   }));
 
+  const templatesById = Object.fromEntries(
+    getAllTemplates().map((t) => [
+      t.id,
+      {
+        id: t.id,
+        name: t.name,
+        accentColors: t.compatibleAccentColors,
+        fonts: t.compatibleFonts,
+        supportedSections: t.supportedSections,
+        defaultHeadings: t.defaultSectionHeadings ?? {},
+      } satisfies EditorTemplateInfo,
+    ])
+  );
+
   return (
     <PortfolioEditorClient
       handle={profileRecord.handle}
@@ -96,6 +111,7 @@ export default async function PortfolioEditPage() {
       profile={normalizedProfile}
       currentTemplateId={publishedPlan.templateId}
       templates={templates}
+      templatesById={templatesById}
       template={{
         id: templateMeta.id,
         name: templateMeta.name,

@@ -744,6 +744,8 @@ async function loadProfileWithRelations(profileId: string): Promise<FullProfile 
 export interface SwitchTemplateResult {
   portfolioId: string;
   templateId: string;
+  /** The new published portfolio plan after switching templates */
+  plan: TemplatePortfolio;
   /** True when the AI pipeline was run (only happens on the fallback path) */
   isAIGenerated: boolean;
   /** True when nothing changed because the portfolio was already on this template */
@@ -793,9 +795,18 @@ export async function switchPortfolioTemplate(
       templateId,
     });
     const result = await generateEnhancedPortfolio(profileId, { templateId });
+    const generated = await db.generatedPortfolio.findUnique({
+      where: { id: result.portfolioId },
+      select: { plan: true },
+    });
+    const plan = generated?.plan as unknown as TemplatePortfolio;
+    if (!plan || typeof plan.templateId !== 'string') {
+      throw Errors.internal('Template switch completed but portfolio plan is missing');
+    }
     return {
       portfolioId: result.portfolioId,
       templateId: result.templateId,
+      plan,
       isAIGenerated: result.isAIGenerated,
       unchanged: false,
     };
@@ -806,6 +817,7 @@ export async function switchPortfolioTemplate(
     return {
       portfolioId: existing!.id,
       templateId,
+      plan: existingPlan,
       isAIGenerated: false,
       unchanged: true,
     };
@@ -898,6 +910,7 @@ export async function switchPortfolioTemplate(
   return {
     portfolioId: saved.id,
     templateId,
+    plan: newPortfolio,
     isAIGenerated: false,
     unchanged: false,
   };
