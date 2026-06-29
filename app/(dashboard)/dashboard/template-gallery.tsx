@@ -1,7 +1,6 @@
 'use client';
 
 import { Loader2 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import {
@@ -18,15 +17,23 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 
+import type { TemplatePortfolio } from '@/lib/portfolio/templates/types';
+
 interface TemplateGalleryProps {
   templates: TemplateOption[];
   currentTemplateId: string | null;
+  /** Called with the new published plan so the editor preview can update instantly. */
+  onTemplateApplied?: (plan: TemplatePortfolio) => void;
   /** The trigger element (e.g. a button). Rendered via DialogTrigger asChild. */
   children: React.ReactNode;
 }
 
-export function TemplateGallery({ templates, currentTemplateId, children }: TemplateGalleryProps) {
-  const router = useRouter();
+export function TemplateGallery({
+  templates,
+  currentTemplateId,
+  onTemplateApplied,
+  children,
+}: TemplateGalleryProps) {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<string | null>(currentTemplateId);
   const [busy, setBusy] = useState(false);
@@ -51,8 +58,10 @@ export function TemplateGallery({ templates, currentTemplateId, children }: Temp
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'Failed to switch template');
       }
+      if (data.plan && typeof data.plan.templateId === 'string') {
+        onTemplateApplied?.(data.plan as TemplatePortfolio);
+      }
       setOpen(false);
-      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {

@@ -696,7 +696,7 @@ export function MSSkills({ profile, copy, index, layout = DEFAULT_SKILLS_STYLE }
               </Reveal>
             ))
           ) : (
-            <Reveal as="div" className="ms-skill-group">
+            <Reveal as="div" className="ms-skill-group ms-skill-group--full">
               <ul className="ms-tag-list">
                 {flatSkills.map((skill) => (
                   <li key={skill.id} className="ms-tag">

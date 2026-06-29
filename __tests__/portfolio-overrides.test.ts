@@ -167,9 +167,10 @@ describe('resolveEffective helpers', () => {
     expect(resolveAboutStyle({ aboutStyle: 'statement' })).toBe('statement');
     expect(resolveAboutStyle({ aboutStyle: 'nope' as 'centered' })).toBe('sidebar');
 
-    expect(resolveSkillsStyle(null)).toBe('rows');
+    expect(resolveSkillsStyle(null)).toBe('columns');
     expect(resolveSkillsStyle({ skillsStyle: 'columns' })).toBe('columns');
-    expect(resolveSkillsStyle({ skillsStyle: 'nope' as 'inline' })).toBe('rows');
+    expect(resolveSkillsStyle({ skillsStyle: 'rows' })).toBe('rows');
+    expect(resolveSkillsStyle({ skillsStyle: 'nope' as 'inline' })).toBe('columns');
   });
 });
 
