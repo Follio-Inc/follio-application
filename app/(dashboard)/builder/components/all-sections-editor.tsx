@@ -20,7 +20,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowLeft, ChevronDown, Eye, EyeOff, GripVertical, Plus } from 'lucide-react';
-import { useCallback, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 
 import {
   AlertDialog,
@@ -111,6 +111,9 @@ const FORM_SECTION_TYPES = new Set(['BASIC_INFO', 'SUMMARY']);
 
 /** Section types that are pinned at the top and NOT draggable */
 const PINNED_SECTION_TYPES = new Set<string>(['BASIC_INFO']);
+
+/** Stable DndContext id — must not use useId() (hydration mismatch in nested SSR trees). */
+const SECTION_DND_CONTEXT_ID = 'builder-all-sections-dnd';
 
 /** Singular display name for "Add ___" buttons */
 const ENTRY_SINGULAR: Record<string, string> = {
@@ -302,7 +305,6 @@ export function AllSectionsEditor() {
   const hasFormChanges = profileChanged || contactChanged;
 
   // ── DnD: Section reorder ──
-  const sectionDndId = useId();
   const sectionSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -1157,7 +1159,7 @@ export function AllSectionsEditor() {
 
         {/* Draggable body sections */}
         <DndContext
-          id={sectionDndId}
+          id={SECTION_DND_CONTEXT_ID}
           sensors={sectionSensors}
           collisionDetection={closestCenter}
           onDragEnd={handleSectionDragEnd}

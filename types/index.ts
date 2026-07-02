@@ -56,11 +56,16 @@ export type ResumeDividerStyle = 'line' | 'double' | 'dotted' | 'dashed' | 'thic
 /** Paper density / spacing */
 export type ResumeDensity = 'compact' | 'normal' | 'relaxed';
 
+/** Resume color theme — independent of the Follio app theme */
+export type ResumeColorTheme = 'light' | 'dark' | 'system';
+
 /**
  * Resume design settings — stored as JSON on the Profile model.
  * All fields are optional; missing values fall back to defaults.
  */
 export interface ResumeDesign {
+  /** Light / dark / system color theme for the resume document */
+  colorTheme?: ResumeColorTheme;
   /** Color for section headings (CSS color, e.g. '#1a1a1a' or '#2563eb') */
   headingColor?: string;
   /** Accent color for divider lines, bullets, etc. */
@@ -83,6 +88,8 @@ export interface ResumeDesign {
 
 /** Default design settings applied when no custom design is configured */
 export const RESUME_DESIGN_DEFAULTS: Required<ResumeDesign> = {
+  /** Resume defaults to light paper — independent of the Follio app theme */
+  colorTheme: 'light',
   headingColor: '#000000',
   accentColor: '#000000',
   fontFamily: 'georgia',

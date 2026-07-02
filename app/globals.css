@@ -420,7 +420,7 @@
   }
 
   /* Dark mode - inverted paper look */
-  .dark .resume-paper {
+  .resume-paper-wrapper[data-resume-theme='dark'] .resume-paper {
     @apply bg-gray-900 text-gray-100;
     box-shadow:
       0 1px 3px rgba(0, 0, 0, 0.3),
@@ -442,7 +442,7 @@
     color: var(--rd-heading-color, inherit);
   }
 
-  .dark .resume-name {
+  .resume-paper-wrapper[data-resume-theme='dark'] .resume-name {
     color: var(--rd-heading-color-dark, #e5e5e5);
   }
 
@@ -453,7 +453,7 @@
     font-style: italic;
   }
 
-  .dark .resume-headline {
+  .resume-paper-wrapper[data-resume-theme='dark'] .resume-headline {
     color: #a0a0a0;
   }
 
@@ -464,7 +464,7 @@
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 
-  .dark .resume-contact-line {
+  .resume-paper-wrapper[data-resume-theme='dark'] .resume-contact-line {
     color: #999;
   }
 
@@ -472,7 +472,7 @@
     color: #999;
   }
 
-  .dark .resume-contact-separator {
+  .resume-paper-wrapper[data-resume-theme='dark'] .resume-contact-separator {
     color: #666;
   }
 
@@ -495,7 +495,7 @@
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 
-  .dark .resume-section-title {
+  .resume-paper-wrapper[data-resume-theme='dark'] .resume-section-title {
     color: var(--rd-heading-color-dark, #e5e5e5);
   }
 
@@ -507,7 +507,7 @@
     opacity: var(--rd-divider-opacity, 0.2);
   }
 
-  .dark .resume-section-line {
+  .resume-paper-wrapper[data-resume-theme='dark'] .resume-section-line {
     background: var(--rd-divider-bg-dark, currentColor);
     border-top: var(--rd-divider-border-dark, none);
     border-bottom: var(--rd-divider-border-bottom-dark, none);
@@ -560,7 +560,7 @@
     margin: 1px 0 0 0;
   }
 
-  .dark .resume-entry-subtitle {
+  .resume-paper-wrapper[data-resume-theme='dark'] .resume-entry-subtitle {
     color: #a0a0a0;
   }
 
@@ -572,7 +572,7 @@
     flex-shrink: 0;
   }
 
-  .dark .resume-entry-date {
+  .resume-paper-wrapper[data-resume-theme='dark'] .resume-entry-date {
     color: #888;
   }
 
@@ -583,7 +583,7 @@
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 
-  .dark .resume-entry-tech {
+  .resume-paper-wrapper[data-resume-theme='dark'] .resume-entry-tech {
     color: #888;
   }
 
@@ -599,7 +599,7 @@
     color: #666;
   }
 
-  .dark .resume-entry-details {
+  .resume-paper-wrapper[data-resume-theme='dark'] .resume-entry-details {
     color: #888;
   }
 
@@ -614,7 +614,7 @@
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 
-  .dark .resume-entry-tags {
+  .resume-paper-wrapper[data-resume-theme='dark'] .resume-entry-tags {
     color: #888;
   }
 
@@ -655,7 +655,7 @@
     opacity: 0.6;
   }
 
-  .dark .resume-bullets li::marker {
+  .resume-paper-wrapper[data-resume-theme='dark'] .resume-bullets li::marker {
     color: var(--rd-accent-color-dark, #888);
     opacity: 0.6;
   }
@@ -706,7 +706,7 @@
     opacity: 0.6;
   }
 
-  .dark .resume-entry .rich-text-bullets li::marker {
+  .resume-paper-wrapper[data-resume-theme='dark'] .resume-entry .rich-text-bullets li::marker {
     color: var(--rd-accent-color-dark, #888);
     opacity: 0.6;
   }
@@ -804,7 +804,7 @@
     color: #555;
   }
 
-  .dark .resume-skill-group-items {
+  .resume-paper-wrapper[data-resume-theme='dark'] .resume-skill-group-items {
     color: #a0a0a0;
   }
 
@@ -827,7 +827,7 @@
     color: #555;
   }
 
-  .dark .resume-entry-inline-issuer {
+  .resume-paper-wrapper[data-resume-theme='dark'] .resume-entry-inline-issuer {
     color: #a0a0a0;
   }
 
@@ -836,7 +836,7 @@
     font-size: 12px;
   }
 
-  .dark .resume-entry-inline-date {
+  .resume-paper-wrapper[data-resume-theme='dark'] .resume-entry-inline-date {
     color: #888;
   }
 
@@ -847,7 +847,7 @@
     padding-left: 12px;
   }
 
-  .dark .resume-entry-inline-description {
+  .resume-paper-wrapper[data-resume-theme='dark'] .resume-entry-inline-description {
     color: #888;
   }
 
@@ -877,7 +877,7 @@
     margin: 2px 0 0 0;
   }
 
-  .dark .resume-publication-authors {
+  .resume-paper-wrapper[data-resume-theme='dark'] .resume-publication-authors {
     color: #a0a0a0;
   }
 
@@ -888,7 +888,7 @@
     margin: 2px 0 0 0;
   }
 
-  .dark .resume-publication-meta {
+  .resume-paper-wrapper[data-resume-theme='dark'] .resume-publication-meta {
     color: #888;
   }
 

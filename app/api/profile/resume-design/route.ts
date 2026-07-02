@@ -6,6 +6,7 @@ import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import {
   RESUME_DESIGN_DEFAULTS,
+  type ResumeColorTheme,
   type ResumeDensity,
   type ResumeDesign,
   type ResumeDividerStyle,
@@ -41,6 +42,8 @@ const VALID_DIVIDER_STYLES = new Set<ResumeDividerStyle>([
 
 const VALID_DENSITIES = new Set<ResumeDensity>(['compact', 'normal', 'relaxed']);
 
+const VALID_COLOR_THEMES = new Set<ResumeColorTheme>(['light', 'dark', 'system']);
+
 /** Validates a CSS hex color string (3-, 4-, 6-, or 8-digit). */
 function isValidHexColor(value: unknown): value is string {
   if (typeof value !== 'string') return false;
@@ -58,6 +61,18 @@ function validateResumeDesign(body: unknown): {
 
   const raw = body as Record<string, unknown>;
   const design: ResumeDesign = {};
+
+  // colorTheme
+  if (raw.colorTheme !== undefined) {
+    if (!VALID_COLOR_THEMES.has(raw.colorTheme as ResumeColorTheme)) {
+      return {
+        valid: false,
+        data: null,
+        error: `colorTheme must be one of: ${[...VALID_COLOR_THEMES].join(', ')}`,
+      };
+    }
+    design.colorTheme = raw.colorTheme as ResumeColorTheme;
+  }
 
   // headingColor
   if (raw.headingColor !== undefined) {

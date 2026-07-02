@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { useResolvedResumeColorTheme } from '@/lib/hooks/use-resume-color-theme';
 import { containsHtmlFormatting, isHtmlEmpty, sanitizeRichHtml } from '@/lib/html-utils';
 import { cleanPhoneDisplay } from '@/lib/phone';
 import { buildResumeDesignStyles, parseResumeDesign } from '@/lib/resume-design';
@@ -714,6 +715,8 @@ export function CleanResumeView({ profile: rawProfile, authState }: CleanResumeV
     [rawProfile]
   );
 
+  const resolvedColorTheme = useResolvedResumeColorTheme(parsedDesign?.colorTheme);
+
   // ── Sections ordered by user-configured sortOrder ─────────────────────
   // Header sections (BASIC_INFO, LINKS) are always rendered as
   // the header block; body sections follow in their sortOrder.
@@ -801,7 +804,10 @@ export function CleanResumeView({ profile: rawProfile, authState }: CleanResumeV
         />
       ) : null}
 
-      <div className="resume-paper-wrapper group/resume relative">
+      <div
+        className="resume-paper-wrapper group/resume relative"
+        data-resume-theme={resolvedColorTheme}
+      >
         {/* Kebab anchor — sits *outside* the resume's right margin,
             vertically aligned with the top of the paper. The actual
             menu is portalled in by `<PublicResumeActions>` so it

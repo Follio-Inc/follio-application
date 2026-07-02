@@ -26,6 +26,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { ResumeColorThemeSwitch } from '@/components/resume-color-theme-switch';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -394,6 +395,24 @@ export function ResumeDesignPanel({ open, onCloseAction }: ResumeDesignPanelProp
             {/* Scrollable Content */}
             <ScrollArea className="flex-1">
               <div className="space-y-6 p-4">
+                {/* ── Section: Theme ── */}
+                <section className="space-y-3">
+                  <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-foreground">
+                    <Palette className="h-3 w-3" />
+                    Theme
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Controls how your resume looks when shared — independent of the Follio app
+                    theme.
+                  </p>
+                  <ResumeColorThemeSwitch
+                    value={design.colorTheme}
+                    onChange={(colorTheme) => updateDesign({ colorTheme })}
+                  />
+                </section>
+
+                <Separator />
+
                 {/* ── Section: Colors ── */}
                 <section className="space-y-4">
                   <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-foreground">

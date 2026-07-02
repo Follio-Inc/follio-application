@@ -166,6 +166,17 @@ export function buildResumeDesignStyles(raw: ResumeDesign | null | undefined): R
 }
 
 /**
+ * Build a CSS `style` attribute string with all `--rd-*` custom properties.
+ * Used by PDF export where inline styles are required.
+ */
+export function buildResumeDesignStyleAttr(raw: ResumeDesign | null | undefined): string {
+  const styles = buildResumeDesignStyles(raw);
+  return Object.entries(styles)
+    .map(([key, value]) => `${key}: ${String(value)}`)
+    .join('; ');
+}
+
+/**
  * Parse the resumeDesign from a profile object (handles JSON or object).
  */
 export function parseResumeDesign(raw: unknown): ResumeDesign | null {

@@ -38,10 +38,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { APP_THEME_DEFAULT, type AppThemeMode } from '@/lib/app-theme';
 
 import type { FullProfile } from '@/types';
 
-type ThemeMode = 'light' | 'dark' | 'system';
+type ThemeMode = AppThemeMode;
 
 interface AccountDataSummary {
   user: {
@@ -128,7 +129,7 @@ export function SettingsSection({ profile }: SettingsSectionProps) {
     setMounted(true);
   }, []);
 
-  const theme = (mounted ? currentTheme : 'system') as ThemeMode;
+  const theme = (mounted ? currentTheme : APP_THEME_DEFAULT) as ThemeMode;
 
   // Apply theme change via next-themes
   const handleThemeChange = (newTheme: ThemeMode) => {

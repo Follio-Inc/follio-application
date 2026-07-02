@@ -4,9 +4,10 @@ import { Monitor, Moon, Sun } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
 
+import { APP_THEME_DEFAULT, type AppThemeMode } from '@/lib/app-theme';
 import { cn } from '@/lib/utils';
 
-type ThemeMode = 'light' | 'dark' | 'system';
+type ThemeMode = AppThemeMode;
 
 const THEME_OPTIONS: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
   { value: 'light', label: 'Light', icon: Sun },
@@ -26,7 +27,7 @@ export function AppThemeModeSwitch({ className }: AppThemeModeSwitchProps) {
     setMounted(true);
   }, []);
 
-  const theme = (mounted ? currentTheme : 'system') as ThemeMode;
+  const theme = (mounted ? currentTheme : APP_THEME_DEFAULT) as ThemeMode;
 
   return (
     <div className={cn('px-4 py-3', className)}>

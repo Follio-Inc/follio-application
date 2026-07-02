@@ -17,7 +17,8 @@ import {
 } from '@/lib/html-utils';
 import { logger } from '@/lib/logger';
 import { cleanPhoneDisplay } from '@/lib/phone';
-import { parseResumeDesign } from '@/lib/resume-design';
+import { parseResumeDesign, buildResumeDesignStyleAttr } from '@/lib/resume-design';
+import { resolveResumeColorTheme } from '@/lib/resume-color-theme';
 import { formatDate } from '@/lib/utils';
 import type {
   CustomSectionContent,
@@ -28,13 +29,11 @@ import type {
   LanguageItem,
   ProfileSection,
   PublicationItem,
-  ResumeDensity,
   ResumeDesign,
-  ResumeDividerStyle,
   ResumeFontFamily,
   VolunteeringItem,
 } from '@/types';
-import { HEADER_SECTION_TYPES, RESUME_DESIGN_DEFAULTS, RESUME_FONT_MAP } from '@/types';
+import { HEADER_SECTION_TYPES, RESUME_DESIGN_DEFAULTS } from '@/types';
 
 const serviceLogger = logger.child({ source: 'export-service' });
 
@@ -463,110 +462,6 @@ const GOOGLE_FONT_URLS: Partial<Record<ResumeFontFamily, string>> = {
   raleway:
     'https://fonts.googleapis.com/css2?family=Raleway:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap',
 };
-
-/** Density → scale factor (mirrors resume-design.ts). */
-const DENSITY_SCALE: Record<ResumeDensity, number> = {
-  compact: 0.75,
-  normal: 1,
-  relaxed: 1.35,
-};
-
-/** Build divider inline-CSS fragments from the divider style. */
-function getDividerCssVars(
-  style: ResumeDividerStyle,
-  accentColor: string
-): Record<string, string | number> {
-  const transparent = 'transparent';
-  switch (style) {
-    case 'line':
-      return {
-        '--rd-divider-height': '1px',
-        '--rd-divider-bg': accentColor,
-        '--rd-divider-border': 'none',
-        '--rd-divider-opacity': '0.2',
-        '--rd-divider-border-bottom': 'none',
-      };
-    case 'double':
-      return {
-        '--rd-divider-height': '4px',
-        '--rd-divider-bg': transparent,
-        '--rd-divider-border': `1px solid ${accentColor}`,
-        '--rd-divider-opacity': '0.25',
-        '--rd-divider-border-bottom': `1px solid ${accentColor}`,
-      };
-    case 'thick':
-      return {
-        '--rd-divider-height': '2.5px',
-        '--rd-divider-bg': accentColor,
-        '--rd-divider-border': 'none',
-        '--rd-divider-opacity': '0.25',
-        '--rd-divider-border-bottom': 'none',
-      };
-    case 'dashed':
-      return {
-        '--rd-divider-height': '0',
-        '--rd-divider-bg': transparent,
-        '--rd-divider-border': `1.5px dashed ${accentColor}`,
-        '--rd-divider-opacity': '0.3',
-        '--rd-divider-border-bottom': 'none',
-      };
-    case 'dotted':
-      return {
-        '--rd-divider-height': '0',
-        '--rd-divider-bg': transparent,
-        '--rd-divider-border': `1.5px dotted ${accentColor}`,
-        '--rd-divider-opacity': '0.3',
-        '--rd-divider-border-bottom': 'none',
-      };
-    case 'none':
-      return {
-        '--rd-divider-height': '0',
-        '--rd-divider-bg': transparent,
-        '--rd-divider-border': 'none',
-        '--rd-divider-opacity': '0',
-        '--rd-divider-border-bottom': 'none',
-      };
-    default:
-      return {
-        '--rd-divider-height': '1px',
-        '--rd-divider-bg': accentColor,
-        '--rd-divider-border': 'none',
-        '--rd-divider-opacity': '0.2',
-        '--rd-divider-border-bottom': 'none',
-      };
-  }
-}
-
-/**
- * Build a CSS `style` attribute value with all `--rd-*` custom properties
- * for the `.resume-paper` element. Mirrors `buildResumeDesignStyles`.
- */
-function buildDesignStyleAttr(raw: unknown): string {
-  const d: Required<ResumeDesign> = {
-    ...RESUME_DESIGN_DEFAULTS,
-    ...(parseResumeDesign(raw) ?? {}),
-  };
-  const s = DENSITY_SCALE[d.density];
-  const divider = getDividerCssVars(d.dividerStyle, d.accentColor);
-
-  const props: Record<string, string | number> = {
-    '--rd-heading-color': d.headingColor,
-    '--rd-accent-color': d.accentColor,
-    '--rd-font-family': RESUME_FONT_MAP[d.fontFamily],
-    '--rd-font-size': `${d.fontSize}px`,
-    '--rd-name-font-size': `${d.nameFontSize}px`,
-    '--rd-header-alignment': d.headerAlignment,
-    '--rd-section-gap': `${Math.round(20 * s)}px`,
-    '--rd-entry-gap': `${Math.round(16 * s)}px`,
-    '--rd-bullet-margin': `${Math.round(8 * s)}px`,
-    '--rd-header-margin-bottom': `${Math.round(24 * s)}px`,
-    ...divider,
-  };
-
-  return Object.entries(props)
-    .map(([k, v]) => `${k}: ${v}`)
-    .join('; ');
-}
 
 /** Strip URL protocol and trailing slash for cleaner contact display. */
 function displayUrl(url: string): string {
@@ -1226,6 +1121,46 @@ const RESUME_CSS = `
 
   /* Freeform */
   .resume-freeform { font-size: 13px; white-space: pre-wrap; margin: 0; }
+
+  /* Dark theme — mirrors globals.css resume dark overrides */
+  [data-resume-theme='dark'] .resume-paper {
+    background: #111827;
+    color: #f3f4f6;
+  }
+  [data-resume-theme='dark'] .resume-name {
+    color: var(--rd-heading-color-dark, #e5e5e5);
+  }
+  [data-resume-theme='dark'] .resume-headline { color: #a0a0a0; }
+  [data-resume-theme='dark'] .resume-contact-line { color: #999; }
+  [data-resume-theme='dark'] .resume-contact-separator { color: #666; }
+  [data-resume-theme='dark'] .resume-section-title {
+    color: var(--rd-heading-color-dark, #e5e5e5);
+  }
+  [data-resume-theme='dark'] .resume-section-line {
+    background: var(--rd-divider-bg-dark, currentColor);
+    border-top: var(--rd-divider-border-dark, none);
+    border-bottom: var(--rd-divider-border-bottom-dark, none);
+    opacity: var(--rd-divider-opacity, 0.35);
+  }
+  [data-resume-theme='dark'] .resume-entry-subtitle { color: #a0a0a0; }
+  [data-resume-theme='dark'] .resume-entry-date { color: #888; }
+  [data-resume-theme='dark'] .resume-entry-tech { color: #888; }
+  [data-resume-theme='dark'] .resume-entry-details { color: #888; }
+  [data-resume-theme='dark'] .resume-entry-tags { color: #888; }
+  [data-resume-theme='dark'] .resume-bullets li::marker {
+    color: var(--rd-accent-color-dark, #888);
+    opacity: 0.6;
+  }
+  [data-resume-theme='dark'] .resume-entry .rich-text-bullets li::marker {
+    color: var(--rd-accent-color-dark, #888);
+    opacity: 0.6;
+  }
+  [data-resume-theme='dark'] .resume-skill-group-items { color: #a0a0a0; }
+  [data-resume-theme='dark'] .resume-entry-inline-issuer { color: #a0a0a0; }
+  [data-resume-theme='dark'] .resume-entry-inline-date { color: #888; }
+  [data-resume-theme='dark'] .resume-entry-inline-description { color: #888; }
+  [data-resume-theme='dark'] .resume-publication-authors { color: #a0a0a0; }
+  [data-resume-theme='dark'] .resume-publication-meta { color: #888; }
 `;
 
 /**
@@ -1240,12 +1175,14 @@ export function toPDFHtml(profile: FullProfile): string {
     const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(' ');
 
     // ── Resume design → CSS custom properties ──────────────
-    const designStyleAttr = buildDesignStyleAttr(profile.resumeDesign);
+    const parsedDesign = parseResumeDesign(profile.resumeDesign);
+    const designStyleAttr = buildResumeDesignStyleAttr(parsedDesign);
+    const resolvedColorTheme = resolveResumeColorTheme(parsedDesign?.colorTheme);
 
     // ── Google Font <link> tag (empty for system fonts) ────
     const design: Required<ResumeDesign> = {
       ...RESUME_DESIGN_DEFAULTS,
-      ...(parseResumeDesign(profile.resumeDesign) ?? {}),
+      ...(parsedDesign ?? {}),
     };
     const fontUrl = GOOGLE_FONT_URLS[design.fontFamily];
     const fontLink = fontUrl
@@ -1340,7 +1277,7 @@ export function toPDFHtml(profile: FullProfile): string {
   ${fontLink}
   <style>${RESUME_CSS}</style>
 </head>
-<body>
+<body data-resume-theme="${resolvedColorTheme}">
   <article class="resume-paper" style="${designStyleAttr}">
     ${headerHtml}
     ${bodyHtml}

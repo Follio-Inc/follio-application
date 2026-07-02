@@ -15,6 +15,7 @@ import {
 import Link from 'next/link';
 import { useCallback, useState } from 'react';
 
+import { ShareDialog } from '@/components/share-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -66,6 +67,10 @@ const VISIBILITY_CONFIG: Record<string, { label: string; icon: typeof Globe }> =
 export function DashboardClient({ data }: DashboardClientProps) {
   const { portfolioProfile, resumes, activeProfileId, primaryProfileId } = data;
   const [copied, setCopied] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [portfolioVisibility, setPortfolioVisibility] = useState(
+    portfolioProfile.portfolioVisibility
+  );
 
   const portfolioUrl = getPortfolioUrl(portfolioProfile.handle);
   const displayUrl = portfolioUrl.replace(/^https?:\/\//, '');
@@ -82,18 +87,6 @@ export function DashboardClient({ data }: DashboardClientProps) {
       // Clipboard API not available
     }
   }, [portfolioUrl]);
-
-  const handleShare = useCallback(async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: 'My Portfolio', url: portfolioUrl });
-      } catch {
-        // User dismissed share sheet
-      }
-      return;
-    }
-    await handleCopy();
-  }, [portfolioUrl, handleCopy]);
 
   return (
     <div className="space-y-12">
@@ -115,7 +108,7 @@ export function DashboardClient({ data }: DashboardClientProps) {
           ═══════════════════════════════════════════════════════════ */}
       <section className="space-y-4">
         <SectionHeader title="Portfolio">
-          <VisibilityBadge visibility={portfolioProfile.portfolioVisibility} />
+          <VisibilityBadge visibility={portfolioVisibility} />
         </SectionHeader>
 
         <div className="surface-raised overflow-hidden">
@@ -165,7 +158,7 @@ export function DashboardClient({ data }: DashboardClientProps) {
                   View
                 </Link>
               </Button>
-              <Button size="sm" className="gap-1.5" onClick={() => void handleShare()}>
+              <Button size="sm" className="gap-1.5" onClick={() => setShareDialogOpen(true)}>
                 <Share2 className="h-3.5 w-3.5" />
                 Share
               </Button>
@@ -198,7 +191,7 @@ export function DashboardClient({ data }: DashboardClientProps) {
                     className="gap-2"
                     onSelect={(event) => {
                       event.preventDefault();
-                      void handleShare();
+                      setShareDialogOpen(true);
                     }}
                   >
                     <Share2 className="h-4 w-4 text-muted-foreground" />
@@ -220,6 +213,19 @@ export function DashboardClient({ data }: DashboardClientProps) {
           </div>
         </div>
       </section>
+
+      <ShareDialog
+        variant="portfolio"
+        profile={{
+          handle: portfolioProfile.handle,
+          firstName: portfolioProfile.firstName,
+          portfolioVisibility: portfolioVisibility as 'PUBLIC' | 'UNLISTED' | 'PRIVATE',
+        }}
+        open={shareDialogOpen}
+        onOpenChange={setShareDialogOpen}
+        onVisibilityChange={setPortfolioVisibility}
+        hideTrigger
+      />
 
       {/* ═══════════════════════════════════════════════════════════
           Resumes
