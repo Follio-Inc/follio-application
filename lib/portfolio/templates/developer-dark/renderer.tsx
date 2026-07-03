@@ -7,7 +7,10 @@
  * No AI at render time — pure deterministic rendering.
  */
 
+import { useResolvedPortfolioAppearance } from '@/lib/hooks/use-portfolio-appearance';
+
 import type { TemplateRendererProps } from '../types';
+import { META } from './meta';
 
 import {
   DDAbout,
@@ -62,6 +65,10 @@ function renderSection(type: string, props: TemplateRendererProps): React.ReactN
  */
 export function DeveloperDarkTemplate({ profile, portfolio }: TemplateRendererProps) {
   const { sections, style } = portfolio;
+  const resolvedAppearance = useResolvedPortfolioAppearance(
+    style.appearance,
+    META.defaultAppearance
+  );
 
   // Sort sections by order, filter to enabled only
   const enabledSections = [...sections].filter((s) => s.enabled).sort((a, b) => a.order - b.order);
@@ -73,7 +80,12 @@ export function DeveloperDarkTemplate({ profile, portfolio }: TemplateRendererPr
   }
 
   return (
-    <div data-template="developer-dark" className="dd-page" style={cssVars as React.CSSProperties}>
+    <div
+      data-template="developer-dark"
+      data-appearance={resolvedAppearance}
+      className="dd-page"
+      style={cssVars as React.CSSProperties}
+    >
       {/* Navigation */}
       <DDNavigation profile={profile} sections={sections} />
 

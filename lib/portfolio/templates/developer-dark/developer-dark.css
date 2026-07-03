@@ -1081,3 +1081,20 @@
     transform: none;
   }
 }
+
+/* ============================================================================
+   LIGHT APPEARANCE — alternate palette when appearance is set to light
+   ============================================================================ */
+
+[data-template='developer-dark'][data-appearance='light'] {
+  --dd-bg: #f8fafc;
+  --dd-bg-card: #ffffff;
+  --dd-bg-card-hover: #f1f5f9;
+  --dd-bg-input: #ffffff;
+  --dd-bg-input-focus: #f8fafc;
+  --dd-text-primary: #0f172a;
+  --dd-text-secondary: #475569;
+  --dd-text-muted: #94a3b8;
+  --dd-border: #e2e8f0;
+  --dd-border-hover: #cbd5e1;
+}

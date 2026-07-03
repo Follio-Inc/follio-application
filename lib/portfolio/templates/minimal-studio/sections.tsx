@@ -418,12 +418,15 @@ export function MSWork({ profile, copy, index, layout = DEFAULT_WORK_STYLE }: Wo
             // Only the image-led editorial layout earns the wide "feature"
             // treatment; a text-only card has no media to fill the extra column.
             const feature = allowFeature && i === 0 && projects.length > 1 && hasImage;
+            // Text-only cards wrap the whole block in an <a>; image cards link only
+            // the media area, so the title may carry its own link there.
+            const linkTitle = Boolean(href && hasImage);
 
             const body = (
               <div className="ms-work-body">
                 <div className="ms-work-headline-row">
                   <h3 className="ms-work-title">
-                    {href ? (
+                    {linkTitle ? (
                       <a href={href} target="_blank" rel="noopener noreferrer">
                         {project.title}
                       </a>

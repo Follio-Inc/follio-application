@@ -2,7 +2,7 @@
 
 import { ArrowLeft, ChevronDown, Clock, Copy, FileText, Loader2, Plus, Upload } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -39,7 +39,27 @@ export type NewResumeListItem = {
 
 type CloneDialogView = 'pick' | 'title';
 
+export type UploadCreatedResume = {
+  id: string;
+  handle: string;
+  resumeTitle: string;
+};
+
+const MAX_UPLOAD_FILE_SIZE_MB = 5;
+const MAX_UPLOAD_FILE_SIZE_BYTES = MAX_UPLOAD_FILE_SIZE_MB * 1024 * 1024;
+const UPLOAD_ACCEPTED_TYPE = 'application/pdf';
+
 // ─── Helpers ──────────────────────────────────────────────────────
+
+function validateUploadFile(file: File): string | null {
+  if (file.type !== UPLOAD_ACCEPTED_TYPE) {
+    return 'Only PDF files are supported. Please upload a .pdf resume.';
+  }
+  if (file.size > MAX_UPLOAD_FILE_SIZE_BYTES) {
+    return `File is too large. Maximum size is ${MAX_UPLOAD_FILE_SIZE_MB} MB.`;
+  }
+  return null;
+}
 
 function formatRelativeDate(dateString: string): string {
   const date = new Date(dateString);
@@ -64,17 +84,60 @@ function getDisplayName(resume: NewResumeListItem): string | null {
   return parts.length > 0 ? parts.join(' ') : null;
 }
 
+export function sortByUpdatedAtDesc<T extends { updatedAt: string }>(items: T[]): T[] {
+  return [...items].sort(
+    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  );
+}
+
+/** Portfolio resume first; remaining resumes sorted by most recently edited. */
+export function sortResumesWithPortfolioFirst<T extends { id: string; updatedAt: string }>(
+  items: T[],
+  primaryProfileId: string | null
+): T[] {
+  if (!primaryProfileId || items.length <= 1) {
+    return sortByUpdatedAtDesc(items);
+  }
+
+  const portfolio = items.find((item) => item.id === primaryProfileId);
+  if (!portfolio) {
+    return sortByUpdatedAtDesc(items);
+  }
+
+  const rest = items.filter((item) => item.id !== primaryProfileId);
+  return [portfolio, ...sortByUpdatedAtDesc(rest)];
+}
+
+/** Small vertical separator between portfolio and other resumes. */
+export function ResumeListDivider({ className }: { className?: string }) {
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      className={cn('h-24 w-px shrink-0 self-center bg-border/70', className)}
+    />
+  );
+}
+
 // ─── Hook ─────────────────────────────────────────────────────────
 
 export function useNewResumeActions({
   onRefresh,
   onError,
+  onImportStart,
+  onImportFailed,
 }: {
   onRefresh: () => Promise<void>;
   onError: (message: string | null) => void;
+  /** Called after a placeholder profile is created and parsing begins. */
+  onImportStart?: (resume: UploadCreatedResume) => void;
+  /** Called when parsing fails so the UI can remove the placeholder card. */
+  onImportFailed?: (profileId: string) => void;
 }) {
   const router = useRouter();
+  const uploadInputRef = useRef<HTMLInputElement>(null);
   const [isMutating, setIsMutating] = useState(false);
+  const [importingProfileId, setImportingProfileId] = useState<string | null>(null);
 
   const [showCloneDialog, setShowCloneDialog] = useState(false);
   const [cloneView, setCloneView] = useState<CloneDialogView>('pick');
@@ -101,38 +164,76 @@ export function useNewResumeActions({
     }
   }, [onError, router]);
 
-  const startUpload = useCallback(async () => {
-    setIsMutating(true);
+  const startUpload = useCallback(() => {
+    if (isMutating || importingProfileId) return;
     onError(null);
+    uploadInputRef.current?.click();
+  }, [importingProfileId, isMutating, onError]);
 
-    try {
-      const response = await fetch('/api/resumes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ strategy: 'UPLOAD' }),
-      });
+  const handleUploadFileChange = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      event.target.value = '';
 
-      if (!response.ok) throw new Error('Failed to create resume');
+      if (!file) return;
 
-      const data = (await response.json()) as {
-        resume: { id: string };
-        nextAction: 'UPLOAD_RESUME' | 'OPEN_BUILDER';
-      };
-
-      if (data.nextAction === 'UPLOAD_RESUME') {
-        sessionStorage.setItem('importTargetProfileId', data.resume.id);
-        router.push('/onboarding/import?from=builder&resume=new');
+      const validationError = validateUploadFile(file);
+      if (validationError) {
+        onError(validationError);
         return;
       }
 
-      await onRefresh();
-      router.refresh();
-    } catch (err) {
-      onError(err instanceof Error ? err.message : 'Failed to create resume');
-    } finally {
-      setIsMutating(false);
-    }
-  }, [onError, onRefresh, router]);
+      setIsMutating(true);
+      onError(null);
+
+      let profileId: string | null = null;
+
+      try {
+        const response = await fetch('/api/resumes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ strategy: 'UPLOAD' }),
+        });
+
+        if (!response.ok) throw new Error('Failed to create resume');
+
+        const data = (await response.json()) as {
+          resume: UploadCreatedResume;
+        };
+
+        profileId = data.resume.id;
+        setImportingProfileId(profileId);
+        onImportStart?.(data.resume);
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const importResponse = await fetch(`/api/resumes/${profileId}/import-resume`, {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!importResponse.ok) {
+          const errData = (await importResponse.json().catch(() => ({}))) as { error?: string };
+          throw new Error(errData.error ?? 'Failed to import resume');
+        }
+
+        await onRefresh();
+        router.refresh();
+      } catch (err) {
+        onError(err instanceof Error ? err.message : 'Failed to import resume');
+
+        if (profileId) {
+          onImportFailed?.(profileId);
+          await fetch(`/api/resumes/${profileId}`, { method: 'DELETE' }).catch(() => undefined);
+        }
+      } finally {
+        setImportingProfileId(null);
+        setIsMutating(false);
+      }
+    },
+    [onError, onImportFailed, onImportStart, onRefresh, router]
+  );
 
   const openCloneDialog = useCallback(() => {
     onError(null);
@@ -194,6 +295,9 @@ export function useNewResumeActions({
 
   return {
     isMutating,
+    importingProfileId,
+    uploadInputRef,
+    handleUploadFileChange,
     createBlank,
     startUpload,
     openCloneDialog,
@@ -213,120 +317,28 @@ export function useNewResumeActions({
   };
 }
 
-// ─── Option buttons (shared styling) ──────────────────────────────
+// ─── Hidden file input for dashboard upload ───────────────────────
 
-function NewResumeOptionButton({
-  icon: Icon,
-  label,
-  description,
-  onClick,
+export function ResumeUploadFileInput({
+  inputRef,
+  onChange,
   disabled,
 }: {
-  icon: typeof Upload;
-  label: string;
-  description: string;
-  onClick: () => void;
+  inputRef: React.Ref<HTMLInputElement>;
+  onChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
   disabled?: boolean;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <input
+      ref={inputRef}
+      type="file"
+      accept=".pdf,application/pdf"
+      className="sr-only"
+      onChange={onChange}
       disabled={disabled}
-      className="flex w-full items-start gap-2.5 rounded-md border border-border/60 bg-card p-2.5 text-left transition-colors hover:border-primary/30 hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-50"
-    >
-      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-      <div className="min-w-0">
-        <p className="text-sm font-medium text-foreground">{label}</p>
-        <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
-      </div>
-    </button>
-  );
-}
-
-// ─── Ghost card ───────────────────────────────────────────────────
-
-export function NewResumeGhostCard({
-  disabled,
-  isMutating,
-  className,
-  onBlank,
-  onUpload,
-  onClone,
-}: {
-  disabled?: boolean;
-  isMutating?: boolean;
-  className?: string;
-  onBlank: () => void;
-  onUpload: () => void;
-  onClone: () => void;
-}) {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const isDisabled = disabled || isMutating;
-
-  const showOptions = isExpanded;
-
-  return (
-    <div
-      className={cn(
-        'group/new-resume relative overflow-hidden rounded-lg border border-dashed border-border/60 bg-muted/10 text-muted-foreground transition-colors duration-200',
-        !isDisabled && 'hover:border-primary/40 hover:bg-card',
-        showOptions && !isDisabled && 'border-primary/40 bg-card',
-        className
-      )}
-    >
-      <button
-        type="button"
-        disabled={isDisabled}
-        onClick={() => setIsExpanded((current) => !current)}
-        className={cn(
-          'flex h-full w-full flex-col items-center justify-center gap-2.5 p-4 transition-opacity duration-200',
-          showOptions
-            ? 'pointer-events-none opacity-0'
-            : 'opacity-100 group-hover/new-resume:pointer-events-none group-hover/new-resume:opacity-0',
-          isDisabled && 'cursor-not-allowed opacity-50'
-        )}
-        aria-label="Create new resume"
-        aria-expanded={showOptions}
-      >
-        <span className="flex h-9 w-9 items-center justify-center rounded-full border border-border/60 bg-card">
-          <Plus className="h-4 w-4" />
-        </span>
-        <span className="text-sm font-medium">New resume</span>
-      </button>
-
-      <div
-        className={cn(
-          'absolute inset-0 z-10 flex flex-col justify-center gap-2 bg-card p-3 transition-opacity duration-200',
-          showOptions
-            ? 'pointer-events-auto opacity-100'
-            : 'pointer-events-none opacity-0 group-hover/new-resume:pointer-events-auto group-hover/new-resume:opacity-100',
-          isDisabled && 'hidden'
-        )}
-      >
-        <NewResumeOptionButton
-          icon={Upload}
-          label="Upload resume"
-          description="Import from a PDF via onboarding"
-          onClick={onUpload}
-          disabled={isMutating}
-        />
-        <NewResumeOptionButton
-          icon={Copy}
-          label="Clone existing"
-          description="Copy data from another resume"
-          onClick={onClone}
-          disabled={isMutating}
-        />
-        <NewResumeOptionButton
-          icon={FileText}
-          label="Start blank"
-          description="Open an empty resume in the builder"
-          onClick={onBlank}
-          disabled={isMutating}
-        />
-      </div>
-    </div>
+      aria-hidden
+      tabIndex={-1}
+    />
   );
 }
 

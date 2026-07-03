@@ -1,7 +1,9 @@
 'use client';
 
-import { FileText, RefreshCw } from 'lucide-react';
+import { FileText, Loader2, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+
+import { PortfolioResumeBadge } from './portfolio-resume-badge';
 
 // ─── Constants ────────────────────────────────────────────────────
 
@@ -36,13 +38,23 @@ const LOAD_TIMEOUT_MS = 10_000;
 interface ResumeThumbnailProps {
   /** Profile ID used to construct the preview URL. */
   profileId: string;
+  /** When true, shows a parsing overlay instead of the iframe preview. */
+  isImporting?: boolean;
   /** CSS class applied to the outer container. */
   className?: string;
   /** Override the maximum visible height (px). Defaults to 260. */
   maxHeight?: number;
+  /** Show the portfolio badge overlay (primary resume only). */
+  showPortfolioBadge?: boolean;
 }
 
-export function ResumeThumbnail({ profileId, className, maxHeight }: ResumeThumbnailProps) {
+export function ResumeThumbnail({
+  profileId,
+  isImporting = false,
+  className,
+  maxHeight,
+  showPortfolioBadge = false,
+}: ResumeThumbnailProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [loaded, setLoaded] = useState(false);
   const [errored, setErrored] = useState(false);
@@ -90,7 +102,7 @@ export function ResumeThumbnail({ profileId, className, maxHeight }: ResumeThumb
   }, []);
 
   const resolvedScale = scale ?? 0;
-  const showSkeleton = !loaded && !errored;
+  const showSkeleton = !isImporting && !loaded && !errored;
 
   return (
     <div
@@ -101,6 +113,16 @@ export function ResumeThumbnail({ profileId, className, maxHeight }: ResumeThumb
         maxHeight: `${maxHeight ?? MAX_HEIGHT}px`,
       }}
     >
+      {showPortfolioBadge && <PortfolioResumeBadge />}
+
+      {/* Import-in-progress overlay */}
+      {isImporting && (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2.5 bg-muted/30">
+          <Loader2 className="h-6 w-6 animate-spin text-primary" aria-hidden />
+          <p className="text-xs font-medium text-muted-foreground">Parsing resume…</p>
+        </div>
+      )}
+
       {/* Loading skeleton — visible until iframe loads or errors */}
       {showSkeleton && (
         <div className="absolute inset-0 animate-pulse bg-muted/40">
@@ -132,7 +154,7 @@ export function ResumeThumbnail({ profileId, className, maxHeight }: ResumeThumb
       )}
 
       {/* Iframe — invisible until fully loaded, then fades in */}
-      {!errored && resolvedScale > 0 && (
+      {!errored && !isImporting && resolvedScale > 0 && (
         <iframe
           key={retryKey}
           src={`/resume-preview/${profileId}`}

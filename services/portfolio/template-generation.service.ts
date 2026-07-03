@@ -129,6 +129,7 @@ export async function generateTemplatePortfolio(
   const style: TemplateStyleConfig = {
     accentColor: options.accentColor || meta.compatibleAccentColors[0]?.value || '#3b82f6',
     fontFamily: options.fontFamily || meta.compatibleFonts[0]?.id || 'inter',
+    appearance: meta.defaultAppearance ?? 'system',
   };
 
   // ── Step 7: Assemble the TemplatePortfolio ───────────────────────────

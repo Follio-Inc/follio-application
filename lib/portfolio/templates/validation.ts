@@ -62,6 +62,7 @@ const styleSchema = z
   .object({
     accentColor: z.string(),
     fontFamily: z.string(),
+    appearance: z.enum(['light', 'dark', 'system']).optional(),
   })
   .passthrough();
 

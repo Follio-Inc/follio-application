@@ -37,7 +37,11 @@ export default function TemplatePreviewPage() {
       templateId,
       copy: sampleCopy,
       sections: buildPreviewSections(kit.meta.defaultSections),
-      style: { accentColor: accent, fontFamily: font },
+      style: {
+        accentColor: accent,
+        fontFamily: font,
+        appearance: kit.meta.defaultAppearance ?? 'system',
+      },
       enrichment: sampleEnrichment,
     };
   }, [kit, templateId]);

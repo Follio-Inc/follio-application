@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  ArrowRight,
   Check,
   Copy,
   ExternalLink,
@@ -230,16 +229,7 @@ export function DashboardClient({ data }: DashboardClientProps) {
       {/* ═══════════════════════════════════════════════════════════
           Resumes
           ═══════════════════════════════════════════════════════════ */}
-      <section className="space-y-4">
-        <SectionHeader title="Resumes" count={resumes.length}>
-          <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" asChild>
-            <Link href="/resumes">
-              Manage all
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
-          </Button>
-        </SectionHeader>
-
+      <section>
         <DashboardResumesSection
           initialResumes={resumes}
           initialActiveProfileId={activeProfileId}

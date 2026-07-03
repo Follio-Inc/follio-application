@@ -2,6 +2,7 @@
 
 import { Check } from 'lucide-react';
 
+import { AppearanceModeSwitch } from '@/components/appearance-mode-switch';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -21,8 +22,24 @@ interface StylePanelProps {
 }
 
 export function StylePanel({ style, template, onChange }: StylePanelProps) {
+  const appearance = style.appearance ?? template.defaultAppearance ?? 'system';
+
   return (
     <div className="space-y-6">
+      <section className="space-y-3">
+        <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Appearance
+        </Label>
+        <p className="text-xs text-muted-foreground">
+          Controls how your portfolio looks when shared — independent of the Follio app theme.
+        </p>
+        <AppearanceModeSwitch
+          value={appearance}
+          onChange={(value) => onChange({ appearance: value })}
+          ariaLabel="Portfolio appearance"
+        />
+      </section>
+
       <section className="space-y-3">
         <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Accent color

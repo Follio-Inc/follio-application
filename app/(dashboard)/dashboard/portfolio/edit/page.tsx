@@ -99,6 +99,7 @@ export default async function PortfolioEditPage() {
         fonts: t.compatibleFonts,
         supportedSections: t.supportedSections,
         defaultHeadings: t.defaultSectionHeadings ?? {},
+        defaultAppearance: t.defaultAppearance,
       } satisfies EditorTemplateInfo,
     ])
   );
@@ -119,6 +120,7 @@ export default async function PortfolioEditPage() {
         fonts: templateMeta.compatibleFonts,
         supportedSections: templateMeta.supportedSections,
         defaultHeadings: templateMeta.defaultSectionHeadings ?? {},
+        defaultAppearance: templateMeta.defaultAppearance,
       }}
     />
   );

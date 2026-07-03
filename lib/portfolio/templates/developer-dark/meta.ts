@@ -33,11 +33,13 @@ export const DEFAULT_SECTIONS: TemplateSectionConfig[] = [
 
 export const META: TemplateKitMeta = {
   id: 'developer-dark',
-  name: 'Developer Dark',
+  name: 'Developer',
   description:
-    'A sleek, modern dark-themed portfolio. Deep navy background, clean typography, accent dash headings. Perfect for developers and engineers.',
+    'A sleek, modern portfolio for developers and engineers. Clean typography, accent dash headings, and a polished light or dark canvas.',
   previewUrl: null,
-  tags: ['dark', 'developer', 'modern', 'professional', 'tech'],
+  tags: ['developer', 'modern', 'professional', 'tech'],
+
+  defaultAppearance: 'dark',
 
   defaultSections: DEFAULT_SECTIONS,
 

@@ -326,6 +326,13 @@ export interface TemplateSectionConfig {
 // STYLE CONFIGURATION
 // ============================================================================
 
+/**
+ * Portfolio appearance — light / dark / system for the published template.
+ * Independent of the Follio app theme. Each template kit ships with both
+ * light and dark palettes; this setting picks which one visitors see.
+ */
+export type PortfolioAppearance = 'light' | 'dark' | 'system';
+
 /** Style options within a template's bounded choices */
 export interface TemplateStyleConfig {
   /** Accent color (hex) — from template's compatible list */
@@ -333,7 +340,18 @@ export interface TemplateStyleConfig {
 
   /** Font family identifier — from template's compatible list */
   fontFamily: string;
+
+  /**
+   * Light / dark / system appearance for the portfolio document.
+   * When omitted, falls back to the template kit's `defaultAppearance`.
+   */
+  appearance?: PortfolioAppearance;
 }
+
+/** Default style values applied when fields are missing from saved plans */
+export const TEMPLATE_STYLE_DEFAULTS = {
+  appearance: 'system' satisfies PortfolioAppearance,
+} as const;
 
 // ============================================================================
 // TEMPLATE KIT METADATA
@@ -390,6 +408,12 @@ export interface TemplateKitMeta {
    * "heading" fields. Only sections listed here expose editable headings.
    */
   defaultSectionHeadings?: Partial<Record<TemplateSectionType, { eyebrow: string; title: string }>>;
+
+  /**
+   * Default appearance when the user has not chosen one yet.
+   * Typically matches the template's primary design direction.
+   */
+  defaultAppearance?: PortfolioAppearance;
 
   /**
    * Navbar theme — tells the Follio top bar how to blend with this template.

@@ -21,6 +21,7 @@ const baseMeta: TemplateKitMeta = {
   description: 'A demo template',
   tags: ['minimal'],
   defaultSections: [],
+  defaultAppearance: 'light',
   compatibleAccentColors: [
     { name: 'Ink', value: '#111111' },
     { name: 'Blue', value: '#3b82f6' },
@@ -33,23 +34,32 @@ const baseMeta: TemplateKitMeta = {
 
 describe('reconcileStyle', () => {
   it('keeps the user accent + font when the new template supports them', () => {
-    const result = reconcileStyle({ accentColor: '#3b82f6', fontFamily: 'fraunces' }, baseMeta);
-    expect(result).toEqual({ accentColor: '#3b82f6', fontFamily: 'fraunces' });
+    const result = reconcileStyle(
+      { accentColor: '#3b82f6', fontFamily: 'fraunces', appearance: 'dark' },
+      baseMeta
+    );
+    expect(result).toEqual({ accentColor: '#3b82f6', fontFamily: 'fraunces', appearance: 'dark' });
   });
 
   it('falls back to the template defaults when the choices are unsupported', () => {
-    const result = reconcileStyle({ accentColor: '#ff0000', fontFamily: 'comic-sans' }, baseMeta);
-    expect(result).toEqual({ accentColor: '#111111', fontFamily: 'inter' });
+    const result = reconcileStyle(
+      { accentColor: '#ff0000', fontFamily: 'comic-sans', appearance: 'invalid' as 'dark' },
+      baseMeta
+    );
+    expect(result).toEqual({ accentColor: '#111111', fontFamily: 'inter', appearance: 'light' });
   });
 
   it('uses template defaults when no prior style exists', () => {
     const result = reconcileStyle(undefined, baseMeta);
-    expect(result).toEqual({ accentColor: '#111111', fontFamily: 'inter' });
+    expect(result).toEqual({ accentColor: '#111111', fontFamily: 'inter', appearance: 'light' });
   });
 
   it('reconciles each field independently', () => {
-    const result = reconcileStyle({ accentColor: '#3b82f6', fontFamily: 'comic-sans' }, baseMeta);
-    expect(result).toEqual({ accentColor: '#3b82f6', fontFamily: 'inter' });
+    const result = reconcileStyle(
+      { accentColor: '#3b82f6', fontFamily: 'comic-sans', appearance: 'system' },
+      baseMeta
+    );
+    expect(result).toEqual({ accentColor: '#3b82f6', fontFamily: 'inter', appearance: 'system' });
   });
 });
 

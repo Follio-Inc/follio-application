@@ -27,6 +27,8 @@
   --ms-line-strong: rgba(22, 19, 15, 0.22);
   --ms-accent: #b85c38;
 
+  --ms-nav-scrolled-bg: rgba(247, 245, 240, 0.82);
+
   --ms-font-serif: 'Fraunces', Georgia, 'Times New Roman', serif;
   --ms-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 
@@ -260,7 +262,7 @@
 }
 
 [data-template='minimal-studio'] .ms-nav--scrolled {
-  background-color: rgba(247, 245, 240, 0.82);
+  background-color: var(--ms-nav-scrolled-bg);
   backdrop-filter: blur(14px) saturate(120%);
   border-bottom-color: var(--ms-line);
 }
@@ -1657,4 +1659,24 @@
   display: flex;
   flex-direction: column;
   gap: 2.5rem;
+}
+
+/* ============================================================================
+   DARK APPEARANCE — alternate palette when appearance is set to dark
+   ============================================================================ */
+
+[data-template='minimal-studio'][data-appearance='dark'] {
+  --ms-paper: #141210;
+  --ms-paper-raised: #1c1916;
+  --ms-paper-sunk: #0e0c0a;
+  --ms-ink: #f5f2ed;
+  --ms-ink-soft: #c4bdb4;
+  --ms-muted: #8c857a;
+  --ms-line: rgba(245, 242, 237, 0.1);
+  --ms-line-strong: rgba(245, 242, 237, 0.18);
+  --ms-nav-scrolled-bg: rgba(20, 18, 16, 0.82);
+}
+
+[data-template='minimal-studio'][data-appearance='dark'] ::selection {
+  color: #141210;
 }

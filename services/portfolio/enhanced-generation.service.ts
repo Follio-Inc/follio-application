@@ -234,6 +234,7 @@ export async function generateEnhancedPortfolio(
       accentColor:
         options.accentColor || templateMeta.compatibleAccentColors[0]?.value || '#3b82f6',
       fontFamily: options.fontFamily || templateMeta.compatibleFonts[0]?.id || 'inter',
+      appearance: templateMeta.defaultAppearance ?? 'system',
     };
 
     // ── Assemble TemplatePortfolio ────────────────────────────────────
@@ -951,6 +952,9 @@ export function reconcileStyle(
 ): TemplateStyleConfig {
   const accentSupported = meta.compatibleAccentColors.some((c) => c.value === style?.accentColor);
   const fontSupported = meta.compatibleFonts.some((f) => f.id === style?.fontFamily);
+  const validAppearances = new Set(['light', 'dark', 'system']);
+  const appearanceSupported =
+    style?.appearance !== undefined && validAppearances.has(style.appearance);
 
   return {
     accentColor:
@@ -959,6 +963,7 @@ export function reconcileStyle(
         : (meta.compatibleAccentColors[0]?.value ?? '#3b82f6'),
     fontFamily:
       fontSupported && style ? style.fontFamily : (meta.compatibleFonts[0]?.id ?? 'inter'),
+    appearance: appearanceSupported ? style!.appearance : (meta.defaultAppearance ?? 'system'),
   };
 }
 

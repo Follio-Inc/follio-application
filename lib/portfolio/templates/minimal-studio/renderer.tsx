@@ -11,7 +11,10 @@
 
 import { useEffect } from 'react';
 
+import { useResolvedPortfolioAppearance } from '@/lib/hooks/use-portfolio-appearance';
+
 import type { TemplateRendererProps } from '../types';
+import { META } from './meta';
 import {
   resolveAboutStyle,
   resolvePortraitStyle,
@@ -156,6 +159,10 @@ export function MinimalStudioTemplate({ profile, portfolio }: TemplateRendererPr
   useTemplateFonts();
 
   const { sections, style } = portfolio;
+  const resolvedAppearance = useResolvedPortfolioAppearance(
+    style.appearance,
+    META.defaultAppearance
+  );
   const enabledSections = [...sections].filter((s) => s.enabled).sort((a, b) => a.order - b.order);
 
   const cssVars: Record<string, string> = {};
@@ -165,7 +172,12 @@ export function MinimalStudioTemplate({ profile, portfolio }: TemplateRendererPr
   }
 
   return (
-    <div data-template="minimal-studio" className="ms-page" style={cssVars as React.CSSProperties}>
+    <div
+      data-template="minimal-studio"
+      data-appearance={resolvedAppearance}
+      className="ms-page"
+      style={cssVars as React.CSSProperties}
+    >
       <MSNavigation profile={profile} sections={sections} />
 
       <main className="ms-main">
