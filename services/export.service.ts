@@ -17,8 +17,14 @@ import {
 } from '@/lib/html-utils';
 import { logger } from '@/lib/logger';
 import { cleanPhoneDisplay } from '@/lib/phone';
-import { parseResumeDesign, buildResumeDesignStyleAttr } from '@/lib/resume-design';
+import { formatAtelierYearRange } from '@/lib/resume/atelier';
 import { resolveResumeColorTheme } from '@/lib/resume-color-theme';
+import {
+  buildResumeDesignStyleAttr,
+  parseResumeDesign,
+  resolveResumeFonts,
+} from '@/lib/resume-design';
+import { getResumeTemplateId, isResumeAtelierRailSectionType } from '@/lib/resume/templates';
 import { formatDate } from '@/lib/utils';
 import type {
   CustomSectionContent,
@@ -29,11 +35,10 @@ import type {
   LanguageItem,
   ProfileSection,
   PublicationItem,
-  ResumeDesign,
   ResumeFontFamily,
   VolunteeringItem,
 } from '@/types';
-import { HEADER_SECTION_TYPES, RESUME_DESIGN_DEFAULTS } from '@/types';
+import { HEADER_SECTION_TYPES } from '@/types';
 
 const serviceLogger = logger.child({ source: 'export-service' });
 
@@ -461,6 +466,11 @@ const GOOGLE_FONT_URLS: Partial<Record<ResumeFontFamily, string>> = {
     'https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300;0,400;0,600;0,700;1,400&display=swap',
   raleway:
     'https://fonts.googleapis.com/css2?family=Raleway:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap',
+  'instrument-sans':
+    'https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap',
+  'dm-sans':
+    'https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap',
+  'great-vibes': 'https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap',
 };
 
 /** Strip URL protocol and trailing slash for cleaner contact display. */
@@ -487,6 +497,7 @@ function formatDateRange(
   const end = isCurrent ? 'Present' : formatResumeDate(endDate);
   if (!start && !end) return '';
   if (!start) return end;
+  if (!end) return start;
   return `${start} – ${end}`;
 }
 
@@ -544,7 +555,7 @@ function sectionDividerHtml(title: string): string {
 
 // ── Section HTML renderers ────────────────────────────────────────
 
-function summarySectionHtml(profile: FullProfile): string {
+function summarySectionHtml(profile: FullProfile, title = 'SUMMARY'): string {
   if (!profile.summary || isHtmlEmpty(profile.summary)) return '';
   // Summary may contain rich HTML from the editor — sanitize before embedding.
   const content = containsHtmlFormatting(profile.summary)
@@ -552,18 +563,30 @@ function summarySectionHtml(profile: FullProfile): string {
     : escapeHtml(profile.summary);
   return `
   <section class="resume-section">
-    ${sectionDividerHtml('SUMMARY')}
+    ${sectionDividerHtml(title)}
     <div class="resume-summary resume-rich-html">${content}</div>
   </section>`;
 }
 
-function experienceSectionHtml(profile: FullProfile): string {
+function atelierContactIconSvg(kind: 'phone' | 'email' | 'website' | 'link'): string {
+  if (kind === 'phone') {
+    return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.81.36 1.6.68 2.35a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.75.32 1.54.55 2.35.68A2 2 0 0 1 22 16.92z"/></svg>`;
+  }
+  if (kind === 'email') {
+    return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>`;
+  }
+  return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`;
+}
+
+function experienceSectionHtml(profile: FullProfile, atelier = false): string {
   const items = profile.workExperiences.filter((e) => e.isVisible !== false);
   if (items.length === 0) return '';
 
   const entries = items
     .map((exp) => {
-      const dateRange = formatDateRange(exp.startDate, exp.endDate, exp.isCurrent);
+      const dateRange = atelier
+        ? formatAtelierYearRange(exp.startDate, exp.endDate, exp.isCurrent)
+        : formatDateRange(exp.startDate, exp.endDate, exp.isCurrent);
       const companyLine = [exp.company, exp.location].filter(Boolean).join(', ');
 
       // Prefer bulletsHtml for perfect rendering (same as CleanResumeView).
@@ -582,6 +605,20 @@ function experienceSectionHtml(profile: FullProfile): string {
         bulletsHtml = `<ul class="resume-bullets">${lis}</ul>`;
       }
 
+      if (atelier) {
+        return `
+      <div class="resume-entry resume-atelier-exp">
+        <div class="resume-atelier-exp-grid">
+          <span class="resume-entry-date">${dateRange}</span>
+          <div class="resume-atelier-exp-body">
+            <h3 class="resume-entry-title">${escapeHtml(exp.company)}</h3>
+            <p class="resume-entry-subtitle">${escapeHtml(exp.role)}</p>
+            ${bulletsHtml}
+          </div>
+        </div>
+      </div>`;
+      }
+
       return `
       <div class="resume-entry">
         <div class="resume-entry-header">
@@ -589,7 +626,7 @@ function experienceSectionHtml(profile: FullProfile): string {
             <h3 class="resume-entry-title">${escapeHtml(exp.role)}</h3>
             <p class="resume-entry-subtitle">${escapeHtml(companyLine)}</p>
           </div>
-          <span class="resume-entry-date">${dateRange}</span>
+          ${dateRange ? `<span class="resume-entry-date">${dateRange}</span>` : ''}
         </div>
         ${bulletsHtml}
       </div>`;
@@ -598,19 +635,21 @@ function experienceSectionHtml(profile: FullProfile): string {
 
   return `
   <section class="resume-section">
-    ${sectionDividerHtml('EXPERIENCE')}
+    ${sectionDividerHtml(atelier ? 'WORK EXPERIENCE' : 'EXPERIENCE')}
     <div class="resume-entries">${entries}</div>
   </section>`;
 }
 
-function educationSectionHtml(profile: FullProfile): string {
+function educationSectionHtml(profile: FullProfile, atelier = false): string {
   const items = profile.educations.filter((e) => e.isVisible !== false);
   if (items.length === 0) return '';
 
   const entries = items
     .map((edu) => {
       const degreeLine = [edu.degree, edu.fieldOfStudy].filter(Boolean).join(' in ');
-      const dateRange = formatDateRange(edu.startDate, edu.endDate, edu.isCurrent);
+      const dateRange = atelier
+        ? formatAtelierYearRange(edu.startDate, edu.endDate, edu.isCurrent)
+        : formatDateRange(edu.startDate, edu.endDate, edu.isCurrent);
 
       let detailsHtml = '';
       if (edu.gpa || edu.activities) {
@@ -620,6 +659,17 @@ function educationSectionHtml(profile: FullProfile): string {
         detailsHtml = `<div class="resume-entry-details">${parts.join('')}</div>`;
       }
 
+      if (atelier) {
+        const meta = [dateRange, edu.location].filter(Boolean).join(' · ');
+        return `
+      <div class="resume-entry resume-atelier-edu">
+        <h3 class="resume-entry-title">${escapeHtml(degreeLine || edu.institution)}</h3>
+        ${degreeLine ? `<p class="resume-entry-subtitle">${escapeHtml(edu.institution)}</p>` : ''}
+        ${meta ? `<p class="resume-atelier-edu-meta">${escapeHtml(meta)}</p>` : ''}
+        ${detailsHtml}
+      </div>`;
+      }
+
       return `
       <div class="resume-entry">
         <div class="resume-entry-header">
@@ -627,7 +677,7 @@ function educationSectionHtml(profile: FullProfile): string {
             <h3 class="resume-entry-title">${escapeHtml(degreeLine || edu.institution)}</h3>
             ${degreeLine ? `<p class="resume-entry-subtitle">${escapeHtml(edu.institution)}</p>` : ''}
           </div>
-          <span class="resume-entry-date">${dateRange}</span>
+          ${dateRange ? `<span class="resume-entry-date">${dateRange}</span>` : ''}
         </div>
         ${detailsHtml}
       </div>`;
@@ -641,11 +691,26 @@ function educationSectionHtml(profile: FullProfile): string {
   </section>`;
 }
 
-function skillsSectionHtml(profile: FullProfile): string {
+function skillsSectionHtml(profile: FullProfile, options: { stacked?: boolean } = {}): string {
+  const { stacked = false } = options;
   const visibleSkillGroups = profile.skillGroups
     .map((g) => ({ ...g, skills: g.skills.filter((s) => s.isVisible !== false) }))
     .filter((g) => g.skills.length > 0);
   const visibleSkills = profile.skills.filter((s) => s.isVisible !== false);
+  const flatSkills =
+    visibleSkillGroups.length > 0 ? visibleSkillGroups.flatMap((g) => g.skills) : visibleSkills;
+
+  if (stacked) {
+    const names = flatSkills.map((s) => s.name);
+    if (names.length === 0) return '';
+    return `
+  <section class="resume-section">
+    ${sectionDividerHtml('SKILLS')}
+    <ul class="resume-skills-stack">${names
+      .map((name) => `<li class="resume-skills-stack-item">${escapeHtml(name)}</li>`)
+      .join('')}</ul>
+  </section>`;
+  }
 
   if (visibleSkillGroups.length > 0) {
     const groups = visibleSkillGroups
@@ -742,7 +807,7 @@ function certificationsSectionHtml(profile: FullProfile): string {
   </section>`;
 }
 
-function awardsSectionHtml(profile: FullProfile): string {
+function awardsSectionHtml(profile: FullProfile, title = 'AWARDS & RECOGNITION'): string {
   const items = profile.awards.filter((a) => a.isVisible !== false);
   if (items.length === 0) return '';
 
@@ -761,7 +826,7 @@ function awardsSectionHtml(profile: FullProfile): string {
 
   return `
   <section class="resume-section">
-    ${sectionDividerHtml('AWARDS & RECOGNITION')}
+    ${sectionDividerHtml(title)}
     <div class="resume-entries resume-entries-compact">${entries}</div>
   </section>`;
 }
@@ -904,22 +969,28 @@ function getCustomContentItems<T>(section: ProfileSection): T[] {
 }
 
 /** Render a single body section by its type (mirrors CleanResumeView's renderSection). */
-function renderSectionHtml(section: ProfileSection, profile: FullProfile): string {
+function renderSectionHtml(
+  section: ProfileSection,
+  profile: FullProfile,
+  options: { stackedSkills?: boolean; atelier?: boolean } = {}
+): string {
   switch (section.type) {
     case 'SUMMARY':
-      return summarySectionHtml(profile);
+      return summarySectionHtml(profile, options.atelier ? 'PROFILE' : 'SUMMARY');
     case 'EXPERIENCE':
-      return experienceSectionHtml(profile);
+      return experienceSectionHtml(profile, options.atelier === true);
     case 'EDUCATION':
-      return educationSectionHtml(profile);
+      return educationSectionHtml(profile, options.atelier === true);
     case 'SKILLS':
-      return skillsSectionHtml(profile);
+      return skillsSectionHtml(profile, {
+        stacked: options.stackedSkills === true,
+      });
     case 'PROJECTS':
       return projectsSectionHtml(profile);
     case 'CERTIFICATIONS':
       return certificationsSectionHtml(profile);
     case 'AWARDS':
-      return awardsSectionHtml(profile);
+      return awardsSectionHtml(profile, options.atelier ? 'AWARDS' : 'AWARDS & RECOGNITION');
     case 'PUBLICATIONS':
       return publicationsSectionHtml(getCustomContentItems<PublicationItem>(section));
     case 'VOLUNTEERING':
@@ -950,6 +1021,9 @@ const RESUME_CSS = `
     padding: 48px 56px;
     font-family: var(--rd-font-family, 'Georgia', 'Times New Roman', Times, serif);
     font-size: var(--rd-font-size, 13px);
+    font-weight: var(--rd-body-font-weight, 400);
+    font-style: var(--rd-body-font-style, normal);
+    text-decoration: var(--rd-body-text-decoration, none);
     line-height: 1.5;
     margin: 0 auto;
   }
@@ -960,23 +1034,32 @@ const RESUME_CSS = `
     margin-bottom: var(--rd-header-margin-bottom, 24px);
   }
   .resume-name {
+    font-family: var(--rd-font-name, inherit);
     font-size: var(--rd-name-font-size, 28px);
-    font-weight: 700;
+    font-weight: var(--rd-name-font-weight, 700);
+    font-style: var(--rd-name-font-style, normal);
+    text-decoration: var(--rd-name-text-decoration, none);
     letter-spacing: 0.02em;
     margin: 0;
     color: var(--rd-heading-color, inherit);
   }
   .resume-headline {
-    font-size: 15px;
+    font-family: var(--rd-font-title, inherit);
+    font-size: var(--rd-title-font-size, 15px);
+    font-weight: var(--rd-title-font-weight, 400);
+    font-style: var(--rd-title-font-style, italic);
+    text-decoration: var(--rd-title-text-decoration, none);
     color: #555;
     margin-top: 4px;
-    font-style: italic;
   }
   .resume-contact-line {
-    font-size: 12px;
+    font-family: var(--rd-font-contact, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+    font-size: var(--rd-contact-font-size, 12px);
+    font-weight: var(--rd-contact-font-weight, 400);
+    font-style: var(--rd-contact-font-style, normal);
+    text-decoration: var(--rd-contact-text-decoration, none);
     color: #666;
     margin-top: 10px;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
   .resume-contact-separator { color: #999; }
   .resume-header-photo {
@@ -993,13 +1076,15 @@ const RESUME_CSS = `
   }
   .resume-section-header { margin-bottom: 12px; }
   .resume-section-title {
-    font-size: 12px;
-    font-weight: 700;
+    font-size: var(--rd-heading-font-size, 12px);
+    font-weight: var(--rd-heading-font-weight, 700);
+    font-style: var(--rd-heading-font-style, normal);
+    text-decoration: var(--rd-heading-text-decoration, none);
     letter-spacing: 0.15em;
     text-transform: uppercase;
     color: var(--rd-heading-color, inherit);
     margin: 0 0 6px 0;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: var(--rd-font-heading, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
   }
   .resume-section-line {
     height: var(--rd-divider-height, 1px);
@@ -1161,6 +1246,325 @@ const RESUME_CSS = `
   [data-resume-theme='dark'] .resume-entry-inline-description { color: #888; }
   [data-resume-theme='dark'] .resume-publication-authors { color: #a0a0a0; }
   [data-resume-theme='dark'] .resume-publication-meta { color: #888; }
+
+  /* Lumen template — mirrors globals.css .resume-paper--lumen rules */
+  .resume-paper.resume-paper--lumen {
+    padding: 52px 56px;
+    letter-spacing: 0.005em;
+  }
+  .resume-paper--lumen .resume-header {
+    margin-bottom: calc(var(--rd-header-margin-bottom, 24px) * 1.15);
+    padding-bottom: 18px;
+    border-bottom: 1px solid color-mix(in srgb, var(--rd-accent-color, #b0aaa3) 55%, transparent);
+  }
+  .resume-paper--lumen .resume-name {
+    letter-spacing: -0.025em;
+    font-weight: var(--rd-name-font-weight, 600);
+  }
+  .resume-paper--lumen .resume-headline {
+    margin-top: 6px;
+    letter-spacing: 0.01em;
+    color: #5c5c5c;
+  }
+  [data-resume-theme='dark'] .resume-paper--lumen .resume-headline { color: #a3a3a3; }
+  .resume-paper--lumen .resume-contact-line {
+    margin-top: 12px;
+    letter-spacing: 0.015em;
+    color: #737373;
+  }
+  [data-resume-theme='dark'] .resume-paper--lumen .resume-contact-line { color: #a3a3a3; }
+  .resume-paper--lumen .resume-contact-separator {
+    color: color-mix(in srgb, var(--rd-accent-color, #b0aaa3) 80%, #999);
+  }
+  .resume-paper--lumen .resume-section {
+    margin-top: calc(var(--rd-section-gap, 20px) * 1.1);
+  }
+  .resume-paper--lumen .resume-section-header { margin-bottom: 10px; }
+  .resume-paper--lumen .resume-section-title {
+    letter-spacing: 0.2em;
+    font-weight: var(--rd-heading-font-weight, 600);
+  }
+  .resume-paper--lumen .resume-section-line {
+    opacity: var(--rd-divider-opacity, 0.28);
+    height: 1px;
+  }
+  .resume-paper--lumen .resume-entry-title {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .resume-paper--lumen .resume-entry-subtitle { color: #525252; }
+  [data-resume-theme='dark'] .resume-paper--lumen .resume-entry-subtitle { color: #a3a3a3; }
+  .resume-paper.resume-paper--lumen .resume-entry-date {
+    color: #737373;
+    letter-spacing: 0.02em;
+  }
+  [data-resume-theme='dark'] .resume-paper.resume-paper--lumen .resume-entry-date { color: #a3a3a3; }
+  .resume-paper--lumen .resume-summary {
+    line-height: 1.55;
+    color: #404040;
+  }
+  [data-resume-theme='dark'] .resume-paper--lumen .resume-summary { color: #d4d4d4; }
+
+  /* Sleek template — mirrors globals.css .resume-paper--sleek rules */
+  .resume-paper.resume-paper--sleek { padding: 56px 60px; }
+  .resume-sleek-header {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 40px; text-align: left;
+    margin-bottom: calc(var(--rd-header-margin-bottom, 24px) * 0.75);
+    padding: 8px 0;
+  }
+  .resume-sleek-identity { display: flex; align-items: center; gap: 16px; min-width: 0; }
+  .resume-sleek-photo {
+    width: 64px; height: 64px; border-radius: 50%;
+    object-fit: cover; flex-shrink: 0;
+  }
+  .resume-paper--sleek .resume-name {
+    text-transform: uppercase; letter-spacing: 0.14em;
+    font-weight: 600; line-height: 1.2;
+  }
+  .resume-paper--sleek .resume-headline { margin-top: 6px; letter-spacing: 0.02em; }
+  .resume-sleek-contact {
+    list-style: none; margin: 0; padding: 4px 0 4px 24px;
+    border-left: 1px dotted color-mix(in srgb, var(--rd-accent-color, #8f9aa8) 75%, transparent);
+    display: flex; flex-direction: column; gap: 5px;
+    max-width: 240px; flex-shrink: 0;
+  }
+  [data-resume-theme='dark'] .resume-sleek-contact {
+    border-left-color: color-mix(in srgb, var(--rd-accent-color-dark, #b6bec9) 60%, transparent);
+  }
+  .resume-sleek-contact-item {
+    font-family: var(--rd-font-contact, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+    font-size: var(--rd-contact-font-size, 11px); line-height: 1.5; color: #555; word-break: break-word;
+    font-weight: var(--rd-contact-font-weight, 400);
+    font-style: var(--rd-contact-font-style, normal);
+    text-decoration: var(--rd-contact-text-decoration, none);
+  }
+  [data-resume-theme='dark'] .resume-sleek-contact-item { color: #999; }
+  .resume-paper--sleek .resume-section {
+    display: grid; grid-template-columns: 168px 1fr;
+    column-gap: 36px; row-gap: 14px;
+    margin-top: var(--rd-section-gap, 20px);
+    padding-top: var(--rd-section-gap, 20px);
+    border-top: 1px solid color-mix(in srgb, var(--rd-accent-color, #8f9aa8) 40%, transparent);
+  }
+  [data-resume-theme='dark'] .resume-paper--sleek .resume-section {
+    border-top-color: color-mix(in srgb, var(--rd-accent-color-dark, #b6bec9) 35%, transparent);
+  }
+  .resume-paper--sleek .resume-section-header { grid-column: 1; margin-bottom: 0; }
+  .resume-paper--sleek .resume-section-title { font-size: var(--rd-heading-font-size, 11.5px); letter-spacing: 0.24em; }
+  .resume-paper--sleek .resume-section-line { display: none; }
+  .resume-paper--sleek .resume-section > :not(.resume-section-header) { grid-column: 2; }
+  .resume-paper--sleek .resume-section > .resume-entries { grid-column: 1 / -1; }
+  .resume-paper--sleek .resume-section > .resume-entries-compact { grid-column: 2; }
+  .resume-paper--sleek .resume-entry {
+    display: grid; grid-template-columns: 168px 1fr; column-gap: 36px;
+  }
+  .resume-paper--sleek .resume-entries-compact .resume-entry { display: block; }
+  .resume-paper--sleek .resume-entry-header { grid-column: 1; display: block; }
+  .resume-paper--sleek .resume-entry > :not(.resume-entry-header) { grid-column: 2; }
+  .resume-paper--sleek .resume-entry-title {
+    font-size: 13px; text-transform: uppercase;
+    letter-spacing: 0.05em; line-height: 1.35;
+  }
+  .resume-paper--sleek .resume-entry-subtitle {
+    font-size: 11.5px; text-transform: uppercase;
+    letter-spacing: 0.05em; margin-top: 3px;
+  }
+  .resume-paper.resume-paper--sleek .resume-entry-date {
+    display: block; margin-top: 8px; white-space: normal; text-align: left;
+  }
+  .resume-paper--sleek .resume-entry > :nth-child(2) { margin-top: 0; }
+  .resume-paper--sleek .resume-entry > :nth-child(2) > .rich-text-bullets:first-child { margin-top: 0; }
+
+  /* Studio template — mirrors globals.css .resume-paper--studio rules */
+  .resume-paper.resume-paper--studio { padding: 0; overflow: hidden; }
+  .resume-studio-header {
+    display: flex; align-items: stretch; justify-content: space-between;
+    gap: 28px; text-align: left; margin: 0; padding: 36px 0 28px;
+  }
+  .resume-studio-identity {
+    display: flex; align-items: center; gap: 16px; min-width: 0; flex: 1;
+    background: transparent; padding: 8px 12px 8px 36px; position: relative;
+  }
+  .resume-studio-identity::before {
+    content: ''; position: absolute; left: 0; top: 4px; bottom: 4px;
+    width: 14px; background: var(--rd-accent-color, #7a9aa5);
+  }
+  .resume-studio-photo {
+    width: 64px; height: 64px; border-radius: 4px;
+    object-fit: cover; flex-shrink: 0;
+  }
+  .resume-studio-identity-text { min-width: 0; }
+  .resume-paper--studio .resume-name {
+    text-transform: uppercase; letter-spacing: 0.04em;
+    font-weight: 700; line-height: 1.15;
+    font-size: calc(var(--rd-name-font-size, 28px) * 1.05);
+  }
+  .resume-paper--studio .resume-headline {
+    margin-top: 8px; text-transform: uppercase; letter-spacing: 0.12em;
+    font-style: var(--rd-title-font-style, normal);
+    font-weight: var(--rd-title-font-weight, 500);
+    text-decoration: var(--rd-title-text-decoration, none);
+    font-family: var(--rd-font-title, inherit);
+    font-size: var(--rd-title-font-size, 12px); color: #6b7280;
+  }
+  [data-resume-theme='dark'] .resume-paper--studio .resume-headline { color: #9ca3af; }
+  .resume-studio-contact {
+    list-style: none; margin: 0; padding: 18px 28px 18px 22px;
+    display: flex; flex-direction: column; justify-content: center; gap: 8px;
+    width: 260px; max-width: 42%; flex-shrink: 0;
+    background: color-mix(in srgb, var(--rd-accent-color, #7a9aa5) 28%, #f4f7f8);
+  }
+  [data-resume-theme='dark'] .resume-studio-contact {
+    background: color-mix(in srgb, var(--rd-accent-color-dark, #9bb5bd) 22%, #1f2937);
+  }
+  .resume-studio-contact-item {
+    font-family: var(--rd-font-contact, inherit);
+    font-size: var(--rd-contact-font-size, 12px); line-height: 1.45; color: #374151; word-break: break-word;
+    font-weight: var(--rd-contact-font-weight, 400);
+    font-style: var(--rd-contact-font-style, normal);
+    text-decoration: var(--rd-contact-text-decoration, none);
+  }
+  [data-resume-theme='dark'] .resume-studio-contact-item { color: #d1d5db; }
+  .resume-studio-body { padding: 8px 40px 40px 36px; }
+  .resume-studio-body .resume-section:first-child { margin-top: 0; }
+  .resume-paper--studio .resume-section-header {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
+  }
+  .resume-paper--studio .resume-section-title {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: var(--rd-heading-font-size, 13px);
+    font-weight: var(--rd-heading-font-weight, 700);
+    font-style: var(--rd-heading-font-style, normal);
+    text-decoration: var(--rd-heading-text-decoration, none);
+    letter-spacing: 0.06em; flex-shrink: 0; margin: 0;
+  }
+  .resume-paper--studio .resume-section-title::before {
+    content: ''; display: inline-block; width: 12px; height: 10px; flex-shrink: 0;
+    background:
+      linear-gradient(currentColor, currentColor) 0 0 / 100% 1.5px no-repeat,
+      linear-gradient(currentColor, currentColor) 0 50% / 100% 1.5px no-repeat,
+      linear-gradient(currentColor, currentColor) 0 100% / 100% 1.5px no-repeat;
+  }
+  .resume-paper--studio .resume-section-line {
+    flex: 1; height: 1px; background: #c4c4c4; opacity: 1; margin: 0;
+  }
+  .resume-skills-stack {
+    list-style: none; margin: 0; padding: 0;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .resume-skills-stack-item { font-size: 12.5px; line-height: 1.4; color: #374151; }
+  [data-resume-theme='dark'] .resume-skills-stack-item { color: #d1d5db; }
+  .resume-paper--studio .resume-summary {
+    font-size: 12.5px; line-height: 1.55; color: #4b5563;
+  }
+  .resume-paper--studio .resume-entry-title {
+    text-transform: uppercase; letter-spacing: 0.03em; font-weight: 700;
+  }
+  .resume-paper--studio .resume-entry-subtitle { font-style: italic; margin-top: 2px; }
+  .resume-paper.resume-paper--studio .resume-entry-date {
+    border: 1px solid #9ca3af; border-radius: 999px; padding: 3px 10px;
+    font-size: 10.5px; letter-spacing: 0.02em; white-space: nowrap;
+    flex-shrink: 0; margin-top: 2px;
+  }
+  [data-resume-theme='dark'] .resume-paper--studio .resume-entry-date { border-color: #6b7280; }
+
+  /* Atelier template — mirrors globals.css .resume-paper--atelier rules */
+  .resume-paper.resume-paper--atelier {
+    display: flex; flex-direction: column; padding: 40px 48px 28px; position: relative;
+  }
+  .resume-atelier-header {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 28px; text-align: left; margin: 0 0 28px; padding: 0 0 20px;
+    border-bottom: 1px solid color-mix(in srgb, var(--rd-accent-color, #c25b42) 35%, transparent);
+  }
+  .resume-atelier-identity { min-width: 0; flex: 1; }
+  .resume-paper--atelier .resume-name {
+    font-family: var(--rd-font-name, 'Great Vibes', 'Segoe Script', cursive);
+    font-weight: var(--rd-name-font-weight, 400);
+    font-style: var(--rd-name-font-style, normal);
+    text-decoration: var(--rd-name-text-decoration, none);
+    font-size: calc(var(--rd-name-font-size, 42px) * 1.05); line-height: 1.15;
+    letter-spacing: 0.01em; color: #2a2a2a; text-transform: none;
+  }
+  .resume-paper--atelier .resume-headline {
+    margin-top: 4px; font-family: var(--rd-font-title, 'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif);
+    font-size: var(--rd-title-font-size, 11px);
+    font-weight: var(--rd-title-font-weight, 400);
+    font-style: var(--rd-title-font-style, normal);
+    text-decoration: var(--rd-title-text-decoration, none);
+    letter-spacing: 0.28em;
+    text-transform: uppercase; color: #4a4a4a;
+  }
+  .resume-atelier-contact {
+    list-style: none; margin: 0; padding: 4px 0 0; display: flex;
+    flex-direction: column; gap: 7px; flex-shrink: 0; max-width: 42%;
+  }
+  .resume-atelier-contact-item {
+    display: flex; align-items: center; gap: 8px;
+    font-family: var(--rd-font-contact, 'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif);
+    font-size: var(--rd-contact-font-size, 11.5px); line-height: 1.35; color: #3a3a3a; word-break: break-word;
+    font-weight: var(--rd-contact-font-weight, 400);
+    font-style: var(--rd-contact-font-style, normal);
+    text-decoration: var(--rd-contact-text-decoration, none);
+  }
+  .resume-atelier-contact-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--rd-accent-color, #c25b42); flex-shrink: 0;
+  }
+  .resume-atelier-layout {
+    display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(180px, 0.9fr);
+    gap: 0 36px; flex: 1;
+  }
+  .resume-atelier-main, .resume-atelier-rail { min-width: 0; }
+  .resume-atelier-rail {
+    border-left: 1px solid color-mix(in srgb, var(--rd-accent-color, #c25b42) 55%, #e8c4b8);
+    padding-left: 28px; margin-left: -8px;
+  }
+  .resume-atelier-main .resume-section:first-child,
+  .resume-atelier-rail .resume-section:first-child { margin-top: 0; }
+  .resume-paper--atelier .resume-section-header { display: block; margin-bottom: 12px; }
+  .resume-paper--atelier .resume-section-title {
+    font-family: var(--rd-font-heading, 'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif);
+    font-size: var(--rd-heading-font-size, 12px);
+    font-weight: var(--rd-heading-font-weight, 700);
+    font-style: var(--rd-heading-font-style, normal);
+    text-decoration: var(--rd-heading-text-decoration, none);
+    letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--rd-heading-color, var(--rd-accent-color, #c25b42)); margin: 0;
+  }
+  .resume-paper--atelier .resume-section-line { display: none; }
+  .resume-paper--atelier .resume-summary { font-size: 12.5px; line-height: 1.6; color: #3a3a3a; }
+  .resume-atelier-exp { margin-bottom: 18px; }
+  .resume-atelier-exp-grid {
+    display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 12px 16px; align-items: start;
+  }
+  .resume-paper.resume-paper--atelier .resume-atelier-exp .resume-entry-date {
+    font-family: var(--rd-font-heading, 'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif);
+    font-size: 12px; font-weight: 700; letter-spacing: 0.02em;
+    color: var(--rd-accent-color, #c25b42); white-space: nowrap;
+    padding: 0; border: none; margin: 0;
+  }
+  .resume-atelier-exp-body .resume-entry-title {
+    font-family: var(--rd-font-heading, 'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif);
+    font-size: 13px; font-weight: 700; text-transform: none; letter-spacing: 0;
+    color: #1a1a1a; margin: 0;
+  }
+  .resume-atelier-exp-body .resume-entry-subtitle {
+    font-family: var(--rd-font-heading, 'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif);
+    font-size: 12px; font-weight: 600; font-style: normal; margin-top: 2px; color: #2a2a2a;
+  }
+  .resume-atelier-exp-body .resume-bullets,
+  .resume-atelier-exp-body .rich-text-bullets { margin-top: 8px; }
+  .resume-atelier-edu .resume-entry-title {
+    font-family: var(--rd-font-heading, 'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif);
+    font-size: 12.5px; font-weight: 700; margin: 0;
+  }
+  .resume-atelier-edu .resume-entry-subtitle { font-style: normal; font-size: 12px; margin-top: 2px; }
+  .resume-atelier-edu-meta {
+    font-family: var(--rd-font-heading, 'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif);
+    font-size: 11px; color: #6b6b6b; margin-top: 3px;
+  }
 `;
 
 /**
@@ -1179,15 +1583,16 @@ export function toPDFHtml(profile: FullProfile): string {
     const designStyleAttr = buildResumeDesignStyleAttr(parsedDesign);
     const resolvedColorTheme = resolveResumeColorTheme(parsedDesign?.colorTheme);
 
-    // ── Google Font <link> tag (empty for system fonts) ────
-    const design: Required<ResumeDesign> = {
-      ...RESUME_DESIGN_DEFAULTS,
-      ...(parsedDesign ?? {}),
-    };
-    const fontUrl = GOOGLE_FONT_URLS[design.fontFamily];
-    const fontLink = fontUrl
-      ? `<link rel="stylesheet" href="${fontUrl}" crossorigin="anonymous" />`
-      : '';
+    // ── Google Font <link> tags for body / name / heading ──
+    const fonts = resolveResumeFonts(parsedDesign);
+    const fontUrls = new Set(
+      [fonts.body, fonts.name, fonts.heading]
+        .map((face) => GOOGLE_FONT_URLS[face])
+        .filter((url): url is string => Boolean(url))
+    );
+    const fontLink = [...fontUrls]
+      .map((url) => `<link rel="stylesheet" href="${url}" crossorigin="anonymous" />`)
+      .join('\n  ');
 
     // ── Contact items (mirrors CleanResumeView logic) ──────
     const contactItems: string[] = (() => {
@@ -1266,7 +1671,179 @@ export function toPDFHtml(profile: FullProfile): string {
 
     // ── Body sections in user-configured sortOrder ─────────
     const bodySections = getOrderedSectionObjects(profile);
-    const bodyHtml = bodySections.map((section) => renderSectionHtml(section, profile)).join('\n');
+    const templateId = getResumeTemplateId(parsedDesign?.templateId);
+    const isSleek = templateId === 'sleek';
+    const isStudio = templateId === 'studio';
+    const isAtelier = templateId === 'atelier';
+    const isLumen = templateId === 'lumen';
+    const sectionOpts = {
+      stackedSkills: isAtelier,
+      atelier: isAtelier,
+    };
+
+    let articleInnerHtml: string;
+    if (isAtelier) {
+      const railSections = bodySections.filter((s) => isResumeAtelierRailSectionType(s.type));
+      const mainSections = bodySections.filter((s) => !isResumeAtelierRailSectionType(s.type));
+      const railBodyHtml = railSections
+        .map((section) => renderSectionHtml(section, profile, sectionOpts))
+        .join('\n');
+      const mainBodyHtml = mainSections
+        .map((section) => renderSectionHtml(section, profile, sectionOpts))
+        .join('\n');
+
+      const atelierFields: {
+        id: string;
+        kind: 'phone' | 'email' | 'website' | 'link';
+        value: string;
+      }[] = [];
+      if (profile.contactInfo?.phone && profile.contactInfo.phonePublic) {
+        atelierFields.push({
+          id: 'phone',
+          kind: 'phone',
+          value: cleanPhoneDisplay(profile.contactInfo.phone),
+        });
+      }
+      if (profile.contactInfo?.email && profile.contactInfo.emailPublic) {
+        atelierFields.push({
+          id: 'email',
+          kind: 'email',
+          value: profile.contactInfo.email,
+        });
+      }
+      if (profile.contactInfo?.website) {
+        atelierFields.push({
+          id: 'website',
+          kind: 'website',
+          value: displayUrl(profile.contactInfo.website),
+        });
+      }
+      for (const link of profile.links.filter((l) => l.isVisible !== false)) {
+        atelierFields.push({ id: link.id, kind: 'link', value: displayUrl(link.url) });
+      }
+
+      const contactListHtml =
+        atelierFields.length > 0
+          ? `<ul class="resume-atelier-contact">${atelierFields
+              .map(
+                (field) =>
+                  `<li class="resume-atelier-contact-item"><span class="resume-atelier-contact-icon">${atelierContactIconSvg(field.kind)}</span><span>${escapeHtml(field.value)}</span></li>`
+              )
+              .join('')}</ul>`
+          : '';
+
+      articleInnerHtml = `
+      <header class="resume-header resume-atelier-header">
+        <div class="resume-atelier-identity">
+          <h1 class="resume-name">${escapeHtml(fullName)}</h1>
+          ${profile.headline ? `<p class="resume-headline">${escapeHtml(profile.headline)}</p>` : ''}
+        </div>
+        ${contactListHtml}
+      </header>
+      <div class="resume-atelier-layout">
+        <div class="resume-atelier-main">${mainBodyHtml}</div>
+        <aside class="resume-atelier-rail">${railBodyHtml}</aside>
+      </div>`;
+    } else if (isStudio) {
+      const bodyHtml = bodySections
+        .map((section) => renderSectionHtml(section, profile, sectionOpts))
+        .join('\n');
+
+      // Contact values only — no P: / E: / A: labels (matches CleanResumeView StudioHeader)
+      const contactFieldMap = new Map<string, string>();
+      if (profile.contactInfo?.email && profile.contactInfo.emailPublic) {
+        contactFieldMap.set('email', profile.contactInfo.email);
+      }
+      if (profile.contactInfo?.phone && profile.contactInfo.phonePublic) {
+        contactFieldMap.set('phone', cleanPhoneDisplay(profile.contactInfo.phone));
+      }
+      for (const link of profile.links.filter((l) => l.isVisible !== false)) {
+        contactFieldMap.set(link.id, displayUrl(link.url));
+      }
+
+      const storedOrder = Array.isArray(profile.contactInfo?.headerFieldsOrder)
+        ? (profile.contactInfo!.headerFieldsOrder as string[])
+        : null;
+      const orderedValues: string[] = [];
+      const seenFields = new Set<string>();
+      const preferredOrder = storedOrder?.length
+        ? storedOrder.filter((id) => id !== 'location')
+        : ['phone', 'email', ...Array.from(contactFieldMap.keys())];
+      for (const id of preferredOrder) {
+        if (id === 'location') continue;
+        const value = contactFieldMap.get(id);
+        if (value && !seenFields.has(id)) {
+          orderedValues.push(value);
+          seenFields.add(id);
+        }
+      }
+      for (const [id, value] of contactFieldMap) {
+        if (!seenFields.has(id)) orderedValues.push(value);
+      }
+
+      const photoHtml = showPhoto
+        ? `<img src="${safeUrl(profile.avatarUrl)}" alt="${escapeHtml(fullName)}" class="resume-studio-photo" />`
+        : '';
+      const contactListHtml =
+        orderedValues.length > 0
+          ? `<ul class="resume-studio-contact">${orderedValues
+              .map((value) => `<li class="resume-studio-contact-item">${escapeHtml(value)}</li>`)
+              .join('')}</ul>`
+          : '';
+
+      articleInnerHtml = `
+      <header class="resume-header resume-studio-header">
+        <div class="resume-studio-identity">
+          ${photoHtml}
+          <div class="resume-studio-identity-text">
+            <h1 class="resume-name">${escapeHtml(fullName)}</h1>
+            ${profile.headline ? `<p class="resume-headline">${escapeHtml(profile.headline)}</p>` : ''}
+          </div>
+        </div>
+        ${contactListHtml}
+      </header>
+      <div class="resume-studio-body">${bodyHtml}</div>`;
+    } else {
+      const bodyHtml = bodySections
+        .map((section) => renderSectionHtml(section, profile, sectionOpts))
+        .join('\n');
+
+      if (isSleek) {
+        const photoHtml = showPhoto
+          ? `<img src="${safeUrl(profile.avatarUrl)}" alt="${escapeHtml(fullName)}" class="resume-sleek-photo" />`
+          : '';
+        const contactListHtml =
+          contactItems.length > 0
+            ? `<ul class="resume-sleek-contact">${contactItems
+                .map((item) => `<li class="resume-sleek-contact-item">${escapeHtml(item)}</li>`)
+                .join('')}</ul>`
+            : '';
+        const sleekHeaderHtml = `
+      <header class="resume-header resume-sleek-header">
+        <div class="resume-sleek-identity">
+          ${photoHtml}
+          <div style="min-width:0;">
+            <h1 class="resume-name">${escapeHtml(fullName)}</h1>
+            ${profile.headline ? `<p class="resume-headline">${escapeHtml(profile.headline)}</p>` : ''}
+          </div>
+        </div>
+        ${contactListHtml}
+      </header>`;
+        articleInnerHtml = `${sleekHeaderHtml}\n    ${bodyHtml}`;
+      } else {
+        articleInnerHtml = `${headerHtml}\n    ${bodyHtml}`;
+      }
+    }
+
+    const paperClass = [
+      'resume-paper',
+      isSleek && 'resume-paper--sleek',
+      isStudio && 'resume-paper--studio',
+      isAtelier && 'resume-paper--atelier',
+      isLumen && 'resume-paper--lumen',
+    ]
+      .filter(Boolean)
+      .join(' ');
 
     // ── Assemble full HTML document ────────────────────────
     return `<!DOCTYPE html>
@@ -1278,9 +1855,8 @@ export function toPDFHtml(profile: FullProfile): string {
   <style>${RESUME_CSS}</style>
 </head>
 <body data-resume-theme="${resolvedColorTheme}">
-  <article class="resume-paper" style="${designStyleAttr}">
-    ${headerHtml}
-    ${bodyHtml}
+  <article class="${paperClass}" data-resume-template="${templateId}" style="${designStyleAttr}">
+    ${articleInnerHtml}
   </article>
 </body>
 </html>`;

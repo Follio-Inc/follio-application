@@ -4,6 +4,7 @@ import { ArrowRight, Grid3X3 } from 'lucide-react';
 import Link from 'next/link';
 
 import { Button } from '@/components/ui/button';
+import { isPortfolioEnabled } from '@/lib/features';
 import { getPortfolioPath } from '@/lib/url';
 
 interface PortfolioLinkBannerProps {
@@ -11,6 +12,8 @@ interface PortfolioLinkBannerProps {
 }
 
 export function PortfolioLinkBanner({ profileHandle }: PortfolioLinkBannerProps) {
+  if (!isPortfolioEnabled()) return null;
+
   return (
     <div className="border-b bg-muted/30">
       <div className="container flex items-center justify-center gap-3 py-2.5">

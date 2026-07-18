@@ -54,7 +54,7 @@ interface PublicResumeActionsProps {
   handle: string;
   /** Resume owner's first name (used in dialog copy). */
   firstName: string | null;
-  /** Resume document title — passed to the download dialog. */
+  /** Resume document title — used as the download filename. */
   resumeTitle: string;
   /** Owner's current resume visibility — drives the full share dialog. */
   resumeVisibility: ContentVisibility;
@@ -83,6 +83,38 @@ export function PublicResumeActions({
 }: PublicResumeActionsProps) {
   const router = useRouter();
   const isOwner = authState === 'owner';
+
+  // #region agent log
+  useEffect(() => {
+    const isIframe = (() => {
+      try {
+        return window.self !== window.top;
+      } catch {
+        return true;
+      }
+    })();
+    fetch('http://127.0.0.1:7254/ingest/fcf2bd3d-74c8-4090-ab73-f47f4b1cfce0', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'a3be95' },
+      body: JSON.stringify({
+        sessionId: 'a3be95',
+        runId: 'pre-fix',
+        hypothesisId: 'D',
+        location: 'public-resume-actions.tsx:mount',
+        message: 'PublicResumeActions mounted',
+        data: {
+          authState,
+          isOwner,
+          handle,
+          pathname: window.location.pathname,
+          isIframe,
+          willMountShareDialog: isOwner,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+  }, [authState, isOwner, handle]);
+  // #endregion
 
   const { copied, copy: handleCopyText } = useCopyElementText(resumeRef);
   const [idle, setIdle] = useState(false);

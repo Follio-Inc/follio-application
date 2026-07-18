@@ -1,66 +1,42 @@
 /**
  * Enhanced Portfolio Generation Service
  *
- * Orchestrates the AI pipeline to produce deeply enriched template portfolios.
- * This replaces the simple "AI writes some copy" approach with a full analysis
- * pipeline that understands the person, extracts evidence, writes narratives,
- * and validates everything — then feeds it all into the template system.
- *
- * Pipeline flow:
- *   1. Collect profile data (DB → CollectedProfileData)
- *   2. Stage A: Profile Understanding (who are they?)
- *   3. Stage B: Evidence Extraction (what's impressive?)
- *   4. Stage D: Narrative Generation (write the copy)
- *   5. Stage F: Validation (fact-check everything)
- *   6. Compose into TemplatePortfolio with enrichment
- *
- * Stages C (Strategy) and E (Design Brief) are skipped because
- * templates handle their own structure and design. When we add
- * AI-driven template selection in the future, Stage C can inform which
- * template to pick and Stage E can suggest accent colors.
+ * Product entry point for portfolio generation (onboarding, regenerate, set-primary).
+ * When AI is available, runs the shared portfolio-generation agent
+ * (`services/agents/portfolio`) which adapts to attached sources and section
+ * policies. This service still owns template assembly + DB persistence so the
+ * end-user experience stays seamless.
  *
  * Design principles:
  * - Template-agnostic: produces data any template can consume
  * - Backwards compatible: enrichment is optional, core copy always present
- * - Graceful degradation: falls back to simple generation if AI fails
- * - Observable: full pipeline metadata stored for debugging
+ * - Graceful degradation: falls back to default copy if AI fails
+ * - Observable: agent run metadata stored on GeneratedPortfolio
  */
 
 import { isAIAvailable } from '@/lib/ai-client';
 import { db } from '@/lib/db';
 import { Errors } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { normalizeProfileForTemplate } from '@/lib/portfolio/templates/normalizer';
+import { getDraftPlan } from '@/lib/portfolio/templates/overrides';
 import { getDefaultTemplateId, getTemplateMeta } from '@/lib/portfolio/templates/registry';
+import { runPortfolioGenerationAgent } from '@/services/agents/portfolio';
 import { Prisma } from '@prisma/client';
+
+import { transformToPortfolioContent } from './content-transform.service';
+import { determineSections, loadNormalizedProfile, resolveWorkingPlan } from './plan-helpers';
 
 import type {
   TemplateAIEnrichment,
   TemplateCopy,
   TemplateKitMeta,
   TemplatePortfolio,
+  TemplateProfileData,
   TemplateSectionConfig,
   TemplateSectionType,
   TemplateStyleConfig,
 } from '@/lib/portfolio/templates/types';
-import type { FullProfile } from '@/types';
-import type {
-  CollectedProfileData,
-  EvidenceExtraction,
-  NarrativeContent,
-  ProfileUnderstanding,
-  ValidationReport,
-} from '@/types/portfolio';
 
-import { collectProfileData, computeDataRichness } from './data-collector.service';
-import {
-  applyValidationFixes,
-  executeEvidenceExtraction,
-  executeNarrativeGeneration,
-  executePortfolioStrategy,
-  executeProfileUnderstanding,
-  executeValidation,
-} from './pipeline';
 import { getDefaultCopy } from './template-copy.service';
 
 const enhancedLogger = logger.child({ source: 'enhanced-generation' });
@@ -78,6 +54,11 @@ export interface EnhancedGenerateOptions {
   fontFamily?: string;
   /** Skip AI entirely — use default copy, no enrichment */
   skipAI?: boolean;
+  /**
+   * When set, carry over the user's template choice, style, media overrides,
+   * and intentionally hidden sections. Fresh AI copy + content are still generated.
+   */
+  preserveCustomizations?: TemplatePortfolio;
   /** Progress callback for UI updates */
   onProgress?: ProgressCallback;
 }
@@ -118,13 +99,13 @@ export function isTemplateBasedPlan(plan: unknown): plan is TemplatePortfolio {
  * Designating a resume as the user's portfolio must never leave the public
  * portfolio surface broken. If the profile already has an active template-based
  * portfolio we leave it untouched (so AI copy / user edits are preserved).
- * Otherwise we generate a deterministic portfolio **without AI** so it is
- * instantly available and the request never depends on a slow/optional AI
- * pipeline. The user can enrich it later from the portfolio editor.
+ * Otherwise we generate a portfolio from the resume, snapshotting portfolio-owned
+ * content. Pass `skipAI: false` when the user explicitly assigns a resume so
+ * content is AI-shaped; default `skipAI: true` keeps dashboard/fallback paths fast.
  */
 export async function ensureActiveTemplatePortfolio(
   profileId: string,
-  options: { templateId?: string } = {}
+  options: { templateId?: string; skipAI?: boolean } = {}
 ): Promise<{ portfolioId: string; created: boolean }> {
   const existing = await db.generatedPortfolio.findFirst({
     where: {
@@ -142,7 +123,7 @@ export async function ensureActiveTemplatePortfolio(
 
   const result = await generateEnhancedPortfolio(profileId, {
     templateId: options.templateId,
-    skipAI: true,
+    skipAI: options.skipAI ?? true,
   });
 
   return { portfolioId: result.portfolioId, created: true };
@@ -151,11 +132,10 @@ export async function ensureActiveTemplatePortfolio(
 /**
  * Generate a fully AI-enriched template portfolio.
  *
- * This is the primary portfolio generation entry point.
- * Runs the AI pipeline (understand → extract evidence → narrate → validate),
- * then assembles a TemplatePortfolio with enrichment data any template can use.
- *
- * Falls back to simple copy generation if AI is unavailable or fails.
+ * Primary entry point for onboarding, regenerate, and set-primary flows.
+ * When AI is available this runs the shared portfolio-generation agent
+ * (source-aware, policy-driven). Persistence and template assembly stay here
+ * so the product UX remains unchanged.
  */
 export async function generateEnhancedPortfolio(
   profileId: string,
@@ -172,82 +152,105 @@ export async function generateEnhancedPortfolio(
     enhancedLogger.info('Starting enhanced portfolio generation', { profileId });
 
     // ── Resolve template ──────────────────────────────────────────────
-    const templateId = options.templateId || getDefaultTemplateId();
+    const preserved = options.preserveCustomizations;
+    const templateId = preserved?.templateId ?? options.templateId ?? getDefaultTemplateId();
     const templateMeta = getTemplateMeta(templateId);
     if (!templateMeta) {
       throw Errors.badRequest(`Template "${templateId}" does not exist`);
     }
 
     // ── Load profile for template normalizer ──────────────────────────
-    const profile = await loadProfileWithRelations(profileId);
-    if (!profile) {
+    const normalizedProfile = await loadNormalizedProfile(profileId);
+    if (!normalizedProfile) {
       throw Errors.notFound('Profile not found');
     }
 
-    // Load GitHub profile separately
-    let githubProfile = null;
-    try {
-      githubProfile = await db.gitHubProfile.findUnique({
-        where: { profileId },
-        select: {
-          username: true,
-          avatarUrl: true,
-          bio: true,
-          publicRepos: true,
-          followers: true,
-          totalStars: true,
-          primaryLanguages: true,
-        },
-      });
-    } catch {
-      enhancedLogger.warn('Failed to fetch GitHub profile, continuing without it');
-    }
-
-    // Normalize for template rendering
-    const serialized = JSON.parse(JSON.stringify(profile));
-    const normalizedProfile = normalizeProfileForTemplate(serialized, {
-      githubProfile: githubProfile ? JSON.parse(JSON.stringify(githubProfile)) : null,
-    });
-
-    // ── Decide: AI pipeline or simple fallback ────────────────────────
+    // ── Decide: agent or simple fallback ──────────────────────────────
     const useAI = !options.skipAI && isAIAvailable();
 
     let copy: TemplateCopy;
     let enrichment: TemplateAIEnrichment | null = null;
+    let content: TemplateProfileData | undefined;
 
     if (useAI) {
-      const pipelineResult = await runAIPipeline(profileId, normalizedProfile, report);
-      copy = pipelineResult.copy;
-      enrichment = pipelineResult.enrichment;
-      stagesRun.push(...pipelineResult.stagesRun);
+      report('agent', 0, 4, 'Analyzing your profile and attached sources...');
+      const { output, run } = await runPortfolioGenerationAgent(
+        { profileId },
+        {
+          profileId,
+          onProgress: (event) => {
+            report(
+              event.stepId,
+              Math.max(0, event.stepsCompleted),
+              event.totalSteps > 0 ? event.totalSteps : 6,
+              event.message
+            );
+          },
+        }
+      );
+      copy = output.copy;
+      enrichment = output.enrichment;
+      content = output.content;
+      stagesRun.push(...output.stagesRun, `agent:${run.version}`);
+      enhancedLogger.info('Portfolio agent completed', {
+        profileId,
+        runId: run.id,
+        stages: output.stagesRun,
+        tokens: output.tokensUsed,
+      });
     } else {
       enhancedLogger.info('AI unavailable or skipped, using default copy');
       copy = getDefaultCopy(normalizedProfile);
     }
 
+    // ── Portfolio-owned content (snapshot + portfolio-style transform) ─
+    // Agent already shaped content when AI ran; otherwise transform here.
+    report('content', useAI ? 3 : 1, useAI ? 4 : 3, 'Shaping portfolio content...');
+    if (!content) {
+      content = await transformToPortfolioContent(normalizedProfile, {
+        projectNarratives: copy.projectNarratives,
+        skipAI: !useAI,
+      });
+      if (useAI) stagesRun.push('contentTransform');
+    }
+
     // ── Determine sections ────────────────────────────────────────────
-    report('sections', useAI ? 5 : 1, useAI ? 6 : 2, 'Configuring sections...');
-    const sections = determineSections(normalizedProfile, templateMeta.defaultSections, enrichment);
+    report('sections', useAI ? 3 : 2, useAI ? 4 : 3, 'Configuring sections...');
+    const derivedSections = determineSections(content, templateMeta.defaultSections, enrichment);
+    const sections = preserved
+      ? preserveUserHiddenSections(derivedSections, preserved.sections)
+      : derivedSections;
 
     // ── Style ─────────────────────────────────────────────────────────
-    const style: TemplateStyleConfig = {
-      accentColor:
-        options.accentColor || templateMeta.compatibleAccentColors[0]?.value || '#3b82f6',
-      fontFamily: options.fontFamily || templateMeta.compatibleFonts[0]?.id || 'inter',
-      appearance: templateMeta.defaultAppearance ?? 'system',
-    };
+    const style: TemplateStyleConfig = preserved?.style
+      ? reconcileStyle(
+          {
+            accentColor: options.accentColor ?? preserved.style.accentColor,
+            fontFamily: options.fontFamily ?? preserved.style.fontFamily,
+            appearance: preserved.style.appearance,
+          },
+          templateMeta
+        )
+      : {
+          accentColor:
+            options.accentColor || templateMeta.compatibleAccentColors[0]?.value || '#3b82f6',
+          fontFamily: options.fontFamily || templateMeta.compatibleFonts[0]?.id || 'inter',
+          appearance: templateMeta.defaultAppearance ?? 'system',
+        };
 
     // ── Assemble TemplatePortfolio ────────────────────────────────────
     const templatePortfolio: TemplatePortfolio = {
       templateId,
       copy,
+      content,
       sections,
       style,
       enrichment,
+      overrides: preserved?.overrides,
     };
 
     // ── Save to DB ────────────────────────────────────────────────────
-    report('saving', useAI ? 6 : 2, useAI ? 6 : 2, 'Saving your portfolio...');
+    report('saving', useAI ? 4 : 3, useAI ? 4 : 3, 'Saving your portfolio...');
     const generationTimeMs = Date.now() - startTime;
 
     // Deactivate existing active portfolios
@@ -270,9 +273,10 @@ export async function generateEnhancedPortfolio(
         version: nextVersion,
         status: 'PUBLISHED',
         plan: templatePortfolio as unknown as Prisma.InputJsonValue,
+        userOverrides: { draftPlan: templatePortfolio } as unknown as Prisma.InputJsonValue,
         isActive: true,
         generationTimeMs,
-        pipelineVersion: useAI ? 'enhanced-v1' : 'template-v1',
+        pipelineVersion: useAI ? 'agent-v2' : 'template-v1',
         publishedAt: new Date(),
         totalTokensUsed: enrichment?._meta?.totalTokensUsed
           ? JSON.parse(JSON.stringify(enrichment._meta.totalTokensUsed))
@@ -307,440 +311,13 @@ export async function generateEnhancedPortfolio(
 }
 
 // ============================================================================
-// AI PIPELINE EXECUTION
-// ============================================================================
-
-interface PipelineResult {
-  copy: TemplateCopy;
-  enrichment: TemplateAIEnrichment;
-  stagesRun: string[];
-}
-
-/**
- * Run the AI pipeline stages and produce enriched copy + insights.
- *
- * Runs: Stage A → B → D → F (skips C strategy and E design since templates handle those).
- * Each stage feeds into the next. Validation fixes are applied to the narrative.
- */
-async function runAIPipeline(
-  profileId: string,
-  normalizedProfile: import('@/lib/portfolio/templates/types').TemplateProfileData,
-  report: (stage: string, completed: number, total: number, message: string) => void
-): Promise<PipelineResult> {
-  const pipelineStart = Date.now();
-  const stagesRun: string[] = [];
-  let totalInput = 0;
-  let totalOutput = 0;
-
-  // ── Collect data for AI pipeline ────────────────────────────────────
-  report('collecting', 0, 6, 'Gathering your profile data...');
-  const collectedData = await collectProfileData(profileId);
-  stagesRun.push('dataCollection');
-
-  // ── Stage A: Profile Understanding ──────────────────────────────────
-  report('understanding', 1, 6, 'Understanding who you are...');
-  const understanding = await executeProfileUnderstanding(collectedData);
-  stagesRun.push('profileUnderstanding');
-  totalInput += understanding._meta.tokensUsed.input;
-  totalOutput += understanding._meta.tokensUsed.output;
-
-  enhancedLogger.info('Stage A complete', {
-    archetype: understanding.primaryArchetype,
-    careerStage: understanding.careerStage,
-    themes: understanding.definingThemes,
-  });
-
-  // ── Stage B: Evidence Extraction ────────────────────────────────────
-  report('evidence', 2, 6, 'Finding your strongest proof points...');
-  const evidence = await executeEvidenceExtraction(collectedData, understanding);
-  stagesRun.push('evidenceExtraction');
-  totalInput += evidence._meta.tokensUsed.input;
-  totalOutput += evidence._meta.tokensUsed.output;
-
-  enhancedLogger.info('Stage B complete', {
-    topEvidenceCount: evidence.topEvidence.length,
-    mustFeature: evidence.mustFeature.length,
-    weakItems: evidence.weakItems.length,
-  });
-
-  // ── Stage C: Portfolio Strategy (lightweight, for section ordering) ─
-  // We run strategy to get intelligent section ordering and hook strategy,
-  // even though the template controls the visual structure.
-  report('strategy', 3, 6, 'Planning your portfolio structure...');
-  const strategy = await executePortfolioStrategy(collectedData, understanding, evidence);
-  stagesRun.push('portfolioStrategy');
-  totalInput += strategy._meta.tokensUsed.input;
-  totalOutput += strategy._meta.tokensUsed.output;
-
-  enhancedLogger.info('Stage C complete', {
-    tone: strategy.tone,
-    leadWith: strategy.leadWith,
-    hookStrategy: strategy.hookStrategy,
-  });
-
-  // ── Stage D: Narrative Generation ───────────────────────────────────
-  report('narrative', 4, 6, 'Writing your portfolio story...');
-  let narrative = await executeNarrativeGeneration(
-    collectedData,
-    understanding,
-    evidence,
-    strategy
-  );
-  stagesRun.push('narrativeGeneration');
-  totalInput += narrative._meta.tokensUsed.input;
-  totalOutput += narrative._meta.tokensUsed.output;
-
-  enhancedLogger.info('Stage D complete', {
-    headline: narrative.headline,
-    hasProjectFramings: Object.keys(narrative.projectFramings).length,
-    hasPullQuote: !!narrative.pullQuote,
-  });
-
-  // ── Stage F: Validation ─────────────────────────────────────────────
-  report('validation', 5, 6, 'Verifying accuracy...');
-  const validation = await executeValidation(collectedData, narrative);
-  stagesRun.push('validation');
-  totalInput += validation._meta.tokensUsed.input;
-  totalOutput += validation._meta.tokensUsed.output;
-
-  // Apply fixes if validation found issues
-  if (validation.modifications.length > 0) {
-    narrative = applyValidationFixes(narrative, validation);
-    enhancedLogger.info('Applied validation fixes', {
-      fixes: validation.modifications.length,
-      overallScore: validation.overallScore,
-    });
-  }
-
-  enhancedLogger.info('Stage F complete', {
-    score: validation.overallScore,
-    passed: validation.passed,
-    warnings: validation.warnings.length,
-  });
-
-  // ── Map to TemplateCopy + Enrichment ────────────────────────────────
-  const copy = mapNarrativeToTemplateCopy(narrative, collectedData, normalizedProfile);
-  const enrichment = buildEnrichment(
-    understanding,
-    evidence,
-    validation,
-    collectedData,
-    pipelineStart,
-    totalInput,
-    totalOutput,
-    stagesRun
-  );
-
-  return { copy, enrichment, stagesRun };
-}
-
-// ============================================================================
-// MAPPING: AI Pipeline Output → Template Types
-// ============================================================================
-
-/**
- * Map the full narrative content from Stage D into the TemplateCopy format.
- * This bridges the AI pipeline output to the template's copy contract.
- *
- * Core fields (heroHeadline, aboutText, etc.) are always present.
- * Extended fields (sectionIntros, projectNarratives, etc.) are populated
- * from the richer pipeline output.
- */
-function mapNarrativeToTemplateCopy(
-  narrative: NarrativeContent,
-  data: CollectedProfileData,
-  normalizedProfile: import('@/lib/portfolio/templates/types').TemplateProfileData
-): TemplateCopy {
-  const name =
-    [data.basics.firstName, data.basics.lastName].filter(Boolean).join(' ') || 'Portfolio';
-
-  return {
-    // Core copy
-    heroHeadline: narrative.headline,
-    heroSubtext: narrative.subheadline,
-    aboutTitle: buildAboutTitle(data),
-    aboutText: narrative.introParagraph,
-    contactTitle: 'Let\u2019s work together',
-    contactSubtext: narrative.ctaText,
-    primaryCtaLabel: inferCtaLabel(normalizedProfile),
-    seoTitle: `${name} \u2014 ${data.basics.headline || 'Portfolio'}`,
-    seoDescription: narrative.metaBio,
-
-    // Extended copy from pipeline
-    sectionIntros: mapSectionIntros(narrative.sectionIntros),
-    projectNarratives: narrative.projectFramings,
-    experienceNarrative: narrative.experienceNarrative ?? null,
-    githubNarrative: narrative.githubNarrative ?? null,
-    writingNarrative: narrative.writingNarrative ?? null,
-    pullQuote: narrative.pullQuote ?? null,
-  };
-}
-
-/**
- * Build a personal about title from the data.
- */
-function buildAboutTitle(data: CollectedProfileData): string {
-  const name = [data.basics.firstName, data.basics.lastName].filter(Boolean).join(' ');
-
-  if (name) {
-    return `About ${name}`;
-  }
-  return 'About Me';
-}
-
-/**
- * Infer a contextual CTA label based on available data.
- */
-function inferCtaLabel(
-  profile: import('@/lib/portfolio/templates/types').TemplateProfileData
-): string {
-  const hasProjects = profile.projects.filter((p) => p.isVisible && p.showOnPortfolio).length > 0;
-  if (hasProjects) return 'View My Work \u2192';
-  return 'Get In Touch \u2192';
-}
-
-/**
- * Map the AI pipeline's generic section intros to TemplateSectionType keys.
- * The pipeline uses PortfolioSectionType names; templates use TemplateSectionType.
- */
-function mapSectionIntros(
-  pipelineIntros: Partial<Record<string, string>> | undefined
-): Partial<Record<TemplateSectionType, string>> | undefined {
-  if (!pipelineIntros || Object.keys(pipelineIntros).length === 0) return undefined;
-
-  const mapping: Record<string, TemplateSectionType> = {
-    about: 'about',
-    'experience-timeline': 'experience',
-    'experience-highlights': 'experience',
-    'featured-projects': 'projects',
-    'all-projects': 'projects',
-    'skills-overview': 'skills',
-    'skills-detailed': 'skills',
-    education: 'education',
-    certifications: 'certifications',
-    awards: 'awards',
-    'github-showcase': 'github',
-    'blog-showcase': 'blog',
-    'featured-writing': 'blog',
-    contact: 'contact',
-  };
-
-  const mapped: Partial<Record<TemplateSectionType, string>> = {};
-  for (const [pipelineKey, text] of Object.entries(pipelineIntros)) {
-    if (!text) continue;
-    const templateKey = mapping[pipelineKey];
-    if (templateKey && !mapped[templateKey]) {
-      mapped[templateKey] = text;
-    }
-  }
-
-  return Object.keys(mapped).length > 0 ? mapped : undefined;
-}
-
-/**
- * Build the AI enrichment payload from pipeline outputs.
- * This provides deep insights templates can use for smarter rendering.
- */
-function buildEnrichment(
-  understanding: ProfileUnderstanding,
-  evidence: EvidenceExtraction,
-  validation: ValidationReport,
-  data: CollectedProfileData,
-  pipelineStart: number,
-  totalInput: number,
-  totalOutput: number,
-  stagesRun: string[]
-): TemplateAIEnrichment {
-  const richness = computeDataRichness(data);
-
-  return {
-    archetype: understanding.primaryArchetype,
-    secondaryArchetypes: understanding.secondaryArchetypes,
-    careerStage: understanding.careerStage,
-    definingThemes: understanding.definingThemes,
-    uniqueAngles: understanding.uniqueAngles,
-    domains: understanding.domains,
-
-    mustFeature: evidence.mustFeature,
-    weakItems: evidence.weakItems,
-
-    highlightFacts: buildHighlightFacts(data, evidence),
-    stats: buildStats(data),
-
-    dataRichness: richness.overall,
-    validationScore: validation.overallScore,
-
-    _meta: {
-      pipelineVersion: 'enhanced-v1',
-      generatedAt: new Date().toISOString(),
-      totalDurationMs: Date.now() - pipelineStart,
-      totalTokensUsed: { input: totalInput, output: totalOutput },
-      stagesRun,
-    },
-  };
-}
-
-/**
- * Build human-readable highlight facts for badge/pill display.
- */
-function buildHighlightFacts(data: CollectedProfileData, evidence: EvidenceExtraction): string[] {
-  const facts: string[] = [];
-
-  const years = calculateYearsExperience(data);
-  if (years > 0) facts.push(`${Math.round(years)}+ years experience`);
-
-  const companies = [...new Set(data.workExperiences.map((w) => w.company))];
-  if (companies.length > 1) facts.push(`${companies.length} companies`);
-
-  if (data.github?.totalStars && data.github.totalStars > 10) {
-    facts.push(`${data.github.totalStars} GitHub stars`);
-  }
-
-  if (data.blogPosts.length > 0) {
-    facts.push(`${data.blogPosts.length} published articles`);
-  }
-
-  if (data.projects.length > 3) {
-    facts.push(`${data.projects.length}+ projects`);
-  }
-
-  if (evidence.measurableOutcomes.length > 0) {
-    // Include the first measurable outcome as a highlight
-    facts.push(evidence.measurableOutcomes[0]);
-  }
-
-  // Limit to 5 most impactful facts
-  return facts.slice(0, 5);
-}
-
-/**
- * Build stats array for optional display.
- */
-function buildStats(data: CollectedProfileData): Array<{ label: string; value: string }> {
-  const stats: Array<{ label: string; value: string }> = [];
-
-  const years = calculateYearsExperience(data);
-  if (years > 0) {
-    stats.push({ label: 'Years Experience', value: `${Math.round(years)}+` });
-  }
-
-  if (data.projects.length > 0) {
-    stats.push({ label: 'Projects', value: String(data.projects.length) });
-  }
-
-  if (data.github?.totalStars && data.github.totalStars > 0) {
-    stats.push({ label: 'GitHub Stars', value: String(data.github.totalStars) });
-  }
-
-  if (data.blogPosts.length > 0) {
-    stats.push({ label: 'Articles', value: String(data.blogPosts.length) });
-  }
-
-  return stats.slice(0, 4);
-}
-
-function calculateYearsExperience(data: CollectedProfileData): number {
-  return data.workExperiences.reduce((total, exp) => {
-    const start = new Date(exp.startDate);
-    const end = exp.isCurrent ? new Date() : exp.endDate ? new Date(exp.endDate) : new Date();
-    const years = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 365);
-    return total + Math.max(0, years);
-  }, 0);
-}
-
-// ============================================================================
 // SECTION DETERMINATION (enhanced with AI insights)
 // ============================================================================
 
-/**
- * Determine which sections to enable, informed by AI enrichment.
- *
- * When enrichment is available, sections containing "weak items" are
- * still enabled but could be flagged for de-emphasis by templates.
- * Sections without data are disabled regardless of AI opinion.
- */
-function determineSections(
-  profile: import('@/lib/portfolio/templates/types').TemplateProfileData,
-  defaults: TemplateSectionConfig[],
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _enrichment: TemplateAIEnrichment | null
-): TemplateSectionConfig[] {
-  return defaults.map((section) => {
-    // Navigation and footer: always enabled
-    if (section.type === 'navigation' || section.type === 'footer') {
-      return { ...section, enabled: true };
-    }
-
-    // Hero, about, contact: always enabled (they use AI copy)
-    if (section.type === 'hero' || section.type === 'about' || section.type === 'contact') {
-      return { ...section, enabled: true };
-    }
-
-    // Data-dependent sections: enable only if data exists
-    const hasData = sectionHasData(section.type, profile);
-    return { ...section, enabled: hasData };
-  });
+export interface SwitchTemplateOptions {
+  /** Current editor draft from the client (may include unsaved changes). */
+  sourcePlan?: TemplatePortfolio;
 }
-
-function sectionHasData(
-  type: string,
-  profile: import('@/lib/portfolio/templates/types').TemplateProfileData
-): boolean {
-  switch (type) {
-    case 'experience':
-      return profile.workExperiences.filter((e) => e.isVisible).length > 0;
-    case 'projects':
-      return profile.projects.filter((p) => p.isVisible && p.showOnPortfolio).length > 0;
-    case 'skills':
-      return profile.skills.filter((s) => s.isVisible).length > 0 || profile.skillGroups.length > 0;
-    case 'education':
-      return profile.educations.filter((e) => e.isVisible).length > 0;
-    case 'certifications':
-      return profile.certifications.filter((c) => c.isVisible).length > 0;
-    case 'awards':
-      return profile.awards.filter((a) => a.isVisible).length > 0;
-    case 'github':
-      return profile.github !== null;
-    case 'blog':
-      return profile.blogPosts.filter((b) => b.isVisible).length > 0;
-    default:
-      return false;
-  }
-}
-
-// ============================================================================
-// DB HELPERS
-// ============================================================================
-
-async function loadProfileWithRelations(profileId: string): Promise<FullProfile | null> {
-  const profile = await db.profile.findUnique({
-    where: { id: profileId },
-    include: {
-      contactInfo: true,
-      links: { orderBy: { sortOrder: 'asc' } },
-      workExperiences: { orderBy: { sortOrder: 'asc' } },
-      educations: { orderBy: { sortOrder: 'asc' } },
-      skills: { orderBy: { sortOrder: 'asc' } },
-      skillGroups: {
-        include: { skills: { orderBy: { sortOrder: 'asc' } } },
-        orderBy: { sortOrder: 'asc' },
-      },
-      projects: { orderBy: { sortOrder: 'asc' } },
-      awards: { orderBy: { sortOrder: 'asc' } },
-      certifications: { orderBy: { sortOrder: 'asc' } },
-      blogPosts: { orderBy: { createdAt: 'desc' } },
-      youtubeVideos: { orderBy: { createdAt: 'desc' } },
-      photos: { orderBy: { sortOrder: 'asc' } },
-      sections: { orderBy: { sortOrder: 'asc' } },
-    },
-  });
-
-  return profile as FullProfile | null;
-}
-
-// ============================================================================
-// TEMPLATE SWITCHING
-// ============================================================================
 
 export interface SwitchTemplateResult {
   portfolioId: string;
@@ -771,7 +348,8 @@ export interface SwitchTemplateResult {
  */
 export async function switchPortfolioTemplate(
   profileId: string,
-  templateId: string
+  templateId: string,
+  options: SwitchTemplateOptions = {}
 ): Promise<SwitchTemplateResult> {
   const templateMeta = getTemplateMeta(templateId);
   if (!templateMeta) {
@@ -782,12 +360,19 @@ export async function switchPortfolioTemplate(
   const existing = await db.generatedPortfolio.findFirst({
     where: { profileId, isActive: true, status: { in: ['PUBLISHED', 'DRAFT'] } },
     orderBy: { version: 'desc' },
-    select: { id: true, plan: true, pipelineVersion: true, totalTokensUsed: true },
+    select: {
+      id: true,
+      plan: true,
+      pipelineVersion: true,
+      totalTokensUsed: true,
+      userOverrides: true,
+    },
   });
 
-  const existingPlan = existing?.plan as unknown as TemplatePortfolio | null;
+  const publishedPlan = existing?.plan as unknown as TemplatePortfolio | null;
+  const sourcePlan = resolveWorkingPlan(publishedPlan, existing?.userOverrides, options.sourcePlan);
   const isReusableTemplatePlan =
-    !!existingPlan && typeof existingPlan.templateId === 'string' && !!existingPlan.copy;
+    !!sourcePlan && typeof sourcePlan.templateId === 'string' && !!sourcePlan.copy;
 
   // No reusable copy → do a full generation with the requested template.
   if (!isReusableTemplatePlan) {
@@ -813,64 +398,51 @@ export async function switchPortfolioTemplate(
     };
   }
 
-  // Already on the requested template — nothing to do.
-  if (existingPlan.templateId === templateId) {
+  // Already on the requested template — return the working plan as-is.
+  if (sourcePlan.templateId === templateId) {
     return {
       portfolioId: existing!.id,
       templateId,
-      plan: existingPlan,
+      plan: sourcePlan,
       isAIGenerated: false,
       unchanged: true,
     };
   }
 
-  // Load + normalize the profile so we can derive data-aware sections.
-  const profile = await loadProfileWithRelations(profileId);
-  if (!profile) {
+  const normalizedProfile = await loadNormalizedProfile(profileId);
+  if (!normalizedProfile) {
     throw Errors.notFound('Profile not found');
   }
 
-  let githubProfile = null;
-  try {
-    githubProfile = await db.gitHubProfile.findUnique({
-      where: { profileId },
-      select: {
-        username: true,
-        avatarUrl: true,
-        bio: true,
-        publicRepos: true,
-        followers: true,
-        totalStars: true,
-        primaryLanguages: true,
-      },
-    });
-  } catch {
-    enhancedLogger.warn('Failed to fetch GitHub profile during template switch');
-  }
-
-  const serialized = JSON.parse(JSON.stringify(profile));
-  const normalizedProfile = normalizeProfileForTemplate(serialized, {
-    githubProfile: githubProfile ? JSON.parse(JSON.stringify(githubProfile)) : null,
-  });
+  // Prefer owned content; seed from the live profile for legacy plans so a
+  // template switch never re-links the portfolio to the resume.
+  const content =
+    sourcePlan.content ??
+    (await transformToPortfolioContent(normalizedProfile, {
+      projectNarratives: sourcePlan.copy.projectNarratives,
+      skipAI: true,
+    }));
 
   // Derive sections from the new template, then preserve any sections the user
   // intentionally turned off (never force-enable something without data).
   const derivedSections = determineSections(
-    normalizedProfile,
+    content,
     templateMeta.defaultSections,
-    existingPlan.enrichment
+    sourcePlan.enrichment
   );
-  const sections = preserveUserHiddenSections(derivedSections, existingPlan.sections);
+  const sections = preserveUserHiddenSections(derivedSections, sourcePlan.sections);
 
   // Reconcile style against the new template's bounded options.
-  const style = reconcileStyle(existingPlan.style, templateMeta);
+  const style = reconcileStyle(sourcePlan.style, templateMeta);
 
   const newPortfolio: TemplatePortfolio = {
     templateId,
-    copy: existingPlan.copy,
+    copy: sourcePlan.copy,
+    content,
     sections,
     style,
-    enrichment: existingPlan.enrichment,
+    enrichment: sourcePlan.enrichment,
+    overrides: sourcePlan.overrides,
   };
 
   // Deactivate current active portfolios and save a new version.
@@ -892,8 +464,8 @@ export async function switchPortfolioTemplate(
       version: nextVersion,
       status: 'PUBLISHED',
       plan: newPortfolio as unknown as Prisma.InputJsonValue,
+      userOverrides: { draftPlan: newPortfolio } as unknown as Prisma.InputJsonValue,
       isActive: true,
-      // Preserve provenance: the copy still came from whatever pipeline made it.
       pipelineVersion: existing!.pipelineVersion ?? 'template-v1',
       publishedAt: new Date(),
       totalTokensUsed: existing!.totalTokensUsed ?? undefined,
@@ -902,10 +474,11 @@ export async function switchPortfolioTemplate(
 
   enhancedLogger.info('Portfolio template switched', {
     profileId,
-    fromTemplate: existingPlan.templateId,
+    fromTemplate: sourcePlan.templateId,
     toTemplate: templateId,
     portfolioId: saved.id,
     version: nextVersion,
+    usedDraft: Boolean(getDraftPlan(existing?.userOverrides) || options.sourcePlan),
   });
 
   return {
@@ -972,27 +545,35 @@ export function reconcileStyle(
 // ============================================================================
 
 /**
- * Regenerate only the AI copy for an existing enhanced portfolio.
- * Preserves template ID, sections, style, and enrichment metadata.
+ * Regenerate AI copy and portfolio content for an existing portfolio.
+ * Preserves the user's template choice, style, media overrides, and hidden sections.
  */
 export async function regenerateEnhancedCopy(
   portfolioId: string
 ): Promise<{ copy: TemplateCopy; isAIGenerated: boolean }> {
   const portfolio = await db.generatedPortfolio.findUnique({
     where: { id: portfolioId },
-    select: { profileId: true, plan: true },
+    select: { profileId: true, plan: true, userOverrides: true },
   });
 
   if (!portfolio) {
     throw Errors.notFound('Portfolio not found');
   }
 
-  // Re-run the full pipeline for the best copy
+  const existingPlan = resolveWorkingPlan(
+    portfolio.plan as unknown as TemplatePortfolio,
+    portfolio.userOverrides
+  );
+  if (!existingPlan) {
+    throw Errors.badRequest('Portfolio is not template-based and cannot be regenerated');
+  }
+
   const result = await generateEnhancedPortfolio(portfolio.profileId, {
+    templateId: existingPlan.templateId,
     skipAI: false,
+    preserveCustomizations: existingPlan,
   });
 
-  // Read back the newly saved portfolio's copy
   const newPortfolio = await db.generatedPortfolio.findUnique({
     where: { id: result.portfolioId },
     select: { plan: true },

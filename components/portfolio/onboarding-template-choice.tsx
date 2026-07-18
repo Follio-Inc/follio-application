@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
+import { isPortfolioEnabled } from '@/lib/features';
 import { ONBOARDING_TEMPLATE_KEY } from '@/lib/portfolio/templates/onboarding';
 import { getAllTemplates, getDefaultTemplateId } from '@/lib/portfolio/templates/registry';
 
@@ -59,7 +60,7 @@ export function OnboardingTemplateChoice() {
   };
 
   // With only one template there's nothing to choose.
-  if (templates.length < 2) return null;
+  if (!isPortfolioEnabled() || templates.length < 2) return null;
 
   return (
     <div className="space-y-3 text-left">

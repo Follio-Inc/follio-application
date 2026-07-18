@@ -128,6 +128,16 @@ export async function ensurePrimaryProfile(
   return candidateId;
 }
 
+export interface MakePortfolioReadyOptions {
+  /**
+   * When true and no portfolio exists yet, run the full AI pipeline (copy +
+   * portfolio-style content transform). Used when the user explicitly assigns
+   * a resume as their portfolio. Defaults to false for fast, idempotent paths
+   * (dashboard load, resume deletion fallback).
+   */
+  useAI?: boolean;
+}
+
 /**
  * Make a profile fully usable as the user's portfolio.
  *
@@ -140,10 +150,20 @@ export async function ensurePrimaryProfile(
  * It performs two idempotent steps:
  *   1. Promote `status` out of `DRAFT` (to `PUBLIC`) so the page stops 404ing.
  *      `PRIVATE`/`PUBLIC` are left untouched to respect an explicit user choice.
- *   2. Ensure an active template-based portfolio exists, generating a
- *      deterministic one (no AI) when missing.
+ *   2. Ensure an active template-based portfolio exists, generating one when
+ *      missing. Generation snapshots resume data into portfolio-owned content.
  */
-export async function makeProfilePortfolioReady(profileId: string): Promise<void> {
+export async function makeProfilePortfolioReady(
+  profileId: string,
+  options: MakePortfolioReadyOptions = {}
+): Promise<void> {
+  // Resume-only mode: skip portfolio generation entirely. Callers may still
+  // promote a primary profile pointer; public portfolio is gated elsewhere.
+  const { isPortfolioEnabled } = await import('@/lib/features');
+  if (!isPortfolioEnabled()) {
+    return;
+  }
+
   const profile = await db.profile.findUnique({
     where: { id: profileId },
     select: { status: true },
@@ -164,7 +184,7 @@ export async function makeProfilePortfolioReady(profileId: string): Promise<void
   // dependency graph) into every consumer of the active-profile helpers.
   const { ensureActiveTemplatePortfolio } =
     await import('@/services/portfolio/enhanced-generation.service');
-  await ensureActiveTemplatePortfolio(profileId);
+  await ensureActiveTemplatePortfolio(profileId, { skipAI: !options.useAI });
 }
 
 /**

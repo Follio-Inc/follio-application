@@ -13,6 +13,7 @@
 export { executeProfileUnderstanding } from './stage-a-understanding';
 export { executeEvidenceExtraction } from './stage-b-evidence';
 export { executePortfolioStrategy } from './stage-c-strategy';
-export { executeNarrativeGeneration } from './stage-d-narrative';
+export { executeNarrativeGeneration, buildNarrativeUserPrompt } from './stage-d-narrative';
+export type { NarrativeGenerationContext } from './stage-d-narrative';
 export { COMPONENT_VARIANTS, executeDesignBrief, VALID_COLOR_THEMES } from './stage-e-design';
 export { applyValidationFixes, executeValidation } from './stage-f-validation';

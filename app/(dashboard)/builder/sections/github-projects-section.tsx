@@ -16,6 +16,8 @@ import {
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
+import { isPortfolioEnabled } from '@/lib/features';
+
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -310,10 +312,12 @@ export function GitHubProjectsSection({ projects, onUpdateAction }: GitHubProjec
         {/* Visibility indicators */}
         {showActions && (
           <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <Monitor className="h-3 w-3" />
-              Portfolio: {project.showOnPortfolio !== false ? 'Yes' : 'No'}
-            </span>
+            {isPortfolioEnabled() && (
+              <span className="flex items-center gap-1">
+                <Monitor className="h-3 w-3" />
+                Portfolio: {project.showOnPortfolio !== false ? 'Yes' : 'No'}
+              </span>
+            )}
             <span className="flex items-center gap-1">
               <FileText className="h-3 w-3" />
               Resume: {project.showOnResume !== false ? 'Yes' : 'No'}
@@ -334,7 +338,9 @@ export function GitHubProjectsSection({ projects, onUpdateAction }: GitHubProjec
               GitHub Projects
             </CardTitle>
             <CardDescription>
-              Manage which GitHub repositories appear on your portfolio and resume
+              {isPortfolioEnabled()
+                ? 'Manage which GitHub repositories appear on your portfolio and resume'
+                : 'Manage which GitHub repositories appear on your resume'}
             </CardDescription>
           </div>
           {githubConnected && githubUsername && (
@@ -441,19 +447,21 @@ export function GitHubProjectsSection({ projects, onUpdateAction }: GitHubProjec
                 />
               </div>
 
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Show on Portfolio</Label>
-                  <p className="text-xs text-muted-foreground">Display in your portfolio view</p>
+              {isPortfolioEnabled() && (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Show on Portfolio</Label>
+                    <p className="text-xs text-muted-foreground">Display in your portfolio view</p>
+                  </div>
+                  <Switch
+                    checked={visibility.showOnPortfolio}
+                    onCheckedChange={(checked) =>
+                      setVisibility((prev) => (prev ? { ...prev, showOnPortfolio: checked } : null))
+                    }
+                    disabled={!visibility.isVisible}
+                  />
                 </div>
-                <Switch
-                  checked={visibility.showOnPortfolio}
-                  onCheckedChange={(checked) =>
-                    setVisibility((prev) => (prev ? { ...prev, showOnPortfolio: checked } : null))
-                  }
-                  disabled={!visibility.isVisible}
-                />
-              </div>
+              )}
 
               <div className="flex items-center justify-between">
                 <div>

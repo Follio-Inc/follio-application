@@ -21,7 +21,7 @@ export const SECTION_LABELS: Record<TemplateSectionType, string> = {
   navigation: 'Navigation',
   hero: 'Intro',
   about: 'About',
-  experience: 'Experience',
+  experience: 'Work Experience',
   projects: 'Projects',
   skills: 'Skills',
   education: 'Education',

@@ -10,11 +10,22 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
-import type { TemplateAIEnrichment, TemplateCopy, TemplateProfileData } from '../types';
+import type { TemplateCopy, TemplateProfileData, TemplateSectionType } from '../types';
 import { PORTFOLIO_THUMBNAIL_FOCUS_ATTR } from '../types';
+import { resolveProjectDescription, resolveSectionHeading } from '../resolve-copy';
+import { PortfolioRichHtml } from '@/components/portfolio/portfolio-rich-html';
+import { isPortfolioTextEmpty } from '@/lib/portfolio/rich-html';
 
+import { SECTION_DEFAULT_HEADINGS } from './meta';
 import { SocialLinksRow } from './social-icons';
 import { computeYearsOfExperience, formatDateRange, getDisplayName } from './utils';
+
+function resolveHeading(
+  copy: TemplateCopy,
+  type: TemplateSectionType
+): { eyebrow: string; title: string } {
+  return resolveSectionHeading(copy, type, SECTION_DEFAULT_HEADINGS);
+}
 
 // ============================================================================
 // NAVIGATION
@@ -162,6 +173,7 @@ interface HeroProps {
 
 export function DDHero({ profile, copy }: HeroProps) {
   const displayName = getDisplayName(profile.firstName, profile.lastName);
+  const headline = copy.heroHeadline.trim() || profile.headline?.trim() || '';
 
   const scrollToNext = useCallback(() => {
     const hero = document.getElementById('dd-hero');
@@ -176,16 +188,18 @@ export function DDHero({ profile, copy }: HeroProps) {
         <div className="dd-hero-centered" {...{ [PORTFOLIO_THUMBNAIL_FOCUS_ATTR]: '' }}>
           <div className="dd-accent-dash dd-animate-in" />
 
-          <p className="dd-hero-greeting dd-animate-in dd-animate-delay-1">
-            Hi, I&apos;m {displayName}
-          </p>
+          {displayName && (
+            <p className="dd-hero-greeting dd-animate-in dd-animate-delay-1">{displayName}</p>
+          )}
 
-          <h1 className="dd-hero-headline dd-animate-in dd-animate-delay-2">
-            {copy.heroHeadline || profile.headline || 'I build things that matter.'}
-          </h1>
+          {headline && (
+            <h1 className="dd-hero-headline dd-animate-in dd-animate-delay-2">{headline}</h1>
+          )}
 
-          {copy.heroSubtext && (
-            <p className="dd-hero-subtext dd-animate-in dd-animate-delay-3">{copy.heroSubtext}</p>
+          {!isPortfolioTextEmpty(copy.heroSubtext) && (
+            <div className="dd-hero-subtext dd-animate-in dd-animate-delay-3">
+              <PortfolioRichHtml html={copy.heroSubtext} />
+            </div>
           )}
 
           <div className="dd-animate-in dd-animate-delay-4">
@@ -229,13 +243,16 @@ export function DDHero({ profile, copy }: HeroProps) {
 interface AboutProps {
   profile: TemplateProfileData;
   copy: TemplateCopy;
-  enrichment?: TemplateAIEnrichment | null;
 }
 
-export function DDAbout({ profile, copy, enrichment }: AboutProps) {
+export function DDAbout({ profile, copy }: AboutProps) {
   const displayName = getDisplayName(profile.firstName, profile.lastName);
   const yearsExp = computeYearsOfExperience(profile.workExperiences);
   const projectCount = profile.projects.filter((p) => p.isVisible && p.showOnPortfolio).length;
+  const aboutTitle = copy.aboutTitle.trim();
+  const aboutText = !isPortfolioTextEmpty(copy.aboutText)
+    ? copy.aboutText
+    : profile.summary?.trim() || '';
 
   return (
     <section id="dd-about" className="dd-section">
@@ -244,21 +261,13 @@ export function DDAbout({ profile, copy, enrichment }: AboutProps) {
           {/* Content */}
           <div className="dd-about-content">
             <div className="dd-accent-dash" />
-            <h2 className="dd-section-title">{copy.aboutTitle || `About Me`}</h2>
-            <p className="dd-about-text">{copy.aboutText || profile.summary || ''}</p>
-
-            {copy.pullQuote && (
-              <blockquote className="dd-pull-quote">&ldquo;{copy.pullQuote}&rdquo;</blockquote>
+            {aboutTitle && <h2 className="dd-section-title">{aboutTitle}</h2>}
+            {!isPortfolioTextEmpty(aboutText) && (
+              <PortfolioRichHtml html={aboutText} className="dd-about-text" />
             )}
 
-            {enrichment?.highlightFacts && enrichment.highlightFacts.length > 0 && (
-              <div className="dd-highlight-facts">
-                {enrichment.highlightFacts.map((fact, i) => (
-                  <span key={i} className="dd-highlight-fact">
-                    {fact}
-                  </span>
-                ))}
-              </div>
+            {!isPortfolioTextEmpty(copy.pullQuote) && (
+              <PortfolioRichHtml html={copy.pullQuote} className="dd-pull-quote" />
             )}
 
             {(yearsExp > 0 || projectCount > 0) && (
@@ -320,14 +329,17 @@ export function DDExperience({ profile, copy }: ExperienceProps) {
   if (visibleExperiences.length === 0) return null;
 
   const sectionIntro = copy.experienceNarrative || copy.sectionIntros?.experience;
+  const { title } = resolveHeading(copy, 'experience');
 
   return (
     <section id="dd-experience" className="dd-section">
       <div className="dd-container">
         <div className="dd-accent-dash" />
-        <h2 className="dd-section-title">Experience</h2>
+        {title && <h2 className="dd-section-title">{title}</h2>}
 
-        {sectionIntro && <p className="dd-section-intro">{sectionIntro}</p>}
+        {!isPortfolioTextEmpty(sectionIntro) && (
+          <PortfolioRichHtml html={sectionIntro} className="dd-section-intro" />
+        )}
 
         <div className="dd-timeline">
           {visibleExperiences.map((exp) => (
@@ -342,7 +354,9 @@ export function DDExperience({ profile, copy }: ExperienceProps) {
                   {exp.company}
                   {exp.location && <span className="dd-timeline-location"> · {exp.location}</span>}
                 </div>
-                {exp.bullets.length > 0 && <p className="dd-timeline-desc">{exp.bullets[0]}</p>}
+                {exp.bullets.length > 0 && !isPortfolioTextEmpty(exp.bullets[0]) && (
+                  <PortfolioRichHtml html={exp.bullets[0]} className="dd-timeline-desc" />
+                )}
               </div>
             </div>
           ))}
@@ -366,19 +380,21 @@ export function DDProjects({ profile, copy }: ProjectsProps) {
   if (visibleProjects.length === 0) return null;
 
   const sectionIntro = copy.sectionIntros?.projects;
+  const { title } = resolveHeading(copy, 'projects');
 
   return (
     <section id="dd-projects" className="dd-section">
       <div className="dd-container">
         <div className="dd-accent-dash" />
-        <h2 className="dd-section-title">Featured Work</h2>
+        {title && <h2 className="dd-section-title">{title}</h2>}
 
-        {sectionIntro && <p className="dd-section-intro">{sectionIntro}</p>}
+        {!isPortfolioTextEmpty(sectionIntro) && (
+          <PortfolioRichHtml html={sectionIntro} className="dd-section-intro" />
+        )}
 
         <div className="dd-projects-grid">
           {visibleProjects.map((project) => {
-            const narrative = copy.projectNarratives?.[project.title];
-            const description = narrative || project.description;
+            const description = resolveProjectDescription(project, copy);
             const href = project.url || project.repoUrl || undefined;
 
             return (
@@ -413,7 +429,9 @@ export function DDProjects({ profile, copy }: ProjectsProps) {
 
                   <div className="dd-project-title">{project.title}</div>
 
-                  {description && <div className="dd-project-desc">{description}</div>}
+                  {description && !isPortfolioTextEmpty(description) && (
+                    <PortfolioRichHtml html={description} className="dd-project-desc" />
+                  )}
 
                   {(project.ghStars != null || project.ghLanguage) && (
                     <div className="dd-project-meta">
@@ -447,20 +465,22 @@ export function DDProjects({ profile, copy }: ProjectsProps) {
 
 interface SkillsProps {
   profile: TemplateProfileData;
+  copy: TemplateCopy;
 }
 
-export function DDSkills({ profile }: SkillsProps) {
+export function DDSkills({ profile, copy }: SkillsProps) {
   const visibleSkills = profile.skills.filter((s) => s.isVisible);
   if (visibleSkills.length === 0 && profile.skillGroups.length === 0) return null;
 
   // Use skill groups if available, otherwise create a flat list
   const hasGroups = profile.skillGroups.length > 0;
+  const { title } = resolveHeading(copy, 'skills');
 
   return (
     <section id="dd-skills" className="dd-section">
       <div className="dd-container">
         <div className="dd-accent-dash" />
-        <h2 className="dd-section-title">Skills</h2>
+        {title && <h2 className="dd-section-title">{title}</h2>}
 
         <div className="dd-skills-grid">
           {hasGroups ? (
@@ -499,17 +519,20 @@ export function DDSkills({ profile }: SkillsProps) {
 
 interface EducationProps {
   profile: TemplateProfileData;
+  copy: TemplateCopy;
 }
 
-export function DDEducation({ profile }: EducationProps) {
+export function DDEducation({ profile, copy }: EducationProps) {
   const visibleEducation = profile.educations.filter((e) => e.isVisible);
   if (visibleEducation.length === 0) return null;
+
+  const { title } = resolveHeading(copy, 'education');
 
   return (
     <section id="dd-education" className="dd-section">
       <div className="dd-container">
         <div className="dd-accent-dash" />
-        <h2 className="dd-section-title">Education</h2>
+        {title && <h2 className="dd-section-title">{title}</h2>}
 
         <div className="dd-education-list">
           {visibleEducation.map((edu) => (
@@ -521,7 +544,7 @@ export function DDEducation({ profile }: EducationProps) {
                 <div className="dd-education-degree">
                   {edu.degree
                     ? `${edu.degree}${edu.fieldOfStudy ? ` in ${edu.fieldOfStudy}` : ''}`
-                    : edu.fieldOfStudy || 'Degree'}
+                    : edu.fieldOfStudy || edu.institution}
                 </div>
                 <div className="dd-education-school">{edu.institution}</div>
                 {edu.gpa && <div className="dd-education-field">GPA: {edu.gpa}</div>}
@@ -540,17 +563,20 @@ export function DDEducation({ profile }: EducationProps) {
 
 interface CertificationsProps {
   profile: TemplateProfileData;
+  copy: TemplateCopy;
 }
 
-export function DDCertifications({ profile }: CertificationsProps) {
+export function DDCertifications({ profile, copy }: CertificationsProps) {
   const visibleCerts = profile.certifications.filter((c) => c.isVisible);
   if (visibleCerts.length === 0) return null;
+
+  const { title } = resolveHeading(copy, 'certifications');
 
   return (
     <section id="dd-certifications" className="dd-section">
       <div className="dd-container">
         <div className="dd-accent-dash" />
-        <h2 className="dd-section-title">Certifications</h2>
+        {title && <h2 className="dd-section-title">{title}</h2>}
 
         <div className="dd-cert-list">
           {visibleCerts.map((cert) => (
@@ -604,18 +630,25 @@ export function DDCertifications({ profile }: CertificationsProps) {
 
 interface GithubProps {
   profile: TemplateProfileData;
+  copy: TemplateCopy;
 }
 
-export function DDGithub({ profile }: GithubProps) {
+export function DDGithub({ profile, copy }: GithubProps) {
   if (!profile.github) return null;
 
   const { github } = profile;
+  const { title } = resolveHeading(copy, 'github');
+  const intro = copy.githubNarrative || copy.sectionIntros?.github;
 
   return (
     <section id="dd-github" className="dd-section">
       <div className="dd-container">
         <div className="dd-accent-dash" />
-        <h2 className="dd-section-title">Open Source</h2>
+        {title && <h2 className="dd-section-title">{title}</h2>}
+
+        {!isPortfolioTextEmpty(intro) && (
+          <PortfolioRichHtml html={intro} className="dd-section-intro" />
+        )}
 
         <div className="dd-github-stats">
           <div className="dd-github-stat-card">
@@ -671,22 +704,28 @@ interface ContactProps {
 }
 
 export function DDContact({ profile, copy }: ContactProps) {
+  const contactTitle = copy.contactTitle.trim();
+  const contactSubtext = copy.contactSubtext.trim();
+  const ctaLabel = copy.primaryCtaLabel.trim();
+
   return (
     <section id="dd-contact" className="dd-section">
       <div className="dd-container">
         <div className="dd-contact-centered">
           <div className="dd-accent-dash" style={{ margin: '0 auto 1.25rem' }} />
-          <h2 className="dd-section-title" style={{ textAlign: 'center' }}>
-            {copy.contactTitle || 'Let\u2019s work together'}
-          </h2>
-          <p className="dd-contact-subtext">{copy.contactSubtext || 'Get in touch with me'}</p>
+          {contactTitle && (
+            <h2 className="dd-section-title" style={{ textAlign: 'center' }}>
+              {contactTitle}
+            </h2>
+          )}
+          {contactSubtext && <p className="dd-contact-subtext">{contactSubtext}</p>}
 
-          {profile.contactInfo?.email && (
+          {profile.contactInfo?.email && ctaLabel && (
             <a
               href={`mailto:${profile.contactInfo.email}`}
               className="dd-btn-primary dd-contact-email-btn"
             >
-              Send me an email
+              {ctaLabel}
               <span>&rarr;</span>
             </a>
           )}

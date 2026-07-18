@@ -21,7 +21,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -140,91 +139,99 @@ export function AddSectionDialog({ existingSections, onAdd }: AddSectionDialogPr
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="w-full gap-2">
-          <Plus className="h-4 w-4" />
-          Add Section
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Add New Section</DialogTitle>
-          <DialogDescription>Choose a section type to add to your profile</DialogDescription>
-        </DialogHeader>
+    <>
+      {/* Controlled open — avoid DialogTrigger aria-controls SSR/client useId mismatch */}
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="w-full gap-2"
+        onClick={() => setOpen(true)}
+      >
+        <Plus className="h-4 w-4" />
+        Add Section
+      </Button>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add New Section</DialogTitle>
+            <DialogDescription>Choose a section type to add to your profile</DialogDescription>
+          </DialogHeader>
 
-        <div className="space-y-4 py-4">
-          {/* Section Type Selection */}
-          <div className="grid gap-2">
-            {availableSections.map((section) => {
-              const Icon = section.icon;
-              const isSelected = selectedType === section.type;
+          <div className="space-y-4 py-4">
+            {/* Section Type Selection */}
+            <div className="grid gap-2">
+              {availableSections.map((section) => {
+                const Icon = section.icon;
+                const isSelected = selectedType === section.type;
 
-              return (
-                <button
-                  key={section.type}
-                  onClick={() => setSelectedType(section.type)}
-                  className={cn(
-                    'flex items-start gap-3 rounded-lg border p-3 text-left transition-colors',
-                    isSelected
-                      ? 'border-primary bg-primary/5'
-                      : 'border-border hover:border-primary/50 hover:bg-muted/50'
-                  )}
-                >
-                  <div
+                return (
+                  <button
+                    key={section.type}
+                    type="button"
+                    onClick={() => setSelectedType(section.type)}
                     className={cn(
-                      'rounded-md p-2',
-                      isSelected ? 'bg-primary text-primary-foreground' : 'bg-muted'
+                      'flex items-start gap-3 rounded-lg border p-3 text-left transition-colors',
+                      isSelected
+                        ? 'border-primary bg-primary/5'
+                        : 'border-border hover:border-primary/50 hover:bg-muted/50'
                     )}
                   >
-                    <Icon className="h-4 w-4" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-medium">{section.title}</p>
-                    <p className="text-xs text-muted-foreground">{section.description}</p>
-                  </div>
-                </button>
-              );
-            })}
+                    <div
+                      className={cn(
+                        'rounded-md p-2',
+                        isSelected ? 'bg-primary text-primary-foreground' : 'bg-muted'
+                      )}
+                    >
+                      <Icon className="h-4 w-4" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-medium">{section.title}</p>
+                      <p className="text-xs text-muted-foreground">{section.description}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Custom Section Name Input */}
+            {selectedType === 'CUSTOM' && (
+              <div className="space-y-2">
+                <Label htmlFor="customName">Section Name</Label>
+                <Input
+                  id="customName"
+                  placeholder="e.g., Hobbies, Publications, Speaking..."
+                  value={customName}
+                  onChange={(e) => setCustomName(e.target.value)}
+                  autoFocus
+                />
+              </div>
+            )}
+
+            {/* No More Sections Message */}
+            {availableSections.length === 1 && availableSections[0].type === 'CUSTOM' && (
+              <p className="text-center text-sm text-muted-foreground">
+                All standard sections have been added. You can create custom sections below.
+              </p>
+            )}
           </div>
 
-          {/* Custom Section Name Input */}
-          {selectedType === 'CUSTOM' && (
-            <div className="space-y-2">
-              <Label htmlFor="customName">Section Name</Label>
-              <Input
-                id="customName"
-                placeholder="e.g., Hobbies, Publications, Speaking..."
-                value={customName}
-                onChange={(e) => setCustomName(e.target.value)}
-                autoFocus
-              />
-            </div>
-          )}
-
-          {/* No More Sections Message */}
-          {availableSections.length === 1 && availableSections[0].type === 'CUSTOM' && (
-            <p className="text-center text-sm text-muted-foreground">
-              All standard sections have been added. You can create custom sections below.
-            </p>
-          )}
-        </div>
-
-        {/* Actions */}
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={() => setOpen(false)}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleAdd}
-            disabled={
-              !selectedType || (selectedType === 'CUSTOM' && !customName.trim()) || isAdding
-            }
-          >
-            {isAdding ? 'Adding...' : 'Add Section'}
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+          {/* Actions */}
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAdd}
+              disabled={
+                !selectedType || (selectedType === 'CUSTOM' && !customName.trim()) || isAdding
+              }
+            >
+              {isAdding ? 'Adding...' : 'Add Section'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

@@ -24,6 +24,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { cn } from '@/lib/utils';
+import { isPortfolioEnabled } from '@/lib/features';
 
 import { DownloadDialog } from '@/app/(dashboard)/builder/components/download-dialog';
 import { ShareDialog } from '@/components/share-dialog';
@@ -501,9 +502,7 @@ export function ResumeDashboardClient({
     const isImporting = resume.id === newResume.importingProfileId;
 
     return (
-      <Card
-        className="group relative flex flex-col overflow-hidden transition-all duration-200 hover:border-border hover:shadow-md"
-      >
+      <Card className="group relative flex flex-col overflow-hidden transition-all duration-200 hover:border-border hover:shadow-md">
         <button
           type="button"
           className="relative block w-full cursor-pointer border-b border-border/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -590,7 +589,13 @@ export function ResumeDashboardClient({
                   disabled={resume.id === primaryProfileId || isMutating}
                 >
                   <Star className="mr-2 h-4 w-4" />
-                  {resume.id === primaryProfileId ? 'Current Portfolio' : 'Set as Portfolio'}
+                  {resume.id === primaryProfileId
+                    ? isPortfolioEnabled()
+                      ? 'Current Portfolio'
+                      : 'Primary resume'
+                    : isPortfolioEnabled()
+                      ? 'Set as Portfolio'
+                      : 'Set as primary'}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem

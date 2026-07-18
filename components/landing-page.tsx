@@ -41,6 +41,7 @@ import { AppHeader } from '@/components/app-header';
 import { ResumeIllustration } from '@/components/resume-illustration';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { isPortfolioEnabled } from '@/lib/features';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Motion primitives
@@ -264,8 +265,9 @@ const VIEWS: ReadonlyArray<{
 ];
 
 export function ViewSwitcher() {
+  const views = isPortfolioEnabled() ? VIEWS : VIEWS.filter((v) => v.key !== 'portfolio');
   const [active, setActive] = useState<ViewKey>('follio');
-  const current = VIEWS.find((v) => v.key === active) ?? VIEWS[0];
+  const current = views.find((v) => v.key === active) ?? views[0];
   const Mock = current.Mock;
 
   return (
@@ -276,7 +278,7 @@ export function ViewSwitcher() {
           role="tablist"
           aria-label="Preview view"
         >
-          {VIEWS.map((v) => {
+          {views.map((v) => {
             const isActive = v.key === active;
             return (
               <button
@@ -1017,14 +1019,14 @@ function Hero() {
         >
           {/* Mobile: a tight, scannable promise. Desktop: the full positioning. */}
           <span className="sm:hidden">
-            Build one living profile and share it as a resume, portfolio, or quick snapshot — all
-            from a single link.
+            {isPortfolioEnabled()
+              ? 'Build one living profile and share it as a resume, portfolio, or quick snapshot — all from a single link.'
+              : 'Build a living resume you can share, refine, and export — all from a single link.'}
           </span>
           <span className="hidden sm:inline">
-            Follio is a web app for job seekers and professionals to build one living profile and
-            share it as a resume, portfolio, or quick snapshot through a single link, with clean
-            formatting, viewer-adaptive presentation, and AI assistance that helps answer recruiter
-            questions and suggest skills based on market trends.
+            {isPortfolioEnabled()
+              ? 'Follio is a web app for job seekers and professionals to build one living profile and share it as a resume, portfolio, or quick snapshot through a single link, with clean formatting, viewer-adaptive presentation, and AI assistance that helps answer recruiter questions and suggest skills based on market trends.'
+              : 'Follio is a web app for job seekers and professionals to build a living resume you can share, refine, and export — with clean formatting and AI assistance that helps answer recruiter questions and suggest skills based on market trends.'}
           </span>
         </motion.p>
 
@@ -1114,9 +1116,11 @@ export function LandingPage() {
       <footer className="border-t border-border/60">
         <div className="mx-auto max-w-6xl px-5 py-12 sm:px-6 sm:py-14 lg:px-8">
           <p className="max-w-3xl text-xs leading-6 text-muted-foreground">
-            Follio helps you build a living, shareable professional resume and portfolio. When you
-            sign in with Google, we use the basic profile information provided by Google — your
-            name, email address, and profile picture — to create and secure your account and
+            {isPortfolioEnabled()
+              ? 'Follio helps you build a living, shareable professional resume and portfolio.'
+              : 'Follio helps you build a living, shareable professional resume.'}{' '}
+            When you sign in with Google, we use the basic profile information provided by Google —
+            your name, email address, and profile picture — to create and secure your account and
             personalize your workspace. We do not access Gmail, Drive, Contacts, or other Google
             services. For full details, see our{' '}
             <Link

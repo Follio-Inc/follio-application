@@ -49,6 +49,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { MAX_RESUMES_PER_USER } from '@/lib/validations';
+import { isPortfolioEnabled } from '@/lib/features';
 
 import {
   NewResumeCloneDialog,
@@ -734,8 +735,12 @@ export function DashboardResumesSection({
                             >
                               <Star className="mr-2 h-4 w-4" />
                               {resume.id === primaryProfileId
-                                ? 'Current Portfolio'
-                                : 'Set as Portfolio'}
+                                ? isPortfolioEnabled()
+                                  ? 'Current Portfolio'
+                                  : 'Primary resume'
+                                : isPortfolioEnabled()
+                                  ? 'Set as Portfolio'
+                                  : 'Set as primary'}
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem

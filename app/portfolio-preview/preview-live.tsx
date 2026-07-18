@@ -14,8 +14,10 @@ import { useEffect, useState } from 'react';
 import {
   PREVIEW_READY,
   isPreviewDraftMessage,
+  isPreviewScrollToSectionMessage,
   type PreviewReadyMessage,
 } from '@/lib/portfolio/preview-messages';
+import { PortfolioEditorPreviewProvider } from '@/lib/portfolio/preview-editable-section';
 
 import { TemplatePortfolioView } from '../u/[handle]/views/template-portfolio-view';
 
@@ -36,6 +38,12 @@ interface PreviewLiveProps {
   } | null;
 }
 
+function scrollPreviewToSection(sectionId: string) {
+  const target = document.querySelector(`[data-portfolio-section-id="${CSS.escape(sectionId)}"]`);
+  if (!(target instanceof HTMLElement)) return;
+  target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 export function PreviewLive({ profile, initialDraft, githubProfile = null }: PreviewLiveProps) {
   const [draft, setDraft] = useState<TemplatePortfolio>(initialDraft);
 
@@ -45,6 +53,10 @@ export function PreviewLive({ profile, initialDraft, githubProfile = null }: Pre
       if (event.origin !== window.location.origin) return;
       if (isPreviewDraftMessage(event.data)) {
         setDraft(event.data.draft);
+        return;
+      }
+      if (isPreviewScrollToSectionMessage(event.data)) {
+        scrollPreviewToSection(event.data.sectionId);
       }
     }
 
@@ -58,6 +70,8 @@ export function PreviewLive({ profile, initialDraft, githubProfile = null }: Pre
   }, []);
 
   return (
-    <TemplatePortfolioView profile={profile} templateData={draft} githubProfile={githubProfile} />
+    <PortfolioEditorPreviewProvider>
+      <TemplatePortfolioView profile={profile} templateData={draft} githubProfile={githubProfile} />
+    </PortfolioEditorPreviewProvider>
   );
 }

@@ -41,6 +41,7 @@ import {
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 import { containsHtmlFormatting, sanitizeRichHtml, stripHtmlTags } from '@/lib/html-utils';
+import { isPortfolioEnabled } from '@/lib/features';
 import { ONBOARDING_TEMPLATE_KEY } from '@/lib/portfolio/templates/onboarding';
 import { toMonthInputFormat } from '@/lib/utils';
 
@@ -230,6 +231,50 @@ interface ReviewData {
   skills: ParsedSkill[];
   links: ParsedLink[];
   projects: ParsedProject[];
+  /** Writing posts carried through from Medium/etc. — not edited on review UI yet */
+  blogPosts?: Array<{
+    title: string;
+    url: string;
+    slug?: string;
+    excerpt?: string;
+    content?: string;
+    thumbnail?: string;
+    author?: string;
+    publishedAt?: string;
+    tags?: string[];
+    readTimeMin?: number;
+    claps?: number;
+    platform?: string;
+    platformIcon?: string;
+    source?: string;
+  }>;
+  /** Aggregate GitHub profile from import — persisted on complete for the portfolio agent */
+  githubProfile?: {
+    username: string;
+    githubId?: number;
+    avatarUrl?: string;
+    htmlUrl?: string;
+    bio?: string | null;
+    company?: string | null;
+    blog?: string | null;
+    location?: string | null;
+    hireable?: boolean | null;
+    publicRepos?: number;
+    publicGists?: number;
+    followers?: number;
+    following?: number;
+    accountCreatedAt?: string | Date | null;
+    totalStars?: number;
+    totalForks?: number;
+    primaryLanguages?: string[];
+    languageStats?: Record<string, number>;
+    organizations?: Array<{
+      login: string;
+      avatarUrl: string;
+      url: string;
+      description?: string;
+    }>;
+  };
   contactInfo?: {
     email?: string;
     phone?: string;
@@ -639,6 +684,23 @@ function ReviewPageContent() {
                 source: repoUrl?.includes('github.com') ? 'GITHUB' : 'RESUME',
               };
             }),
+            blogPosts: (parsed.blogPosts || []).map((post: Record<string, unknown>) => ({
+              title: (post.title as string) || 'Untitled',
+              url: (post.url as string) || '',
+              slug: post.slug as string | undefined,
+              excerpt: post.excerpt as string | undefined,
+              content: post.content as string | undefined,
+              thumbnail: post.thumbnail as string | undefined,
+              author: post.author as string | undefined,
+              publishedAt: post.publishedAt as string | undefined,
+              tags: (post.tags as string[]) || [],
+              readTimeMin: post.readTimeMin as number | undefined,
+              claps: post.claps as number | undefined,
+              platform: (post.platform as string) || 'medium',
+              platformIcon: post.platformIcon as string | undefined,
+              source: (post.source as string) || 'MEDIUM',
+            })),
+            githubProfile: parsed.githubProfile || undefined,
             contactInfo: {
               ...parsed.contactInfo,
               // allEmails will be built from Clerk + imported emails in useEffect
@@ -870,6 +932,8 @@ function ReviewPageContent() {
               showReadme: p.showReadme,
               customDescription: p.customDescription,
             })),
+            blogPosts: data.blogPosts,
+            githubProfile: data.githubProfile,
           },
         }),
       });
@@ -3024,15 +3088,17 @@ function ProjectCard({
           <div className="mt-3 space-y-3 border-t pt-3">
             {/* Visibility checkboxes */}
             <div className="flex flex-wrap gap-4 text-sm">
-              <label className="flex cursor-pointer items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={project.showOnPortfolio}
-                  onChange={() => onToggleVisibility('showOnPortfolio')}
-                  className="rounded"
-                />
-                Show on Portfolio
-              </label>
+              {isPortfolioEnabled() && (
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={project.showOnPortfolio}
+                    onChange={() => onToggleVisibility('showOnPortfolio')}
+                    className="rounded"
+                  />
+                  Show on Portfolio
+                </label>
+              )}
               <label className="flex cursor-pointer items-center gap-2">
                 <input
                   type="checkbox"

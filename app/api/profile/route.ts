@@ -8,6 +8,7 @@ import {
 import { syncAvatarToClerk } from '@/lib/clerk-avatar-sync';
 import { db } from '@/lib/db';
 import { handleApiError } from '@/lib/errors';
+import { generateUniqueResumeTitle } from '@/lib/resume-title';
 import { CreateProfileSchema } from '@/lib/validations';
 
 async function ensureActiveProfileForUser(clerkId: string): Promise<void> {
@@ -159,12 +160,12 @@ export async function POST(request: NextRequest) {
     const clerkAvatarUrl = clerkUser?.imageUrl || null;
 
     // Create profile - use Clerk avatar as initial value if available
+    const resumeTitle = await generateUniqueResumeTitle(db, user.id);
     const profile = await db.profile.create({
       data: {
         userId: user.id,
         handle,
-        resumeTitle:
-          [firstName, middleName, lastName].filter(Boolean).join(' ').trim() || 'Untitled Resume',
+        resumeTitle,
         firstName,
         middleName,
         lastName,

@@ -1,14 +1,14 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 
 import type { ResumeFontFamily } from '@/types';
 
 /**
  * Google Fonts URLs for each resume font family.
- * System fonts (Georgia, Times New Roman) don't need loading.
+ * System fonts (Georgia, Times New Roman, System UI) don't need loading.
  */
-const GOOGLE_FONT_URLS: Partial<Record<ResumeFontFamily, string>> = {
+export const RESUME_GOOGLE_FONT_URLS: Partial<Record<ResumeFontFamily, string>> = {
   garamond:
     'https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap',
   inter: 'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap',
@@ -23,35 +23,60 @@ const GOOGLE_FONT_URLS: Partial<Record<ResumeFontFamily, string>> = {
     'https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300;0,400;0,600;0,700;1,400&display=swap',
   raleway:
     'https://fonts.googleapis.com/css2?family=Raleway:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap',
+  'instrument-sans':
+    'https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap',
+  'dm-sans':
+    'https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap',
+  'great-vibes': 'https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap',
 };
 
+function ensureFontLink(url: string, loaded: Set<string>) {
+  if (loaded.has(url)) return;
+  const existing = document.querySelector(`link[href="${url}"]`);
+  if (existing) {
+    loaded.add(url);
+    return;
+  }
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = url;
+  link.crossOrigin = 'anonymous';
+  document.head.appendChild(link);
+  loaded.add(url);
+}
+
 /**
- * Dynamically loads a Google Font stylesheet if the chosen resume font requires it.
+ * Dynamically loads Google Font stylesheets for the chosen resume faces.
  * Idempotent — won't add duplicate <link> elements.
+ * `extraUrls` loads additional faces not in the allowlist.
  */
-export function ResumeFontLoader({ fontFamily }: { fontFamily?: ResumeFontFamily }) {
+export function ResumeFontLoader({
+  fontFamily,
+  fonts,
+  extraUrls,
+}: {
+  /** @deprecated Prefer `fonts` — kept for single-face call sites */
+  fontFamily?: ResumeFontFamily;
+  fonts?: ResumeFontFamily[];
+  extraUrls?: string[];
+}) {
   const loadedRef = useRef<Set<string>>(new Set());
+  const fontKey = useMemo(
+    () => (fonts ?? (fontFamily ? [fontFamily] : [])).join(','),
+    [fonts, fontFamily]
+  );
+  const extraKey = useMemo(() => (extraUrls ?? []).join(','), [extraUrls]);
 
   useEffect(() => {
-    if (!fontFamily) return;
-    const url = GOOGLE_FONT_URLS[fontFamily];
-    if (!url) return; // System font, nothing to load
-    if (loadedRef.current.has(url)) return; // Already loaded
-
-    // Check if the link already exists in the document
-    const existing = document.querySelector(`link[href="${url}"]`);
-    if (existing) {
-      loadedRef.current.add(url);
-      return;
+    const faces = fonts ?? (fontFamily ? [fontFamily] : []);
+    for (const face of faces) {
+      const url = RESUME_GOOGLE_FONT_URLS[face];
+      if (url) ensureFontLink(url, loadedRef.current);
     }
-
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = url;
-    link.crossOrigin = 'anonymous';
-    document.head.appendChild(link);
-    loadedRef.current.add(url);
-  }, [fontFamily]);
+    for (const url of extraUrls ?? []) {
+      if (url) ensureFontLink(url, loadedRef.current);
+    }
+  }, [fontKey, extraKey, fonts, fontFamily, extraUrls]);
 
   return null;
 }

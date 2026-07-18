@@ -506,4 +506,175 @@ describe('toPDFHtml', () => {
     expect(html).toContain('class="resume-paper"');
     expect(html).toContain('class="resume-section"');
   });
+
+  it('falls back to classic when sidebar template id is stored', () => {
+    const html = toPDFHtml(
+      makeProfile({
+        resumeDesign: {
+          templateId: 'sidebar',
+          accentColor: '#1e40af',
+          fontFamily: 'inter',
+        },
+      } as unknown as Partial<FullProfile>)
+    );
+    expect(html).toContain('data-resume-template="classic"');
+    expect(html).not.toContain('resume-paper--sidebar');
+    expect(html).not.toContain('resume-sidebar-layout');
+    expect(html).toContain('SKILLS');
+    expect(html).toContain('EXPERIENCE');
+    expect(html).toContain('Acme Corp');
+  });
+
+  it('renders lumen template as single-column ATS layout', () => {
+    const html = toPDFHtml(
+      makeProfile({
+        resumeDesign: {
+          templateId: 'lumen',
+          accentColor: '#b0aaa3',
+          fontFamily: 'instrument-sans',
+          nameFontFamily: 'instrument-sans',
+          titleFontFamily: 'instrument-sans',
+          headingFontFamily: 'instrument-sans',
+          contactFontFamily: 'instrument-sans',
+          headerAlignment: 'left',
+        },
+      } as unknown as Partial<FullProfile>)
+    );
+    expect(html).toContain('resume-paper--lumen');
+    expect(html).toContain('data-resume-template="lumen"');
+    expect(html).toContain('Instrument Sans');
+    expect(html).toMatch(/class="resume-paper resume-paper--lumen"/);
+    expect(html).not.toMatch(/class="[^"]*resume-sleek-header/);
+    expect(html).not.toMatch(/class="[^"]*resume-atelier-layout/);
+    expect(html).toContain('SKILLS');
+    expect(html).toContain('EXPERIENCE');
+    expect(html).toContain('Acme Corp');
+  });
+
+  it('renders sleek template layout without losing content', () => {
+    const html = toPDFHtml(
+      makeProfile({
+        resumeDesign: {
+          templateId: 'sleek',
+          accentColor: '#8f9aa8',
+          fontFamily: 'lato',
+        },
+      } as unknown as Partial<FullProfile>)
+    );
+    expect(html).toContain('resume-paper--sleek');
+    expect(html).toContain('data-resume-template="sleek"');
+    expect(html).toContain('resume-sleek-header');
+    expect(html).toContain('resume-sleek-contact');
+    expect(html).toContain('SKILLS');
+    expect(html).toContain('EXPERIENCE');
+    expect(html).toContain('Acme Corp');
+  });
+
+  it('renders studio template as single-column layout without proficiency bars', () => {
+    const html = toPDFHtml(
+      makeProfile({
+        resumeDesign: {
+          templateId: 'studio',
+          accentColor: '#7a9aa5',
+          fontFamily: 'open-sans',
+        },
+      } as unknown as Partial<FullProfile>)
+    );
+    expect(html).toContain('resume-paper--studio');
+    expect(html).toContain('data-resume-template="studio"');
+    expect(html).toContain('resume-studio-header');
+    expect(html).toContain('resume-studio-contact');
+    expect(html).toContain('resume-studio-body');
+    expect(html).not.toContain('resume-studio-rail');
+    expect(html).not.toContain('resume-studio-layout');
+    expect(html).not.toContain('type="range"');
+    expect(html).toContain('SKILLS');
+    expect(html).toContain('SUMMARY');
+    expect(html).toContain('EXPERIENCE');
+    expect(html).toContain('Acme Corp');
+  });
+
+  it('omits studio date pills when experience or education has no dates', () => {
+    const html = toPDFHtml(
+      makeProfile({
+        resumeDesign: {
+          templateId: 'studio',
+          accentColor: '#7a9aa5',
+          fontFamily: 'open-sans',
+        },
+        workExperiences: [
+          {
+            id: 'w1',
+            profileId: 'p1',
+            company: 'Acme Corp',
+            companyUrl: null,
+            role: 'Senior Engineer',
+            location: 'Remote',
+            startDate: null,
+            endDate: null,
+            isCurrent: false,
+            bullets: ['Built scalable APIs'],
+            sortOrder: 0,
+            source: 'MANUAL',
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ],
+        educations: [
+          {
+            id: 'e1',
+            profileId: 'p1',
+            institution: 'MIT',
+            institutionUrl: null,
+            degree: 'B.S.',
+            fieldOfStudy: 'Computer Science',
+            startDate: null,
+            endDate: null,
+            isCurrent: false,
+            gpa: null,
+            activities: null,
+            sortOrder: 0,
+            source: 'MANUAL',
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ],
+        projects: [],
+      } as unknown as Partial<FullProfile>)
+    );
+
+    expect(html).toContain('Acme Corp');
+    expect(html).toContain('MIT');
+    // No empty date pill markup for undated entries
+    expect(html).not.toMatch(/<span class="resume-entry-date">\s*<\/span>/);
+    // Experience/education sections should not render a date pill at all
+    const experienceBlock = html.slice(html.indexOf('EXPERIENCE'), html.indexOf('EDUCATION'));
+    const educationBlock = html.slice(html.indexOf('EDUCATION'), html.indexOf('SKILLS'));
+    expect(experienceBlock).not.toContain('resume-entry-date');
+    expect(educationBlock).not.toContain('resume-entry-date');
+  });
+
+  it('renders atelier template with script header and rail layout', () => {
+    const html = toPDFHtml(
+      makeProfile({
+        resumeDesign: {
+          templateId: 'atelier',
+          accentColor: '#C25B42',
+          fontFamily: 'garamond',
+        },
+      } as unknown as Partial<FullProfile>)
+    );
+    expect(html).toContain('resume-paper--atelier');
+    expect(html).toContain('data-resume-template="atelier"');
+    expect(html).toContain('resume-atelier-header');
+    expect(html).toContain('resume-atelier-layout');
+    expect(html).toContain('resume-atelier-rail');
+    expect(html).not.toContain('resume-atelier-ruler');
+    expect(html).not.toContain('resume-rating-dot');
+    expect(html).toContain('Great+Vibes');
+    expect(html).toContain('PROFILE');
+    expect(html).toContain('WORK EXPERIENCE');
+    expect(html).toContain('resume-skills-stack');
+    expect(html).toContain('Acme Corp');
+  });
 });

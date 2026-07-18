@@ -8,6 +8,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { cn } from '@/lib/utils';
 
 import { AllSectionsEditor } from './components/all-sections-editor';
+import { BuilderContentHeader } from './components/builder-content-header';
+import { BuilderMobileBar } from './components/builder-mobile-bar';
 import { BuilderStoreProvider, useBuilderStore } from './components/builder-store-provider';
 import { ResumePreviewPanel } from './components/resume-preview-panel';
 
@@ -73,7 +75,14 @@ interface BuilderEdgeTabProps {
  * Only the *inactive* panel's tab is shown — it invites the user to slide that
  * panel in from its side, matching the builder-slide transform direction.
  */
-function BuilderEdgeTab({ side, label, icon: Icon, visible, onClick, tooltip }: BuilderEdgeTabProps) {
+function BuilderEdgeTab({
+  side,
+  label,
+  icon: Icon,
+  visible,
+  onClick,
+  tooltip,
+}: BuilderEdgeTabProps) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -86,15 +95,11 @@ function BuilderEdgeTab({ side, label, icon: Icon, visible, onClick, tooltip }: 
             'absolute top-1/2 z-30 hidden -translate-y-1/2 flex-col items-center gap-2.5 xl:flex',
             'border border-primary/30 bg-primary px-2 py-5',
             'text-primary-foreground shadow-md shadow-primary/20',
-            'transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]',
+            'ease-[cubic-bezier(0.16,1,0.3,1)] transition-all duration-500',
             'hover:bg-primary/90 hover:shadow-lg hover:shadow-primary/30',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-            side === 'left'
-              ? 'left-0 rounded-r-xl border-l-0'
-              : 'right-0 rounded-l-xl border-r-0',
-            visible
-              ? 'translate-x-0 opacity-100'
-              : 'pointer-events-none opacity-0',
+            side === 'left' ? 'left-0 rounded-r-xl border-l-0' : 'right-0 rounded-l-xl border-r-0',
+            visible ? 'translate-x-0 opacity-100' : 'pointer-events-none opacity-0',
             !visible && side === 'left' && '-translate-x-2',
             !visible && side === 'right' && 'translate-x-2'
           )}
@@ -132,6 +137,20 @@ function BuilderLayoutInner({ sections }: BuilderLayoutInnerProps) {
 
   const openDesign = useCallback(() => setDesignerActive(true), []);
   const openContent = useCallback(() => setDesignerActive(false), []);
+
+  // Escape returns to content when the design panel is open (desktop).
+  useEffect(() => {
+    if (!designerActive) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setDesignerActive(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [designerActive]);
 
   // Keep sections in sync with the zustand store so the preview stays up-to-date.
   // Only sync from props → store on initial mount or when sections prop identity
@@ -171,7 +190,8 @@ function BuilderLayoutInner({ sections }: BuilderLayoutInnerProps) {
           >
             {/* ── Panel 1: Editor ── */}
             <main className="flex w-full min-w-0 flex-col bg-muted/40 xl:w-auto xl:flex-[4_0_0%] xl:overflow-y-auto">
-              <div className="min-h-[60vh] flex-1">
+              <BuilderContentHeader />
+              <div className="min-h-[60vh] flex-1 pb-20 xl:pb-8">
                 <div className="flat-cards mx-auto max-w-3xl px-6 py-8">
                   <AllSectionsEditor />
                 </div>
@@ -208,6 +228,8 @@ function BuilderLayoutInner({ sections }: BuilderLayoutInnerProps) {
             onClick={openContent}
             tooltip="Return to content editor"
           />
+
+          <BuilderMobileBar />
         </div>
       </TooltipProvider>
     </div>

@@ -20,6 +20,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { MAX_RESUMES_PER_USER } from '@/lib/validations';
 
+import { useBuilderStore } from './builder-store-provider';
+
 // ─── Types ────────────────────────────────────────────────────────
 
 type ResumeItem = {
@@ -73,6 +75,7 @@ async function fetchResumes(): Promise<ResumeResponse> {
 export function ResumeSwitcher() {
   const pathname = usePathname();
   const router = useRouter();
+  const commitInlineChange = useBuilderStore((s) => s.commitInlineChange);
 
   const isBuilderRoute = pathname.startsWith('/builder');
   const [resumes, setResumes] = useState<ResumeItem[]>([]);
@@ -258,6 +261,10 @@ export function ResumeSwitcher() {
       setResumes((prev) =>
         prev.map((r) => (r.id === resumeId ? { ...r, resumeTitle: trimmed } : r))
       );
+
+      if (resumeId === activeProfileId) {
+        commitInlineChange({ resumeTitle: trimmed });
+      }
     } catch (renameError) {
       setError(renameError instanceof Error ? renameError.message : 'Failed to rename');
     } finally {

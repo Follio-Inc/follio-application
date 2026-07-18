@@ -10,7 +10,7 @@ import {
   Plus,
   Youtube,
 } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { useCallback, useState, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -40,12 +40,28 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
 interface AddSourceDialogProps {
   activeSources: string[];
   onAddSourceAction: (source: SourceDefinition, fetchResult?: Record<string, unknown>) => void;
+  /** Controlled open state (optional). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** Hide the built-in outline button trigger (use with controlled open). */
+  hideTrigger?: boolean;
+  /** Optional custom trigger element (rendered as DialogTrigger). */
+  trigger?: ReactNode;
 }
 
 type DialogState = 'input' | 'detected' | 'fetching' | 'success' | 'error';
 
-export function AddSourceDialog({ activeSources, onAddSourceAction }: AddSourceDialogProps) {
-  const [open, setOpen] = useState(false);
+export function AddSourceDialog({
+  activeSources,
+  onAddSourceAction,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
+  hideTrigger = false,
+  trigger,
+}: AddSourceDialogProps) {
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = controlledOpen ?? uncontrolledOpen;
+  const setOpen = controlledOnOpenChange ?? setUncontrolledOpen;
   const [url, setUrl] = useState('');
   const [state, setState] = useState<DialogState>('input');
   const [detected, setDetected] = useState<DetectedSource | null>(null);
@@ -67,7 +83,7 @@ export function AddSourceDialog({ activeSources, onAddSourceAction }: AddSourceD
       setOpen(isOpen);
       if (!isOpen) resetState();
     },
-    [resetState]
+    [resetState, setOpen]
   );
 
   // Step 1: Detect platform from URL
@@ -148,12 +164,16 @@ export function AddSourceDialog({ activeSources, onAddSourceAction }: AddSourceD
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2">
-          <Plus className="h-4 w-4" />
-          Add Source
-        </Button>
-      </DialogTrigger>
+      {!hideTrigger && (
+        <DialogTrigger asChild>
+          {trigger ?? (
+            <Button variant="outline" size="sm" className="gap-2">
+              <Plus className="h-4 w-4" />
+              Add Source
+            </Button>
+          )}
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Add External Source</DialogTitle>

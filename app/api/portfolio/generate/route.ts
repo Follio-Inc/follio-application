@@ -1,20 +1,24 @@
 import { auth } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 
-import { resolveActiveProfileContext } from '@/lib/active-profile';
+import { resolvePrimaryProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { AppError, ErrorCode, handleApiError } from '@/lib/errors';
+import { assertPortfolioEnabled } from '@/lib/features';
 import { logger } from '@/lib/logger';
 import { generateEnhancedPortfolio } from '@/services/portfolio/enhanced-generation.service';
+import { resolveWorkingPlan } from '@/services/portfolio/plan-helpers';
+
+import type { TemplatePortfolio } from '@/lib/portfolio/templates/types';
 
 const portfolioLogger = logger.child({ source: 'api-portfolio-generate' });
 
 /**
  * POST /api/portfolio/generate
  *
- * Generate a portfolio for the authenticated user's active profile.
- * Uses the AI pipeline (understand → extract evidence → narrate → validate)
- * to produce deeply enriched portfolio data.
+ * Generate (or regenerate) the portfolio for the authenticated user's primary
+ * profile — the resume that backs the public portfolio surface. Uses the AI
+ * pipeline to produce narrative copy and portfolio-owned structural content.
  *
  * Falls back to simple defaults if AI is unavailable.
  *
@@ -27,12 +31,14 @@ const portfolioLogger = logger.child({ source: 'api-portfolio-generate' });
  */
 export async function POST(request: NextRequest) {
   try {
+    assertPortfolioEnabled();
+
     const { userId } = await auth();
     if (!userId) {
       throw new AppError('Unauthorized', ErrorCode.UNAUTHORIZED, 401);
     }
 
-    const context = await resolveActiveProfileContext(userId);
+    const context = await resolvePrimaryProfileContext(userId);
 
     // Parse optional body
     let body: Record<string, unknown> = {};
@@ -91,11 +97,32 @@ export async function POST(request: NextRequest) {
       regenerate,
     });
 
+    let preserveCustomizations: TemplatePortfolio | undefined;
+    if (regenerate) {
+      const existingForPreserve = await db.generatedPortfolio.findFirst({
+        where: {
+          profileId: context.profileId,
+          isActive: true,
+          status: { in: ['PUBLISHED', 'DRAFT'] },
+        },
+        orderBy: { version: 'desc' },
+        select: { plan: true, userOverrides: true },
+      });
+      if (existingForPreserve) {
+        preserveCustomizations =
+          resolveWorkingPlan(
+            existingForPreserve.plan as TemplatePortfolio | null,
+            existingForPreserve.userOverrides
+          ) ?? undefined;
+      }
+    }
+
     const result = await generateEnhancedPortfolio(context.profileId, {
       templateId,
       accentColor,
       fontFamily,
       skipAI,
+      preserveCustomizations,
     });
 
     portfolioLogger.info('Enhanced portfolio generation completed', {
@@ -124,17 +151,19 @@ export async function POST(request: NextRequest) {
 /**
  * GET /api/portfolio/generate
  *
- * Returns the active portfolio for the authenticated user,
+ * Returns the active portfolio for the user's primary (portfolio) profile,
  * or null if none exists.
  */
 export async function GET() {
   try {
+    assertPortfolioEnabled();
+
     const { userId } = await auth();
     if (!userId) {
       throw new AppError('Unauthorized', ErrorCode.UNAUTHORIZED, 401);
     }
 
-    const context = await resolveActiveProfileContext(userId);
+    const context = await resolvePrimaryProfileContext(userId);
 
     const portfolio = await db.generatedPortfolio.findFirst({
       where: {

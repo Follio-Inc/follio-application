@@ -1,7 +1,10 @@
+import { isPortfolioEnabled } from '@/lib/features';
 import { cn } from '@/lib/utils';
 
-/** Compact portfolio marker using the app primary (purple) color. */
+/** Compact marker for the primary resume (portfolio when that product is enabled). */
 export function PortfolioResumeBadge({ className }: { className?: string }) {
+  const label = isPortfolioEnabled() ? 'Portfolio' : 'Primary';
+
   return (
     <span
       className={cn(
@@ -12,7 +15,7 @@ export function PortfolioResumeBadge({ className }: { className?: string }) {
       )}
     >
       <span className="size-1 shrink-0 rounded-full bg-primary-foreground/80" aria-hidden />
-      Portfolio
+      {label}
     </span>
   );
 }

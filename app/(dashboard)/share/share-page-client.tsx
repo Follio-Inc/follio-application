@@ -3,6 +3,7 @@
 import { useState } from 'react';
 
 import { ShareSection } from '@/app/(dashboard)/builder/sections/share-section';
+import { isPortfolioEnabled } from '@/lib/features';
 import type { FullProfile } from '@/types';
 
 interface SharePageClientProps {
@@ -22,7 +23,9 @@ export function SharePageClient({ profile }: SharePageClientProps) {
         <div>
           <h1 className="text-2xl font-bold">Share & Publish</h1>
           <p className="text-muted-foreground">
-            Control visibility and share your resume & portfolio
+            {isPortfolioEnabled()
+              ? 'Control visibility and share your resume & portfolio'
+              : 'Control visibility and share your resume'}
           </p>
         </div>
         <ShareSection profile={currentProfile} onUpdateAction={handleProfileUpdate} />

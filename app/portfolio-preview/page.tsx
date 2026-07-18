@@ -18,6 +18,7 @@ import { notFound } from 'next/navigation';
 
 import { resolvePrimaryProfileContextOrNull } from '@/lib/active-profile';
 import { db } from '@/lib/db';
+import { isPortfolioEnabled } from '@/lib/features';
 import { getDraftPlan } from '@/lib/portfolio/templates/overrides';
 import { getPublicProfile } from '@/services/profile.service';
 
@@ -33,6 +34,8 @@ export const metadata = {
 };
 
 export default async function PortfolioPreviewPage() {
+  if (!isPortfolioEnabled()) notFound();
+
   const { userId } = await auth();
   if (!userId) notFound();
 

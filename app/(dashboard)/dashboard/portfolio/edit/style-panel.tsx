@@ -3,7 +3,6 @@
 import { Check } from 'lucide-react';
 
 import { AppearanceModeSwitch } from '@/components/appearance-mode-switch';
-import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -25,14 +24,9 @@ export function StylePanel({ style, template, onChange }: StylePanelProps) {
   const appearance = style.appearance ?? template.defaultAppearance ?? 'system';
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <section className="space-y-3">
-        <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Appearance
-        </Label>
-        <p className="text-xs text-muted-foreground">
-          Controls how your portfolio looks when shared — independent of the Follio app theme.
-        </p>
+        <h4 className="text-xs font-medium text-muted-foreground">Appearance</h4>
         <AppearanceModeSwitch
           value={appearance}
           onChange={(value) => onChange({ appearance: value })}
@@ -41,9 +35,7 @@ export function StylePanel({ style, template, onChange }: StylePanelProps) {
       </section>
 
       <section className="space-y-3">
-        <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Accent color
-        </Label>
+        <h4 className="text-xs font-medium text-muted-foreground">Accent color</h4>
         <div className="flex flex-wrap gap-2">
           {template.accentColors.map((color) => {
             const selected = color.value.toLowerCase() === style.accentColor.toLowerCase();
@@ -68,9 +60,7 @@ export function StylePanel({ style, template, onChange }: StylePanelProps) {
       </section>
 
       <section className="space-y-3">
-        <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Font
-        </Label>
+        <h4 className="text-xs font-medium text-muted-foreground">Font</h4>
         <Select value={style.fontFamily} onValueChange={(value) => onChange({ fontFamily: value })}>
           <SelectTrigger>
             <SelectValue placeholder="Choose a font" />

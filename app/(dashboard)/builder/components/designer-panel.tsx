@@ -5,9 +5,14 @@ import {
   AlignJustify,
   AlignLeft,
   AlignRight,
+  Bold,
+  ChevronLeft,
+  ChevronRight,
+  Italic,
   Minus,
   Pencil,
   RotateCcw,
+  Underline,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -29,29 +34,50 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { Slider } from '@/components/ui/slider';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import {
-  RESUME_DESIGN_DEFAULTS,
+  getTemplateDefaultFont,
+  mergeResumeDesign,
+  type ResumeTypographyRole,
+} from '@/lib/resume-design';
+import {
   RESUME_FONT_LABELS,
   RESUME_FONT_MAP,
+  RESUME_FONT_OPTIONS,
+  type PublicProfile,
   type ResumeDensity,
   type ResumeDesign,
   type ResumeDividerStyle,
   type ResumeFontFamily,
   type ResumeHeaderAlignment,
+  type ResumeTextStyle,
 } from '@/types';
 
 import { ResumeFontLoader } from '@/app/u/[handle]/views/resume-font-loader';
+import {
+  buildDefaultDesignForTemplate,
+  buildDesignForTemplateSwitch,
+  getAllResumeTemplates,
+  getResumeTemplateId,
+  type ResumeTemplateId,
+} from '@/lib/resume/templates';
 
 import { useJustifyAll } from '../lib/use-justify-all';
 import { useBuilderStore } from './builder-store-provider';
+import { ResumeTemplateGallery } from './resume-template-gallery';
+import { ResumeTemplateLiveThumbnail } from './resume-template-live-thumbnail';
+
+/** How many template thumbnails to show inline before "Browse all". */
+const INLINE_TEMPLATE_PREVIEW_COUNT = 3;
 
 // ─── Constants ────────────────────────────────────────────────────
 
@@ -87,19 +113,6 @@ const DENSITY_OPTIONS: { value: ResumeDensity; label: string; description: strin
   { value: 'compact', label: 'Compact', description: 'Tighter spacing, more content per page' },
   { value: 'normal', label: 'Normal', description: 'Balanced spacing for readability' },
   { value: 'relaxed', label: 'Relaxed', description: 'More whitespace, easier to scan' },
-];
-
-const FONT_OPTIONS: ResumeFontFamily[] = [
-  'georgia',
-  'times',
-  'garamond',
-  'merriweather',
-  'inter',
-  'roboto',
-  'lato',
-  'source-sans',
-  'open-sans',
-  'raleway',
 ];
 
 // ─── Color Picker ─────────────────────────────────────────────────
@@ -205,28 +218,218 @@ function AlignmentSelector({ value, onChange }: AlignmentSelectorProps) {
 function FontFamilySelect({
   value,
   onChange,
+  id,
+  templateDefault,
 }: {
   value: ResumeFontFamily;
   onChange: (font: ResumeFontFamily) => void;
+  id?: string;
+  /** Template-recommended font — pinned at the top of the list */
+  templateDefault: ResumeFontFamily;
 }) {
+  const otherFonts = RESUME_FONT_OPTIONS.filter((font) => font !== templateDefault);
+
   return (
     <Select value={value} onValueChange={(v) => onChange(v as ResumeFontFamily)}>
-      <SelectTrigger className="h-9 w-full text-sm" style={{ fontFamily: RESUME_FONT_MAP[value] }}>
+      <SelectTrigger
+        id={id}
+        className="h-9 min-w-0 flex-1 text-sm"
+        style={{ fontFamily: RESUME_FONT_MAP[value] }}
+      >
         <SelectValue placeholder="Select font" />
       </SelectTrigger>
       <SelectContent>
-        {FONT_OPTIONS.map((font) => (
-          <SelectItem key={font} value={font}>
-            <span style={{ fontFamily: RESUME_FONT_MAP[font] }}>{RESUME_FONT_LABELS[font]}</span>
+        <SelectGroup>
+          <SelectLabel className="px-2 py-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            Template default
+          </SelectLabel>
+          <SelectItem value={templateDefault}>
+            <span style={{ fontFamily: RESUME_FONT_MAP[templateDefault] }}>
+              {RESUME_FONT_LABELS[templateDefault]}
+            </span>
           </SelectItem>
-        ))}
+        </SelectGroup>
+        <SelectSeparator />
+        <SelectGroup>
+          <SelectLabel className="px-2 py-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            All fonts
+          </SelectLabel>
+          {otherFonts.map((font) => (
+            <SelectItem key={font} value={font}>
+              <span style={{ fontFamily: RESUME_FONT_MAP[font] }}>{RESUME_FONT_LABELS[font]}</span>
+            </SelectItem>
+          ))}
+        </SelectGroup>
       </SelectContent>
     </Select>
   );
 }
 
-// ─── Divider Preview ──────────────────────────────────────────────
+/** Discrete size control — clearer and more precise than a range slider. */
+function FontSizeStepper({
+  value,
+  min,
+  max,
+  step = 1,
+  onChange,
+  'aria-label': ariaLabel,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  step?: number;
+  onChange: (size: number) => void;
+  'aria-label': string;
+}) {
+  const decimals = step < 1 ? 1 : 0;
+  const display = Number(value.toFixed(decimals));
+  const canDecrease = value > min;
+  const canIncrease = value < max;
 
+  const bump = (delta: number) => {
+    const next = Math.min(max, Math.max(min, Number((value + delta).toFixed(decimals))));
+    if (next !== value) onChange(next);
+  };
+
+  return (
+    <div
+      className="inline-flex h-9 shrink-0 items-center overflow-hidden rounded-md border border-input bg-background"
+      role="group"
+      aria-label={ariaLabel}
+    >
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="h-9 w-8 rounded-none px-0 text-muted-foreground hover:text-foreground"
+        onClick={() => bump(-step)}
+        disabled={!canDecrease}
+        aria-label={`Decrease ${ariaLabel}`}
+      >
+        <ChevronLeft className="h-3.5 w-3.5" />
+      </Button>
+      <span className="min-w-[3.25rem] select-none border-x border-input px-1 text-center text-xs tabular-nums text-foreground">
+        {display}px
+      </span>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="h-9 w-8 rounded-none px-0 text-muted-foreground hover:text-foreground"
+        onClick={() => bump(step)}
+        disabled={!canIncrease}
+        aria-label={`Increase ${ariaLabel}`}
+      >
+        <ChevronRight className="h-3.5 w-3.5" />
+      </Button>
+    </div>
+  );
+}
+
+function TextStyleToggleGroup({
+  value,
+  onChange,
+  label,
+}: {
+  value: ResumeTextStyle;
+  onChange: (next: ResumeTextStyle) => void;
+  label: string;
+}) {
+  const toggles = [
+    { key: 'bold' as const, icon: Bold, aria: 'Bold' },
+    { key: 'italic' as const, icon: Italic, aria: 'Italic' },
+    { key: 'underline' as const, icon: Underline, aria: 'Underline' },
+  ];
+
+  return (
+    <div
+      className="inline-flex h-9 shrink-0 items-center overflow-hidden rounded-md border border-input bg-background"
+      role="group"
+      aria-label={`${label} style`}
+    >
+      {toggles.map(({ key, icon: Icon, aria }, index) => {
+        const active = value[key];
+        return (
+          <Button
+            key={key}
+            type="button"
+            variant="ghost"
+            size="sm"
+            className={cn(
+              'h-9 w-8 rounded-none px-0',
+              index > 0 && 'border-l border-input',
+              active ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'
+            )}
+            aria-pressed={active}
+            aria-label={`${aria} ${label}`}
+            onClick={() => onChange({ ...value, [key]: !active })}
+          >
+            <Icon className="h-3.5 w-3.5" />
+          </Button>
+        );
+      })}
+    </div>
+  );
+}
+
+function TypographyRoleRow({
+  label,
+  fontId,
+  role,
+  templateId,
+  font,
+  onFontChange,
+  size,
+  onSizeChange,
+  sizeMin,
+  sizeMax,
+  sizeStep = 1,
+  style,
+  onStyleChange,
+}: {
+  label: string;
+  fontId: string;
+  role: ResumeTypographyRole;
+  templateId: ResumeDesign['templateId'];
+  font: ResumeFontFamily;
+  onFontChange: (font: ResumeFontFamily) => void;
+  size: number;
+  onSizeChange: (size: number) => void;
+  sizeMin: number;
+  sizeMax: number;
+  sizeStep?: number;
+  style: ResumeTextStyle;
+  onStyleChange: (style: ResumeTextStyle) => void;
+}) {
+  const templateDefault = getTemplateDefaultFont(templateId, role);
+
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={fontId} className="text-xs font-medium text-foreground">
+        {label}
+      </Label>
+      <div className="flex flex-wrap items-center gap-2">
+        <FontFamilySelect
+          id={fontId}
+          value={font}
+          onChange={onFontChange}
+          templateDefault={templateDefault}
+        />
+        <FontSizeStepper
+          value={size}
+          min={sizeMin}
+          max={sizeMax}
+          step={sizeStep}
+          onChange={onSizeChange}
+          aria-label={`${label} size`}
+        />
+        <TextStyleToggleGroup value={style} onChange={onStyleChange} label={label} />
+      </div>
+    </div>
+  );
+}
+
+// ─── Divider Preview ──────────────────────────────────────────────
 function DividerPreview({ style }: { style: ResumeDividerStyle }) {
   const common = 'w-8 h-[2px]';
   switch (style) {
@@ -301,10 +504,7 @@ export function DesignerPanel() {
   const draftProfile = useBuilderStore((s) => s.draftProfile);
   const commitInlineChange = useBuilderStore((s) => s.commitInlineChange);
 
-  const currentDesign: Required<ResumeDesign> = {
-    ...RESUME_DESIGN_DEFAULTS,
-    ...(draftProfile.resumeDesign ?? {}),
-  };
+  const currentDesign: Required<ResumeDesign> = mergeResumeDesign(draftProfile.resumeDesign);
 
   const [design, setDesign] = useState<Required<ResumeDesign>>(currentDesign);
   const [isSaving, setIsSaving] = useState(false);
@@ -314,8 +514,7 @@ export function DesignerPanel() {
 
   // Sync local state when store changes externally
   useEffect(() => {
-    const storeDesign = draftProfile.resumeDesign ?? {};
-    setDesign({ ...RESUME_DESIGN_DEFAULTS, ...storeDesign });
+    setDesign(mergeResumeDesign(draftProfile.resumeDesign));
   }, [draftProfile.resumeDesign]);
 
   // Auto-save debounced: update the store immediately for preview, persist to API after 600ms
@@ -353,7 +552,7 @@ export function DesignerPanel() {
   );
 
   const handleReset = useCallback(() => {
-    updateDesign(RESUME_DESIGN_DEFAULTS);
+    updateDesign(buildDefaultDesignForTemplate(designRef.current.templateId));
   }, [updateDesign]);
 
   // Clean up timeout on unmount
@@ -365,8 +564,16 @@ export function DesignerPanel() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Load the selected font */}
-      <ResumeFontLoader fontFamily={design.fontFamily} />
+      {/* Load selected fonts for live previews in the picker */}
+      <ResumeFontLoader
+        fonts={[
+          design.fontFamily,
+          design.nameFontFamily,
+          design.titleFontFamily,
+          design.headingFontFamily,
+          design.contactFontFamily,
+        ]}
+      />
 
       {/* Header */}
       <div className="flex h-12 shrink-0 items-center justify-between border-b border-border/60 px-5">
@@ -390,6 +597,65 @@ export function DesignerPanel() {
       {/* Scrollable Content */}
       <ScrollArea className="flex-1">
         <div className="space-y-6 p-5">
+          {/* ── Section: Template ── */}
+          <section className="space-y-3">
+            <h3 className="text-eyebrow">Template</h3>
+            <p className="text-xs text-muted-foreground">
+              Switch layouts anytime — your content stays the same.
+            </p>
+            <div className="mx-auto grid w-[88%] grid-cols-3 gap-3">
+              {getAllResumeTemplates()
+                .slice(0, INLINE_TEMPLATE_PREVIEW_COUNT)
+                .map((template) => {
+                  const selected = getResumeTemplateId(design.templateId) === template.id;
+                  return (
+                    <button
+                      key={template.id}
+                      type="button"
+                      onClick={() => {
+                        if (selected) return;
+                        updateDesign(
+                          buildDesignForTemplateSwitch(design, template.id as ResumeTemplateId)
+                        );
+                      }}
+                      className={cn(
+                        'group flex flex-col overflow-hidden rounded-lg border text-left transition-all',
+                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+                        selected
+                          ? 'border-foreground ring-1 ring-foreground'
+                          : 'border-border/70 hover:border-foreground/25'
+                      )}
+                      aria-pressed={selected}
+                      aria-label={`Use ${template.name} template`}
+                    >
+                      <ResumeTemplateLiveThumbnail
+                        profile={draftProfile as unknown as PublicProfile}
+                        templateId={template.id}
+                        currentDesign={design}
+                        className="rounded-none border-0 shadow-none"
+                      />
+                      <span
+                        className={cn(
+                          'truncate px-1 py-1.5 text-center text-[10px] font-medium leading-none',
+                          selected ? 'text-foreground' : 'text-muted-foreground'
+                        )}
+                      >
+                        {template.name}
+                      </span>
+                    </button>
+                  );
+                })}
+            </div>
+            <ResumeTemplateGallery
+              profile={draftProfile as unknown as PublicProfile}
+              currentDesign={design}
+              currentTemplateId={getResumeTemplateId(design.templateId)}
+              onSelect={updateDesign}
+            />
+          </section>
+
+          <Separator />
+
           {/* ── Section: Theme ── */}
           <section className="space-y-3">
             <h3 className="text-eyebrow">Theme</h3>
@@ -427,45 +693,83 @@ export function DesignerPanel() {
           <section className="space-y-4">
             <h3 className="text-eyebrow">Typography</h3>
 
-            <div className="space-y-2">
-              <Label className="text-xs font-medium text-muted-foreground">Font Family</Label>
-              <FontFamilySelect
-                value={design.fontFamily}
-                onChange={(fontFamily) => updateDesign({ fontFamily })}
-              />
-            </div>
+            <TypographyRoleRow
+              label="Name"
+              fontId="design-font-name"
+              role="name"
+              templateId={design.templateId}
+              font={design.nameFontFamily}
+              onFontChange={(nameFontFamily) => updateDesign({ nameFontFamily })}
+              size={design.nameFontSize}
+              onSizeChange={(nameFontSize) => updateDesign({ nameFontSize })}
+              sizeMin={16}
+              sizeMax={48}
+              style={design.nameStyle}
+              onStyleChange={(nameStyle) => updateDesign({ nameStyle })}
+            />
 
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs font-medium text-muted-foreground">Name Size</Label>
-                <span className="text-xs tabular-nums text-muted-foreground">
-                  {design.nameFontSize}px
-                </span>
-              </div>
-              <Slider
-                value={design.nameFontSize}
-                min={20}
-                max={40}
-                step={1}
-                onChange={(nameFontSize) => updateDesign({ nameFontSize })}
-              />
-            </div>
+            <TypographyRoleRow
+              label="Title"
+              fontId="design-font-title"
+              role="title"
+              templateId={design.templateId}
+              font={design.titleFontFamily}
+              onFontChange={(titleFontFamily) => updateDesign({ titleFontFamily })}
+              size={design.titleFontSize}
+              onSizeChange={(titleFontSize) => updateDesign({ titleFontSize })}
+              sizeMin={10}
+              sizeMax={24}
+              style={design.titleStyle}
+              onStyleChange={(titleStyle) => updateDesign({ titleStyle })}
+            />
 
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs font-medium text-muted-foreground">Body Font Size</Label>
-                <span className="text-xs tabular-nums text-muted-foreground">
-                  {design.fontSize}px
-                </span>
-              </div>
-              <Slider
-                value={design.fontSize}
-                min={10}
-                max={16}
-                step={0.5}
-                onChange={(fontSize) => updateDesign({ fontSize })}
-              />
-            </div>
+            <TypographyRoleRow
+              label="Headings"
+              fontId="design-font-heading"
+              role="heading"
+              templateId={design.templateId}
+              font={design.headingFontFamily}
+              onFontChange={(headingFontFamily) => updateDesign({ headingFontFamily })}
+              size={design.headingFontSize}
+              onSizeChange={(headingFontSize) => updateDesign({ headingFontSize })}
+              sizeMin={9}
+              sizeMax={18}
+              sizeStep={0.5}
+              style={design.headingStyle}
+              onStyleChange={(headingStyle) => updateDesign({ headingStyle })}
+            />
+
+            <TypographyRoleRow
+              label="Contact"
+              fontId="design-font-contact"
+              role="contact"
+              templateId={design.templateId}
+              font={design.contactFontFamily}
+              onFontChange={(contactFontFamily) => updateDesign({ contactFontFamily })}
+              size={design.contactFontSize}
+              onSizeChange={(contactFontSize) => updateDesign({ contactFontSize })}
+              sizeMin={9}
+              sizeMax={18}
+              sizeStep={0.5}
+              style={design.contactStyle}
+              onStyleChange={(contactStyle) => updateDesign({ contactStyle })}
+            />
+
+            <TypographyRoleRow
+              label="Body"
+              fontId="design-font-body"
+              role="body"
+              templateId={design.templateId}
+              font={design.fontFamily}
+              onFontChange={(fontFamily) => updateDesign({ fontFamily })}
+              size={design.fontSize}
+              onSizeChange={(fontSize) => updateDesign({ fontSize })}
+              sizeMin={10}
+              sizeMax={16}
+              sizeStep={0.5}
+              style={design.bodyStyle}
+              onStyleChange={(bodyStyle) => updateDesign({ bodyStyle })}
+            />
           </section>
 
           <Separator />
@@ -549,8 +853,8 @@ export function DesignerPanel() {
               <AlertDialogHeader>
                 <AlertDialogTitle>Restore default design?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This will reset all design settings — colors, typography, layout, and spacing —
-                  back to their original defaults. This action cannot be undone.
+                  This will reset colors, typography, layout, and spacing to the defaults for your
+                  selected template. Your template will not change. This action cannot be undone.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>

@@ -18,7 +18,8 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { AppThemeModeSwitch } from '@/components/app-theme-mode-switch';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { getPortfolioPath, getPortfolioUrl } from '@/lib/url';
+import { isPortfolioEnabled } from '@/lib/features';
+import { getPortfolioPath, getPortfolioUrl, getResumePath, getResumeUrl } from '@/lib/url';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -80,7 +81,12 @@ export function UserMenu() {
 
   const email = user.emailAddresses[0]?.emailAddress || '';
 
-  const follioUrl = handle ? getPortfolioUrl(handle) : null;
+  const portfolioEnabled = isPortfolioEnabled();
+  const follioUrl = handle
+    ? portfolioEnabled
+      ? getPortfolioUrl(handle)
+      : getResumeUrl(handle)
+    : null;
 
   const handleCopyLink = async () => {
     if (!follioUrl) return;
@@ -164,7 +170,11 @@ export function UserMenu() {
                         {follioUrl}
                       </p>
                       <p className="mt-1 text-[11px] text-muted-foreground">
-                        {profileStatus === 'PUBLIC' ? 'Public profile' : 'Private link'}
+                        {portfolioEnabled
+                          ? profileStatus === 'PUBLIC'
+                            ? 'Public profile'
+                            : 'Private link'
+                          : 'Resume link'}
                       </p>
                     </div>
                   </div>
@@ -191,7 +201,7 @@ export function UserMenu() {
                       )}
                     </button>
                     <Link
-                      href={getPortfolioPath(handle)}
+                      href={portfolioEnabled ? getPortfolioPath(handle) : getResumePath(handle)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-muted px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
@@ -220,7 +230,9 @@ export function UserMenu() {
                 </div>
                 <div className="flex flex-col">
                   <span className="text-sm font-medium">Dashboard</span>
-                  <span className="text-[11px] text-muted-foreground">Your portfolio overview</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {portfolioEnabled ? 'Your portfolio overview' : 'Your workspace overview'}
+                  </span>
                 </div>
               </Link>
             </DropdownMenuItem>

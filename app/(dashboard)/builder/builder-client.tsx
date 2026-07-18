@@ -28,7 +28,8 @@ import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { notifyProfileUpdated } from '@/lib/events';
-import { getPortfolioPath } from '@/lib/url';
+import { isPortfolioEnabled } from '@/lib/features';
+import { getPortfolioPath, getResumePath } from '@/lib/url';
 import { cn } from '@/lib/utils';
 
 import { ImportDataDialog } from './components/import-data-dialog';
@@ -431,7 +432,14 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
           <Badge variant={profile.status === 'PUBLIC' ? 'default' : 'secondary'}>
             {profile.status.toLowerCase()}
           </Badge>
-          <Link href={getPortfolioPath(profile.handle)} target="_blank">
+          <Link
+            href={
+              isPortfolioEnabled()
+                ? getPortfolioPath(profile.handle)
+                : getResumePath(profile.handle)
+            }
+            target="_blank"
+          >
             <Button variant="outline" size="sm" className="gap-2">
               <Eye className="h-4 w-4" />
               Preview

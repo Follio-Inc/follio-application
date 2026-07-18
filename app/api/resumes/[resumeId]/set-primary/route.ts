@@ -51,9 +51,11 @@ export async function PATCH(_request: Request, context: RouteContext) {
     }
 
     // Guarantee the target is renderable as a portfolio BEFORE repointing the
-    // pointer, so we never expose a "portfolio not found" page. If this fails we
-    // surface the error and leave the existing portfolio untouched.
-    await makeProfilePortfolioReady(targetProfile.id);
+    // pointer, so we never expose a "portfolio not found" page. When no portfolio
+    // exists yet, run AI so resume data is transformed into portfolio-owned
+    // content (summaries, not resume bullets). If this fails we surface the
+    // error and leave the existing portfolio untouched.
+    await makeProfilePortfolioReady(targetProfile.id, { useAI: true });
 
     await db.user.update({
       where: { id: user.id },

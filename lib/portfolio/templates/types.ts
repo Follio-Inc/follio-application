@@ -6,10 +6,13 @@
  * then templates render with that enriched data.
  *
  * Data flow:
- *   Profile (DB) → AI Pipeline (analyze + write copy) → Template Renderer → Pixel-perfect page
+ *   Resume / parsed source → AI Pipeline (copy + portfolio-style content)
+ *     → TemplatePortfolio (owned content + copy) → Template Renderer
  *
- * AI writes: headlines, about text, project narratives, section intros, CTAs, SEO copy
- * Templates render: profile data + AI copy → polished page
+ * AI writes: headlines, about text, section intros, CTAs, SEO copy, and
+ * portfolio-style structural content (summaries, not resume bullet lists).
+ * Templates render: portfolio-owned content + AI copy → polished page.
+ * Resume edits never mutate portfolio content after generation.
  */
 
 // ============================================================================
@@ -44,6 +47,18 @@ export interface TemplatePortfolio {
   /** AI-generated copy — narrative text for the portfolio */
   copy: TemplateCopy;
 
+  /**
+   * Portfolio-owned structural content (experience, projects, skills, etc.).
+   *
+   * Snapshotted from a resume/parsed source at generation time and transformed
+   * into portfolio style (summaries, fewer bullets). Edited only in the
+   * portfolio editor — never live-linked to the resume builder.
+   *
+   * Optional for legacy plans; renderers fall back to the live profile until
+   * the portfolio is regenerated or saved from the editor.
+   */
+  content?: TemplateProfileData;
+
   /** Section visibility and ordering */
   sections: TemplateSectionConfig[];
 
@@ -59,9 +74,9 @@ export interface TemplatePortfolio {
 
   /**
    * User-controlled overrides for media that would otherwise come from the
-   * normalized profile (avatar, project images). Stored inside the plan so the
+   * portfolio content (avatar, project images). Stored inside the plan so the
    * entire portfolio presentation — including images — can be drafted and
-   * published atomically without mutating the underlying profile/resume data.
+   * published atomically without mutating the underlying resume data.
    *
    * Optional: portfolios that have never been edited will have this absent.
    */
@@ -144,6 +159,12 @@ export interface PortraitLayout {
  * AI-generated copy for the portfolio.
  * Core fields are always present (via default fallbacks).
  * Extended fields are populated when the AI pipeline runs.
+ *
+ * Editor vocabulary (keep UI labels consistent across sections):
+ *   Label   → small line above the heading (eyebrow / contactSubtext)
+ *   Heading → main title (heroHeadline / aboutTitle / contactTitle / sectionHeadings.title)
+ *   Subtext → supporting rich text (heroSubtext / aboutText / sectionIntros / narratives)
+ *             Medium-style: Body · Heading · Quote + alignment + emphasis
  */
 export interface TemplateCopy {
   // ── Core Copy (always present) ──────────────────────────────────────

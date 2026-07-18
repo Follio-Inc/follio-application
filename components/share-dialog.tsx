@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { isPortfolioEnabled } from '@/lib/features';
 import { getPortfolioUrl, getResumeUrl } from '@/lib/url';
 
 import type { ContentVisibility } from '@prisma/client';
@@ -359,7 +360,70 @@ export function ShareDialog({
   onVisibilityChange,
   hideTrigger,
 }: ShareDialogProps) {
+  // #region agent log
+  {
+    const isBrowser = typeof window !== 'undefined';
+    const providerUseUser = isBrowser
+      ? (window as unknown as { __follioClerkUseUser?: typeof useUser }).__follioClerkUseUser
+      : undefined;
+    const isIframe = isBrowser
+      ? (() => {
+          try {
+            return window.self !== window.top;
+          } catch {
+            return true;
+          }
+        })()
+      : false;
+    const stack = new Error('ShareDialog render').stack?.split('\n').slice(0, 8).join(' | ');
+    fetch('http://127.0.0.1:7254/ingest/fcf2bd3d-74c8-4090-ab73-f47f4b1cfce0', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'a3be95' },
+      body: JSON.stringify({
+        sessionId: 'a3be95',
+        runId: 'pre-fix',
+        hypothesisId: 'B',
+        location: 'share-dialog.tsx:before-useUser',
+        message: 'ShareDialog about to call useUser',
+        data: {
+          variant,
+          hideTrigger: Boolean(hideTrigger),
+          controlledOpen: controlledOpen ?? null,
+          handle: profile?.handle ?? null,
+          isBrowser,
+          isIframe,
+          pathname: isBrowser ? window.location.pathname : null,
+          providerHookPresent: Boolean(providerUseUser),
+          sameUseUserModule: providerUseUser ? providerUseUser === useUser : null,
+          stack,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+  }
+  // #endregion
+
   const { user: clerkUser } = useUser();
+
+  // #region agent log
+  fetch('http://127.0.0.1:7254/ingest/fcf2bd3d-74c8-4090-ab73-f47f4b1cfce0', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'a3be95' },
+    body: JSON.stringify({
+      sessionId: 'a3be95',
+      runId: 'pre-fix',
+      hypothesisId: 'C',
+      location: 'share-dialog.tsx:after-useUser',
+      message: 'ShareDialog useUser succeeded',
+      data: {
+        hasUser: Boolean(clerkUser),
+        pathname: typeof window !== 'undefined' ? window.location.pathname : null,
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
+
   const [internalOpen, setInternalOpen] = useState(false);
 
   const open = controlledOpen ?? internalOpen;
@@ -582,6 +646,10 @@ export function ShareDialog({
   const CurrentIcon = currentVisibility.icon;
 
   // ── Render ───────────────────────────────────────────────────────────
+
+  if (isPortfolio && !isPortfolioEnabled()) {
+    return null;
+  }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>

@@ -53,6 +53,7 @@ import {
 } from '@/types';
 
 import { ResumeFontLoader } from '@/app/u/[handle]/views/resume-font-loader';
+import { buildDefaultDesignForTemplate } from '@/lib/resume/templates';
 
 import { useJustifyAll } from '../lib/use-justify-all';
 import { useBuilderStore } from './builder-store-provider';
@@ -329,8 +330,8 @@ export function ResumeDesignPanel({ open, onCloseAction }: ResumeDesignPanelProp
   );
 
   const handleReset = useCallback(() => {
-    updateDesign(RESUME_DESIGN_DEFAULTS);
-  }, [updateDesign]);
+    updateDesign(buildDefaultDesignForTemplate(design.templateId));
+  }, [updateDesign, design.templateId]);
 
   // Clean up timeout on unmount
   useEffect(() => {
@@ -573,8 +574,9 @@ export function ResumeDesignPanel({ open, onCloseAction }: ResumeDesignPanelProp
                     <AlertDialogHeader>
                       <AlertDialogTitle>Restore default design?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        This will reset all design settings — colors, typography, layout, and
-                        spacing — back to their original defaults. This action cannot be undone.
+                        This will reset colors, typography, layout, and spacing to the defaults for
+                        your selected template. Your template will not change. This action cannot be
+                        undone.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

@@ -1,15 +1,15 @@
 /**
  * AI Client Configuration
  *
- * Centralized AI client management for the portfolio pipeline.
- * Uses OpenAI as the primary provider.
+ * Centralized AI client for Follio — portfolio pipeline, agents, and other
+ * product features. Uses OpenAI as the primary provider.
  *
  * Model strategy:
  * - "heavy" model (GPT-4o) for creative/reasoning tasks (narrative, strategy)
  * - "light" model (GPT-4o-mini) for structured extraction/validation tasks
  *
- * All AI calls go through this module for consistent error handling,
- * token tracking, and cost awareness.
+ * All OpenAI traffic should go through this module for consistent error
+ * handling, token tracking, and cost awareness.
  */
 
 import { logger } from '@/lib/logger';
@@ -39,19 +39,37 @@ const TEMPERATURE = {
   creative: 0.6,
 } as const;
 
+/** Default max tokens when a stage is not listed below */
+const DEFAULT_MAX_TOKENS = 4096;
+
 /** Max token limits by stage */
 const MAX_TOKENS = {
   profileUnderstanding: 2048,
   evidenceExtraction: 3000,
   portfolioStrategy: 2048,
   narrativeGeneration: 4096,
+  contentTransform: 4000,
   designBrief: 1500,
   validation: 2048,
   snapViewGeneration: 3000,
+  /** Shared agent runtime turns (tool-calling loops) */
+  agentTurn: 4096,
+  /** Resume PDF structured extraction */
+  resumeParse: 4096,
 } as const;
 
 export type AITaskType = 'extraction' | 'strategy' | 'creative';
 export type PipelineStage = keyof typeof MAX_TOKENS;
+
+function resolveMaxTokens(stage: string, override?: number): number {
+  if (override != null) return override;
+  if (stage in MAX_TOKENS) return MAX_TOKENS[stage as PipelineStage];
+  return DEFAULT_MAX_TOKENS;
+}
+
+function resolveModel(taskType: AITaskType): string {
+  return taskType === 'creative' || taskType === 'strategy' ? HEAVY_MODEL : LIGHT_MODEL;
+}
 
 // ============================================================================
 // CLIENT SINGLETON
@@ -85,7 +103,7 @@ export function isAIAvailable(): boolean {
 
 export interface AICallOptions {
   /** Pipeline stage name (for logging and token tracking) */
-  stage: PipelineStage;
+  stage: PipelineStage | string;
   /** Task type determines model and temperature */
   taskType: AITaskType;
   /** System prompt */
@@ -105,10 +123,27 @@ export interface AICallResult<T> {
   meta: PipelineStageMeta;
 }
 
+export interface ChatCompletionOptions {
+  /** Stage / step name for logging */
+  stage: string;
+  taskType: AITaskType;
+  messages: OpenAI.Chat.ChatCompletionMessageParam[];
+  tools?: OpenAI.Chat.ChatCompletionTool[];
+  toolChoice?: OpenAI.Chat.ChatCompletionToolChoiceOption;
+  maxTokens?: number;
+  temperature?: number;
+  /** JSON mode is incompatible with tool calling — ignored when tools are set. */
+  jsonMode?: boolean;
+}
+
+export interface ChatCompletionResult {
+  message: OpenAI.Chat.ChatCompletionMessage;
+  meta: PipelineStageMeta;
+}
+
 /**
  * Execute a single AI call with full tracking and error handling.
- * This is the only function that talks to OpenAI — everything else
- * goes through here.
+ * Prefer this for one-shot JSON extraction/generation.
  */
 export async function executeAICall<T>(options: AICallOptions): Promise<AICallResult<T>> {
   const {
@@ -116,33 +151,92 @@ export async function executeAICall<T>(options: AICallOptions): Promise<AICallRe
     taskType,
     systemPrompt,
     userPrompt,
-    maxTokens = MAX_TOKENS[stage],
+    maxTokens,
     temperature = TEMPERATURE[taskType],
     jsonMode = true,
   } = options;
 
-  const model = taskType === 'creative' || taskType === 'strategy' ? HEAVY_MODEL : LIGHT_MODEL;
-  const startTime = Date.now();
+  const result = await executeChatCompletion({
+    stage,
+    taskType,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+    maxTokens,
+    temperature,
+    jsonMode,
+  });
 
-  aiLogger.info(`[${stage}] Starting AI call`, { model, taskType, maxTokens });
+  const content = result.message.content;
+  if (!content) {
+    throw new Error(`AI returned empty response for stage: ${stage}`);
+  }
+
+  let parsed: T;
+  try {
+    parsed = JSON.parse(content) as T;
+  } catch {
+    aiLogger.error(`[${stage}] Failed to parse AI JSON response`, undefined, {
+      contentPreview: content.substring(0, 500),
+    });
+    throw new Error(`AI returned invalid JSON for stage: ${stage}`);
+  }
+
+  return { data: parsed, meta: result.meta };
+}
+
+/**
+ * Multi-turn / tool-calling chat completion used by the agent runtime.
+ * This is the shared gateway for agent loops — do not open a second OpenAI client.
+ */
+export async function executeChatCompletion(
+  options: ChatCompletionOptions
+): Promise<ChatCompletionResult> {
+  const {
+    stage,
+    taskType,
+    messages,
+    tools,
+    toolChoice,
+    maxTokens = resolveMaxTokens(stage),
+    temperature = TEMPERATURE[taskType],
+    jsonMode = false,
+  } = options;
+
+  const model = resolveModel(taskType);
+  const startTime = Date.now();
+  const hasTools = !!tools && tools.length > 0;
+
+  aiLogger.info(`[${stage}] Starting chat completion`, {
+    model,
+    taskType,
+    maxTokens,
+    hasTools,
+    messageCount: messages.length,
+  });
 
   try {
     const client = getClient();
 
     const response = await client.chat.completions.create({
       model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
+      messages,
       temperature,
       max_tokens: maxTokens,
-      ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
+      ...(hasTools
+        ? {
+            tools,
+            ...(toolChoice ? { tool_choice: toolChoice } : {}),
+          }
+        : jsonMode
+          ? { response_format: { type: 'json_object' as const } }
+          : {}),
     });
 
-    const content = response.choices[0]?.message?.content;
-    if (!content) {
-      throw new Error(`AI returned empty response for stage: ${stage}`);
+    const message = response.choices[0]?.message;
+    if (!message) {
+      throw new Error(`AI returned empty message for stage: ${stage}`);
     }
 
     const durationMs = Date.now() - startTime;
@@ -151,23 +245,13 @@ export async function executeAICall<T>(options: AICallOptions): Promise<AICallRe
       output: response.usage?.completion_tokens ?? 0,
     };
 
-    aiLogger.info(`[${stage}] AI call completed`, {
+    aiLogger.info(`[${stage}] Chat completion finished`, {
       durationMs,
       tokensInput: tokensUsed.input,
       tokensOutput: tokensUsed.output,
       model,
+      toolCallCount: message.tool_calls?.length ?? 0,
     });
-
-    // Parse JSON response
-    let parsed: T;
-    try {
-      parsed = JSON.parse(content) as T;
-    } catch {
-      aiLogger.error(`[${stage}] Failed to parse AI JSON response`, undefined, {
-        contentPreview: content.substring(0, 500),
-      });
-      throw new Error(`AI returned invalid JSON for stage: ${stage}`);
-    }
 
     const meta: PipelineStageMeta = {
       stage,
@@ -177,14 +261,13 @@ export async function executeAICall<T>(options: AICallOptions): Promise<AICallRe
       timestamp: new Date().toISOString(),
     };
 
-    return { data: parsed, meta };
+    return { message, meta };
   } catch (error) {
     const durationMs = Date.now() - startTime;
-    aiLogger.error(`[${stage}] AI call failed after ${durationMs}ms`, error);
+    aiLogger.error(`[${stage}] Chat completion failed after ${durationMs}ms`, error);
 
-    // Re-throw with context
     if (error instanceof Error) {
-      throw new Error(`Portfolio pipeline stage "${stage}" failed: ${error.message}`);
+      throw new Error(`AI stage "${stage}" failed: ${error.message}`);
     }
     throw error;
   }
@@ -204,14 +287,17 @@ export function getStageConfig(stage: PipelineStage): {
     evidenceExtraction: 'extraction',
     portfolioStrategy: 'strategy',
     narrativeGeneration: 'creative',
+    contentTransform: 'creative',
     designBrief: 'strategy',
     validation: 'extraction',
     snapViewGeneration: 'strategy',
+    agentTurn: 'strategy',
+    resumeParse: 'extraction',
   };
 
   const taskType = stageTaskMap[stage];
   return {
-    model: taskType === 'creative' || taskType === 'strategy' ? HEAVY_MODEL : LIGHT_MODEL,
+    model: resolveModel(taskType),
     maxTokens: MAX_TOKENS[stage],
     taskType,
   };

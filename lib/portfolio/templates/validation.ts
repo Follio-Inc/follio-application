@@ -85,6 +85,27 @@ const overridesSchema = z
   .optional();
 
 /**
+ * Portfolio-owned structural content. Validated loosely: the editor and AI
+ * transform own the shape; we only require the identity fields templates need.
+ */
+const profileContentSchema = z
+  .object({
+    id: z.string().min(1),
+    handle: z.string().min(1),
+    workExperiences: z.array(z.unknown()),
+    educations: z.array(z.unknown()),
+    skills: z.array(z.unknown()),
+    skillGroups: z.array(z.unknown()),
+    projects: z.array(z.unknown()),
+    certifications: z.array(z.unknown()),
+    awards: z.array(z.unknown()),
+    blogPosts: z.array(z.unknown()),
+    photos: z.array(z.unknown()),
+    links: z.array(z.unknown()),
+  })
+  .passthrough();
+
+/**
  * Validates a complete TemplatePortfolio. Enrichment is left as an opaque
  * passthrough (it is produced by the AI pipeline, never authored by the editor).
  */
@@ -92,6 +113,7 @@ export const templatePortfolioSchema = z
   .object({
     templateId: z.string().min(1),
     copy: copySchema,
+    content: profileContentSchema.optional(),
     sections: z.array(sectionSchema),
     style: styleSchema,
     enrichment: z.unknown().nullable().optional(),
