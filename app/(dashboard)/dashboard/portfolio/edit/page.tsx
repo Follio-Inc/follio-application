@@ -3,6 +3,8 @@ import { redirect } from 'next/navigation';
 
 import { resolvePrimaryProfileContextOrNull } from '@/lib/active-profile';
 import { db } from '@/lib/db';
+import { isPortfolioEnabled } from '@/lib/features';
+import { ensurePlanContent } from '@/lib/portfolio/templates/content';
 import { normalizeProfileForTemplate } from '@/lib/portfolio/templates/normalizer';
 import { getDraftPlan } from '@/lib/portfolio/templates/overrides';
 import { getAllTemplates, getTemplateMeta } from '@/lib/portfolio/templates/registry';
@@ -22,6 +24,10 @@ export const metadata = {
 };
 
 export default async function PortfolioEditPage() {
+  if (!isPortfolioEnabled()) {
+    redirect('/dashboard');
+  }
+
   const { userId } = await auth();
   if (!userId) redirect('/sign-in');
 
@@ -78,8 +84,14 @@ export default async function PortfolioEditPage() {
     return <PortfolioEditorEmptyState handle={profileRecord.handle} />;
   }
 
-  const normalizedProfile = normalizeProfileForTemplate(profile, { githubProfile });
-  const draftPlan = getDraftPlan(generatedPortfolio?.userOverrides) ?? publishedPlan;
+  const liveProfile = normalizeProfileForTemplate(profile, { githubProfile });
+  // Seed portfolio-owned content for legacy plans so the editor never depends
+  // on the live resume. First autosave persists ownership.
+  const publishedWithContent = ensurePlanContent(publishedPlan, liveProfile);
+  const draftPlan = ensurePlanContent(
+    getDraftPlan(generatedPortfolio?.userOverrides) ?? publishedWithContent,
+    liveProfile
+  );
 
   const templates: TemplateOption[] = getAllTemplates().map((t) => ({
     id: t.id,
@@ -99,6 +111,7 @@ export default async function PortfolioEditPage() {
         fonts: t.compatibleFonts,
         supportedSections: t.supportedSections,
         defaultHeadings: t.defaultSectionHeadings ?? {},
+        defaultAppearance: t.defaultAppearance,
       } satisfies EditorTemplateInfo,
     ])
   );
@@ -106,9 +119,8 @@ export default async function PortfolioEditPage() {
   return (
     <PortfolioEditorClient
       handle={profileRecord.handle}
-      publishedPlan={publishedPlan}
+      publishedPlan={publishedWithContent}
       initialDraft={draftPlan}
-      profile={normalizedProfile}
       currentTemplateId={publishedPlan.templateId}
       templates={templates}
       templatesById={templatesById}
@@ -119,6 +131,7 @@ export default async function PortfolioEditPage() {
         fonts: templateMeta.compatibleFonts,
         supportedSections: templateMeta.supportedSections,
         defaultHeadings: templateMeta.defaultSectionHeadings ?? {},
+        defaultAppearance: templateMeta.defaultAppearance,
       }}
     />
   );

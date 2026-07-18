@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { AppError, ErrorCode, handleApiError } from '@/lib/errors';
+import { assertPortfolioEnabled } from '@/lib/features';
 import { logger } from '@/lib/logger';
 import { publishPortfolio } from '@/services/portfolio/orchestrator.service';
 
@@ -20,6 +21,8 @@ interface RouteContext {
  */
 export async function GET(_request: NextRequest, context: RouteContext) {
   try {
+    assertPortfolioEnabled();
+
     const { userId } = await auth();
     if (!userId) {
       throw new AppError('Unauthorized', ErrorCode.UNAUTHORIZED, 401);
@@ -66,6 +69,8 @@ export async function GET(_request: NextRequest, context: RouteContext) {
  */
 export async function PATCH(request: NextRequest, context: RouteContext) {
   try {
+    assertPortfolioEnabled();
+
     const { userId } = await auth();
     if (!userId) {
       throw new AppError('Unauthorized', ErrorCode.UNAUTHORIZED, 401);

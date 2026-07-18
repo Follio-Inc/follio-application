@@ -77,6 +77,8 @@ export const META: TemplateKitMeta = {
   previewUrl: null,
   tags: ['light', 'minimal', 'editorial', 'creative', 'designer', 'photography', 'studio'],
 
+  defaultAppearance: 'light',
+
   defaultSections: DEFAULT_SECTIONS,
 
   supportedSections: [

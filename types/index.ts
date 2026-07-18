@@ -45,7 +45,11 @@ export type ResumeFontFamily =
   | 'merriweather'
   | 'source-sans'
   | 'open-sans'
-  | 'raleway';
+  | 'raleway'
+  | 'instrument-sans'
+  | 'dm-sans'
+  | 'system'
+  | 'great-vibes';
 
 /** Header alignment options */
 export type ResumeHeaderAlignment = 'left' | 'center' | 'right';
@@ -56,43 +60,127 @@ export type ResumeDividerStyle = 'line' | 'double' | 'dotted' | 'dashed' | 'thic
 /** Paper density / spacing */
 export type ResumeDensity = 'compact' | 'normal' | 'relaxed';
 
+/** Resume color theme — independent of the Follio app theme */
+export type ResumeColorTheme = 'light' | 'dark' | 'system';
+
+/** Resume layout kit — presentation only; content is shared across templates */
+export type ResumeTemplateId = 'classic' | 'lumen' | 'sleek' | 'studio' | 'atelier';
+
+/** Text emphasis for a typography role (name, title, headings, body) */
+export interface ResumeTextStyle {
+  bold: boolean;
+  italic: boolean;
+  underline: boolean;
+}
+
+export const RESUME_TEXT_STYLE_DEFAULTS: ResumeTextStyle = {
+  bold: false,
+  italic: false,
+  underline: false,
+};
+
 /**
  * Resume design settings — stored as JSON on the Profile model.
  * All fields are optional; missing values fall back to defaults.
+ * Switching `templateId` never rewrites profile content.
  */
 export interface ResumeDesign {
+  /** Layout kit id (classic single-column, sidebar two-column, …) */
+  templateId?: ResumeTemplateId;
+  /** Light / dark / system color theme for the resume document */
+  colorTheme?: ResumeColorTheme;
   /** Color for section headings (CSS color, e.g. '#1a1a1a' or '#2563eb') */
   headingColor?: string;
   /** Accent color for divider lines, bullets, etc. */
   accentColor?: string;
-  /** Font family applied to the entire resume */
+  /** Body / content font family (legacy single-font field) */
   fontFamily?: ResumeFontFamily;
+  /** Font for the display name; falls back to `fontFamily` when unset */
+  nameFontFamily?: ResumeFontFamily;
+  /**
+   * Font for the professional title under the name (`.resume-headline`).
+   * Independent from section headings — falls back to body (or Atelier heading) when unset.
+   */
+  titleFontFamily?: ResumeFontFamily;
+  /** Font for section headings (EXPERIENCE, EDUCATION, …); falls back to system UI when unset */
+  headingFontFamily?: ResumeFontFamily;
+  /** Font for email / phone / contact block; falls back to system UI (or template default) when unset */
+  contactFontFamily?: ResumeFontFamily;
   /** Header block alignment: left / center / right */
   headerAlignment?: ResumeHeaderAlignment;
   /** Style of the divider line below section headings */
   dividerStyle?: ResumeDividerStyle;
-  /** Base font size in px (default 13) */
+  /** Base body font size in px (default 13) */
   fontSize?: number;
   /** Content density / spacing */
   density?: ResumeDensity;
   /** Name font size in px (default 28) */
   nameFontSize?: number;
+  /** Professional title (headline) font size in px (default 15) */
+  titleFontSize?: number;
+  /** Section heading font size in px (default 12) */
+  headingFontSize?: number;
+  /** Contact (email / phone) font size in px (default 12) */
+  contactFontSize?: number;
+  /** Bold / italic / underline for the display name */
+  nameStyle?: ResumeTextStyle;
+  /** Bold / italic / underline for the professional title under the name */
+  titleStyle?: ResumeTextStyle;
+  /** Bold / italic / underline for section headings */
+  headingStyle?: ResumeTextStyle;
+  /** Bold / italic / underline for body text */
+  bodyStyle?: ResumeTextStyle;
+  /** Bold / italic / underline for contact (email / phone) */
+  contactStyle?: ResumeTextStyle;
   /** Apply justified text alignment to all resume content */
   justifyAll?: boolean;
 }
 
 /** Default design settings applied when no custom design is configured */
 export const RESUME_DESIGN_DEFAULTS: Required<ResumeDesign> = {
+  /** Resume defaults to light paper — independent of the Follio app theme */
+  templateId: 'classic',
+  colorTheme: 'light',
   headingColor: '#000000',
   accentColor: '#000000',
   fontFamily: 'georgia',
+  nameFontFamily: 'georgia',
+  titleFontFamily: 'georgia',
+  headingFontFamily: 'system',
+  contactFontFamily: 'system',
   headerAlignment: 'center',
   dividerStyle: 'line',
   fontSize: 13,
   density: 'normal',
   nameFontSize: 28,
+  titleFontSize: 15,
+  headingFontSize: 12,
+  contactFontSize: 12,
+  nameStyle: { bold: true, italic: false, underline: false },
+  titleStyle: { bold: false, italic: true, underline: false },
+  headingStyle: { bold: true, italic: false, underline: false },
+  bodyStyle: { bold: false, italic: false, underline: false },
+  contactStyle: { bold: false, italic: false, underline: false },
   justifyAll: false,
 };
+
+/** Ordered allowlist for resume font pickers */
+export const RESUME_FONT_OPTIONS: ResumeFontFamily[] = [
+  'georgia',
+  'times',
+  'garamond',
+  'merriweather',
+  'inter',
+  'roboto',
+  'lato',
+  'source-sans',
+  'open-sans',
+  'raleway',
+  'instrument-sans',
+  'dm-sans',
+  'system',
+  'great-vibes',
+];
 
 /** Maps font family identifiers to CSS font-family values */
 export const RESUME_FONT_MAP: Record<ResumeFontFamily, string> = {
@@ -106,6 +194,10 @@ export const RESUME_FONT_MAP: Record<ResumeFontFamily, string> = {
   'source-sans': "'Source Sans 3', -apple-system, 'Segoe UI', sans-serif",
   'open-sans': "'Open Sans', -apple-system, 'Segoe UI', sans-serif",
   raleway: "'Raleway', -apple-system, 'Segoe UI', sans-serif",
+  'instrument-sans': "'Instrument Sans', -apple-system, 'Segoe UI', sans-serif",
+  'dm-sans': "'DM Sans', -apple-system, 'Segoe UI', sans-serif",
+  system: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+  'great-vibes': "'Great Vibes', 'Segoe Script', cursive",
 };
 
 /** Human-readable labels for font families */
@@ -120,6 +212,10 @@ export const RESUME_FONT_LABELS: Record<ResumeFontFamily, string> = {
   'source-sans': 'Source Sans',
   'open-sans': 'Open Sans',
   raleway: 'Raleway',
+  'instrument-sans': 'Instrument Sans',
+  'dm-sans': 'DM Sans',
+  system: 'System UI',
+  'great-vibes': 'Great Vibes',
 };
 
 // ===========================================

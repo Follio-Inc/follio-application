@@ -20,7 +20,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowLeft, ChevronDown, Eye, EyeOff, GripVertical, Plus } from 'lucide-react';
-import { useCallback, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 
 import {
   AlertDialog,
@@ -43,6 +43,7 @@ import {
 import { cn } from '@/lib/utils';
 
 import { saveProfileDraft } from '../lib/save-profile-draft';
+import { AddSectionDialog } from './add-section-dialog';
 import { useBuilderStore } from './builder-store-provider';
 import { FormSaveBar } from './form-save-bar';
 
@@ -69,6 +70,7 @@ import type {
   FullProfile,
   ProfileSection,
   Project,
+  SectionType,
   WorkExperience,
 } from '@/types';
 
@@ -111,6 +113,9 @@ const FORM_SECTION_TYPES = new Set(['BASIC_INFO', 'SUMMARY']);
 
 /** Section types that are pinned at the top and NOT draggable */
 const PINNED_SECTION_TYPES = new Set<string>(['BASIC_INFO']);
+
+/** Stable DndContext id — must not use useId() (hydration mismatch in nested SSR trees). */
+const SECTION_DND_CONTEXT_ID = 'builder-all-sections-dnd';
 
 /** Singular display name for "Add ___" buttons */
 const ENTRY_SINGULAR: Record<string, string> = {
@@ -168,6 +173,24 @@ function formatDateRange(
   if (isCurrent) return `${startStr} – Present`;
   if (end) return `${startStr} – ${fmt(end)}`;
   return startStr;
+}
+
+/** Entry count badge for list-based sections (null when not applicable). */
+function getSectionEntryCount(sectionType: string, profile: FullProfile): number | null {
+  switch (sectionType) {
+    case 'EXPERIENCE':
+      return profile.workExperiences.length;
+    case 'EDUCATION':
+      return profile.educations.length;
+    case 'PROJECTS':
+      return profile.projects.length;
+    case 'AWARDS':
+      return profile.awards.length;
+    case 'CERTIFICATIONS':
+      return profile.certifications.length;
+    default:
+      return null;
+  }
 }
 
 // ──────────────────────────────────────────────
@@ -302,7 +325,6 @@ export function AllSectionsEditor() {
   const hasFormChanges = profileChanged || contactChanged;
 
   // ── DnD: Section reorder ──
-  const sectionDndId = useId();
   const sectionSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -955,6 +977,38 @@ export function AllSectionsEditor() {
     setExpandedSection((prev) => (prev === sectionId ? null : sectionId));
   }, []);
 
+  const jumpToSection = useCallback((sectionId: string) => {
+    setExpandedSection(sectionId);
+    requestAnimationFrame(() => {
+      document.getElementById(`section-${sectionId}`)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    });
+  }, []);
+
+  const handleAddSection = useCallback(
+    async (type: SectionType, customName?: string, title?: string) => {
+      const response = await fetch('/api/profile/sections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, customName, title }),
+      });
+
+      if (!response.ok) {
+        console.error('Failed to add section:', await response.text());
+        return;
+      }
+
+      const newSection = (await response.json()) as ProfileSection;
+      const sections = draftProfile.sections || [];
+      commitInlineChange({ sections: [...sections, newSection] });
+      notifyProfileUpdated();
+      jumpToSection(newSection.id);
+    },
+    [commitInlineChange, draftProfile.sections, jumpToSection]
+  );
+
   // ── Section visibility toggle ──
   const visibilityAbortRef = useRef<AbortController | null>(null);
 
@@ -1037,13 +1091,14 @@ export function AllSectionsEditor() {
         ? section.title || section.customName || 'Custom Section'
         : SECTION_TITLES[section.type] || section.title;
     const showVisibilityToggle = !PINNED_SECTION_TYPES.has(section.type);
+    const entryCount = getSectionEntryCount(section.type, draftProfile);
 
     return (
       <section
         key={section.id}
-        id={`section-${section.type.toLowerCase()}`}
+        id={`section-${section.id}`}
         data-section-type={section.type}
-        className="group/section"
+        className="group/section scroll-mt-16"
       >
         {/* Unified section container — header + content share one visual card */}
         <div
@@ -1069,6 +1124,16 @@ export function AllSectionsEditor() {
             >
               {title}
             </span>
+            {entryCount !== null && (
+              <span
+                className={cn(
+                  'shrink-0 rounded-full px-2 py-0.5 text-[11px] tabular-nums',
+                  entryCount === 0 ? 'bg-muted text-muted-foreground' : 'bg-primary/10 text-primary'
+                )}
+              >
+                {entryCount}
+              </span>
+            )}
             {showVisibilityToggle && (
               <span
                 role="button"
@@ -1151,13 +1216,44 @@ export function AllSectionsEditor() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {/* Section jump nav — quick scroll to any section on long resumes */}
+      {orderedSections.length > 3 && (
+        <nav
+          aria-label="Jump to section"
+          className="scrollbar-thin -mx-1 mb-4 flex gap-1.5 overflow-x-auto pb-1"
+        >
+          {orderedSections.map((section) => {
+            const navTitle =
+              section.type === 'CUSTOM'
+                ? section.title || section.customName || 'Custom'
+                : SECTION_TITLES[section.type] || section.title;
+            const isActive = expandedSection === section.id;
+
+            return (
+              <button
+                key={section.id}
+                type="button"
+                onClick={() => jumpToSection(section.id)}
+                className={cn(
+                  'shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                  isActive
+                    ? 'border-primary/40 bg-primary/10 text-primary'
+                    : 'border-border/60 bg-background text-muted-foreground hover:border-border hover:text-foreground'
+                )}
+              >
+                {navTitle}
+              </button>
+            );
+          })}
+        </nav>
+      )}
       <div className="space-y-3 pl-5">
         {/* Pinned sections (BASIC_INFO) — always at top, not draggable */}
         {pinnedSections.map((section) => renderSectionCard(section))}
 
         {/* Draggable body sections */}
         <DndContext
-          id={sectionDndId}
+          id={SECTION_DND_CONTEXT_ID}
           sensors={sectionSensors}
           collisionDetection={closestCenter}
           onDragEnd={handleSectionDragEnd}
@@ -1173,6 +1269,13 @@ export function AllSectionsEditor() {
             </div>
           </SortableContext>
         </DndContext>
+
+        <div className="pt-2">
+          <AddSectionDialog
+            existingSections={draftProfile.sections || []}
+            onAdd={handleAddSection}
+          />
+        </div>
       </div>
     </>
   );

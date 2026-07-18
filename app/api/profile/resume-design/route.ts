@@ -4,13 +4,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
+import { isValidResumeTemplateId } from '@/lib/resume/templates';
 import {
   RESUME_DESIGN_DEFAULTS,
+  type ResumeColorTheme,
   type ResumeDensity,
   type ResumeDesign,
   type ResumeDividerStyle,
   type ResumeFontFamily,
   type ResumeHeaderAlignment,
+  type ResumeTextStyle,
 } from '@/types';
 
 // ─── Validation ───────────────────────────────────────────────────
@@ -26,7 +29,59 @@ const VALID_FONT_FAMILIES = new Set<ResumeFontFamily>([
   'source-sans',
   'open-sans',
   'raleway',
+  'instrument-sans',
+  'dm-sans',
+  'system',
+  'great-vibes',
 ]);
+
+function validateFontField(
+  raw: Record<string, unknown>,
+  key:
+    | 'fontFamily'
+    | 'nameFontFamily'
+    | 'titleFontFamily'
+    | 'headingFontFamily'
+    | 'contactFontFamily',
+  design: ResumeDesign
+): { valid: true } | { valid: false; error: string } {
+  if (raw[key] === undefined) return { valid: true };
+  if (!VALID_FONT_FAMILIES.has(raw[key] as ResumeFontFamily)) {
+    return {
+      valid: false,
+      error: `${key} must be one of: ${[...VALID_FONT_FAMILIES].join(', ')}`,
+    };
+  }
+  design[key] = raw[key] as ResumeFontFamily;
+  return { valid: true };
+}
+
+function validateTextStyleField(
+  raw: Record<string, unknown>,
+  key: 'nameStyle' | 'titleStyle' | 'headingStyle' | 'bodyStyle' | 'contactStyle',
+  design: ResumeDesign
+): { valid: true } | { valid: false; error: string } {
+  if (raw[key] === undefined) return { valid: true };
+  const value = raw[key];
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {
+      valid: false,
+      error: `${key} must be an object with bold, italic, underline booleans`,
+    };
+  }
+  const style = value as Record<string, unknown>;
+  for (const flag of ['bold', 'italic', 'underline'] as const) {
+    if (style[flag] !== undefined && typeof style[flag] !== 'boolean') {
+      return { valid: false, error: `${key}.${flag} must be a boolean` };
+    }
+  }
+  design[key] = {
+    bold: Boolean(style.bold),
+    italic: Boolean(style.italic),
+    underline: Boolean(style.underline),
+  } satisfies ResumeTextStyle;
+  return { valid: true };
+}
 
 const VALID_HEADER_ALIGNMENTS = new Set<ResumeHeaderAlignment>(['left', 'center', 'right']);
 
@@ -40,6 +95,8 @@ const VALID_DIVIDER_STYLES = new Set<ResumeDividerStyle>([
 ]);
 
 const VALID_DENSITIES = new Set<ResumeDensity>(['compact', 'normal', 'relaxed']);
+
+const VALID_COLOR_THEMES = new Set<ResumeColorTheme>(['light', 'dark', 'system']);
 
 /** Validates a CSS hex color string (3-, 4-, 6-, or 8-digit). */
 function isValidHexColor(value: unknown): value is string {
@@ -59,6 +116,18 @@ function validateResumeDesign(body: unknown): {
   const raw = body as Record<string, unknown>;
   const design: ResumeDesign = {};
 
+  // colorTheme
+  if (raw.colorTheme !== undefined) {
+    if (!VALID_COLOR_THEMES.has(raw.colorTheme as ResumeColorTheme)) {
+      return {
+        valid: false,
+        data: null,
+        error: `colorTheme must be one of: ${[...VALID_COLOR_THEMES].join(', ')}`,
+      };
+    }
+    design.colorTheme = raw.colorTheme as ResumeColorTheme;
+  }
+
   // headingColor
   if (raw.headingColor !== undefined) {
     if (!isValidHexColor(raw.headingColor)) {
@@ -75,16 +144,15 @@ function validateResumeDesign(body: unknown): {
     design.accentColor = raw.accentColor;
   }
 
-  // fontFamily
-  if (raw.fontFamily !== undefined) {
-    if (!VALID_FONT_FAMILIES.has(raw.fontFamily as ResumeFontFamily)) {
-      return {
-        valid: false,
-        data: null,
-        error: `fontFamily must be one of: ${[...VALID_FONT_FAMILIES].join(', ')}`,
-      };
-    }
-    design.fontFamily = raw.fontFamily as ResumeFontFamily;
+  for (const key of [
+    'fontFamily',
+    'nameFontFamily',
+    'titleFontFamily',
+    'headingFontFamily',
+    'contactFontFamily',
+  ] as const) {
+    const result = validateFontField(raw, key, design);
+    if (!result.valid) return { valid: false, data: null, error: result.error };
   }
 
   // headerAlignment
@@ -141,12 +209,74 @@ function validateResumeDesign(body: unknown): {
     design.nameFontSize = size;
   }
 
+  // titleFontSize (professional title under the name)
+  if (raw.titleFontSize !== undefined) {
+    const size = Number(raw.titleFontSize);
+    if (isNaN(size) || size < 10 || size > 24) {
+      return {
+        valid: false,
+        data: null,
+        error: 'titleFontSize must be a number between 10 and 24',
+      };
+    }
+    design.titleFontSize = size;
+  }
+
+  // headingFontSize (section titles)
+  if (raw.headingFontSize !== undefined) {
+    const size = Number(raw.headingFontSize);
+    if (isNaN(size) || size < 9 || size > 18) {
+      return {
+        valid: false,
+        data: null,
+        error: 'headingFontSize must be a number between 9 and 18',
+      };
+    }
+    design.headingFontSize = size;
+  }
+
+  // contactFontSize (email / phone)
+  if (raw.contactFontSize !== undefined) {
+    const size = Number(raw.contactFontSize);
+    if (isNaN(size) || size < 9 || size > 18) {
+      return {
+        valid: false,
+        data: null,
+        error: 'contactFontSize must be a number between 9 and 18',
+      };
+    }
+    design.contactFontSize = size;
+  }
+
+  for (const key of [
+    'nameStyle',
+    'titleStyle',
+    'headingStyle',
+    'bodyStyle',
+    'contactStyle',
+  ] as const) {
+    const result = validateTextStyleField(raw, key, design);
+    if (!result.valid) return { valid: false, data: null, error: result.error };
+  }
+
   // justifyAll
   if (raw.justifyAll !== undefined) {
     if (typeof raw.justifyAll !== 'boolean') {
       return { valid: false, data: null, error: 'justifyAll must be a boolean' };
     }
     design.justifyAll = raw.justifyAll;
+  }
+
+  // templateId
+  if (raw.templateId !== undefined) {
+    if (!isValidResumeTemplateId(raw.templateId)) {
+      return {
+        valid: false,
+        data: null,
+        error: 'templateId must be a valid resume template id',
+      };
+    }
+    design.templateId = raw.templateId;
   }
 
   return { valid: true, data: design };

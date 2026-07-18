@@ -7,6 +7,7 @@ import { ensurePrimaryProfile } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { handleApiError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { generateUniqueResumeTitle } from '@/lib/resume-title';
 import { MAX_RESUMES_PER_USER } from '@/lib/validations';
 
 /**
@@ -120,9 +121,7 @@ async function setActiveProfile(
 /**
  * Resolve a human-friendly base for a new resume's handle.
  *
- * Resumes are keyed by a globally-unique `handle`, but the auto-generated resume
- * *title* ("My Resume 20260625_2348") produces ugly URLs like
- * `my-resume-20260625-2348-hw81h`. Prefer the user's name (taken from their
+ * Resumes are keyed by a globally-unique `handle`. Prefer the user's name (taken from their
  * oldest existing profile) so additional resumes read like
  * `shobhit-srivastava-hw81h`, falling back to the email local-part.
  */
@@ -169,44 +168,6 @@ async function generateUniqueHandle(
   }
 
   return `${fallbackPrefix}-${Date.now()}`;
-}
-
-/**
- * Generate a unique resume title for a user.
- * If a title is provided, checks for duplicates and appends a numeric suffix if needed.
- * If no title is provided, generates one in the format "My Resume <YYYYMMDD_HHmm>".
- */
-async function generateUniqueResumeTitle(
-  tx: Prisma.TransactionClient,
-  userId: string,
-  requestedTitle: string | undefined
-): Promise<string> {
-  const now = new Date();
-  const pad = (n: number) => n.toString().padStart(2, '0');
-  const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
-
-  const baseTitle = requestedTitle?.trim() || `My Resume ${timestamp}`;
-
-  // Check if the exact title already exists for this user
-  const existing = await tx.profile.findFirst({
-    where: { userId, resumeTitle: baseTitle, isArchived: false },
-    select: { id: true },
-  });
-
-  if (!existing) return baseTitle;
-
-  // Append incrementing suffix until unique
-  for (let suffix = 2; suffix <= 100; suffix += 1) {
-    const candidate = `${baseTitle} (${suffix})`;
-    const dup = await tx.profile.findFirst({
-      where: { userId, resumeTitle: candidate, isArchived: false },
-      select: { id: true },
-    });
-    if (!dup) return candidate;
-  }
-
-  // Fallback: append timestamp to guarantee uniqueness
-  return `${baseTitle} ${timestamp}`;
 }
 
 async function createDefaultSections(
@@ -263,8 +224,7 @@ async function cloneProfile(
   source: CloneSourceProfile,
   title: string | undefined
 ): Promise<{ id: string; handle: string; resumeTitle: string }> {
-  const rawCloneTitle = title?.trim() || `${source.resumeTitle} Copy`;
-  const cloneTitle = await generateUniqueResumeTitle(tx, user.id, rawCloneTitle);
+  const cloneTitle = await generateUniqueResumeTitle(tx, user.id, title?.trim());
   const handleBase = await resolveHandleBase(tx, user.id, user.email);
   const generatedHandle = await generateUniqueHandle(
     tx,

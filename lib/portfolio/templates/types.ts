@@ -6,10 +6,13 @@
  * then templates render with that enriched data.
  *
  * Data flow:
- *   Profile (DB) → AI Pipeline (analyze + write copy) → Template Renderer → Pixel-perfect page
+ *   Resume / parsed source → AI Pipeline (copy + portfolio-style content)
+ *     → TemplatePortfolio (owned content + copy) → Template Renderer
  *
- * AI writes: headlines, about text, project narratives, section intros, CTAs, SEO copy
- * Templates render: profile data + AI copy → polished page
+ * AI writes: headlines, about text, section intros, CTAs, SEO copy, and
+ * portfolio-style structural content (summaries, not resume bullet lists).
+ * Templates render: portfolio-owned content + AI copy → polished page.
+ * Resume edits never mutate portfolio content after generation.
  */
 
 // ============================================================================
@@ -44,6 +47,18 @@ export interface TemplatePortfolio {
   /** AI-generated copy — narrative text for the portfolio */
   copy: TemplateCopy;
 
+  /**
+   * Portfolio-owned structural content (experience, projects, skills, etc.).
+   *
+   * Snapshotted from a resume/parsed source at generation time and transformed
+   * into portfolio style (summaries, fewer bullets). Edited only in the
+   * portfolio editor — never live-linked to the resume builder.
+   *
+   * Optional for legacy plans; renderers fall back to the live profile until
+   * the portfolio is regenerated or saved from the editor.
+   */
+  content?: TemplateProfileData;
+
   /** Section visibility and ordering */
   sections: TemplateSectionConfig[];
 
@@ -59,9 +74,9 @@ export interface TemplatePortfolio {
 
   /**
    * User-controlled overrides for media that would otherwise come from the
-   * normalized profile (avatar, project images). Stored inside the plan so the
+   * portfolio content (avatar, project images). Stored inside the plan so the
    * entire portfolio presentation — including images — can be drafted and
-   * published atomically without mutating the underlying profile/resume data.
+   * published atomically without mutating the underlying resume data.
    *
    * Optional: portfolios that have never been edited will have this absent.
    */
@@ -144,6 +159,12 @@ export interface PortraitLayout {
  * AI-generated copy for the portfolio.
  * Core fields are always present (via default fallbacks).
  * Extended fields are populated when the AI pipeline runs.
+ *
+ * Editor vocabulary (keep UI labels consistent across sections):
+ *   Label   → small line above the heading (eyebrow / contactSubtext)
+ *   Heading → main title (heroHeadline / aboutTitle / contactTitle / sectionHeadings.title)
+ *   Subtext → supporting rich text (heroSubtext / aboutText / sectionIntros / narratives)
+ *             Medium-style: Body · Heading · Quote + alignment + emphasis
  */
 export interface TemplateCopy {
   // ── Core Copy (always present) ──────────────────────────────────────
@@ -326,6 +347,13 @@ export interface TemplateSectionConfig {
 // STYLE CONFIGURATION
 // ============================================================================
 
+/**
+ * Portfolio appearance — light / dark / system for the published template.
+ * Independent of the Follio app theme. Each template kit ships with both
+ * light and dark palettes; this setting picks which one visitors see.
+ */
+export type PortfolioAppearance = 'light' | 'dark' | 'system';
+
 /** Style options within a template's bounded choices */
 export interface TemplateStyleConfig {
   /** Accent color (hex) — from template's compatible list */
@@ -333,7 +361,18 @@ export interface TemplateStyleConfig {
 
   /** Font family identifier — from template's compatible list */
   fontFamily: string;
+
+  /**
+   * Light / dark / system appearance for the portfolio document.
+   * When omitted, falls back to the template kit's `defaultAppearance`.
+   */
+  appearance?: PortfolioAppearance;
 }
+
+/** Default style values applied when fields are missing from saved plans */
+export const TEMPLATE_STYLE_DEFAULTS = {
+  appearance: 'system' satisfies PortfolioAppearance,
+} as const;
 
 // ============================================================================
 // TEMPLATE KIT METADATA
@@ -390,6 +429,12 @@ export interface TemplateKitMeta {
    * "heading" fields. Only sections listed here expose editable headings.
    */
   defaultSectionHeadings?: Partial<Record<TemplateSectionType, { eyebrow: string; title: string }>>;
+
+  /**
+   * Default appearance when the user has not chosen one yet.
+   * Typically matches the template's primary design direction.
+   */
+  defaultAppearance?: PortfolioAppearance;
 
   /**
    * Navbar theme — tells the Follio top bar how to blend with this template.

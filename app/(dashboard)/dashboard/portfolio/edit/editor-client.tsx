@@ -5,24 +5,32 @@ import {
   Check,
   CloudUpload,
   ExternalLink,
-  LayoutTemplate,
   Loader2,
   RotateCcw,
+  WandSparkles,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { TemplateOption } from '@/components/portfolio/template-option-card';
 import { Button } from '@/components/ui/button';
 import {
   PREVIEW_DRAFT,
+  PREVIEW_SCROLL_TO_SECTION,
   isPreviewReadyMessage,
+  isPreviewSectionClickMessage,
   type PreviewDraftMessage,
+  type PreviewScrollToSectionMessage,
 } from '@/lib/portfolio/preview-messages';
+import { cn } from '@/lib/utils';
 
-import { TemplateGallery } from '../../template-gallery';
-import { SectionsAccordion } from './sections-accordion';
+import {
+  PortfolioEditorSidebar,
+  PortfolioMobileBar,
+  PortfolioMobileDesignDialog,
+} from './portfolio-editor-sidebar';
+import { PortfolioDesignPanel } from './portfolio-design-panel';
 
+import type { TemplateOption } from '@/components/portfolio/template-option-card';
 import type { EditorTemplateInfo } from './types';
 import type {
   TemplateCopy,
@@ -37,7 +45,6 @@ interface PortfolioEditorClientProps {
   handle: string;
   publishedPlan: TemplatePortfolio;
   initialDraft: TemplatePortfolio;
-  profile: TemplateProfileData;
   currentTemplateId: string;
   templates: TemplateOption[];
   templatesById: Record<string, EditorTemplateInfo>;
@@ -45,6 +52,8 @@ interface PortfolioEditorClientProps {
 }
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
+type MobileView = 'editor' | 'preview';
+type EditorTab = 'content' | 'design';
 
 const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
@@ -52,7 +61,6 @@ export function PortfolioEditorClient({
   handle,
   publishedPlan,
   initialDraft,
-  profile,
   currentTemplateId,
   templates,
   templatesById,
@@ -64,6 +72,10 @@ export function PortfolioEditorClient({
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [publishing, setPublishing] = useState(false);
   const [publishedToast, setPublishedToast] = useState(false);
+  const [mobileView, setMobileView] = useState<MobileView>('editor');
+  const [editorTab, setEditorTab] = useState<EditorTab>('content');
+  const [mobileDesignOpen, setMobileDesignOpen] = useState(false);
+  const [focusSectionId, setFocusSectionId] = useState<string | null>(null);
 
   const isFirstRender = useRef(true);
   const skipNextAutosave = useRef(false);
@@ -71,6 +83,7 @@ export function PortfolioEditorClient({
   const previewReadyRef = useRef(false);
 
   const activeTemplate = templatesById[activeTemplateId] ?? template;
+  const content = draft.content!;
 
   const dirty = useMemo(
     () => JSON.stringify(draft) !== JSON.stringify(published),
@@ -78,8 +91,8 @@ export function PortfolioEditorClient({
   );
 
   const emptyByType = useMemo(
-    () => computeEmptySections(profile, draft.copy),
-    [profile, draft.copy]
+    () => computeEmptySections(content, draft.copy),
+    [content, draft.copy]
   );
 
   const save = useCallback(async (next: TemplatePortfolio) => {
@@ -97,9 +110,6 @@ export function PortfolioEditorClient({
     }
   }, []);
 
-  // Stream the working draft into the preview iframe so edits appear instantly —
-  // no reload, no blank flash. This is decoupled from the (debounced) network
-  // save below, which only handles persistence.
   const pushDraftToPreview = useCallback((next: TemplatePortfolio) => {
     const frame = previewFrameRef.current;
     if (!frame?.contentWindow || !previewReadyRef.current) return;
@@ -107,26 +117,37 @@ export function PortfolioEditorClient({
     frame.contentWindow.postMessage(message, window.location.origin);
   }, []);
 
-  // When the iframe announces it's ready, send it the current draft. If it
-  // reloads (e.g. dev HMR), it re-announces and we re-sync automatically.
+  const pushScrollToPreview = useCallback((sectionId: string) => {
+    const frame = previewFrameRef.current;
+    if (!frame?.contentWindow || !previewReadyRef.current) return;
+    const message: PreviewScrollToSectionMessage = {
+      type: PREVIEW_SCROLL_TO_SECTION,
+      sectionId,
+    };
+    frame.contentWindow.postMessage(message, window.location.origin);
+  }, []);
+
   useEffect(() => {
     function onMessage(event: MessageEvent) {
       if (event.origin !== window.location.origin) return;
       if (isPreviewReadyMessage(event.data)) {
         previewReadyRef.current = true;
         pushDraftToPreview(draft);
+        return;
+      }
+      if (isPreviewSectionClickMessage(event.data)) {
+        setMobileView('editor');
+        setFocusSectionId(event.data.sectionId);
       }
     }
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
   }, [draft, pushDraftToPreview]);
 
-  // Real-time preview: push on every draft change immediately.
   useEffect(() => {
     pushDraftToPreview(draft);
   }, [draft, pushDraftToPreview]);
 
-  // Debounced autosave of the working draft (persistence only).
   useEffect(() => {
     if (isFirstRender.current) {
       isFirstRender.current = false;
@@ -174,7 +195,6 @@ export function PortfolioEditorClient({
     setDraft(clone(published));
   }, [published]);
 
-  // ── Field updaters ────────────────────────────────────────────────
   const onSections = useCallback(
     (sections: TemplateSectionConfig[]) => setDraft((d) => ({ ...d, sections })),
     []
@@ -192,29 +212,42 @@ export function PortfolioEditorClient({
     (next: TemplatePortfolioOverrides) => setDraft((d) => ({ ...d, overrides: next })),
     []
   );
+  const onContent = useCallback(
+    (next: TemplateProfileData) => setDraft((d) => ({ ...d, content: next })),
+    []
+  );
+
+  const showMobilePreview = mobileView === 'preview';
 
   return (
-    <div className="flex h-full flex-col">
-      {/* Header */}
-      <header className="flex shrink-0 items-center justify-between gap-3 border-b bg-background px-4 py-2.5">
+    <div className="flex h-[calc(100vh-3.5rem)] min-h-0 flex-col bg-muted/30">
+      {/* Top bar */}
+      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border/60 bg-background px-4 py-2.5">
         <div className="flex min-w-0 items-center gap-3">
-          <Button variant="ghost" size="sm" asChild>
-            <Link href="/dashboard">
+          {showMobilePreview ? (
+            <Button variant="ghost" size="sm" onClick={() => setMobileView('editor')}>
               <ArrowLeft className="mr-1.5 h-4 w-4" />
-              <span className="hidden sm:inline">Dashboard</span>
-            </Link>
-          </Button>
+              Editor
+            </Button>
+          ) : (
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/dashboard">
+                <ArrowLeft className="mr-1.5 h-4 w-4" />
+                <span className="hidden sm:inline">Dashboard</span>
+              </Link>
+            </Button>
+          )}
           <div className="hidden min-w-0 sm:block">
-            <span className="block truncate text-sm font-semibold">Edit portfolio</span>
-            <span className="block truncate text-xs text-muted-foreground">
+            <span className="text-eyebrow">Portfolio</span>
+            <span className="mt-0.5 block truncate text-xs text-muted-foreground">
               {activeTemplate.name}
             </span>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <SaveIndicator status={saveStatus} />
-          {dirty && (
+          <SaveIndicator status={saveStatus} dirty={dirty} />
+          {dirty && !showMobilePreview && (
             <Button variant="ghost" size="sm" onClick={handleDiscard} disabled={publishing}>
               <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
               <span className="hidden sm:inline">Discard</span>
@@ -239,82 +272,133 @@ export function PortfolioEditorClient({
         </div>
       </header>
 
-      {/* Body */}
-      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-        {/* Controls — section-wise accordion (mirrors the resume builder) */}
-        <div className="flex w-full shrink-0 flex-col border-b md:w-[400px] md:border-b-0 md:border-r">
-          {templates.length > 1 && (
-            <div className="shrink-0 border-b p-4">
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Template
-              </p>
-              <TemplateGallery
-                templates={templates}
-                currentTemplateId={activeTemplateId}
-                onTemplateApplied={handleTemplateApplied}
-              >
-                <Button
-                  variant="outline"
-                  className="h-auto w-full justify-between gap-2 px-3 py-2.5"
-                >
-                  <span className="flex items-center gap-2 text-sm font-medium">
-                    <LayoutTemplate className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    Change template
-                  </span>
-                  <span className="truncate text-sm text-muted-foreground">
-                    {activeTemplate.name}
-                  </span>
-                </Button>
-              </TemplateGallery>
-            </div>
-          )}
-          <div className="min-h-0 flex-1 overflow-auto p-4">
-            <SectionsAccordion
-              draft={draft}
-              profile={profile}
-              template={activeTemplate}
-              emptyByType={emptyByType}
-              onSections={onSections}
-              onCopy={onCopy}
-              onStyle={onStyle}
-              onOverrides={onOverrides}
-            />
-          </div>
-        </div>
+      {/* Body — sidebar + preview share one row; no wrapper between them */}
+      <div className="relative flex min-h-0 w-full flex-1">
+        <PortfolioEditorSidebar
+          className={cn(showMobilePreview ? 'hidden md:flex' : 'flex', 'pb-16 md:pb-0')}
+          draft={draft}
+          content={content}
+          template={activeTemplate}
+          templates={templates}
+          activeTemplateId={activeTemplateId}
+          emptyByType={emptyByType}
+          saveStatus={saveStatus}
+          dirty={dirty}
+          tab={editorTab}
+          onTabChange={setEditorTab}
+          onTemplateApplied={handleTemplateApplied}
+          onSections={onSections}
+          onCopy={onCopy}
+          onStyle={onStyle}
+          onOverrides={onOverrides}
+          onContent={onContent}
+          focusSectionId={focusSectionId}
+          onFocusSectionHandled={() => setFocusSectionId(null)}
+          onScrollPreviewToSection={pushScrollToPreview}
+        />
 
         {/* Live preview */}
-        <div className="relative min-h-[420px] flex-1 bg-muted/30">
+        <div
+          className={cn(
+            'relative min-h-0 min-w-0 flex-col bg-muted/20',
+            showMobilePreview ? 'flex flex-1 pb-16 md:pb-0' : 'hidden md:flex md:flex-1'
+          )}
+        >
+          <div className="flex h-12 shrink-0 items-center justify-between border-b border-border/60 bg-background/80 px-6">
+            <span className="text-eyebrow">Preview</span>
+            <span className="hidden text-xs text-muted-foreground sm:inline">
+              Click a section to edit
+            </span>
+          </div>
           <iframe
             ref={previewFrameRef}
             src="/portfolio-preview"
             title="Portfolio preview"
-            className="h-full w-full border-0"
+            className="min-h-0 flex-1 border-0"
           />
         </div>
+
+        {!showMobilePreview ? (
+          <PortfolioMobileBar
+            onOpenPreview={() => setMobileView('preview')}
+            onOpenDesign={() => setEditorTab('design')}
+          />
+        ) : (
+          <div className="fixed inset-x-0 bottom-0 z-40 flex gap-2 border-t border-border/60 bg-background/95 p-2 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:hidden">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-10 flex-1 gap-2"
+              onClick={() => setMobileView('editor')}
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Editor
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-10 flex-1 gap-2"
+              onClick={() => setMobileDesignOpen(true)}
+            >
+              <WandSparkles className="h-4 w-4" />
+              Design
+            </Button>
+          </div>
+        )}
+
+        <PortfolioMobileDesignDialog open={mobileDesignOpen} onOpenChange={setMobileDesignOpen}>
+          <PortfolioDesignPanel
+            draft={draft}
+            template={activeTemplate}
+            templates={templates}
+            activeTemplateId={activeTemplateId}
+            onTemplateApplied={(plan) => {
+              handleTemplateApplied(plan);
+              setMobileDesignOpen(false);
+            }}
+            onCopy={onCopy}
+            onStyle={onStyle}
+          />
+        </PortfolioMobileDesignDialog>
       </div>
     </div>
   );
 }
 
-function SaveIndicator({ status }: { status: SaveStatus }) {
+function SaveIndicator({ status, dirty }: { status: SaveStatus; dirty: boolean }) {
   if (status === 'saving') {
     return (
-      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <Loader2 className="h-3 w-3 animate-spin" />
-        Saving
+      <span className="flex items-center gap-1.5 text-xs text-muted-foreground" role="status">
+        <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+        Saving draft
       </span>
     );
   }
-  if (status === 'saved') {
+  if (status === 'saved' && !dirty) {
     return (
-      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <Check className="h-3 w-3" />
-        Saved
+      <span className="flex items-center gap-1.5 text-xs text-muted-foreground" role="status">
+        <Check className="h-3 w-3" aria-hidden />
+        Draft saved
+      </span>
+    );
+  }
+  if (dirty) {
+    return (
+      <span
+        className="text-xs font-medium text-amber-600 dark:text-amber-500"
+        role="status"
+        title="Draft is saved. Publish to update your live site."
+      >
+        Unpublished changes
       </span>
     );
   }
   if (status === 'error') {
-    return <span className="text-xs text-destructive">Couldn&apos;t save</span>;
+    return (
+      <span className="text-xs text-destructive" role="status">
+        Couldn&apos;t save
+      </span>
+    );
   }
   return null;
 }

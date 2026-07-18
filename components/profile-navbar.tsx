@@ -27,6 +27,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { isPortfolioEnabled } from '@/lib/features';
 import { getDisplayHost, getPortfolioUrl, getResumeUrl } from '@/lib/url';
 
 import type { TemplateNavbarTheme } from '@/lib/portfolio/templates/types';
@@ -242,44 +243,46 @@ function ProfileMenu({ profileHandle }: { profileHandle?: string } = {}) {
             <div className="px-4 py-3">
               <p className="text-eyebrow mb-2">Your links</p>
 
-              {/* Portfolio Link */}
-              <button
-                onClick={() => handleCopyLink(follioUrl, 'portfolio')}
-                className="group mb-2 w-full rounded-lg border border-border/60 bg-muted/20 p-3 text-left transition-colors hover:border-border hover:bg-muted/40"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                    <Globe className="h-4 w-4" />
+              {isPortfolioEnabled() && (
+                <button
+                  onClick={() => handleCopyLink(follioUrl, 'portfolio')}
+                  className="group mb-2 w-full rounded-lg border border-border/60 bg-muted/20 p-3 text-left transition-colors hover:border-border hover:bg-muted/40"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                      <Globe className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <span className="block truncate font-mono text-[13px] font-medium tracking-tight text-foreground">
+                        {getDisplayHost(handle)}
+                      </span>
+                      <span className="text-[11px] text-muted-foreground">
+                        Portfolio &middot;{' '}
+                        {portfolioVisibility === 'PUBLIC' ? 'Public' : 'Unlisted'}
+                      </span>
+                    </div>
+                    <div
+                      className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+                        copiedType === 'portfolio'
+                          ? 'bg-primary/10 text-primary'
+                          : 'bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary'
+                      }`}
+                    >
+                      {copiedType === 'portfolio' ? (
+                        <>
+                          <Check className="h-3.5 w-3.5" />
+                          <span>Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="h-3.5 w-3.5" />
+                          <span>Copy</span>
+                        </>
+                      )}
+                    </div>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <span className="block truncate font-mono text-[13px] font-medium tracking-tight text-foreground">
-                      {getDisplayHost(handle)}
-                    </span>
-                    <span className="text-[11px] text-muted-foreground">
-                      Portfolio &middot; {portfolioVisibility === 'PUBLIC' ? 'Public' : 'Unlisted'}
-                    </span>
-                  </div>
-                  <div
-                    className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
-                      copiedType === 'portfolio'
-                        ? 'bg-primary/10 text-primary'
-                        : 'bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary'
-                    }`}
-                  >
-                    {copiedType === 'portfolio' ? (
-                      <>
-                        <Check className="h-3.5 w-3.5" />
-                        <span>Copied!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="h-3.5 w-3.5" />
-                        <span>Copy</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </button>
+                </button>
+              )}
 
               {/* Resume Link */}
               <button

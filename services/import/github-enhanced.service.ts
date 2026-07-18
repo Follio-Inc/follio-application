@@ -21,6 +21,120 @@ import { shouldOverrideSource } from '@/services/multi-source-merger.service';
 import { DataSource, type Prisma } from '@prisma/client';
 import type { ImportServiceResult, NormalizedImportResult } from './types';
 
+/** Aggregate GitHub profile payload used by onboarding + builder imports. */
+export type GitHubProfileUpsertInput = Omit<
+  NormalizedEnhancedGitHubData['githubProfile'],
+  'accountCreatedAt'
+> & {
+  accountCreatedAt?: Date | string | null;
+};
+
+/**
+ * Persist the aggregate GitHubProfile row for a profile.
+ * Safe to call from onboarding complete or builder import — does not touch projects.
+ */
+export async function upsertGitHubProfileForProfile(
+  profileId: string,
+  githubProfile: GitHubProfileUpsertInput,
+  options: { itemsImported?: number } = {}
+): Promise<void> {
+  const accountCreatedAt =
+    githubProfile.accountCreatedAt instanceof Date
+      ? githubProfile.accountCreatedAt
+      : githubProfile.accountCreatedAt
+        ? new Date(githubProfile.accountCreatedAt)
+        : null;
+
+  await db.gitHubProfile.upsert({
+    where: { profileId },
+    create: {
+      profileId,
+      username: githubProfile.username,
+      githubId: githubProfile.githubId,
+      avatarUrl: githubProfile.avatarUrl,
+      htmlUrl: githubProfile.htmlUrl,
+      bio: githubProfile.bio,
+      company: githubProfile.company,
+      blog: githubProfile.blog,
+      location: githubProfile.location,
+      hireable: githubProfile.hireable,
+      publicRepos: githubProfile.publicRepos,
+      publicGists: githubProfile.publicGists,
+      followers: githubProfile.followers,
+      following: githubProfile.following,
+      accountCreatedAt,
+      totalStars: githubProfile.totalStars,
+      totalForks: githubProfile.totalForks,
+      primaryLanguages: githubProfile.primaryLanguages || [],
+      languageStats: (githubProfile.languageStats || {}) as Prisma.InputJsonValue,
+      organizations: (githubProfile.organizations || []) as unknown as Prisma.InputJsonValue,
+      lastSyncAt: new Date(),
+      syncStatus: 'success',
+    },
+    update: {
+      username: githubProfile.username,
+      githubId: githubProfile.githubId,
+      avatarUrl: githubProfile.avatarUrl,
+      htmlUrl: githubProfile.htmlUrl,
+      bio: githubProfile.bio,
+      company: githubProfile.company,
+      blog: githubProfile.blog,
+      location: githubProfile.location,
+      hireable: githubProfile.hireable,
+      publicRepos: githubProfile.publicRepos,
+      publicGists: githubProfile.publicGists,
+      followers: githubProfile.followers,
+      following: githubProfile.following,
+      accountCreatedAt,
+      totalStars: githubProfile.totalStars,
+      totalForks: githubProfile.totalForks,
+      primaryLanguages: githubProfile.primaryLanguages || [],
+      languageStats: (githubProfile.languageStats || {}) as Prisma.InputJsonValue,
+      organizations: (githubProfile.organizations || []) as unknown as Prisma.InputJsonValue,
+      lastSyncAt: new Date(),
+      syncStatus: 'success',
+      syncError: null,
+    },
+  });
+
+  await db.dataSourceConnection.upsert({
+    where: {
+      profileId_source: {
+        profileId,
+        source: 'GITHUB',
+      },
+    },
+    create: {
+      profileId,
+      source: 'GITHUB',
+      status: 'CONNECTED',
+      externalId: githubProfile.username,
+      lastImportedAt: new Date(),
+      lastSyncAt: new Date(),
+      itemsImported: options.itemsImported ?? 0,
+      metadata: {
+        username: githubProfile.username,
+        totalStars: githubProfile.totalStars,
+        publicRepos: githubProfile.publicRepos,
+      },
+    },
+    update: {
+      status: 'CONNECTED',
+      externalId: githubProfile.username,
+      lastImportedAt: new Date(),
+      lastSyncAt: new Date(),
+      ...(options.itemsImported != null ? { itemsImported: options.itemsImported } : {}),
+      importError: null,
+      syncError: null,
+      metadata: {
+        username: githubProfile.username,
+        totalStars: githubProfile.totalStars,
+        publicRepos: githubProfile.publicRepos,
+      },
+    },
+  });
+}
+
 /**
  * Smart defaults for GitHub project visibility
  * Determines what projects should be visible by default based on quality signals
@@ -661,57 +775,9 @@ export async function saveEnhancedGitHubToProfile(
       });
     }
 
-    // Save GitHubProfile
-    await db.gitHubProfile.upsert({
-      where: { profileId },
-      create: {
-        profileId,
-        username: data.githubProfile.username,
-        githubId: data.githubProfile.githubId,
-        avatarUrl: data.githubProfile.avatarUrl,
-        htmlUrl: data.githubProfile.htmlUrl,
-        bio: data.githubProfile.bio,
-        company: data.githubProfile.company,
-        blog: data.githubProfile.blog,
-        location: data.githubProfile.location,
-        hireable: data.githubProfile.hireable,
-        publicRepos: data.githubProfile.publicRepos,
-        publicGists: data.githubProfile.publicGists,
-        followers: data.githubProfile.followers,
-        following: data.githubProfile.following,
-        accountCreatedAt: data.githubProfile.accountCreatedAt,
-        totalStars: data.githubProfile.totalStars,
-        totalForks: data.githubProfile.totalForks,
-        primaryLanguages: data.githubProfile.primaryLanguages,
-        languageStats: data.githubProfile.languageStats as Prisma.InputJsonValue,
-        organizations: data.githubProfile.organizations as unknown as Prisma.InputJsonValue,
-        lastSyncAt: new Date(),
-        syncStatus: 'success',
-      },
-      update: {
-        username: data.githubProfile.username,
-        githubId: data.githubProfile.githubId,
-        avatarUrl: data.githubProfile.avatarUrl,
-        htmlUrl: data.githubProfile.htmlUrl,
-        bio: data.githubProfile.bio,
-        company: data.githubProfile.company,
-        blog: data.githubProfile.blog,
-        location: data.githubProfile.location,
-        hireable: data.githubProfile.hireable,
-        publicRepos: data.githubProfile.publicRepos,
-        publicGists: data.githubProfile.publicGists,
-        followers: data.githubProfile.followers,
-        following: data.githubProfile.following,
-        accountCreatedAt: data.githubProfile.accountCreatedAt,
-        totalStars: data.githubProfile.totalStars,
-        totalForks: data.githubProfile.totalForks,
-        primaryLanguages: data.githubProfile.primaryLanguages,
-        languageStats: data.githubProfile.languageStats as Prisma.InputJsonValue,
-        organizations: data.githubProfile.organizations as unknown as Prisma.InputJsonValue,
-        lastSyncAt: new Date(),
-        syncStatus: 'success',
-        syncError: null,
-      },
+    // Save GitHubProfile + data source connection
+    await upsertGitHubProfileForProfile(profileId, data.githubProfile, {
+      itemsImported: data.projects.length + data.skills.length,
     });
 
     // Handle email from GitHub

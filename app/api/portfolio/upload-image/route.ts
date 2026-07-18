@@ -16,6 +16,7 @@
 import { resolvePrimaryProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { AppError, ErrorCode, handleApiError } from '@/lib/errors';
+import { assertPortfolioEnabled } from '@/lib/features';
 import { auth } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -24,6 +25,8 @@ const MAX_DATA_URL_LENGTH = 7_000_000;
 
 export async function POST(request: NextRequest) {
   try {
+    assertPortfolioEnabled();
+
     const { userId } = await auth();
     if (!userId) {
       throw new AppError('Unauthorized', ErrorCode.UNAUTHORIZED, 401);

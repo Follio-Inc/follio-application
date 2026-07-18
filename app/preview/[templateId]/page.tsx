@@ -10,9 +10,10 @@
  */
 
 import Link from 'next/link';
-import { useParams, useSearchParams } from 'next/navigation';
+import { notFound, useParams, useSearchParams } from 'next/navigation';
 import { useMemo } from 'react';
 
+import { isPortfolioEnabled } from '@/lib/features';
 import { getAllTemplates, getTemplate } from '@/lib/portfolio/templates/registry';
 import type { TemplatePortfolio } from '@/lib/portfolio/templates/types';
 
@@ -37,10 +38,18 @@ export default function TemplatePreviewPage() {
       templateId,
       copy: sampleCopy,
       sections: buildPreviewSections(kit.meta.defaultSections),
-      style: { accentColor: accent, fontFamily: font },
+      style: {
+        accentColor: accent,
+        fontFamily: font,
+        appearance: kit.meta.defaultAppearance ?? 'system',
+      },
       enrichment: sampleEnrichment,
     };
   }, [kit, templateId]);
+
+  if (!isPortfolioEnabled()) {
+    notFound();
+  }
 
   if (!kit || !portfolio) {
     return (

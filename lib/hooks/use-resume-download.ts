@@ -3,6 +3,7 @@
 import { useCallback, useState } from 'react';
 
 import type { PdfLayout } from '@/app/(dashboard)/builder/components/download-dialog';
+import { formatResumeDownloadFilename } from '@/lib/resume-title';
 
 const DEFAULT_LAYOUT: PdfLayout = 'continuous';
 
@@ -28,7 +29,7 @@ export function buildResumePdfUrl(
 interface UseResumeDownloadOptions {
   /** Profile handle used to build the export API URL. */
   handle: string;
-  /** Used as the downloaded filename (without extension). */
+  /** Resume's current title — used as the download filename. */
   resumeTitle: string;
   /** PDF layout mode. Defaults to `'continuous'`. */
   layout?: PdfLayout;
@@ -49,6 +50,7 @@ interface UseResumeDownloadReturn {
  * Shared hook that downloads a resume PDF via the export API.
  *
  * Used by both the builder's `DownloadDialog` and the `/resumes` card menu.
+ * The downloaded file is named after the resume's current title.
  */
 export function useResumeDownload({
   handle,
@@ -74,7 +76,7 @@ export function useResumeDownload({
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${resumeTitle}.pdf`;
+      a.download = `${formatResumeDownloadFilename(resumeTitle)}.pdf`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

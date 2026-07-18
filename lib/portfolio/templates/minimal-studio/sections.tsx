@@ -14,12 +14,14 @@ import type {
   AboutStyle,
   PortraitStyle,
   SkillsStyle,
-  TemplateAIEnrichment,
   TemplateCopy,
   TemplateProfileData,
   TemplateSectionType,
   WorkStyle,
 } from '../types';
+import { resolveProjectDescription, resolveSectionHeading } from '../resolve-copy';
+import { PortfolioRichHtml } from '@/components/portfolio/portfolio-rich-html';
+import { isPortfolioTextEmpty } from '@/lib/portfolio/rich-html';
 import { DEFAULT_PORTRAIT_STYLE, type PortraitStyleId } from './portrait-styles';
 import { DEFAULT_ABOUT_STYLE, DEFAULT_SKILLS_STYLE, DEFAULT_WORK_STYLE } from './section-styles';
 import { PORTFOLIO_THUMBNAIL_FOCUS_ATTR } from '../types';
@@ -58,12 +60,7 @@ function resolveHeading(
   copy: TemplateCopy,
   type: TemplateSectionType
 ): { eyebrow: string; title: string } {
-  const fallback = SECTION_DEFAULT_HEADINGS[type] ?? { eyebrow: '', title: '' };
-  const override = copy.sectionHeadings?.[type];
-  return {
-    eyebrow: override?.eyebrow?.trim() || fallback.eyebrow,
-    title: override?.title?.trim() || fallback.title,
-  };
+  return resolveSectionHeading(copy, type, SECTION_DEFAULT_HEADINGS);
 }
 
 // ============================================================================
@@ -135,7 +132,9 @@ function SectionHeader({ index, eyebrow, title, intro }: SectionHeaderProps) {
         <span className="ms-eyebrow">{eyebrow}</span>
       </div>
       <h2 className="ms-section-title">{title}</h2>
-      {intro && <p className="ms-section-intro">{intro}</p>}
+      {!isPortfolioTextEmpty(intro) && (
+        <PortfolioRichHtml html={intro} className="ms-section-intro" />
+      )}
     </Reveal>
   );
 }
@@ -160,13 +159,15 @@ const NAV_LABELS: Record<string, string> = {
 interface NavigationProps {
   profile: TemplateProfileData;
   sections: Array<{ type: string; enabled: boolean }>;
+  copy: TemplateCopy;
 }
 
-export function MSNavigation({ profile, sections }: NavigationProps) {
+export function MSNavigation({ profile, sections, copy }: NavigationProps) {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const displayName = getDisplayName(profile.firstName, profile.lastName);
   const email = profile.contactInfo?.email;
+  const ctaLabel = copy.primaryCtaLabel.trim();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
@@ -215,9 +216,9 @@ export function MSNavigation({ profile, sections }: NavigationProps) {
                 {item.label}
               </button>
             ))}
-            {email && (
+            {email && ctaLabel && (
               <a className="ms-nav-cta" href={`mailto:${email}`}>
-                Get in touch
+                {ctaLabel}
               </a>
             )}
           </div>
@@ -246,9 +247,9 @@ export function MSNavigation({ profile, sections }: NavigationProps) {
               {item.label}
             </button>
           ))}
-          {email && (
+          {email && ctaLabel && (
             <a className="ms-nav-overlay-cta" href={`mailto:${email}`}>
-              Get in touch
+              {ctaLabel}
             </a>
           )}
         </div>
@@ -278,7 +279,7 @@ function HeroPortrait({ url, style }: { url: string; style: PortraitStyleId }) {
 
 export function MSHero({ profile, copy, portraitStyle = DEFAULT_PORTRAIT_STYLE }: HeroProps) {
   const displayName = getDisplayName(profile.firstName, profile.lastName);
-  const headline = copy.heroHeadline || profile.headline || 'Designing things worth looking at.';
+  const headline = copy.heroHeadline.trim() || profile.headline?.trim() || '';
   const socialLinks = profile.links.filter((l) =>
     ['GITHUB', 'LINKEDIN', 'TWITTER', 'X', 'INSTAGRAM', 'DRIBBBLE', 'BEHANCE', 'YOUTUBE'].includes(
       l.type.toUpperCase()
@@ -310,11 +311,11 @@ export function MSHero({ profile, copy, portraitStyle = DEFAULT_PORTRAIT_STYLE }
     </Reveal>
   );
 
-  const headlineBlock = (
+  const headlineBlock = headline ? (
     <Reveal delay={90}>
       <h1 className="ms-hero-headline">{headline}</h1>
     </Reveal>
-  );
+  ) : null;
 
   const introBody = (
     <>
@@ -335,9 +336,9 @@ export function MSHero({ profile, copy, portraitStyle = DEFAULT_PORTRAIT_STYLE }
         headlineBlock
       )}
 
-      {copy.heroSubtext && (
+      {!isPortfolioTextEmpty(copy.heroSubtext) && (
         <Reveal delay={180}>
-          <p className="ms-hero-sub">{copy.heroSubtext}</p>
+          <PortfolioRichHtml html={copy.heroSubtext} className="ms-hero-sub" />
         </Reveal>
       )}
 
@@ -347,9 +348,6 @@ export function MSHero({ profile, copy, portraitStyle = DEFAULT_PORTRAIT_STYLE }
             <span className="ms-dot" /> Based in {profile.location}
           </span>
         )}
-        <span className="ms-hero-meta-item ms-hero-available">
-          <span className="ms-dot ms-dot--live" /> Available for work
-        </span>
         {socialLinks.length > 0 && <SocialLinksRow links={socialLinks} />}
       </Reveal>
     </>
@@ -411,19 +409,21 @@ export function MSWork({ profile, copy, index, layout = DEFAULT_WORK_STYLE }: Wo
 
         <div className="ms-work-grid">
           {projects.map((project, i) => {
-            const narrative = copy.projectNarratives?.[project.title];
-            const description = narrative || project.description;
+            const description = resolveProjectDescription(project, copy);
             const href = project.url || project.repoUrl || undefined;
             const hasImage = Boolean(project.imageUrl);
             // Only the image-led editorial layout earns the wide "feature"
             // treatment; a text-only card has no media to fill the extra column.
             const feature = allowFeature && i === 0 && projects.length > 1 && hasImage;
+            // Text-only cards wrap the whole block in an <a>; image cards link only
+            // the media area, so the title may carry its own link there.
+            const linkTitle = Boolean(href && hasImage);
 
             const body = (
               <div className="ms-work-body">
                 <div className="ms-work-headline-row">
                   <h3 className="ms-work-title">
-                    {href ? (
+                    {linkTitle ? (
                       <a href={href} target="_blank" rel="noopener noreferrer">
                         {project.title}
                       </a>
@@ -436,7 +436,9 @@ export function MSWork({ profile, copy, index, layout = DEFAULT_WORK_STYLE }: Wo
                   )}
                 </div>
 
-                {description && <p className="ms-work-desc">{description}</p>}
+                {!isPortfolioTextEmpty(description) && (
+                  <PortfolioRichHtml html={description} className="ms-work-desc" />
+                )}
 
                 {project.techStack.length > 0 && (
                   <ul className="ms-tag-list">
@@ -532,31 +534,24 @@ export function MSWork({ profile, copy, index, layout = DEFAULT_WORK_STYLE }: Wo
 interface AboutProps {
   profile: TemplateProfileData;
   copy: TemplateCopy;
-  enrichment?: TemplateAIEnrichment | null;
   index?: string;
   layout?: AboutStyle;
 }
 
-export function MSAbout({
-  profile,
-  copy,
-  enrichment,
-  index,
-  layout = DEFAULT_ABOUT_STYLE,
-}: AboutProps) {
-  const displayName = getDisplayName(profile.firstName, profile.lastName);
+export function MSAbout({ profile, copy, index, layout = DEFAULT_ABOUT_STYLE }: AboutProps) {
   const yearsExp = computeYearsOfExperience(profile.workExperiences);
   const projectCount = profile.projects.filter((p) => p.isVisible && p.showOnPortfolio).length;
-  const aboutText = copy.aboutText || profile.summary || '';
+  const aboutText = !isPortfolioTextEmpty(copy.aboutText)
+    ? copy.aboutText
+    : profile.summary?.trim() || '';
+  const aboutTitle = copy.aboutTitle.trim();
   const { eyebrow } = resolveHeading(copy, 'about');
 
-  const stats: Array<{ label: string; value: string }> =
-    enrichment?.stats && enrichment.stats.length > 0
-      ? enrichment.stats
-      : [
-          ...(yearsExp > 0 ? [{ label: 'Years experience', value: `${yearsExp}+` }] : []),
-          ...(projectCount > 0 ? [{ label: 'Projects shipped', value: `${projectCount}` }] : []),
-        ];
+  // Derived from real portfolio data only — never invent AI "ghost" facts.
+  const stats: Array<{ label: string; value: string }> = [
+    ...(yearsExp > 0 ? [{ label: 'Years experience', value: `${yearsExp}+` }] : []),
+    ...(projectCount > 0 ? [{ label: 'Projects shipped', value: `${projectCount}` }] : []),
+  ];
 
   return (
     <section id="ms-about" className={cx('ms-section ms-about', `ms-about--${layout}`)}>
@@ -567,33 +562,24 @@ export function MSAbout({
               {index && <span className="ms-eyebrow-index">{index}</span>}
               <span className="ms-eyebrow">{eyebrow}</span>
             </div>
-            {enrichment?.highlightFacts && enrichment.highlightFacts.length > 0 && (
-              <ul className="ms-fact-list">
-                {enrichment.highlightFacts.slice(0, 4).map((fact, i) => (
-                  <li key={i} className="ms-fact">
-                    {fact}
-                  </li>
-                ))}
-              </ul>
-            )}
           </div>
 
           <div className="ms-about-main">
-            <Reveal>
-              <h2 className="ms-section-title ms-about-title">
-                {copy.aboutTitle || `Hello, I'm ${displayName}.`}
-              </h2>
-            </Reveal>
-
-            {aboutText && (
-              <Reveal delay={80}>
-                <p className="ms-about-text">{aboutText}</p>
+            {aboutTitle && (
+              <Reveal>
+                <h2 className="ms-section-title ms-about-title">{aboutTitle}</h2>
               </Reveal>
             )}
 
-            {copy.pullQuote && (
+            {!isPortfolioTextEmpty(aboutText) && (
+              <Reveal delay={80}>
+                <PortfolioRichHtml html={aboutText} className="ms-about-text" />
+              </Reveal>
+            )}
+
+            {!isPortfolioTextEmpty(copy.pullQuote) && (
               <Reveal delay={140}>
-                <blockquote className="ms-pull-quote">{copy.pullQuote}</blockquote>
+                <PortfolioRichHtml html={copy.pullQuote} className="ms-pull-quote" />
               </Reveal>
             )}
 
@@ -648,7 +634,9 @@ export function MSExperience({ profile, copy, index }: ExperienceProps) {
                   {exp.company}
                   {exp.location && <span className="ms-exp-location"> — {exp.location}</span>}
                 </div>
-                {exp.bullets.length > 0 && <p className="ms-exp-desc">{exp.bullets[0]}</p>}
+                {exp.bullets.length > 0 && !isPortfolioTextEmpty(exp.bullets[0]) && (
+                  <PortfolioRichHtml html={exp.bullets[0]} className="ms-exp-desc" />
+                )}
               </div>
             </Reveal>
           ))}
@@ -743,7 +731,7 @@ export function MSEducation({ profile, copy, index }: EducationProps) {
                 <h3 className="ms-exp-role">
                   {edu.degree
                     ? `${edu.degree}${edu.fieldOfStudy ? `, ${edu.fieldOfStudy}` : ''}`
-                    : edu.fieldOfStudy || 'Studies'}
+                    : edu.fieldOfStudy || edu.institution}
                 </h3>
                 <div className="ms-exp-company">{edu.institution}</div>
                 {edu.gpa && <p className="ms-exp-desc">GPA {edu.gpa}</p>}
@@ -786,7 +774,9 @@ export function MSAwards({ profile, copy, index }: AwardsProps) {
               <div className="ms-exp-main">
                 <h3 className="ms-exp-role">{award.title}</h3>
                 {award.issuer && <div className="ms-exp-company">{award.issuer}</div>}
-                {award.description && <p className="ms-exp-desc">{award.description}</p>}
+                {!isPortfolioTextEmpty(award.description) && (
+                  <PortfolioRichHtml html={award.description} className="ms-exp-desc" />
+                )}
               </div>
             </Reveal>
           ))}
@@ -916,13 +906,15 @@ interface ContactProps {
 export function MSContact({ profile, copy }: ContactProps) {
   const email = profile.contactInfo?.email;
   const allLinks = profile.links;
+  const contactSubtext = copy.contactSubtext.trim();
+  const contactTitle = copy.contactTitle.trim();
 
   return (
     <section id="ms-contact" className="ms-section ms-contact">
       <div className="ms-container">
         <Reveal className="ms-contact-inner">
-          <span className="ms-eyebrow">{copy.contactSubtext || 'Get in touch'}</span>
-          <h2 className="ms-contact-title">{copy.contactTitle || "Let's work together"}</h2>
+          {contactSubtext && <span className="ms-eyebrow">{contactSubtext}</span>}
+          {contactTitle && <h2 className="ms-contact-title">{contactTitle}</h2>}
 
           {email && (
             <a className="ms-contact-email" href={`mailto:${email}`}>

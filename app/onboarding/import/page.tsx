@@ -31,6 +31,7 @@ import Cropper from 'react-easy-crop';
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
 import { OnboardingTemplateChoice } from '@/components/portfolio/onboarding-template-choice';
+import { isPortfolioEnabled } from '@/lib/features';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
@@ -163,7 +164,12 @@ const STEP_META: Record<OnboardingStep, { title: string; subtitle: string }> = {
     subtitle: 'Import data from your professional profiles',
   },
   platforms: { title: 'Add more platforms', subtitle: 'Link your content and publications' },
-  gallery: { title: 'Portfolio photos', subtitle: 'Add up to 3 photos to showcase your work' },
+  gallery: {
+    title: isPortfolioEnabled() ? 'Portfolio photos' : 'Photos',
+    subtitle: isPortfolioEnabled()
+      ? 'Add up to 3 photos to showcase your work'
+      : 'Add up to 3 photos (optional)',
+  },
   review: {
     title: 'Review your profile',
     subtitle: 'Check everything looks good before creating your profile',
@@ -1217,6 +1223,7 @@ export default function OnboardingImportPage() {
     const resumeData = importedData.resume as Record<string, unknown> | undefined;
     const linkedinData = importedData.linkedin as Record<string, unknown> | undefined;
     const githubData = importedData.github as Record<string, unknown> | undefined;
+    const mediumData = importedData.medium as Record<string, unknown> | undefined;
 
     const resumeProfile = (resumeData?.profile as Record<string, unknown>) || {};
     const linkedinProfile = (linkedinData?.profile as Record<string, unknown>) || {};
@@ -1369,6 +1376,7 @@ export default function OnboardingImportPage() {
       ...((resumeData?.links as Array<Record<string, unknown>>) || []),
       ...((linkedinData?.links as Array<Record<string, unknown>>) || []),
       ...((githubData?.links as Array<Record<string, unknown>>) || []),
+      ...((mediumData?.links as Array<Record<string, unknown>>) || []),
     ];
     const seenUrls = new Set<string>();
     const uniqueLinks = allLinks.filter((link) => {
@@ -1410,8 +1418,17 @@ export default function OnboardingImportPage() {
         ...((resumeData?.projects as Array<Record<string, unknown>>) || []),
         ...((githubData?.projects as Array<Record<string, unknown>>) || []),
       ],
+      // Writing sources (Medium today; Substack/etc. later) — must reach complete → AI agent
+      blogPosts: [...((mediumData?.blogPosts as Array<Record<string, unknown>>) || [])],
+      // Aggregate GitHub profile (stars, languages, orgs) — separate from per-repo projects
+      githubProfile: (githubData?.githubProfile as Record<string, unknown>) || undefined,
       galleryPhotos: galleryPhotoRefs,
-      _sources: { hasResume: !!resumeData, hasLinkedIn: !!linkedinData, hasGitHub: !!githubData },
+      _sources: {
+        hasResume: !!resumeData,
+        hasLinkedIn: !!linkedinData,
+        hasGitHub: !!githubData,
+        hasMedium: !!mediumData,
+      },
       _resumeFileName: resumeFileName || null,
     };
 
@@ -2609,14 +2626,16 @@ export default function OnboardingImportPage() {
 
               {/* Starting template picker — choice persists to the review/complete flow.
                   Placed outside the narrow summary column so previews have room. */}
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 1.3 }}
-                className="mx-auto mt-8 max-w-2xl border-t pt-6"
-              >
-                <OnboardingTemplateChoice />
-              </motion.div>
+              {isPortfolioEnabled() && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 1.3 }}
+                  className="mx-auto mt-8 max-w-2xl border-t pt-6"
+                >
+                  <OnboardingTemplateChoice />
+                </motion.div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>

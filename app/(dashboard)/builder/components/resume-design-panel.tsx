@@ -26,6 +26,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { ResumeColorThemeSwitch } from '@/components/resume-color-theme-switch';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -52,6 +53,7 @@ import {
 } from '@/types';
 
 import { ResumeFontLoader } from '@/app/u/[handle]/views/resume-font-loader';
+import { buildDefaultDesignForTemplate } from '@/lib/resume/templates';
 
 import { useJustifyAll } from '../lib/use-justify-all';
 import { useBuilderStore } from './builder-store-provider';
@@ -328,8 +330,8 @@ export function ResumeDesignPanel({ open, onCloseAction }: ResumeDesignPanelProp
   );
 
   const handleReset = useCallback(() => {
-    updateDesign(RESUME_DESIGN_DEFAULTS);
-  }, [updateDesign]);
+    updateDesign(buildDefaultDesignForTemplate(design.templateId));
+  }, [updateDesign, design.templateId]);
 
   // Clean up timeout on unmount
   useEffect(() => {
@@ -394,6 +396,24 @@ export function ResumeDesignPanel({ open, onCloseAction }: ResumeDesignPanelProp
             {/* Scrollable Content */}
             <ScrollArea className="flex-1">
               <div className="space-y-6 p-4">
+                {/* ── Section: Theme ── */}
+                <section className="space-y-3">
+                  <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-foreground">
+                    <Palette className="h-3 w-3" />
+                    Theme
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Controls how your resume looks when shared — independent of the Follio app
+                    theme.
+                  </p>
+                  <ResumeColorThemeSwitch
+                    value={design.colorTheme}
+                    onChange={(colorTheme) => updateDesign({ colorTheme })}
+                  />
+                </section>
+
+                <Separator />
+
                 {/* ── Section: Colors ── */}
                 <section className="space-y-4">
                   <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-foreground">
@@ -554,8 +574,9 @@ export function ResumeDesignPanel({ open, onCloseAction }: ResumeDesignPanelProp
                     <AlertDialogHeader>
                       <AlertDialogTitle>Restore default design?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        This will reset all design settings — colors, typography, layout, and
-                        spacing — back to their original defaults. This action cannot be undone.
+                        This will reset colors, typography, layout, and spacing to the defaults for
+                        your selected template. Your template will not change. This action cannot be
+                        undone.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

@@ -1,8 +1,9 @@
 import { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 
 import { db } from '@/lib/db';
-import { getPortfolioUrl } from '@/lib/url';
+import { isPortfolioEnabled } from '@/lib/features';
+import { getPortfolioUrl, getResumePath } from '@/lib/url';
 import { getPublicProfile, validateUnlistedKey } from '@/services/profile.service';
 
 import { getViewerAuthState, validateShareToken } from './access';
@@ -18,6 +19,14 @@ interface ProfilePageProps {
 
 export async function generateMetadata({ params }: ProfilePageProps): Promise<Metadata> {
   const { handle } = await params;
+
+  if (!isPortfolioEnabled()) {
+    return {
+      title: 'Resume | Follio',
+      robots: { index: false, follow: false },
+    };
+  }
+
   const profile = await getPublicProfile(handle);
 
   if (!profile) {
@@ -65,6 +74,13 @@ export const dynamic = 'force-dynamic';
 
 export default async function ProfilePage({ params, searchParams }: ProfilePageProps) {
   const { handle } = await params;
+
+  // Resume-only mode: keep existing portfolio URLs working by sending visitors
+  // to the resume page instead of a hard 404.
+  if (!isPortfolioEnabled()) {
+    redirect(getResumePath(handle));
+  }
+
   const { token, key, preview } = await searchParams;
 
   const [profile, authState] = await Promise.all([

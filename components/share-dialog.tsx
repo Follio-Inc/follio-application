@@ -30,11 +30,14 @@ import {
 } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { getResumeUrl } from '@/lib/url';
+import { isPortfolioEnabled } from '@/lib/features';
+import { getPortfolioUrl, getResumeUrl } from '@/lib/url';
 
 import type { ContentVisibility } from '@prisma/client';
 
 // ── Types ───────────────────────────────────────────────────────────────
+
+export type ShareDialogVariant = 'resume' | 'portfolio';
 
 /**
  * Minimal profile shape required by ShareDialog.
@@ -44,10 +47,13 @@ export interface ShareDialogProfile {
   handle: string;
   firstName: string | null;
   resumeVisibility?: ContentVisibility | null;
+  portfolioVisibility?: ContentVisibility | null;
 }
 
 export interface ShareDialogProps {
   profile: ShareDialogProfile;
+  /** Which content type to share. Defaults to resume. */
+  variant?: ShareDialogVariant;
   /** Controlled open state (optional). When provided, the dialog is externally controlled. */
   open?: boolean;
   /** Callback when the open state changes (required when `open` is provided). */
@@ -74,7 +80,34 @@ type VisibilityOption = {
 
 // A resume contains personal contact details, so it deliberately has no
 // openly-public mode — only a secure (unguessable) link or fully private.
-const VISIBILITY_OPTIONS: VisibilityOption[] = [
+const RESUME_VISIBILITY_OPTIONS: VisibilityOption[] = [
+  {
+    value: 'UNLISTED',
+    label: 'Unlisted',
+    description: 'Only people with the secure link',
+    icon: Link2,
+    color: 'text-foreground',
+    badgeVariant: 'secondary',
+  },
+  {
+    value: 'PRIVATE',
+    label: 'Private',
+    description: 'Only you can see this',
+    icon: EyeOff,
+    color: 'text-muted-foreground',
+    badgeVariant: 'outline',
+  },
+];
+
+const PORTFOLIO_VISIBILITY_OPTIONS: VisibilityOption[] = [
+  {
+    value: 'PUBLIC',
+    label: 'Public',
+    description: 'Anyone can view your portfolio',
+    icon: Globe,
+    color: 'text-foreground',
+    badgeVariant: 'default',
+  },
   {
     value: 'UNLISTED',
     label: 'Unlisted',
@@ -274,6 +307,19 @@ function normalizeResumeVisibility(v: ContentVisibility | null | undefined): Con
   return v === 'PUBLIC' ? 'UNLISTED' : (v ?? 'PRIVATE');
 }
 
+function normalizePortfolioVisibility(v: ContentVisibility | null | undefined): ContentVisibility {
+  return v ?? 'PUBLIC';
+}
+
+function getInitialVisibility(
+  variant: ShareDialogVariant,
+  profile: ShareDialogProfile
+): ContentVisibility {
+  return variant === 'portfolio'
+    ? normalizePortfolioVisibility(profile.portfolioVisibility)
+    : normalizeResumeVisibility(profile.resumeVisibility);
+}
+
 /** Detect webmail provider from an email address. Returns null for unsupported domains. */
 function detectWebmailProvider(email: string | null | undefined): WebmailProvider | null {
   if (!email) return null;
@@ -285,12 +331,17 @@ function detectWebmailProvider(email: string | null | undefined): WebmailProvide
 // ── Helpers ─────────────────────────────────────────────────────────────
 
 /** Build the default share message pre-filled with the user's name and link. */
-function buildDefaultMessage(firstName: string | null, shareUrl: string): string {
+function buildDefaultMessage(
+  firstName: string | null,
+  shareUrl: string,
+  variant: ShareDialogVariant
+): string {
   const signOff = firstName?.trim() || '';
+  const contentLabel = variant === 'portfolio' ? 'portfolio' : 'resume';
   return [
     'Hi,',
     '',
-    `I'd love to share my resume with you. You can view it here:`,
+    `I'd love to share my ${contentLabel} with you. You can view it here:`,
     shareUrl,
     '',
     'Best,',
@@ -302,21 +353,93 @@ function buildDefaultMessage(firstName: string | null, shareUrl: string): string
 
 export function ShareDialog({
   profile,
+  variant = 'resume',
   open: controlledOpen,
   onOpenChange,
   onBeforeOpen,
   onVisibilityChange,
   hideTrigger,
 }: ShareDialogProps) {
+  // #region agent log
+  {
+    const isBrowser = typeof window !== 'undefined';
+    const providerUseUser = isBrowser
+      ? (window as unknown as { __follioClerkUseUser?: typeof useUser }).__follioClerkUseUser
+      : undefined;
+    const isIframe = isBrowser
+      ? (() => {
+          try {
+            return window.self !== window.top;
+          } catch {
+            return true;
+          }
+        })()
+      : false;
+    const stack = new Error('ShareDialog render').stack?.split('\n').slice(0, 8).join(' | ');
+    fetch('http://127.0.0.1:7254/ingest/fcf2bd3d-74c8-4090-ab73-f47f4b1cfce0', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'a3be95' },
+      body: JSON.stringify({
+        sessionId: 'a3be95',
+        runId: 'pre-fix',
+        hypothesisId: 'B',
+        location: 'share-dialog.tsx:before-useUser',
+        message: 'ShareDialog about to call useUser',
+        data: {
+          variant,
+          hideTrigger: Boolean(hideTrigger),
+          controlledOpen: controlledOpen ?? null,
+          handle: profile?.handle ?? null,
+          isBrowser,
+          isIframe,
+          pathname: isBrowser ? window.location.pathname : null,
+          providerHookPresent: Boolean(providerUseUser),
+          sameUseUserModule: providerUseUser ? providerUseUser === useUser : null,
+          stack,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+  }
+  // #endregion
+
   const { user: clerkUser } = useUser();
+
+  // #region agent log
+  fetch('http://127.0.0.1:7254/ingest/fcf2bd3d-74c8-4090-ab73-f47f4b1cfce0', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'a3be95' },
+    body: JSON.stringify({
+      sessionId: 'a3be95',
+      runId: 'pre-fix',
+      hypothesisId: 'C',
+      location: 'share-dialog.tsx:after-useUser',
+      message: 'ShareDialog useUser succeeded',
+      data: {
+        hasUser: Boolean(clerkUser),
+        pathname: typeof window !== 'undefined' ? window.location.pathname : null,
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
+
   const [internalOpen, setInternalOpen] = useState(false);
 
   const open = controlledOpen ?? internalOpen;
   const setOpen = onOpenChange ?? setInternalOpen;
+  const isPortfolio = variant === 'portfolio';
+  const visibilityOptions = isPortfolio ? PORTFOLIO_VISIBILITY_OPTIONS : RESUME_VISIBILITY_OPTIONS;
+  const contentLabel = isPortfolio ? 'portfolio' : 'resume';
+  const dialogTitle = isPortfolio ? 'Share Portfolio' : 'Share Resume';
+  const dialogDescription = isPortfolio
+    ? 'Control access and share your portfolio.'
+    : 'Control access and share your resume.';
+  const triggerTooltip = isPortfolio ? 'Share your portfolio' : 'Share your resume';
 
   // Visibility state.
-  const [resumeVisibility, setResumeVisibility] = useState<ContentVisibility>(
-    normalizeResumeVisibility(profile.resumeVisibility)
+  const [contentVisibility, setContentVisibility] = useState<ContentVisibility>(() =>
+    getInitialVisibility(variant, profile)
   );
   const [savingVisibility, setSavingVisibility] = useState(false);
   const [savedVisibility, setSavedVisibility] = useState(false);
@@ -339,10 +462,9 @@ export function ShareDialog({
   const webmailProvider = useMemo(() => detectWebmailProvider(primaryEmail), [primaryEmail]);
 
   // Computed share URL
-  const shareUrl = getResumeUrl(
-    profile.handle,
-    resumeVisibility === 'UNLISTED' ? unlistedKey : null
-  );
+  const shareUrl = isPortfolio
+    ? getPortfolioUrl(profile.handle, contentVisibility === 'UNLISTED' ? unlistedKey : null)
+    : getResumeUrl(profile.handle, contentVisibility === 'UNLISTED' ? unlistedKey : null);
 
   // ── Fetch unlisted key on open ──────────────────────────────────────
 
@@ -364,7 +486,11 @@ export function ShareDialog({
   useEffect(() => {
     if (open) {
       // Reset visibility state when opening with a (possibly) different profile
-      setResumeVisibility(normalizeResumeVisibility(profile.resumeVisibility));
+      setContentVisibility(
+        variant === 'portfolio'
+          ? normalizePortfolioVisibility(profile.portfolioVisibility)
+          : normalizeResumeVisibility(profile.resumeVisibility)
+      );
       setShowRegenConfirm(false);
       setSavedVisibility(false);
 
@@ -381,25 +507,34 @@ export function ShareDialog({
       };
       void init();
     }
-  }, [open, fetchUnlistedKey, onBeforeOpen, profile.resumeVisibility]);
+  }, [
+    open,
+    fetchUnlistedKey,
+    onBeforeOpen,
+    profile.portfolioVisibility,
+    profile.resumeVisibility,
+    variant,
+  ]);
 
   // Re-generate the default message whenever the share URL changes
   useEffect(() => {
-    setShareMessage(buildDefaultMessage(profile.firstName ?? null, shareUrl));
-  }, [profile.firstName, shareUrl]);
+    setShareMessage(buildDefaultMessage(profile.firstName ?? null, shareUrl, variant));
+  }, [profile.firstName, shareUrl, variant]);
 
   // ── Visibility change ────────────────────────────────────────────────
 
   const handleVisibilityChange = async (value: ContentVisibility) => {
-    const prev = resumeVisibility;
-    setResumeVisibility(value);
+    const prev = contentVisibility;
+    setContentVisibility(value);
     setSavingVisibility(true);
 
     try {
       const res = await fetch('/api/profile', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ resumeVisibility: value }),
+        body: JSON.stringify(
+          isPortfolio ? { portfolioVisibility: value } : { resumeVisibility: value }
+        ),
       });
 
       if (!res.ok) throw new Error('Failed to update visibility');
@@ -417,7 +552,7 @@ export function ShareDialog({
       }
     } catch (err) {
       console.error('Failed to update visibility:', err);
-      setResumeVisibility(prev);
+      setContentVisibility(prev);
     } finally {
       setSavingVisibility(false);
     }
@@ -499,7 +634,7 @@ export function ShareDialog({
   const handleSendViaEmail = () => {
     if (!webmailProvider) return;
     const firstName = profile.firstName?.trim() || '';
-    const subject = `${firstName ? firstName + ' shared' : 'Shared'} a resume with you`;
+    const subject = `${firstName ? firstName + ' shared' : 'Shared'} a ${contentLabel} with you`;
     const composeUrl = webmailProvider.buildComposeUrl(subject, shareMessage);
     window.open(composeUrl, '_blank', 'noopener,noreferrer');
   };
@@ -507,10 +642,14 @@ export function ShareDialog({
   // ── Current visibility info ──────────────────────────────────────────
 
   const currentVisibility =
-    VISIBILITY_OPTIONS.find((v) => v.value === resumeVisibility) ?? VISIBILITY_OPTIONS[0];
+    visibilityOptions.find((v) => v.value === contentVisibility) ?? visibilityOptions[0];
   const CurrentIcon = currentVisibility.icon;
 
   // ── Render ───────────────────────────────────────────────────────────
+
+  if (isPortfolio && !isPortfolioEnabled()) {
+    return null;
+  }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -530,7 +669,7 @@ export function ShareDialog({
               </DialogTrigger>
             </TooltipTrigger>
             <TooltipContent side="bottom">
-              <p>Share your resume</p>
+              <p>{triggerTooltip}</p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
@@ -538,10 +677,8 @@ export function ShareDialog({
 
       <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-[480px]">
         <DialogHeader className="px-5 pb-3 pt-5">
-          <DialogTitle className="text-base">Share Resume</DialogTitle>
-          <DialogDescription className="text-xs">
-            Control access and share your resume.
-          </DialogDescription>
+          <DialogTitle className="text-base">{dialogTitle}</DialogTitle>
+          <DialogDescription className="text-xs">{dialogDescription}</DialogDescription>
         </DialogHeader>
 
         <div className="max-h-[calc(85vh-80px)] overflow-y-auto">
@@ -559,9 +696,9 @@ export function ShareDialog({
             </div>
 
             <div className="flex gap-1.5">
-              {VISIBILITY_OPTIONS.map((option) => {
+              {visibilityOptions.map((option) => {
                 const Icon = option.icon;
-                const isActive = resumeVisibility === option.value;
+                const isActive = contentVisibility === option.value;
                 return (
                   <button
                     key={option.value}
@@ -609,7 +746,7 @@ export function ShareDialog({
               <h3 className="text-xs font-medium text-muted-foreground">Share link</h3>
             </div>
 
-            {resumeVisibility === 'PRIVATE' ? (
+            {contentVisibility === 'PRIVATE' ? (
               <div className="rounded-lg border border-dashed bg-muted/30 px-3 py-2 text-center">
                 <p className="text-xs text-muted-foreground">
                   Change access to Public or Unlisted to get a link.
@@ -620,7 +757,7 @@ export function ShareDialog({
                 {/* URL display & copy */}
                 <div className="flex items-center gap-2">
                   <div className="min-w-0 flex-1 rounded-md border bg-muted/30 px-2.5 py-1.5">
-                    {isLoadingKey && resumeVisibility === 'UNLISTED' ? (
+                    {isLoadingKey && contentVisibility === 'UNLISTED' ? (
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         <Loader2 className="h-3 w-3 animate-spin" />
                         Generating...
@@ -662,7 +799,7 @@ export function ShareDialog({
                 </div>
 
                 {/* Regenerate link — cautious two-step */}
-                {resumeVisibility === 'UNLISTED' && (
+                {contentVisibility === 'UNLISTED' && (
                   <div className="mt-1">
                     {!showRegenConfirm ? (
                       <button
@@ -724,9 +861,9 @@ export function ShareDialog({
               <h3 className="text-xs font-medium text-muted-foreground">Share message</h3>
             </div>
 
-            {resumeVisibility === 'PRIVATE' ? (
+            {contentVisibility === 'PRIVATE' ? (
               <p className="text-xs text-muted-foreground">
-                Make your resume Public or Unlisted to get a shareable message.
+                Make your {contentLabel} Public or Unlisted to get a shareable message.
               </p>
             ) : (
               <div className="space-y-2">

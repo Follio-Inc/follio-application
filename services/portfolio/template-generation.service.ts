@@ -1,14 +1,15 @@
 /**
  * Template Portfolio Generation Service
  *
+ * @deprecated Use `generateEnhancedPortfolio` from `enhanced-generation.service.ts`.
+ * This simpler path remains for scripts and backwards compatibility only.
+ *
  * Orchestrates the creation of a template-based portfolio:
  * 1. Load profile data from DB
  * 2. Normalize it for the template system
  * 3. Generate AI copy
  * 4. Assemble the TemplatePortfolio object
  * 5. Save to GeneratedPortfolio
- *
- * This replaces the old 6-stage orchestrator for template-based portfolios.
  */
 
 import { db } from '@/lib/db';
@@ -19,14 +20,13 @@ import { Prisma } from '@prisma/client';
 import type {
   TemplateCopy,
   TemplatePortfolio,
-  TemplateSectionConfig,
   TemplateStyleConfig,
 } from '@/lib/portfolio/templates/types';
-import type { FullProfile } from '@/types';
 
 import { isAIAvailable } from '@/lib/ai-client';
-import { normalizeProfileForTemplate } from '@/lib/portfolio/templates/normalizer';
 import { getDefaultTemplateId, getTemplateMeta } from '@/lib/portfolio/templates/registry';
+import { transformToPortfolioContent } from './content-transform.service';
+import { determineSections, loadNormalizedProfile } from './plan-helpers';
 import { generateTemplateCopy, getDefaultCopy } from './template-copy.service';
 
 const genLogger = logger.child({ source: 'template-generation' });
@@ -69,8 +69,8 @@ export async function generateTemplatePortfolio(
   genLogger.info('Starting template portfolio generation', { profileId });
 
   // ── Step 1: Load profile data ────────────────────────────────────────
-  const profile = await loadProfileWithRelations(profileId);
-  if (!profile) {
+  const normalizedProfile = await loadNormalizedProfile(profileId);
+  if (!normalizedProfile) {
     throw Errors.notFound('Profile not found');
   }
 
@@ -83,37 +83,12 @@ export async function generateTemplatePortfolio(
 
   genLogger.info('Using template', { templateId, templateName: meta.name });
 
-  // ── Step 3: Normalize profile data ───────────────────────────────────
-  // Load GitHub profile separately (not included in the standard query)
-  let githubProfile = null;
-  try {
-    githubProfile = await db.gitHubProfile.findUnique({
-      where: { profileId },
-      select: {
-        username: true,
-        avatarUrl: true,
-        bio: true,
-        publicRepos: true,
-        followers: true,
-        totalStars: true,
-        primaryLanguages: true,
-      },
-    });
-  } catch {
-    genLogger.warn('Failed to fetch GitHub profile, continuing without it');
-  }
-
-  // Convert to serialized form (same as what the client receives)
-  const serialized = JSON.parse(JSON.stringify(profile));
-  const normalizedProfile = normalizeProfileForTemplate(serialized, {
-    githubProfile: githubProfile ? JSON.parse(JSON.stringify(githubProfile)) : null,
-  });
-
-  // ── Step 4: Generate AI copy ─────────────────────────────────────────
+  // ── Step 3: Generate AI copy ─────────────────────────────────────────
   let copy: TemplateCopy;
   let isAIGenerated = false;
+  const useAI = !options.skipAI && isAIAvailable();
 
-  if (options.skipAI || !isAIAvailable()) {
+  if (!useAI) {
     genLogger.info('Skipping AI copy generation, using defaults');
     copy = getDefaultCopy(normalizedProfile);
   } else {
@@ -122,19 +97,27 @@ export async function generateTemplatePortfolio(
     isAIGenerated = result.isAIGenerated;
   }
 
+  // ── Step 4: Portfolio-owned content ──────────────────────────────────
+  const content = await transformToPortfolioContent(normalizedProfile, {
+    projectNarratives: copy.projectNarratives,
+    skipAI: !useAI,
+  });
+
   // ── Step 5: Determine section configuration ──────────────────────────
-  const sections = determineSections(normalizedProfile, meta.defaultSections);
+  const sections = determineSections(content, meta.defaultSections);
 
   // ── Step 6: Determine style ──────────────────────────────────────────
   const style: TemplateStyleConfig = {
     accentColor: options.accentColor || meta.compatibleAccentColors[0]?.value || '#3b82f6',
     fontFamily: options.fontFamily || meta.compatibleFonts[0]?.id || 'inter',
+    appearance: meta.defaultAppearance ?? 'system',
   };
 
   // ── Step 7: Assemble the TemplatePortfolio ───────────────────────────
   const templatePortfolio: TemplatePortfolio = {
     templateId,
     copy,
+    content,
     sections,
     style,
     enrichment: null,
@@ -164,6 +147,7 @@ export async function generateTemplatePortfolio(
       version: nextVersion,
       status: 'PUBLISHED',
       plan: templatePortfolio as unknown as Prisma.InputJsonValue,
+      userOverrides: { draftPlan: templatePortfolio } as unknown as Prisma.InputJsonValue,
       isActive: true,
       generationTimeMs,
       pipelineVersion: 'template-v1',
@@ -188,133 +172,15 @@ export async function generateTemplatePortfolio(
 }
 
 // ============================================================================
-// SECTION DETERMINATION
-// ============================================================================
-
-/**
- * Determine which sections to enable based on available profile data.
- * Sections without data are disabled by default.
- */
-function determineSections(
-  profile: import('@/lib/portfolio/templates/types').TemplateProfileData,
-  defaults: TemplateSectionConfig[]
-): TemplateSectionConfig[] {
-  return defaults.map((section) => {
-    // Always keep navigation and footer enabled
-    if (section.type === 'navigation' || section.type === 'footer') {
-      return { ...section, enabled: true };
-    }
-
-    // Hero and about are always enabled (they use AI copy)
-    if (section.type === 'hero' || section.type === 'about') {
-      return { ...section, enabled: true };
-    }
-
-    // Contact is always enabled
-    if (section.type === 'contact') {
-      return { ...section, enabled: true };
-    }
-
-    // Data-dependent sections: enable only if data exists
-    const hasData = sectionHasData(section.type, profile);
-    return { ...section, enabled: hasData };
-  });
-}
-
-function sectionHasData(
-  type: string,
-  profile: import('@/lib/portfolio/templates/types').TemplateProfileData
-): boolean {
-  switch (type) {
-    case 'experience':
-      return profile.workExperiences.filter((e) => e.isVisible).length > 0;
-    case 'projects':
-      return profile.projects.filter((p) => p.isVisible && p.showOnPortfolio).length > 0;
-    case 'skills':
-      return profile.skills.filter((s) => s.isVisible).length > 0 || profile.skillGroups.length > 0;
-    case 'education':
-      return profile.educations.filter((e) => e.isVisible).length > 0;
-    case 'certifications':
-      return profile.certifications.filter((c) => c.isVisible).length > 0;
-    case 'awards':
-      return profile.awards.filter((a) => a.isVisible).length > 0;
-    case 'github':
-      return profile.github !== null;
-    case 'blog':
-      return profile.blogPosts.filter((b) => b.isVisible).length > 0;
-    default:
-      return false;
-  }
-}
-
-// ============================================================================
-// DB HELPERS
-// ============================================================================
-
-async function loadProfileWithRelations(profileId: string): Promise<FullProfile | null> {
-  const profile = await db.profile.findUnique({
-    where: { id: profileId },
-    include: {
-      contactInfo: true,
-      links: { orderBy: { sortOrder: 'asc' } },
-      workExperiences: { orderBy: { sortOrder: 'asc' } },
-      educations: { orderBy: { sortOrder: 'asc' } },
-      skills: { orderBy: { sortOrder: 'asc' } },
-      skillGroups: {
-        include: { skills: { orderBy: { sortOrder: 'asc' } } },
-        orderBy: { sortOrder: 'asc' },
-      },
-      projects: { orderBy: { sortOrder: 'asc' } },
-      awards: { orderBy: { sortOrder: 'asc' } },
-      certifications: { orderBy: { sortOrder: 'asc' } },
-      blogPosts: { orderBy: { createdAt: 'desc' } },
-      youtubeVideos: { orderBy: { createdAt: 'desc' } },
-      photos: { orderBy: { sortOrder: 'asc' } },
-      sections: { orderBy: { sortOrder: 'asc' } },
-    },
-  });
-
-  return profile as FullProfile | null;
-}
-
-// ============================================================================
 // RE-GENERATION (for portfolio builder)
 // ============================================================================
 
 /**
- * Regenerate only the AI copy for an existing template portfolio.
- * Preserves all user customizations (sections, style, overrides).
+ * @deprecated Use `regenerateEnhancedCopy` from `enhanced-generation.service.ts`.
  */
 export async function regenerateTemplateCopy(
   portfolioId: string
 ): Promise<{ copy: TemplateCopy; isAIGenerated: boolean }> {
-  const portfolio = await db.generatedPortfolio.findUnique({
-    where: { id: portfolioId },
-    select: { profileId: true, plan: true },
-  });
-
-  if (!portfolio) {
-    throw Errors.notFound('Portfolio not found');
-  }
-
-  const profile = await loadProfileWithRelations(portfolio.profileId);
-  if (!profile) {
-    throw Errors.notFound('Profile not found');
-  }
-
-  const serialized = JSON.parse(JSON.stringify(profile));
-  const normalizedProfile = normalizeProfileForTemplate(serialized);
-
-  const result = await generateTemplateCopy(normalizedProfile);
-
-  // Update the copy in the plan
-  const plan = portfolio.plan as unknown as TemplatePortfolio;
-  plan.copy = result.copy;
-
-  await db.generatedPortfolio.update({
-    where: { id: portfolioId },
-    data: { plan: plan as unknown as Prisma.InputJsonValue },
-  });
-
-  return result;
+  const { regenerateEnhancedCopy } = await import('./enhanced-generation.service');
+  return regenerateEnhancedCopy(portfolioId);
 }

@@ -6,7 +6,32 @@
  * metadata without pulling in React components or CSS files.
  */
 
-import type { TemplateKitMeta, TemplateNavbarTheme, TemplateSectionConfig } from '../types';
+import type {
+  TemplateKitMeta,
+  TemplateNavbarTheme,
+  TemplateSectionConfig,
+  TemplateSectionType,
+} from '../types';
+
+// ============================================================================
+// DEFAULT SECTION HEADINGS
+// ============================================================================
+
+/**
+ * Default section titles for Developer Dark. This template uses a single
+ * accent-dash heading (no eyebrow), so eyebrow defaults are empty and the
+ * editor only shows the Heading field. Users can override any title.
+ */
+export const SECTION_DEFAULT_HEADINGS: Partial<
+  Record<TemplateSectionType, { eyebrow: string; title: string }>
+> = {
+  projects: { eyebrow: '', title: 'Featured Work' },
+  experience: { eyebrow: '', title: 'Experience' },
+  skills: { eyebrow: '', title: 'Skills' },
+  education: { eyebrow: '', title: 'Education' },
+  certifications: { eyebrow: '', title: 'Certifications' },
+  github: { eyebrow: '', title: 'Open Source' },
+};
 
 // ============================================================================
 // DEFAULT SECTIONS
@@ -22,9 +47,8 @@ export const DEFAULT_SECTIONS: TemplateSectionConfig[] = [
   { id: 'edu', type: 'education', enabled: true, order: 6 },
   { id: 'cert', type: 'certifications', enabled: false, order: 7 },
   { id: 'gh', type: 'github', enabled: false, order: 8 },
-  { id: 'blog', type: 'blog', enabled: false, order: 9 },
-  { id: 'cta', type: 'contact', enabled: true, order: 10 },
-  { id: 'foot', type: 'footer', enabled: true, order: 11 },
+  { id: 'cta', type: 'contact', enabled: true, order: 9 },
+  { id: 'foot', type: 'footer', enabled: true, order: 10 },
 ];
 
 // ============================================================================
@@ -33,11 +57,13 @@ export const DEFAULT_SECTIONS: TemplateSectionConfig[] = [
 
 export const META: TemplateKitMeta = {
   id: 'developer-dark',
-  name: 'Developer Dark',
+  name: 'Developer',
   description:
-    'A sleek, modern dark-themed portfolio. Deep navy background, clean typography, accent dash headings. Perfect for developers and engineers.',
+    'A sleek, modern portfolio for developers and engineers. Clean typography, accent dash headings, and a polished light or dark canvas.',
   previewUrl: null,
-  tags: ['dark', 'developer', 'modern', 'professional', 'tech'],
+  tags: ['developer', 'modern', 'professional', 'tech'],
+
+  defaultAppearance: 'dark',
 
   defaultSections: DEFAULT_SECTIONS,
 
@@ -54,6 +80,8 @@ export const META: TemplateKitMeta = {
     'contact',
     'footer',
   ],
+
+  defaultSectionHeadings: SECTION_DEFAULT_HEADINGS,
 
   compatibleAccentColors: [
     { name: 'Blue', value: '#3b82f6' },

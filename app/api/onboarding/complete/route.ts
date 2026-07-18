@@ -1,5 +1,8 @@
 import { syncAvatarToClerk } from '@/lib/clerk-avatar-sync';
+import { upsertGitHubProfileForProfile } from '@/services/import/github-enhanced.service';
 import { db } from '@/lib/db';
+import { isPortfolioEnabled } from '@/lib/features';
+import { generateUniqueResumeTitle } from '@/lib/resume-title';
 import { parseDateFlexible } from '@/lib/utils';
 import type { NormalizedImportResult } from '@/services/import/types';
 import {
@@ -195,6 +198,50 @@ interface ReviewedData {
     showReadme?: boolean;
     customDescription?: string;
   }>;
+  /** Writing posts from Medium / Substack / other blog imports */
+  blogPosts?: Array<{
+    title: string;
+    url: string;
+    slug?: string;
+    excerpt?: string;
+    content?: string;
+    thumbnail?: string;
+    author?: string;
+    publishedAt?: string;
+    tags?: string[];
+    readTimeMin?: number;
+    claps?: number;
+    platform?: string;
+    platformIcon?: string;
+    source?: string;
+  }>;
+  /** Aggregate GitHub profile (stars, languages, orgs) from onboarding import */
+  githubProfile?: {
+    username: string;
+    githubId?: number;
+    avatarUrl?: string;
+    htmlUrl?: string;
+    bio?: string | null;
+    company?: string | null;
+    blog?: string | null;
+    location?: string | null;
+    hireable?: boolean | null;
+    publicRepos?: number;
+    publicGists?: number;
+    followers?: number;
+    following?: number;
+    accountCreatedAt?: string | Date | null;
+    totalStars?: number;
+    totalForks?: number;
+    primaryLanguages?: string[];
+    languageStats?: Record<string, number>;
+    organizations?: Array<{
+      login: string;
+      avatarUrl: string;
+      url: string;
+      description?: string;
+    }>;
+  };
   contactInfo?: {
     email?: string;
     emailSource?: string;
@@ -493,13 +540,12 @@ export async function POST(request: NextRequest) {
     // Create or update profile
     if (!user.profile) {
       // Create new profile
+      const resumeTitle = await generateUniqueResumeTitle(db, user.id);
       const profile = await db.profile.create({
         data: {
           userId: user.id,
           handle,
-          resumeTitle:
-            [finalFirstName, finalMiddleName, finalLastName].filter(Boolean).join(' ').trim() ||
-            'Untitled Resume',
+          resumeTitle,
           firstName: finalFirstName,
           middleName: finalMiddleName,
           lastName: finalLastName,
@@ -796,7 +842,7 @@ export async function POST(request: NextRequest) {
 
     // Generate AI-enriched portfolio (fire and forget - don't block the response)
     const profileId = user.profile?.id;
-    if (profileId) {
+    if (profileId && isPortfolioEnabled()) {
       const startingTemplateId = typeof templateId === 'string' ? templateId : undefined;
       import('@/services/portfolio/enhanced-generation.service')
         .then(({ generateEnhancedPortfolio }) =>
@@ -882,13 +928,12 @@ async function handleReviewedData(
 
   if (!user.profile) {
     // Create new profile
+    const resumeTitle = await generateUniqueResumeTitle(db, user.id);
     const profile = await db.profile.create({
       data: {
         userId: user.id,
         handle,
-        resumeTitle:
-          [finalFirstName, finalMiddleName, finalLastName].filter(Boolean).join(' ').trim() ||
-          'Untitled Resume',
+        resumeTitle,
         firstName: finalFirstName,
         middleName: finalMiddleName,
         lastName: finalLastName,
@@ -1201,6 +1246,93 @@ async function handleReviewedData(
     console.log('[handleReviewedData] Created all projects');
   }
 
+  // Create blog posts (Medium / Substack / other writing sources)
+  if (reviewedData.blogPosts?.length) {
+    console.log('[handleReviewedData] Creating blog posts:', reviewedData.blogPosts.length);
+    for (const post of reviewedData.blogPosts) {
+      if (!post.url || !post.title) continue;
+      try {
+        await db.blogPost.upsert({
+          where: {
+            profileId_url: { profileId, url: post.url },
+          },
+          create: {
+            profileId,
+            title: post.title,
+            url: post.url,
+            slug: post.slug,
+            excerpt: post.excerpt,
+            content: post.content,
+            thumbnail: post.thumbnail,
+            author: post.author,
+            publishedAt: post.publishedAt ? new Date(post.publishedAt) : null,
+            tags: post.tags || [],
+            readTimeMin: post.readTimeMin,
+            claps: post.claps,
+            platform: post.platform || 'medium',
+            platformIcon: post.platformIcon,
+            source: (post.source as 'MEDIUM' | 'BLOG' | 'MANUAL') || 'MEDIUM',
+            isVisible: true,
+          },
+          update: {
+            title: post.title,
+            excerpt: post.excerpt,
+            content: post.content,
+            thumbnail: post.thumbnail,
+            tags: post.tags || [],
+            readTimeMin: post.readTimeMin,
+            claps: post.claps,
+          },
+        });
+      } catch (err) {
+        console.error('[handleReviewedData] Failed to save blog post:', post.url, err);
+      }
+    }
+  }
+
+  // Persist aggregate GitHub profile so the portfolio agent sees stars/languages/orgs
+  if (reviewedData.githubProfile?.username) {
+    const gh = reviewedData.githubProfile;
+    const githubProjectCount =
+      reviewedData.projects?.filter((p) => p.repoUrl?.includes('github.com')).length ?? 0;
+    try {
+      await upsertGitHubProfileForProfile(
+        profileId,
+        {
+          username: gh.username,
+          githubId: gh.githubId ?? 0,
+          avatarUrl: gh.avatarUrl || '',
+          htmlUrl: gh.htmlUrl || `https://github.com/${gh.username}`,
+          bio: gh.bio ?? null,
+          company: gh.company ?? null,
+          blog: gh.blog ?? null,
+          location: gh.location ?? null,
+          hireable: gh.hireable ?? null,
+          publicRepos: gh.publicRepos ?? 0,
+          publicGists: gh.publicGists ?? 0,
+          followers: gh.followers ?? 0,
+          following: gh.following ?? 0,
+          accountCreatedAt: gh.accountCreatedAt
+            ? gh.accountCreatedAt instanceof Date
+              ? gh.accountCreatedAt
+              : new Date(gh.accountCreatedAt)
+            : new Date(),
+          totalStars: gh.totalStars ?? 0,
+          totalForks: gh.totalForks ?? 0,
+          primaryLanguages: gh.primaryLanguages || [],
+          languageStats: gh.languageStats || {},
+          organizations: gh.organizations || [],
+        },
+        {
+          itemsImported: githubProjectCount + (reviewedData.skills?.length || 0),
+        }
+      );
+      console.log('[handleReviewedData] Saved GitHubProfile for', gh.username);
+    } catch (err) {
+      console.error('[handleReviewedData] Failed to save GitHubProfile:', err);
+    }
+  }
+
   // ── Save profile photo as ProfilePhoto record ───────────────────────
   // If the client uploaded a photo, save the original full-resolution
   // version as a PROFILE photo.  The serving endpoint /api/photos/[id]
@@ -1354,7 +1486,7 @@ async function handleReviewedData(
 
   // Generate AI-enriched portfolio (awaited so the template portfolio is ready
   // before the user lands on their profile page after onboarding)
-  if (profileId) {
+  if (profileId && isPortfolioEnabled()) {
     try {
       const { generateEnhancedPortfolio } =
         await import('@/services/portfolio/enhanced-generation.service');

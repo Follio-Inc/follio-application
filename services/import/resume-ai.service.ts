@@ -15,18 +15,16 @@
  */
 
 import { resolveActiveProfileContext } from '@/lib/active-profile';
+import { executeAICall, isAIAvailable } from '@/lib/ai-client';
 import { db } from '@/lib/db';
 import { parseDateFlexible } from '@/lib/utils';
 import { DataSource, LinkType, Prisma } from '@prisma/client';
-import OpenAI from 'openai';
 
 // ============================================================================
 // CONFIGURATION
 // ============================================================================
 
 const OPENAI_MODEL = 'gpt-4o-mini'; // Cost-effective, great for parsing
-const MAX_TOKENS = 4096;
-const TEMPERATURE = 0.1; // Low temperature for consistent, accurate extraction
 
 // ============================================================================
 // TYPES
@@ -165,32 +163,14 @@ export interface ImportResult {
 }
 
 // ============================================================================
-// OPENAI CLIENT
+// AI AVAILABILITY
 // ============================================================================
-
-let openaiClient: OpenAI | null = null;
-
-function getOpenAIClient(): OpenAI {
-  if (!openaiClient) {
-    const apiKey = process.env.OPENAI_API_KEY;
-
-    if (!apiKey) {
-      throw new Error(
-        'OPENAI_API_KEY is not configured. Please add it to your environment variables.'
-      );
-    }
-
-    openaiClient = new OpenAI({ apiKey });
-  }
-
-  return openaiClient;
-}
 
 /**
  * Check if AI parser is available (API key is configured)
  */
 export function isAIParserAvailable(): boolean {
-  return !!process.env.OPENAI_API_KEY;
+  return isAIAvailable();
 }
 
 // ============================================================================
@@ -285,7 +265,7 @@ RESUME TEXT:
 /**
  * Extract text from PDF buffer using pdf-parse
  */
-async function extractTextFromPDF(buffer: Buffer): Promise<string> {
+export async function extractTextFromPDF(buffer: Buffer): Promise<string> {
   console.log('[AI Parser] Extracting text from PDF...');
 
   try {
@@ -323,49 +303,29 @@ async function extractTextFromPDF(buffer: Buffer): Promise<string> {
 // ============================================================================
 
 /**
- * Parse resume text using OpenAI
+ * Parse resume text using the shared AI client (extraction model).
+ * Exported for the resume-parse agent.
  */
-async function parseResumeWithAI(text: string): Promise<ParsedResumeAI> {
-  const client = getOpenAIClient();
-
-  console.log('[AI Parser] Sending to OpenAI...');
+export async function parseResumeTextWithAI(text: string): Promise<ParsedResumeAI> {
+  console.log('[AI Parser] Sending to OpenAI via ai-client...');
   console.log(`[AI Parser] Text length: ${text.length} characters`);
 
-  const response = await client.chat.completions.create({
-    model: OPENAI_MODEL,
-    messages: [
-      {
-        role: 'system',
-        content:
-          'You are a precise resume parser. Extract structured data accurately. Always respond with valid JSON only, no markdown formatting or code blocks.',
-      },
-      {
-        role: 'user',
-        content: RESUME_PARSING_PROMPT + text,
-      },
-    ],
-    temperature: TEMPERATURE,
-    max_tokens: MAX_TOKENS,
-    response_format: { type: 'json_object' },
+  const { data, meta } = await executeAICall<ParsedResumeAI>({
+    stage: 'resumeParse',
+    taskType: 'extraction',
+    systemPrompt:
+      'You are a precise resume parser. Extract structured data accurately. Always respond with valid JSON only, no markdown formatting or code blocks.',
+    userPrompt: RESUME_PARSING_PROMPT + text,
+    jsonMode: true,
   });
 
-  const content = response.choices[0]?.message?.content;
+  console.log('[AI Parser] AI call complete', {
+    model: meta.model,
+    tokens: meta.tokensUsed,
+    durationMs: meta.durationMs,
+  });
 
-  if (!content) {
-    throw new Error('OpenAI returned an empty response');
-  }
-
-  // Parse the JSON response
-  let parsed: ParsedResumeAI;
-  try {
-    parsed = JSON.parse(content);
-  } catch {
-    console.error('[AI Parser] Failed to parse JSON response:', content.substring(0, 500));
-    throw new Error('OpenAI returned invalid JSON');
-  }
-
-  // Validate and clean the response
-  return validateAndCleanResponse(parsed);
+  return validateAndCleanResponse(data);
 }
 
 /**
@@ -510,7 +470,10 @@ function normalizeUrl(url: string): string {
 /**
  * Normalize parsed AI data into application format
  */
-function normalizeAIData(parsed: ParsedResumeAI, processingTimeMs: number): NormalizedResumeData {
+export function normalizeAIData(
+  parsed: ParsedResumeAI,
+  processingTimeMs: number
+): NormalizedResumeData {
   const normalized: NormalizedResumeData = {
     profile: {},
     experiences: [],
@@ -657,17 +620,16 @@ function calculateConfidence(parsed: ParsedResumeAI): number {
 // ============================================================================
 
 /**
- * Parse and import a resume PDF using AI
+ * Parse and import a resume PDF using the shared resume-parse agent.
  */
 export async function importResumeWithAI(buffer: Buffer, userId: string): Promise<ImportResult> {
   const startTime = Date.now();
 
   try {
-    console.log('[AI Resume Import] Starting AI-powered parsing...');
+    console.log('[AI Resume Import] Starting AI-powered parsing via agent...');
     console.log(`[AI Resume Import] User: ${userId}`);
     console.log(`[AI Resume Import] Buffer size: ${buffer.length} bytes`);
 
-    // Check if API key is available
     if (!isAIParserAvailable()) {
       return {
         success: false,
@@ -675,7 +637,6 @@ export async function importResumeWithAI(buffer: Buffer, userId: string): Promis
       };
     }
 
-    // Step 1: Extract text from PDF
     const text = await extractTextFromPDF(buffer);
     console.log(`[AI Resume Import] Extracted ${text.length} characters from PDF`);
 
@@ -687,16 +648,20 @@ export async function importResumeWithAI(buffer: Buffer, userId: string): Promis
       };
     }
 
-    // Step 2: Parse with AI
-    const parsed = await parseResumeWithAI(text);
+    const { runResumeParseAgent } = await import('@/services/agents/resume-parse');
+    const { output, run } = await runResumeParseAgent(
+      { text, userId },
+      { userId, meta: { source: 'resume-import' } }
+    );
+
     const processingTime = Date.now() - startTime;
+    console.log('[AI Resume Import] Agent complete', {
+      runId: run.id,
+      processingTimeMs: processingTime,
+      tokens: run.totalTokensUsed,
+    });
 
-    console.log('[AI Resume Import] AI parsing complete');
-    console.log(`[AI Resume Import] Processing time: ${processingTime}ms`);
-
-    // Step 3: Normalize data
-    const normalized = normalizeAIData(parsed, processingTime);
-
+    const normalized = output.data;
     console.log('[AI Resume Import] === EXTRACTION SUMMARY ===');
     console.log(
       `  Name: ${[
@@ -708,15 +673,9 @@ export async function importResumeWithAI(buffer: Buffer, userId: string): Promis
         .join(' ')}`
     );
     console.log(`  Email: ${normalized.contactInfo?.email}`);
-    console.log(`  Headline: ${normalized.profile.headline?.substring(0, 50)}`);
     console.log(`  Experiences: ${normalized.experiences.length}`);
-    console.log(`  Education: ${normalized.educations.length}`);
     console.log(`  Skills: ${normalized.skills.length}`);
-    console.log(`  Projects: ${normalized.projects.length}`);
-    console.log(`  Certifications: ${normalized.certifications.length}`);
-    console.log(`  Links: ${normalized.links.length}`);
     console.log(`  Confidence: ${normalized.meta.confidence}`);
-    console.log(`  Model: ${normalized.meta.model}`);
 
     return {
       success: true,

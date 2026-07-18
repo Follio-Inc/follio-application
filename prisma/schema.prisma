@@ -96,6 +96,7 @@ model Profile {
   workExperiences        WorkExperience[]
   youtubeVideos          YouTubeVideo[]
   generatedPortfolios    GeneratedPortfolio[]
+  agentRuns              AgentRun[]
 
   @@index([handle])
   @@index([status])
@@ -632,6 +633,34 @@ model GeneratedPortfolio {
   @@index([profileId])
   @@index([status])
   @@index([isActive])
+}
+
+/// Persisted agent run for cost, debugging, and observability across Follio agents.
+model AgentRun {
+  id                   String    @id @default(cuid())
+  agentId              String
+  version              String
+  status               String
+  stepMetas            Json      @default("[]")
+  totalTokensUsed      Json      @default("{\"input\":0,\"output\":0}")
+  startedAt            DateTime
+  finishedAt           DateTime?
+  error                String?
+  requestId            String?
+  userId               String?
+  profileId            String?
+  generatedPortfolioId String?
+  meta                 Json?
+  inputSummary         Json?
+  outputSummary        Json?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  profile              Profile?  @relation(fields: [profileId], references: [id], onDelete: SetNull)
+
+  @@index([agentId, status])
+  @@index([profileId])
+  @@index([userId])
+  @@index([startedAt])
 }
 
 enum PortfolioStatus {

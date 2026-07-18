@@ -15,8 +15,8 @@ import { useMemo } from 'react';
 import type { TemplatePortfolio } from '@/lib/portfolio/templates/types';
 import type { PublicProfile } from '@/types';
 
+import { resolvePortfolioProfile } from '@/lib/portfolio/templates/content';
 import { normalizeProfileForTemplate } from '@/lib/portfolio/templates/normalizer';
-import { applyPortfolioOverrides } from '@/lib/portfolio/templates/overrides';
 import { getTemplate } from '@/lib/portfolio/templates/registry';
 
 interface TemplatePortfolioViewProps {
@@ -44,17 +44,12 @@ export function TemplatePortfolioView({
   // Look up the template kit
   const kit = getTemplate(templateData.templateId);
 
-  // Normalize profile data for the template, then apply the portfolio's media
-  // overrides (avatar / project images) so published image choices take effect
-  // without mutating the underlying profile.
-  const normalizedProfile = useMemo(
-    () =>
-      applyPortfolioOverrides(
-        normalizeProfileForTemplate(profile, { githubProfile }),
-        templateData.overrides
-      ),
-    [profile, githubProfile, templateData.overrides]
-  );
+  // Prefer portfolio-owned content (snapshotted at generation / edited in the
+  // portfolio editor). Fall back to the live profile only for legacy plans.
+  const normalizedProfile = useMemo(() => {
+    const liveProfile = normalizeProfileForTemplate(profile, { githubProfile });
+    return resolvePortfolioProfile(templateData, liveProfile);
+  }, [profile, githubProfile, templateData]);
 
   if (!kit) {
     return (

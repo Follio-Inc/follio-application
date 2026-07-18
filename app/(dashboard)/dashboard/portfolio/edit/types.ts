@@ -1,4 +1,4 @@
-import type { TemplateSectionType } from '@/lib/portfolio/templates/types';
+import type { PortfolioAppearance, TemplateSectionType } from '@/lib/portfolio/templates/types';
 
 /** Template capabilities the editor needs (bounded style + section options). */
 export interface EditorTemplateInfo {
@@ -7,6 +7,8 @@ export interface EditorTemplateInfo {
   accentColors: Array<{ name: string; value: string }>;
   fonts: Array<{ id: string; name: string; css: string }>;
   supportedSections: TemplateSectionType[];
+  /** Default light/dark/system when the user has not chosen appearance yet. */
+  defaultAppearance?: PortfolioAppearance;
   /**
    * Default eyebrow + title per section. Drives which sections expose editable
    * headings and the placeholder text shown when a field is left blank.
@@ -19,7 +21,7 @@ export const SECTION_LABELS: Record<TemplateSectionType, string> = {
   navigation: 'Navigation',
   hero: 'Intro',
   about: 'About',
-  experience: 'Experience',
+  experience: 'Work Experience',
   projects: 'Projects',
   skills: 'Skills',
   education: 'Education',

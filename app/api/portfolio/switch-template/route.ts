@@ -3,9 +3,13 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { resolvePrimaryProfileContext } from '@/lib/active-profile';
 import { AppError, ErrorCode, handleApiError } from '@/lib/errors';
+import { assertPortfolioEnabled } from '@/lib/features';
 import { logger } from '@/lib/logger';
 import { getTemplateMeta } from '@/lib/portfolio/templates/registry';
+import { parseTemplatePortfolio } from '@/lib/portfolio/templates/validation';
 import { switchPortfolioTemplate } from '@/services/portfolio/enhanced-generation.service';
+
+import type { TemplatePortfolio } from '@/lib/portfolio/templates/types';
 
 const switchLogger = logger.child({ source: 'api-portfolio-switch-template' });
 
@@ -18,15 +22,21 @@ const switchLogger = logger.child({ source: 'api-portfolio-switch-template' });
  *
  * Request body:
  *   templateId: string — the template to switch to (required)
+ *   draft?: TemplatePortfolio — optional current editor draft (includes unsaved edits)
  */
 export async function POST(request: NextRequest) {
   try {
+    assertPortfolioEnabled();
+
     const { userId } = await auth();
     if (!userId) {
       throw new AppError('Unauthorized', ErrorCode.UNAUTHORIZED, 401);
     }
 
-    const body = (await request.json().catch(() => ({}))) as { templateId?: unknown };
+    const body = (await request.json().catch(() => ({}))) as {
+      templateId?: unknown;
+      draft?: unknown;
+    };
     const templateId = typeof body.templateId === 'string' ? body.templateId : '';
 
     if (!templateId) {
@@ -37,15 +47,27 @@ export async function POST(request: NextRequest) {
       throw new AppError(`Template "${templateId}" does not exist`, ErrorCode.BAD_REQUEST, 400);
     }
 
+    let sourcePlan: TemplatePortfolio | undefined;
+    if (body.draft && typeof body.draft === 'object') {
+      try {
+        sourcePlan = parseTemplatePortfolio(body.draft);
+      } catch {
+        throw new AppError('Invalid portfolio draft', ErrorCode.VALIDATION_ERROR, 400);
+      }
+    }
+
     const context = await resolvePrimaryProfileContext(userId);
 
     switchLogger.info('Template switch requested', {
       userId,
       profileId: context.profileId,
       templateId,
+      hasClientDraft: Boolean(sourcePlan),
     });
 
-    const result = await switchPortfolioTemplate(context.profileId, templateId);
+    const result = await switchPortfolioTemplate(context.profileId, templateId, {
+      sourcePlan,
+    });
 
     switchLogger.info('Template switch completed', {
       userId,

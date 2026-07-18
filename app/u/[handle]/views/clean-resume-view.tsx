@@ -2,9 +2,25 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { useResolvedResumeColorTheme } from '@/lib/hooks/use-resume-color-theme';
 import { containsHtmlFormatting, isHtmlEmpty, sanitizeRichHtml } from '@/lib/html-utils';
-import { cleanPhoneDisplay } from '@/lib/phone';
-import { buildResumeDesignStyles, parseResumeDesign } from '@/lib/resume-design';
+import {
+  buildResumeAtelierContactFields,
+  formatAtelierYearRange,
+  type AtelierContactKind,
+} from '@/lib/resume/atelier';
+import {
+  buildResumeContactItems,
+  buildResumeStudioContactFields,
+  getResumeFullName,
+  shouldShowResumePhoto,
+} from '@/lib/resume/contact';
+import { getResumeTemplateId, isResumeAtelierRailSectionType } from '@/lib/resume/templates';
+import {
+  buildResumeDesignStyles,
+  parseResumeDesign,
+  resolveResumeFonts,
+} from '@/lib/resume-design';
 import { formatDate } from '@/lib/utils';
 import { applyVisibilityFilter, type FilteredProfile } from '@/lib/visibility';
 import type {
@@ -17,7 +33,7 @@ import type {
   PublicProfile,
   VolunteeringItem,
 } from '@/types';
-import { HEADER_SECTION_TYPES, type ResumeDesign, type ResumeFontFamily } from '@/types';
+import { HEADER_SECTION_TYPES, type ResumeDesign } from '@/types';
 
 import { PublicResumeActions } from './public-resume-actions';
 import { ResumeFontLoader } from './resume-font-loader';
@@ -53,6 +69,43 @@ function SectionDivider({ title }: { title: string }) {
   );
 }
 
+function AtelierContactIcon({ kind }: { kind: AtelierContactKind }) {
+  const common = {
+    width: 12,
+    height: 12,
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.75,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+    'aria-hidden': true as const,
+  };
+
+  if (kind === 'phone') {
+    return (
+      <svg {...common}>
+        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.81.36 1.6.68 2.35a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.75.32 1.54.55 2.35.68A2 2 0 0 1 22 16.92z" />
+      </svg>
+    );
+  }
+  if (kind === 'email') {
+    return (
+      <svg {...common}>
+        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+        <polyline points="22,6 12,13 2,6" />
+      </svg>
+    );
+  }
+  return (
+    <svg {...common}>
+      <circle cx="12" cy="12" r="10" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+    </svg>
+  );
+}
+
 // ============================================================================
 // DATE FORMATTER HELPER
 // ============================================================================
@@ -71,6 +124,7 @@ function formatDateRange(
   const end = isCurrent ? 'Present' : formatResumeDate(endDate);
   if (!start && !end) return '';
   if (!start) return end;
+  if (!end) return start;
   return `${start} – ${end}`;
 }
 
@@ -78,63 +132,17 @@ function formatDateRange(
 // HEADER SECTION
 // ============================================================================
 
-function ResumeHeader({ profile }: { profile: FilteredProfile }) {
-  const fullName = [profile.firstName, profile.middleName, profile.lastName]
-    .filter(Boolean)
-    .join(' ');
-
-  const showPhoto =
-    (profile as unknown as Record<string, unknown>).resumeShowPhoto === true &&
-    profile.avatarUrl &&
-    profile._photosVisible;
-
-  // Build contact line items — respects user-configured headerFieldsOrder
-  const contactItems: string[] = (() => {
-    // Build a map: id → display string
-    const itemMap = new Map<string, string>();
-
-    if (profile.location) {
-      itemMap.set('location', profile.location);
-    }
-    if (profile.contactInfo?.email) {
-      itemMap.set('email', profile.contactInfo.email);
-    }
-    if (profile.contactInfo?.phone) {
-      itemMap.set('phone', cleanPhoneDisplay(profile.contactInfo.phone));
-    }
-
-    // Links — already filtered by applyVisibilityFilter (section + entry level)
-    profile.links?.forEach((link) => {
-      const displayUrl = link.url
-        .replace(/^https?:\/\//, '')
-        .replace(/^www\./, '')
-        .replace(/\/$/, '');
-      itemMap.set(link.id, displayUrl);
-    });
-
-    const storedOrder = (profile.contactInfo as Record<string, unknown> | null)?.headerFieldsOrder;
-    const order = Array.isArray(storedOrder) ? (storedOrder as string[]) : null;
-
-    if (order && order.length > 0) {
-      const ordered: string[] = [];
-      const seen = new Set<string>();
-      for (const id of order) {
-        const val = itemMap.get(id);
-        if (val && !seen.has(id)) {
-          ordered.push(val);
-          seen.add(id);
-        }
-      }
-      // Append items not in the stored order
-      for (const [id, val] of itemMap) {
-        if (!seen.has(id)) ordered.push(val);
-      }
-      return ordered;
-    }
-
-    // Fallback: default order
-    return Array.from(itemMap.values());
-  })();
+function ResumeHeader({
+  profile,
+  showContact = true,
+}: {
+  profile: FilteredProfile;
+  /** When false, contact moves to the sidebar column (Sidebar template). */
+  showContact?: boolean;
+}) {
+  const fullName = getResumeFullName(profile);
+  const showPhoto = shouldShowResumePhoto(profile);
+  const contactItems = showContact ? buildResumeContactItems(profile) : [];
 
   return (
     <header className="resume-header relative">
@@ -182,6 +190,92 @@ function ResumeHeader({ profile }: { profile: FilteredProfile }) {
   );
 }
 
+function SleekHeader({ profile }: { profile: FilteredProfile }) {
+  const fullName = getResumeFullName(profile);
+  const showPhoto = shouldShowResumePhoto(profile);
+  const contactItems = buildResumeContactItems(profile);
+
+  return (
+    <header className="resume-header resume-sleek-header">
+      <div className="resume-sleek-identity">
+        {showPhoto ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={profile.avatarUrl!} alt={fullName} className="resume-sleek-photo" />
+        ) : null}
+        <div className="min-w-0">
+          <h1 className="resume-name">{fullName}</h1>
+          {profile.headline ? <p className="resume-headline">{profile.headline}</p> : null}
+        </div>
+      </div>
+      {contactItems.length > 0 ? (
+        <ul className="resume-sleek-contact">
+          {contactItems.map((item) => (
+            <li key={item} className="resume-sleek-contact-item">
+              {item}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </header>
+  );
+}
+
+function StudioHeader({ profile }: { profile: FilteredProfile }) {
+  const fullName = getResumeFullName(profile);
+  const showPhoto = shouldShowResumePhoto(profile);
+  const contactFields = buildResumeStudioContactFields(profile);
+
+  return (
+    <header className="resume-header resume-studio-header">
+      <div className="resume-studio-identity">
+        {showPhoto ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={profile.avatarUrl!} alt={fullName} className="resume-studio-photo" />
+        ) : null}
+        <div className="resume-studio-identity-text">
+          <h1 className="resume-name">{fullName}</h1>
+          {profile.headline ? <p className="resume-headline">{profile.headline}</p> : null}
+        </div>
+      </div>
+      {contactFields.length > 0 ? (
+        <ul className="resume-studio-contact">
+          {contactFields.map((field) => (
+            <li key={field.id} className="resume-studio-contact-item">
+              {field.value}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </header>
+  );
+}
+
+function AtelierHeader({ profile }: { profile: FilteredProfile }) {
+  const fullName = getResumeFullName(profile);
+  const contactFields = buildResumeAtelierContactFields(profile);
+
+  return (
+    <header className="resume-header resume-atelier-header">
+      <div className="resume-atelier-identity">
+        <h1 className="resume-name">{fullName}</h1>
+        {profile.headline ? <p className="resume-headline">{profile.headline}</p> : null}
+      </div>
+      {contactFields.length > 0 ? (
+        <ul className="resume-atelier-contact">
+          {contactFields.map((field) => (
+            <li key={field.id} className="resume-atelier-contact-item">
+              <span className="resume-atelier-contact-icon">
+                <AtelierContactIcon kind={field.kind} />
+              </span>
+              <span>{field.value}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </header>
+  );
+}
+
 // ============================================================================
 // RICH HTML HELPER
 // ============================================================================
@@ -211,10 +305,10 @@ function RichHtml({
 // SUMMARY SECTION
 // ============================================================================
 
-function SummarySection({ summary }: { summary: string }) {
+function SummarySection({ summary, title = 'SUMMARY' }: { summary: string; title?: string }) {
   return (
     <section className="resume-section">
-      <SectionDivider title="SUMMARY" />
+      <SectionDivider title={title} />
       <RichHtml html={summary} className="resume-summary resume-rich-html" />
     </section>
   );
@@ -246,9 +340,45 @@ function ExperienceEntry({
   isCurrent,
   bullets,
   bulletsHtml,
-}: ExperienceEntryProps) {
-  const dateRange = formatDateRange(startDate, endDate, isCurrent);
+  variant = 'default',
+}: ExperienceEntryProps & { variant?: 'default' | 'atelier' }) {
+  const dateRange =
+    variant === 'atelier'
+      ? formatAtelierYearRange(startDate, endDate, isCurrent)
+      : formatDateRange(startDate, endDate, isCurrent);
   const companyLine = [company, location].filter(Boolean).join(', ');
+
+  const bulletsBlock = bulletsHtml ? (
+    <div dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(bulletsHtml) }} />
+  ) : (
+    bullets &&
+    bullets.length > 0 && (
+      <ul className="resume-bullets">
+        {bullets.map((bullet, index) =>
+          containsHtmlFormatting(bullet) ? (
+            <li key={index} dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(bullet) }} />
+          ) : (
+            <li key={index}>{bullet}</li>
+          )
+        )}
+      </ul>
+    )
+  );
+
+  if (variant === 'atelier') {
+    return (
+      <div className="resume-entry resume-atelier-exp">
+        <div className="resume-atelier-exp-grid">
+          <span className="resume-entry-date">{dateRange}</span>
+          <div className="resume-atelier-exp-body">
+            <h3 className="resume-entry-title">{company}</h3>
+            <p className="resume-entry-subtitle">{role}</p>
+            {bulletsBlock}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="resume-entry">
@@ -257,36 +387,25 @@ function ExperienceEntry({
           <h3 className="resume-entry-title">{role}</h3>
           <p className="resume-entry-subtitle">{companyLine}</p>
         </div>
-        <span className="resume-entry-date">{dateRange}</span>
+        {dateRange ? <span className="resume-entry-date">{dateRange}</span> : null}
       </div>
-      {/* Prefer bulletsHtml for perfect rendering (alignment, bullet style, etc.). */}
-      {/* Fall back to bullets[] for backward compat / when bulletsHtml is absent. */}
-      {bulletsHtml ? (
-        <div dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(bulletsHtml) }} />
-      ) : (
-        bullets &&
-        bullets.length > 0 && (
-          <ul className="resume-bullets">
-            {bullets.map((bullet, index) =>
-              containsHtmlFormatting(bullet) ? (
-                <li key={index} dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(bullet) }} />
-              ) : (
-                <li key={index}>{bullet}</li>
-              )
-            )}
-          </ul>
-        )
-      )}
+      {bulletsBlock}
     </div>
   );
 }
 
-function ExperienceSection({ experiences }: { experiences: PublicProfile['workExperiences'] }) {
+function ExperienceSection({
+  experiences,
+  variant = 'default',
+}: {
+  experiences: PublicProfile['workExperiences'];
+  variant?: 'default' | 'atelier';
+}) {
   if (!experiences || experiences.length === 0) return null;
 
   return (
     <section className="resume-section">
-      <SectionDivider title="EXPERIENCE" />
+      <SectionDivider title={variant === 'atelier' ? 'WORK EXPERIENCE' : 'EXPERIENCE'} />
       <div className="resume-entries">
         {experiences.map((exp) => (
           <ExperienceEntry
@@ -300,6 +419,7 @@ function ExperienceSection({ experiences }: { experiences: PublicProfile['workEx
             bullets={exp.bullets}
             bulletsHtml={exp.bulletsHtml}
             tags={exp.tags}
+            variant={variant}
           />
         ))}
       </div>
@@ -311,7 +431,13 @@ function ExperienceSection({ experiences }: { experiences: PublicProfile['workEx
 // EDUCATION SECTION
 // ============================================================================
 
-function EducationSection({ educations }: { educations: PublicProfile['educations'] }) {
+function EducationSection({
+  educations,
+  variant = 'default',
+}: {
+  educations: PublicProfile['educations'];
+  variant?: 'default' | 'atelier';
+}) {
   if (!educations || educations.length === 0) return null;
 
   return (
@@ -320,7 +446,30 @@ function EducationSection({ educations }: { educations: PublicProfile['education
       <div className="resume-entries">
         {educations.map((edu) => {
           const degreeLine = [edu.degree, edu.fieldOfStudy].filter(Boolean).join(' in ');
-          const dateRange = formatDateRange(edu.startDate, edu.endDate, edu.isCurrent);
+          const dateRange =
+            variant === 'atelier'
+              ? formatAtelierYearRange(edu.startDate, edu.endDate, edu.isCurrent)
+              : formatDateRange(edu.startDate, edu.endDate, edu.isCurrent);
+
+          if (variant === 'atelier') {
+            return (
+              <div key={edu.id} className="resume-entry resume-atelier-edu">
+                <h3 className="resume-entry-title">{degreeLine || edu.institution}</h3>
+                {degreeLine ? <p className="resume-entry-subtitle">{edu.institution}</p> : null}
+                {(dateRange || edu.location) && (
+                  <p className="resume-atelier-edu-meta">
+                    {[dateRange, edu.location].filter(Boolean).join(' · ')}
+                  </p>
+                )}
+                {(edu.gpa || edu.activities) && (
+                  <div className="resume-entry-details">
+                    {edu.gpa && <p>GPA: {edu.gpa}</p>}
+                    {edu.activities && <p>{edu.activities}</p>}
+                  </div>
+                )}
+              </div>
+            );
+          }
 
           return (
             <div key={edu.id} className="resume-entry">
@@ -329,7 +478,7 @@ function EducationSection({ educations }: { educations: PublicProfile['education
                   <h3 className="resume-entry-title">{degreeLine || edu.institution}</h3>
                   {degreeLine && <p className="resume-entry-subtitle">{edu.institution}</p>}
                 </div>
-                <span className="resume-entry-date">{dateRange}</span>
+                {dateRange ? <span className="resume-entry-date">{dateRange}</span> : null}
               </div>
               {(edu.gpa || edu.activities) && (
                 <div className="resume-entry-details">
@@ -349,11 +498,35 @@ function EducationSection({ educations }: { educations: PublicProfile['education
 // SKILLS SECTION
 // ============================================================================
 
-function SkillsSection({ profile }: { profile: PublicProfile }) {
+function SkillsSection({
+  profile,
+  stacked = false,
+}: {
+  profile: PublicProfile;
+  /** Atelier: one skill per line, no proficiency bars. */
+  stacked?: boolean;
+}) {
   const { skills, skillGroups } = profile;
 
   // If we have skill groups, display grouped (already filtered by applyVisibilityFilter)
   if (skillGroups && skillGroups.length > 0) {
+    if (stacked) {
+      const names = skillGroups.flatMap((group) => group.skills.map((s) => s.name));
+      if (names.length === 0) return null;
+      return (
+        <section className="resume-section">
+          <SectionDivider title="SKILLS" />
+          <ul className="resume-skills-stack">
+            {names.map((name) => (
+              <li key={name} className="resume-skills-stack-item">
+                {name}
+              </li>
+            ))}
+          </ul>
+        </section>
+      );
+    }
+
     return (
       <section className="resume-section">
         <SectionDivider title="SKILLS" />
@@ -373,6 +546,21 @@ function SkillsSection({ profile }: { profile: PublicProfile }) {
 
   // Otherwise, display flat list (already filtered by applyVisibilityFilter)
   if (!skills || skills.length === 0) return null;
+
+  if (stacked) {
+    return (
+      <section className="resume-section">
+        <SectionDivider title="SKILLS" />
+        <ul className="resume-skills-stack">
+          {skills.map((s) => (
+            <li key={s.id} className="resume-skills-stack-item">
+              {s.name}
+            </li>
+          ))}
+        </ul>
+      </section>
+    );
+  }
 
   return (
     <section className="resume-section">
@@ -492,12 +680,18 @@ function CertificationsSection({
 // AWARDS SECTION
 // ============================================================================
 
-function AwardsSection({ awards }: { awards: PublicProfile['awards'] }) {
+function AwardsSection({
+  awards,
+  title = 'AWARDS & RECOGNITION',
+}: {
+  awards: PublicProfile['awards'];
+  title?: string;
+}) {
   if (!awards || awards.length === 0) return null;
 
   return (
     <section className="resume-section">
-      <SectionDivider title="AWARDS & RECOGNITION" />
+      <SectionDivider title={title} />
       <div className="resume-entries resume-entries-compact">
         {awards.map((award) => {
           const awardDate = formatResumeDate(award.date);
@@ -714,12 +908,26 @@ export function CleanResumeView({ profile: rawProfile, authState }: CleanResumeV
     [rawProfile]
   );
 
+  const resolvedColorTheme = useResolvedResumeColorTheme(parsedDesign?.colorTheme);
+
   // ── Sections ordered by user-configured sortOrder ─────────────────────
   // Header sections (BASIC_INFO, LINKS) are always rendered as
   // the header block; body sections follow in their sortOrder.
   const bodySections = (profile.sections || [])
     .filter((s: ProfileSection) => !HEADER_SECTION_TYPES.includes(s.type))
     .sort((a: ProfileSection, b: ProfileSection) => a.sortOrder - b.sortOrder);
+
+  const templateId = getResumeTemplateId(parsedDesign?.templateId);
+  const isSleek = templateId === 'sleek';
+  const isStudio = templateId === 'studio';
+  const isAtelier = templateId === 'atelier';
+  const isLumen = templateId === 'lumen';
+  const sidebarSections = isAtelier
+    ? bodySections.filter((s) => isResumeAtelierRailSectionType(s.type))
+    : [];
+  const mainSections = isAtelier
+    ? bodySections.filter((s) => !isResumeAtelierRailSectionType(s.type))
+    : bodySections;
 
   // ── Helper to extract custom-content items from a section ─────────────
   const getCustomContentItems = <T,>(section: ProfileSection): T[] => {
@@ -732,20 +940,42 @@ export function CleanResumeView({ profile: rawProfile, authState }: CleanResumeV
     switch (section.type) {
       case 'SUMMARY':
         return profile.summary && !isHtmlEmpty(profile.summary) ? (
-          <SummarySection key={section.id} summary={profile.summary} />
+          <SummarySection
+            key={section.id}
+            summary={profile.summary}
+            title={isAtelier ? 'PROFILE' : 'SUMMARY'}
+          />
         ) : null;
       case 'EXPERIENCE':
-        return <ExperienceSection key={section.id} experiences={profile.workExperiences} />;
+        return (
+          <ExperienceSection
+            key={section.id}
+            experiences={profile.workExperiences}
+            variant={isAtelier ? 'atelier' : 'default'}
+          />
+        );
       case 'EDUCATION':
-        return <EducationSection key={section.id} educations={profile.educations} />;
+        return (
+          <EducationSection
+            key={section.id}
+            educations={profile.educations}
+            variant={isAtelier ? 'atelier' : 'default'}
+          />
+        );
       case 'SKILLS':
-        return <SkillsSection key={section.id} profile={profile} />;
+        return <SkillsSection key={section.id} profile={profile} stacked={isAtelier} />;
       case 'PROJECTS':
         return <ProjectsSection key={section.id} projects={profile.projects} />;
       case 'CERTIFICATIONS':
         return <CertificationsSection key={section.id} certifications={profile.certifications} />;
       case 'AWARDS':
-        return <AwardsSection key={section.id} awards={profile.awards} />;
+        return (
+          <AwardsSection
+            key={section.id}
+            awards={profile.awards}
+            title={isAtelier ? 'AWARDS' : 'AWARDS & RECOGNITION'}
+          />
+        );
       case 'PUBLICATIONS':
         return (
           <PublicationsSection
@@ -775,9 +1005,11 @@ export function CleanResumeView({ profile: rawProfile, authState }: CleanResumeV
     }
   };
 
-  // ── Determine the font family for the font loader ——————————
-  const activeFontFamily = (parseResumeDesign(rawProfile.resumeDesign) as ResumeDesign | null)
-    ?.fontFamily as ResumeFontFamily | undefined;
+  // ── Fonts for Google Font loader ──────────────────────────
+  const activeFonts = useMemo(() => {
+    const fonts = resolveResumeFonts(parseResumeDesign(rawProfile.resumeDesign));
+    return [fonts.body, fonts.name, fonts.title, fonts.heading, fonts.contact];
+  }, [rawProfile.resumeDesign]);
 
   // Anchor element for the kebab menu — sits at the resume's top-right.
   // Stored in state (rather than a plain ref) so `<PublicResumeActions>`
@@ -787,7 +1019,7 @@ export function CleanResumeView({ profile: rawProfile, authState }: CleanResumeV
 
   return (
     <>
-      <ResumeFontLoader fontFamily={activeFontFamily} />
+      <ResumeFontLoader fonts={activeFonts} />
       {authState ? (
         <PublicResumeActions
           resumeRef={resumeRef}
@@ -801,7 +1033,10 @@ export function CleanResumeView({ profile: rawProfile, authState }: CleanResumeV
         />
       ) : null}
 
-      <div className="resume-paper-wrapper group/resume relative">
+      <div
+        className="resume-paper-wrapper group/resume relative"
+        data-resume-theme={resolvedColorTheme}
+      >
         {/* Kebab anchor — sits *outside* the resume's right margin,
             vertically aligned with the top of the paper. The actual
             menu is portalled in by `<PublicResumeActions>` so it
@@ -818,13 +1053,38 @@ export function CleanResumeView({ profile: rawProfile, authState }: CleanResumeV
 
         <article
           ref={resumeRef}
-          className={['resume-paper', justifyAll && 'resume-justify-all'].filter(Boolean).join(' ')}
+          className={[
+            'resume-paper',
+            isSleek && 'resume-paper--sleek',
+            isStudio && 'resume-paper--studio',
+            isAtelier && 'resume-paper--atelier',
+            isLumen && 'resume-paper--lumen',
+            justifyAll && 'resume-justify-all',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+          data-resume-template={templateId}
           style={designStyles}
         >
-          <ResumeHeader profile={profile} />
-
-          {/* Render body sections in user-configured sortOrder */}
-          {bodySections.map(renderSection)}
+          {isAtelier ? (
+            <>
+              <AtelierHeader profile={profile} />
+              <div className="resume-atelier-layout">
+                <div className="resume-atelier-main">{mainSections.map(renderSection)}</div>
+                <aside className="resume-atelier-rail">{sidebarSections.map(renderSection)}</aside>
+              </div>
+            </>
+          ) : isStudio ? (
+            <>
+              <StudioHeader profile={profile} />
+              <div className="resume-studio-body">{mainSections.map(renderSection)}</div>
+            </>
+          ) : (
+            <>
+              {isSleek ? <SleekHeader profile={profile} /> : <ResumeHeader profile={profile} />}
+              {mainSections.map(renderSection)}
+            </>
+          )}
         </article>
       </div>
     </>

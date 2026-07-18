@@ -38,10 +38,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { APP_THEME_DEFAULT, type AppThemeMode } from '@/lib/app-theme';
+import { isPortfolioEnabled } from '@/lib/features';
 
 import type { FullProfile } from '@/types';
 
-type ThemeMode = 'light' | 'dark' | 'system';
+type ThemeMode = AppThemeMode;
 
 interface AccountDataSummary {
   user: {
@@ -128,7 +130,7 @@ export function SettingsSection({ profile }: SettingsSectionProps) {
     setMounted(true);
   }, []);
 
-  const theme = (mounted ? currentTheme : 'system') as ThemeMode;
+  const theme = (mounted ? currentTheme : APP_THEME_DEFAULT) as ThemeMode;
 
   // Apply theme change via next-themes
   const handleThemeChange = (newTheme: ThemeMode) => {
@@ -329,62 +331,68 @@ export function SettingsSection({ profile }: SettingsSectionProps) {
             <Eye className="h-5 w-5 text-primary" />
             <CardTitle>Visibility</CardTitle>
           </div>
-          <CardDescription>Control who can see your portfolio and resume</CardDescription>
+          <CardDescription>
+            {isPortfolioEnabled()
+              ? 'Control who can see your portfolio and resume'
+              : 'Control who can see your resume'}
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Portfolio Visibility */}
-          <div className="rounded-lg border p-4">
-            <div className="mb-3 flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
-                <Grid3X3 className="h-4 w-4 text-primary" />
+          {isPortfolioEnabled() && (
+            <div className="rounded-lg border p-4">
+              <div className="mb-3 flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
+                  <Grid3X3 className="h-4 w-4 text-primary" />
+                </div>
+                <div>
+                  <h4 className="font-medium">Portfolio</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Your portfolio page at /u/{profile.handle}
+                  </p>
+                </div>
               </div>
-              <div>
-                <h4 className="font-medium">Portfolio</h4>
-                <p className="text-sm text-muted-foreground">
-                  Your portfolio page at /u/{profile.handle}
-                </p>
+              <div className="flex gap-2">
+                <Button
+                  variant={portfolioVisibility === 'PUBLIC' ? 'default' : 'outline'}
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => handleVisibilityChange('portfolio', 'PUBLIC')}
+                  disabled={savingVisibility}
+                >
+                  <Globe className="h-3.5 w-3.5" />
+                  Public
+                </Button>
+                <Button
+                  variant={portfolioVisibility === 'UNLISTED' ? 'default' : 'outline'}
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => handleVisibilityChange('portfolio', 'UNLISTED')}
+                  disabled={savingVisibility}
+                >
+                  <Lock className="h-3.5 w-3.5" />
+                  Unlisted
+                </Button>
+                <Button
+                  variant={portfolioVisibility === 'PRIVATE' ? 'default' : 'outline'}
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => handleVisibilityChange('portfolio', 'PRIVATE')}
+                  disabled={savingVisibility}
+                >
+                  <EyeOff className="h-3.5 w-3.5" />
+                  Private
+                </Button>
               </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                {portfolioVisibility === 'PUBLIC'
+                  ? 'Anyone can view your portfolio.'
+                  : portfolioVisibility === 'UNLISTED'
+                    ? 'Only people with the link can view your portfolio.'
+                    : 'Only you can view your portfolio. No one else has access.'}
+              </p>
             </div>
-            <div className="flex gap-2">
-              <Button
-                variant={portfolioVisibility === 'PUBLIC' ? 'default' : 'outline'}
-                size="sm"
-                className="gap-1.5"
-                onClick={() => handleVisibilityChange('portfolio', 'PUBLIC')}
-                disabled={savingVisibility}
-              >
-                <Globe className="h-3.5 w-3.5" />
-                Public
-              </Button>
-              <Button
-                variant={portfolioVisibility === 'UNLISTED' ? 'default' : 'outline'}
-                size="sm"
-                className="gap-1.5"
-                onClick={() => handleVisibilityChange('portfolio', 'UNLISTED')}
-                disabled={savingVisibility}
-              >
-                <Lock className="h-3.5 w-3.5" />
-                Unlisted
-              </Button>
-              <Button
-                variant={portfolioVisibility === 'PRIVATE' ? 'default' : 'outline'}
-                size="sm"
-                className="gap-1.5"
-                onClick={() => handleVisibilityChange('portfolio', 'PRIVATE')}
-                disabled={savingVisibility}
-              >
-                <EyeOff className="h-3.5 w-3.5" />
-                Private
-              </Button>
-            </div>
-            <p className="mt-2 text-xs text-muted-foreground">
-              {portfolioVisibility === 'PUBLIC'
-                ? 'Anyone can view your portfolio.'
-                : portfolioVisibility === 'UNLISTED'
-                  ? 'Only people with the link can view your portfolio.'
-                  : 'Only you can view your portfolio. No one else has access.'}
-            </p>
-          </div>
+          )}
 
           {/* Resume Visibility */}
           <div className="rounded-lg border p-4">

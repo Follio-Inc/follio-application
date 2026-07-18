@@ -6,12 +6,13 @@ import { useEffect, useState } from 'react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import { APP_THEME_DEFAULT, type AppThemeMode } from '@/lib/app-theme';
 
 // ============================================================================
 // Types
 // ============================================================================
 
-type ThemeMode = 'light' | 'dark' | 'system';
+type ThemeMode = AppThemeMode;
 
 interface ThemeOption {
   value: ThemeMode;
@@ -58,7 +59,7 @@ export function AppearanceSection() {
     setMounted(true);
   }, []);
 
-  const theme = (mounted ? currentTheme : 'system') as ThemeMode;
+  const theme = (mounted ? currentTheme : APP_THEME_DEFAULT) as ThemeMode;
 
   return (
     <Card>

@@ -32,6 +32,7 @@ interface LayoutOption {
 
 interface DownloadDialogProps {
   handle: string;
+  /** Resume's current title — used as the download filename. */
   resumeTitle: string;
   /** Called when the user clicks the share button in the banner. */
   onShareClick?: () => void;

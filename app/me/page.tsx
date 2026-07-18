@@ -1,6 +1,7 @@
 import { resolveActiveProfileContextOrNull } from '@/lib/active-profile';
 import { db } from '@/lib/db';
-import { getPortfolioPath } from '@/lib/url';
+import { isPortfolioEnabled } from '@/lib/features';
+import { getPortfolioPath, getResumePath } from '@/lib/url';
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 
@@ -33,7 +34,9 @@ export default async function MyProfilePage() {
       redirect('/onboarding');
     }
 
-    redirect(getPortfolioPath(profile.handle));
+    redirect(
+      isPortfolioEnabled() ? getPortfolioPath(profile.handle) : getResumePath(profile.handle)
+    );
   } catch (error: unknown) {
     // Re-throw Next.js redirect errors (redirect() uses throw internally)
     if (

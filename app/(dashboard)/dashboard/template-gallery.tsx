@@ -22,6 +22,8 @@ import type { TemplatePortfolio } from '@/lib/portfolio/templates/types';
 interface TemplateGalleryProps {
   templates: TemplateOption[];
   currentTemplateId: string | null;
+  /** Current editor draft — sent with the switch request so unsaved edits carry over. */
+  draftPlan?: TemplatePortfolio;
   /** Called with the new published plan so the editor preview can update instantly. */
   onTemplateApplied?: (plan: TemplatePortfolio) => void;
   /** The trigger element (e.g. a button). Rendered via DialogTrigger asChild. */
@@ -31,6 +33,7 @@ interface TemplateGalleryProps {
 export function TemplateGallery({
   templates,
   currentTemplateId,
+  draftPlan,
   onTemplateApplied,
   children,
 }: TemplateGalleryProps) {
@@ -52,7 +55,10 @@ export function TemplateGallery({
       const res = await fetch('/api/portfolio/switch-template', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ templateId: selected }),
+        body: JSON.stringify({
+          templateId: selected,
+          ...(draftPlan ? { draft: draftPlan } : {}),
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) {

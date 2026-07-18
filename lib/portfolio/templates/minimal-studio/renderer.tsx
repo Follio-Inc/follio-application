@@ -11,7 +11,11 @@
 
 import { useEffect } from 'react';
 
+import { useResolvedPortfolioAppearance } from '@/lib/hooks/use-portfolio-appearance';
+
 import type { TemplateRendererProps } from '../types';
+import { PreviewEditableSection } from '../../preview-editable-section';
+import { META } from './meta';
 import {
   resolveAboutStyle,
   resolvePortraitStyle,
@@ -121,7 +125,6 @@ function renderSection(
         <MSAbout
           profile={profile}
           copy={copy}
-          enrichment={portfolio.enrichment}
           index={index}
           layout={resolveAboutStyle(portfolio.overrides)}
         />
@@ -156,6 +159,10 @@ export function MinimalStudioTemplate({ profile, portfolio }: TemplateRendererPr
   useTemplateFonts();
 
   const { sections, style } = portfolio;
+  const resolvedAppearance = useResolvedPortfolioAppearance(
+    style.appearance,
+    META.defaultAppearance
+  );
   const enabledSections = [...sections].filter((s) => s.enabled).sort((a, b) => a.order - b.order);
 
   const cssVars: Record<string, string> = {};
@@ -165,8 +172,13 @@ export function MinimalStudioTemplate({ profile, portfolio }: TemplateRendererPr
   }
 
   return (
-    <div data-template="minimal-studio" className="ms-page" style={cssVars as React.CSSProperties}>
-      <MSNavigation profile={profile} sections={sections} />
+    <div
+      data-template="minimal-studio"
+      data-appearance={resolvedAppearance}
+      className="ms-page"
+      style={cssVars as React.CSSProperties}
+    >
+      <MSNavigation profile={profile} sections={sections} copy={portfolio.copy} />
 
       <main className="ms-main">
         {(() => {
@@ -178,9 +190,13 @@ export function MinimalStudioTemplate({ profile, portfolio }: TemplateRendererPr
                 ? String(++counter).padStart(2, '0')
                 : undefined;
               return (
-                <div key={section.id}>
+                <PreviewEditableSection
+                  key={section.id}
+                  sectionId={section.id}
+                  sectionType={section.type}
+                >
                   {renderSection(section.type, { profile, portfolio }, index)}
-                </div>
+                </PreviewEditableSection>
               );
             });
         })()}

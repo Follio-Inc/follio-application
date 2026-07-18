@@ -15,7 +15,18 @@ export type {
   TemplateSectionProps,
   TemplateSectionType,
   TemplateStyleConfig,
+  PortfolioAppearance,
 } from './types';
 
+export { TEMPLATE_STYLE_DEFAULTS } from './types';
+
+export {
+  cloneProfileData,
+  ensurePlanContent,
+  resolvePortfolioProfile,
+  sanitizeOwnedProfileText,
+  sanitizePortfolioCopy,
+  toPortfolioPlainText,
+} from './content';
 export { normalizeProfileForTemplate } from './normalizer';
 export { getAllTemplates, getDefaultTemplateId, getTemplate, getTemplateMeta } from './registry';

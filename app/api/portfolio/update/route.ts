@@ -18,6 +18,7 @@ import { ZodError } from 'zod';
 import { resolvePrimaryProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { AppError, ErrorCode, handleApiError } from '@/lib/errors';
+import { assertPortfolioEnabled } from '@/lib/features';
 import { logger } from '@/lib/logger';
 import { parseTemplatePortfolio } from '@/lib/portfolio/templates/validation';
 import { auth } from '@clerk/nextjs/server';
@@ -30,6 +31,8 @@ const updateLogger = logger.child({ source: 'api-portfolio-update' });
 
 export async function PATCH(request: NextRequest) {
   try {
+    assertPortfolioEnabled();
+
     const { userId } = await auth();
     if (!userId) {
       throw new AppError('Unauthorized', ErrorCode.UNAUTHORIZED, 401);

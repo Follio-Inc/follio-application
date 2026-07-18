@@ -2,17 +2,17 @@
 
 import { AlignLeft } from 'lucide-react';
 import dynamic from 'next/dynamic';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { CleanResumeView } from '@/app/u/[handle]/views/clean-resume-view';
+import { ResumeColorThemeSwitch } from '@/components/resume-color-theme-switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { RESUME_DESIGN_DEFAULTS, type PublicProfile, type ResumeColorTheme } from '@/types';
 
 import { useJustifyAll } from '../lib/use-justify-all';
 import { useBuilderStore } from './builder-store-provider';
 import { PreviewFloatingActions } from './preview-floating-actions';
-
-import type { PublicProfile } from '@/types';
 
 // Zoom modal is only mounted when the user clicks the resume — defer its
 // chunk so it doesn't bloat the initial preview bundle.
@@ -37,6 +37,9 @@ const HORIZONTAL_PADDING_PX = 48;
  */
 export function ResumePreviewPanel() {
   const profile = useBuilderStore((s) => s.draftProfile);
+  const commitInlineChange = useBuilderStore((s) => s.commitInlineChange);
+  const colorTheme = profile.resumeDesign?.colorTheme ?? RESUME_DESIGN_DEFAULTS.colorTheme;
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const containerRef = useRef<HTMLDivElement>(null);
   const resumeContentRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0.5);
@@ -47,6 +50,38 @@ export function ResumePreviewPanel() {
   const [kebabAnchor, setKebabAnchor] = useState<HTMLDivElement | null>(null);
 
   const { allJustified, justifyAll: handleJustifyAll } = useJustifyAll();
+
+  const handleColorThemeChange = useCallback(
+    (nextTheme: ResumeColorTheme) => {
+      const nextDesign = {
+        ...RESUME_DESIGN_DEFAULTS,
+        ...(profile.resumeDesign ?? {}),
+        colorTheme: nextTheme,
+      };
+
+      commitInlineChange({ resumeDesign: nextDesign } as Partial<typeof profile>);
+
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = setTimeout(async () => {
+        try {
+          await fetch('/api/profile/resume-design', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(nextDesign),
+          });
+        } catch (err) {
+          console.error('Failed to save resume design:', err);
+        }
+      }, 600);
+    },
+    [commitInlineChange, profile]
+  );
+
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     const updateScale = () => {
@@ -69,8 +104,13 @@ export function ResumePreviewPanel() {
   return (
     <div className="relative flex h-full flex-col">
       {/* ── Slim panel header — labels the column, keeps the surface calm ── */}
-      <div className="flex h-12 shrink-0 items-center border-b border-border/60 px-6">
+      <div className="flex h-12 shrink-0 items-center justify-between border-b border-border/60 px-6">
         <span className="text-eyebrow">Preview</span>
+        <ResumeColorThemeSwitch
+          variant="compact"
+          value={colorTheme}
+          onChange={handleColorThemeChange}
+        />
       </div>
 
       {/* ── Scrollable preview area ─────────────────────────────────── */}

@@ -7,7 +7,11 @@
  * No AI at render time — pure deterministic rendering.
  */
 
+import { useResolvedPortfolioAppearance } from '@/lib/hooks/use-portfolio-appearance';
+
 import type { TemplateRendererProps } from '../types';
+import { PreviewEditableSection } from '../../preview-editable-section';
+import { META } from './meta';
 
 import {
   DDAbout,
@@ -36,19 +40,19 @@ function renderSection(type: string, props: TemplateRendererProps): React.ReactN
     case 'hero':
       return <DDHero profile={profile} copy={copy} />;
     case 'about':
-      return <DDAbout profile={profile} copy={copy} enrichment={portfolio.enrichment} />;
+      return <DDAbout profile={profile} copy={copy} />;
     case 'experience':
       return <DDExperience profile={profile} copy={copy} />;
     case 'projects':
       return <DDProjects profile={profile} copy={copy} />;
     case 'skills':
-      return <DDSkills profile={profile} />;
+      return <DDSkills profile={profile} copy={copy} />;
     case 'education':
-      return <DDEducation profile={profile} />;
+      return <DDEducation profile={profile} copy={copy} />;
     case 'certifications':
-      return <DDCertifications profile={profile} />;
+      return <DDCertifications profile={profile} copy={copy} />;
     case 'github':
-      return <DDGithub profile={profile} />;
+      return <DDGithub profile={profile} copy={copy} />;
     case 'contact':
       return <DDContact profile={profile} copy={copy} />;
     default:
@@ -62,6 +66,10 @@ function renderSection(type: string, props: TemplateRendererProps): React.ReactN
  */
 export function DeveloperDarkTemplate({ profile, portfolio }: TemplateRendererProps) {
   const { sections, style } = portfolio;
+  const resolvedAppearance = useResolvedPortfolioAppearance(
+    style.appearance,
+    META.defaultAppearance
+  );
 
   // Sort sections by order, filter to enabled only
   const enabledSections = [...sections].filter((s) => s.enabled).sort((a, b) => a.order - b.order);
@@ -73,7 +81,12 @@ export function DeveloperDarkTemplate({ profile, portfolio }: TemplateRendererPr
   }
 
   return (
-    <div data-template="developer-dark" className="dd-page" style={cssVars as React.CSSProperties}>
+    <div
+      data-template="developer-dark"
+      data-appearance={resolvedAppearance}
+      className="dd-page"
+      style={cssVars as React.CSSProperties}
+    >
       {/* Navigation */}
       <DDNavigation profile={profile} sections={sections} />
 
@@ -81,7 +94,13 @@ export function DeveloperDarkTemplate({ profile, portfolio }: TemplateRendererPr
       {enabledSections
         .filter((s) => s.type !== 'navigation' && s.type !== 'footer')
         .map((section) => (
-          <div key={section.id}>{renderSection(section.type, { profile, portfolio })}</div>
+          <PreviewEditableSection
+            key={section.id}
+            sectionId={section.id}
+            sectionType={section.type}
+          >
+            {renderSection(section.type, { profile, portfolio })}
+          </PreviewEditableSection>
         ))}
 
       {/* Section divider before footer */}

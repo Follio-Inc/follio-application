@@ -18,6 +18,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
+import { isPortfolioEnabled } from '@/lib/features';
 import { getPortfolioUrl, getResumeUrl } from '@/lib/url';
 import type { FullProfile } from '@/types';
 
@@ -184,130 +185,136 @@ export function ShareSection({ profile }: ShareSectionProps) {
   return (
     <div className="space-y-6 rounded-xl bg-muted/40 p-4">
       {/* Portfolio Card */}
-      <Card className="overflow-hidden border-border">
-        {/* Cropped iframe snapshot of portfolio page */}
-        <div className="relative h-[220px] w-full overflow-hidden bg-muted">
-          {/*
+      {isPortfolioEnabled() && (
+        <Card className="overflow-hidden border-border">
+          {/* Cropped iframe snapshot of portfolio page */}
+          <div className="relative h-[220px] w-full overflow-hidden bg-muted">
+            {/*
             Zoom into the center content, skip nav/top bars:
             - Scale the page to 50% so more content is visible
             - Shift up to skip the navbar (~120px at full scale = ~60px at 50%)
             - Shift left to center the max-w-5xl content
           */}
-          <div
-            className="pointer-events-none absolute left-1/2 top-0"
-            style={{
-              width: '1024px',
-              height: '1400px',
-              transform: 'scale(0.65) translate(-50%, -140px)',
-              transformOrigin: 'top left',
-            }}
-          >
-            <iframe
-              src={`/u/${profile.handle}`}
-              title="Portfolio preview"
-              className="h-full w-full border-0"
-              tabIndex={-1}
-              loading="lazy"
-            />
+            <div
+              className="pointer-events-none absolute left-1/2 top-0"
+              style={{
+                width: '1024px',
+                height: '1400px',
+                transform: 'scale(0.65) translate(-50%, -140px)',
+                transformOrigin: 'top left',
+              }}
+            >
+              <iframe
+                src={`/u/${profile.handle}`}
+                title="Portfolio preview"
+                className="h-full w-full border-0"
+                tabIndex={-1}
+                loading="lazy"
+              />
+            </div>
+            {/* Gradient fade at bottom */}
+            <div className="absolute inset-x-0 bottom-0 z-10 h-16 bg-gradient-to-t from-background to-transparent" />
+            {/* Overlay badge */}
+            <div className="absolute left-3 top-3 z-20">
+              <Badge variant="secondary" className="bg-background/80 backdrop-blur-sm">
+                Portfolio
+              </Badge>
+            </div>
+            {/* Visibility badge */}
+            <div className="absolute right-3 top-3 z-20">
+              <Badge variant="secondary" className="gap-1.5 bg-background/80 backdrop-blur-sm">
+                {portfolioVisibility === 'PUBLIC' ? (
+                  <Globe className="h-3 w-3 text-muted-foreground" />
+                ) : portfolioVisibility === 'UNLISTED' ? (
+                  <Lock className="h-3 w-3 text-muted-foreground" />
+                ) : (
+                  <EyeOff className="h-3 w-3 text-muted-foreground" />
+                )}
+                {portfolioVisibility === 'PUBLIC'
+                  ? 'Public'
+                  : portfolioVisibility === 'UNLISTED'
+                    ? 'Unlisted'
+                    : 'Private'}
+              </Badge>
+            </div>
           </div>
-          {/* Gradient fade at bottom */}
-          <div className="absolute inset-x-0 bottom-0 z-10 h-16 bg-gradient-to-t from-background to-transparent" />
-          {/* Overlay badge */}
-          <div className="absolute left-3 top-3 z-20">
-            <Badge variant="secondary" className="bg-background/80 backdrop-blur-sm">
-              Portfolio
-            </Badge>
-          </div>
-          {/* Visibility badge */}
-          <div className="absolute right-3 top-3 z-20">
-            <Badge variant="secondary" className="gap-1.5 bg-background/80 backdrop-blur-sm">
-              {portfolioVisibility === 'PUBLIC' ? (
-                <Globe className="h-3 w-3 text-muted-foreground" />
-              ) : portfolioVisibility === 'UNLISTED' ? (
-                <Lock className="h-3 w-3 text-muted-foreground" />
-              ) : (
-                <EyeOff className="h-3 w-3 text-muted-foreground" />
-              )}
-              {portfolioVisibility === 'PUBLIC'
-                ? 'Public'
-                : portfolioVisibility === 'UNLISTED'
-                  ? 'Unlisted'
-                  : 'Private'}
-            </Badge>
-          </div>
-        </div>
 
-        <CardContent className="space-y-4 pt-5">
-          {/* URL row */}
-          <div className="flex items-center gap-3">
-            <div className="flex-1 rounded-lg border bg-background p-3">
-              <div className="flex items-center justify-between gap-2">
-                <code className="truncate text-sm font-medium">{portfolioUrl}</code>
-                <div className="flex shrink-0 gap-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={async () => {
-                      await navigator.clipboard.writeText(portfolioUrl);
-                      setCopiedPortfolio(true);
-                      setTimeout(() => setCopiedPortfolio(false), 2000);
-                    }}
-                    className="h-8 gap-2"
-                  >
-                    {copiedPortfolio ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                    {copiedPortfolio ? 'Copied!' : 'Copy'}
-                  </Button>
+          <CardContent className="space-y-4 pt-5">
+            {/* URL row */}
+            <div className="flex items-center gap-3">
+              <div className="flex-1 rounded-lg border bg-background p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <code className="truncate text-sm font-medium">{portfolioUrl}</code>
+                  <div className="flex shrink-0 gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={async () => {
+                        await navigator.clipboard.writeText(portfolioUrl);
+                        setCopiedPortfolio(true);
+                        setTimeout(() => setCopiedPortfolio(false), 2000);
+                      }}
+                      className="h-8 gap-2"
+                    >
+                      {copiedPortfolio ? (
+                        <Check className="h-4 w-4" />
+                      ) : (
+                        <Copy className="h-4 w-4" />
+                      )}
+                      {copiedPortfolio ? 'Copied!' : 'Copy'}
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-          {/* Actions row */}
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <Button variant="outline" size="sm" asChild className="gap-2">
-              <a href={portfolioUrl} target="_blank" rel="noopener">
-                Preview
-                <ExternalLink className="h-3 w-3" />
-              </a>
-            </Button>
-            <div className="flex gap-1.5">
-              <Button
-                variant={portfolioVisibility === 'PUBLIC' ? 'default' : 'outline'}
-                size="sm"
-                className="h-8 text-xs"
-                onClick={() => handleVisibilityChange('portfolio', 'PUBLIC')}
-                disabled={savingVisibility}
-              >
-                Public
+            {/* Actions row */}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Button variant="outline" size="sm" asChild className="gap-2">
+                <a href={portfolioUrl} target="_blank" rel="noopener">
+                  Preview
+                  <ExternalLink className="h-3 w-3" />
+                </a>
               </Button>
-              <Button
-                variant={portfolioVisibility === 'UNLISTED' ? 'default' : 'outline'}
-                size="sm"
-                className="h-8 text-xs"
-                onClick={() => handleVisibilityChange('portfolio', 'UNLISTED')}
-                disabled={savingVisibility}
-              >
-                Unlisted
-              </Button>
-              <Button
-                variant={portfolioVisibility === 'PRIVATE' ? 'default' : 'outline'}
-                size="sm"
-                className="h-8 text-xs"
-                onClick={() => handleVisibilityChange('portfolio', 'PRIVATE')}
-                disabled={savingVisibility}
-              >
-                Private
-              </Button>
+              <div className="flex gap-1.5">
+                <Button
+                  variant={portfolioVisibility === 'PUBLIC' ? 'default' : 'outline'}
+                  size="sm"
+                  className="h-8 text-xs"
+                  onClick={() => handleVisibilityChange('portfolio', 'PUBLIC')}
+                  disabled={savingVisibility}
+                >
+                  Public
+                </Button>
+                <Button
+                  variant={portfolioVisibility === 'UNLISTED' ? 'default' : 'outline'}
+                  size="sm"
+                  className="h-8 text-xs"
+                  onClick={() => handleVisibilityChange('portfolio', 'UNLISTED')}
+                  disabled={savingVisibility}
+                >
+                  Unlisted
+                </Button>
+                <Button
+                  variant={portfolioVisibility === 'PRIVATE' ? 'default' : 'outline'}
+                  size="sm"
+                  className="h-8 text-xs"
+                  onClick={() => handleVisibilityChange('portfolio', 'PRIVATE')}
+                  disabled={savingVisibility}
+                >
+                  Private
+                </Button>
+              </div>
             </div>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {portfolioVisibility === 'PUBLIC'
-              ? 'Anyone can view your portfolio.'
-              : portfolioVisibility === 'UNLISTED'
-                ? 'Only people with a share link can view your portfolio.'
-                : 'Only you can view your portfolio. No one else has access.'}
-          </p>
-        </CardContent>
-      </Card>
+            <p className="text-xs text-muted-foreground">
+              {portfolioVisibility === 'PUBLIC'
+                ? 'Anyone can view your portfolio.'
+                : portfolioVisibility === 'UNLISTED'
+                  ? 'Only people with a share link can view your portfolio.'
+                  : 'Only you can view your portfolio. No one else has access.'}
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Resume Card */}
       <Card className="overflow-hidden border-border">

@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google';
 
 import { ClerkProviderWrapper } from '@/components/providers/clerk-provider-wrapper';
 import { ThemeProvider } from '@/components/theme-provider';
+import { APP_THEME_DEFAULT } from '@/lib/app-theme';
 
 import './globals.css';
 
@@ -65,7 +66,7 @@ export default function RootLayout({
         <body className={`${inter.variable} font-sans antialiased`} suppressHydrationWarning>
           <ThemeProvider
             attribute="class"
-            defaultTheme="system"
+            defaultTheme={APP_THEME_DEFAULT}
             enableSystem
             disableTransitionOnChange
           >

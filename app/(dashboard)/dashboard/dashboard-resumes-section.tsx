@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  ArrowRight,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -15,6 +16,7 @@ import {
   Lock,
   MoreHorizontal,
   Pencil,
+  Plus,
   Share2,
   Star,
   Trash2,
@@ -22,11 +24,10 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { DownloadDialog } from '@/app/(dashboard)/builder/components/download-dialog';
 import { ShareDialog } from '@/components/share-dialog';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import {
@@ -48,12 +49,16 @@ import {
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { MAX_RESUMES_PER_USER } from '@/lib/validations';
+import { isPortfolioEnabled } from '@/lib/features';
 
 import {
   NewResumeCloneDialog,
-  NewResumeGhostCard,
   NewResumeMenuButton,
+  ResumeListDivider,
+  ResumeUploadFileInput,
+  sortResumesWithPortfolioFirst,
   useNewResumeActions,
+  type UploadCreatedResume,
 } from '../resumes/new-resume-options';
 import { ResumeThumbnail } from '../resumes/resume-thumbnail';
 
@@ -137,6 +142,23 @@ function formatRelativeDate(dateString: string): string {
 function getDisplayName(resume: DashboardResumeItem): string | null {
   const parts = [resume.firstName, resume.middleName, resume.lastName].filter(Boolean);
   return parts.length > 0 ? parts.join(' ') : null;
+}
+
+function createPlaceholderResume(resume: UploadCreatedResume): DashboardResumeItem {
+  const now = new Date().toISOString();
+  return {
+    id: resume.id,
+    handle: resume.handle,
+    resumeTitle: resume.resumeTitle,
+    status: 'DRAFT',
+    resumeVisibility: 'PRIVATE',
+    firstName: null,
+    middleName: null,
+    lastName: null,
+    headline: null,
+    updatedAt: now,
+    createdAt: now,
+  };
 }
 
 // ─── Sub-components ───────────────────────────────────────────────
@@ -254,6 +276,16 @@ export function DashboardResumesSection({
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
 
+  const sortedResumes = useMemo(
+    () => sortResumesWithPortfolioFirst(resumes, primaryProfileId),
+    [resumes, primaryProfileId]
+  );
+
+  const showPortfolioDivider =
+    primaryProfileId != null &&
+    sortedResumes.length > 1 &&
+    sortedResumes[0]?.id === primaryProfileId;
+
   // ─── Scroll management ─────────────────────────────────────────
 
   const updateScrollArrows = useCallback(() => {
@@ -278,7 +310,7 @@ export function DashboardResumesSection({
       el.removeEventListener('scroll', updateScrollArrows);
       observer.disconnect();
     };
-  }, [updateScrollArrows, resumes.length]);
+  }, [updateScrollArrows, sortedResumes.length]);
 
   const scrollBy = (direction: 'left' | 'right') => {
     const el = scrollRef.current;
@@ -309,6 +341,12 @@ export function DashboardResumesSection({
   const newResume = useNewResumeActions({
     onRefresh: refreshResumes,
     onError: setError,
+    onImportStart: (resume) => {
+      setResumes((prev) => [createPlaceholderResume(resume), ...prev]);
+    },
+    onImportFailed: (profileId) => {
+      setResumes((prev) => prev.filter((resume) => resume.id !== profileId));
+    },
   });
 
   const isBusy = isMutating || newResume.isMutating;
@@ -464,9 +502,61 @@ export function DashboardResumesSection({
   // ─── Render ───────────────────────────────────────────────────
 
   const canCreateNew = resumes.length < MAX_RESUMES_PER_USER;
+  const atResumeLimit = !canCreateNew;
 
   return (
-    <>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <h2 className="text-section-title">Resumes</h2>
+          <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular-nums leading-none text-muted-foreground">
+            {resumes.length}
+          </span>
+          <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" asChild>
+            <Link href="/resumes">
+              Manage all
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </Button>
+        </div>
+        <TooltipProvider delayDuration={0}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="shrink-0">
+                {atResumeLimit ? (
+                  <Button className="gap-1.5" disabled>
+                    <Plus className="h-4 w-4" />
+                    New resume
+                  </Button>
+                ) : (
+                  <NewResumeMenuButton
+                    disabled={atResumeLimit}
+                    isMutating={isBusy}
+                    onBlank={() => void newResume.createBlank()}
+                    onUpload={() => void newResume.startUpload()}
+                    onClone={() => newResume.openCloneDialog()}
+                  />
+                )}
+              </span>
+            </TooltipTrigger>
+            {atResumeLimit && (
+              <TooltipContent side="bottom">
+                <p>
+                  Maximum {MAX_RESUMES_PER_USER} resumes per user. Delete one to create a new
+                  resume.
+                </p>
+              </TooltipContent>
+            )}
+          </Tooltip>
+        </TooltipProvider>
+      </div>
+
+      <ResumeUploadFileInput
+        inputRef={newResume.uploadInputRef}
+        onChange={(event) => void newResume.handleUploadFileChange(event)}
+        disabled={isBusy}
+      />
+
       {/* Error banner */}
       {error && (
         <div className="mb-4 rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -526,207 +616,199 @@ export function DashboardResumesSection({
           )}
 
           <div ref={scrollRef} className="scrollbar-none flex gap-5 overflow-x-auto pb-2">
-            {resumes.map((resume) => {
+            {sortedResumes.map((resume, index) => {
               const displayName = getDisplayName(resume);
+              const isImporting = resume.id === newResume.importingProfileId;
 
               return (
-                <Card
-                  key={resume.id}
-                  className="group relative flex w-[260px] shrink-0 flex-col overflow-hidden transition-all duration-200 hover:border-border hover:shadow-md"
-                >
-                  {/*
-                   * Resume thumbnail preview.
-                   *
-                   * Rendered as a div with role="button" rather than a real
-                   * <button> because <ResumeThumbnail> contains its own
-                   * "Retry" button in its error state, and a <button> cannot
-                   * be a descendant of another <button> (HTML hydration
-                   * error). The div + role/keydown pattern preserves
-                   * keyboard activation and screen-reader semantics.
-                   */}
-                  <div
-                    role="button"
-                    tabIndex={isMutating ? -1 : 0}
-                    aria-disabled={isMutating}
-                    aria-label={`Open ${resume.resumeTitle} in builder`}
-                    className="relative block w-full cursor-pointer border-b border-border/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-disabled:cursor-not-allowed"
-                    onClick={() => {
-                      if (isMutating) return;
-                      void handleOpenInBuilder(resume.id);
-                    }}
-                    onKeyDown={(event) => {
-                      if (isMutating) return;
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
+                <Fragment key={resume.id}>
+                  {index === 1 && showPortfolioDivider && <ResumeListDivider />}
+                  <Card className="group relative flex w-[260px] shrink-0 flex-col overflow-hidden transition-all duration-200 hover:border-border hover:shadow-md">
+                    {/*
+                     * Resume thumbnail preview.
+                     *
+                     * Rendered as a div with role="button" rather than a real
+                     * <button> because <ResumeThumbnail> contains its own
+                     * "Retry" button in its error state, and a <button> cannot
+                     * be a descendant of another <button> (HTML hydration
+                     * error). The div + role/keydown pattern preserves
+                     * keyboard activation and screen-reader semantics.
+                     */}
+                    <div
+                      role="button"
+                      tabIndex={isMutating || isImporting ? -1 : 0}
+                      aria-disabled={isMutating || isImporting}
+                      aria-label={`Open ${resume.resumeTitle} in builder`}
+                      className="relative block w-full cursor-pointer border-b border-border/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-disabled:cursor-not-allowed"
+                      onClick={() => {
+                        if (isMutating || isImporting) return;
                         void handleOpenInBuilder(resume.id);
-                      }
-                    }}
-                  >
-                    <ResumeThumbnail profileId={resume.id} />
-                    {resume.id === primaryProfileId && (
-                      <Badge className="absolute left-2.5 top-2.5 z-10 gap-1 text-[10px] shadow-sm">
-                        <Star className="h-2.5 w-2.5" />
-                        Portfolio
-                      </Badge>
-                    )}
-                  </div>
+                      }}
+                      onKeyDown={(event) => {
+                        if (isMutating || isImporting) return;
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          void handleOpenInBuilder(resume.id);
+                        }
+                      }}
+                    >
+                      <ResumeThumbnail
+                        profileId={resume.id}
+                        isImporting={isImporting}
+                        showPortfolioBadge={resume.id === primaryProfileId}
+                      />
+                    </div>
 
-                  <div className="flex flex-1 flex-col gap-3 p-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        {renamingResumeId === resume.id ? (
-                          <InlineRenameInput
-                            value={renameValue}
-                            error={renameError}
-                            isMutating={isMutating}
-                            onChange={(v) => {
-                              setRenameValue(v);
-                              if (renameError) setRenameError(null);
-                            }}
-                            onConfirm={() => void handleInlineRename(resume.id)}
-                            onCancel={cancelInlineRename}
-                          />
-                        ) : (
-                          <h3 className="truncate text-sm font-semibold leading-tight text-foreground">
-                            {resume.resumeTitle}
-                          </h3>
-                        )}
-                        {displayName && (
-                          <p className="mt-1 truncate text-xs text-muted-foreground">
-                            {displayName}
-                          </p>
-                        )}
+                    <div className="flex flex-1 flex-col gap-3 p-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          {renamingResumeId === resume.id ? (
+                            <InlineRenameInput
+                              value={renameValue}
+                              error={renameError}
+                              isMutating={isMutating}
+                              onChange={(v) => {
+                                setRenameValue(v);
+                                if (renameError) setRenameError(null);
+                              }}
+                              onConfirm={() => void handleInlineRename(resume.id)}
+                              onCancel={cancelInlineRename}
+                            />
+                          ) : (
+                            <h3 className="truncate text-sm font-semibold leading-tight text-foreground">
+                              {resume.resumeTitle}
+                            </h3>
+                          )}
+                          {displayName && (
+                            <p className="mt-1 truncate text-xs text-muted-foreground">
+                              {displayName}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Card actions menu */}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="-mr-1.5 -mt-1.5 h-7 w-7 shrink-0 text-muted-foreground opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                              <span className="sr-only">Resume actions</span>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuItem onClick={() => handleOpenInBuilder(resume.id)}>
+                              <FileText className="mr-2 h-4 w-4" />
+                              Open in Builder
+                            </DropdownMenuItem>
+                            <DropdownMenuItem asChild>
+                              <Link href={`/u/${resume.handle}/resume`} target="_blank">
+                                <ExternalLink className="mr-2 h-4 w-4" />
+                                View Resume
+                              </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleOpenDownloadDialog(resume)}>
+                              <Download className="mr-2 h-4 w-4" />
+                              Download PDF
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleOpenShareDialog(resume)}>
+                              <Share2 className="mr-2 h-4 w-4" />
+                              Share
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => startInlineRename(resume)}>
+                              <Pencil className="mr-2 h-4 w-4" />
+                              Rename
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => newResume.openCloneDialog()}
+                              disabled={!canCreateNew}
+                            >
+                              <Copy className="mr-2 h-4 w-4" />
+                              Clone
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => void handleSetAsPortfolio(resume.id)}
+                              disabled={resume.id === primaryProfileId || isMutating}
+                            >
+                              <Star className="mr-2 h-4 w-4" />
+                              {resume.id === primaryProfileId
+                                ? isPortfolioEnabled()
+                                  ? 'Current Portfolio'
+                                  : 'Primary resume'
+                                : isPortfolioEnabled()
+                                  ? 'Set as Portfolio'
+                                  : 'Set as primary'}
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => openDeleteDialog(resume)}
+                              disabled={resumes.length <= 1}
+                              className="text-destructive focus:text-destructive"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
 
-                      {/* Card actions menu */}
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="-mr-1.5 -mt-1.5 h-7 w-7 shrink-0 text-muted-foreground opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
-                          >
-                            <MoreHorizontal className="h-4 w-4" />
-                            <span className="sr-only">Resume actions</span>
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48">
-                          <DropdownMenuItem onClick={() => handleOpenInBuilder(resume.id)}>
-                            <FileText className="mr-2 h-4 w-4" />
-                            Open in Builder
-                          </DropdownMenuItem>
-                          <DropdownMenuItem asChild>
-                            <Link href={`/u/${resume.handle}/resume`} target="_blank">
-                              <ExternalLink className="mr-2 h-4 w-4" />
-                              View Resume
-                            </Link>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleOpenDownloadDialog(resume)}>
-                            <Download className="mr-2 h-4 w-4" />
-                            Download PDF
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleOpenShareDialog(resume)}>
-                            <Share2 className="mr-2 h-4 w-4" />
-                            Share
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => startInlineRename(resume)}>
-                            <Pencil className="mr-2 h-4 w-4" />
-                            Rename
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => newResume.openCloneDialog()}
-                            disabled={!canCreateNew}
-                          >
-                            <Copy className="mr-2 h-4 w-4" />
-                            Clone
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => void handleSetAsPortfolio(resume.id)}
-                            disabled={resume.id === primaryProfileId || isMutating}
-                          >
-                            <Star className="mr-2 h-4 w-4" />
-                            {resume.id === primaryProfileId
-                              ? 'Current Portfolio'
-                              : 'Set as Portfolio'}
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            onClick={() => openDeleteDialog(resume)}
-                            disabled={resumes.length <= 1}
-                            className="text-destructive focus:text-destructive"
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
+                      {/* Visibility & timestamp row */}
+                      <div className="mt-auto flex items-center gap-2 text-xs text-muted-foreground">
+                        {(() => {
+                          const config =
+                            VISIBILITY_CONFIG[resume.resumeVisibility] ?? VISIBILITY_CONFIG.PRIVATE;
+                          const Icon = config.icon;
+                          return (
+                            <TooltipProvider delayDuration={0}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="inline-flex cursor-default items-center gap-1">
+                                    <Icon className="h-3 w-3" />
+                                    {config.label}
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom">
+                                  <p>{config.description}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          );
+                        })()}
+                        <span aria-hidden className="text-border">
+                          •
+                        </span>
+                        <span className="inline-flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {formatRelativeDate(resume.updatedAt)}
+                        </span>
+                      </div>
 
-                    {/* Visibility & timestamp row */}
-                    <div className="mt-auto flex items-center gap-2 text-xs text-muted-foreground">
-                      {(() => {
-                        const config =
-                          VISIBILITY_CONFIG[resume.resumeVisibility] ?? VISIBILITY_CONFIG.PRIVATE;
-                        const Icon = config.icon;
-                        return (
-                          <TooltipProvider delayDuration={0}>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span className="inline-flex cursor-default items-center gap-1">
-                                  <Icon className="h-3 w-3" />
-                                  {config.label}
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent side="bottom">
-                                <p>{config.description}</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        );
-                      })()}
-                      <span aria-hidden className="text-border">
-                        •
-                      </span>
-                      <span className="inline-flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {formatRelativeDate(resume.updatedAt)}
-                      </span>
+                      {/* Primary actions */}
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          className="flex-1 gap-1.5"
+                          onClick={() => handleOpenInBuilder(resume.id)}
+                          disabled={isMutating || isImporting}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                          Edit
+                        </Button>
+                        <Button variant="outline" size="sm" className="flex-1 gap-1.5" asChild>
+                          <Link href={`/u/${resume.handle}/resume`} target="_blank">
+                            <ExternalLink className="h-3.5 w-3.5" />
+                            View
+                          </Link>
+                        </Button>
+                      </div>
                     </div>
-
-                    {/* Primary actions */}
-                    <div className="flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        className="flex-1 gap-1.5"
-                        onClick={() => handleOpenInBuilder(resume.id)}
-                        disabled={isMutating}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                        Edit
-                      </Button>
-                      <Button variant="outline" size="sm" className="flex-1 gap-1.5" asChild>
-                        <Link href={`/u/${resume.handle}/resume`} target="_blank">
-                          <ExternalLink className="h-3.5 w-3.5" />
-                          View
-                        </Link>
-                      </Button>
-                    </div>
-                  </div>
-                </Card>
+                  </Card>
+                </Fragment>
               );
             })}
-
-            {/* "New Resume" ghost card — directly opens builder */}
-            {canCreateNew && (
-              <NewResumeGhostCard
-                className="min-h-[260px] w-[260px] shrink-0"
-                isMutating={isBusy}
-                onBlank={() => void newResume.createBlank()}
-                onUpload={() => void newResume.startUpload()}
-                onClone={() => newResume.openCloneDialog()}
-              />
-            )}
           </div>
         </div>
       )}
@@ -835,6 +917,6 @@ export function DashboardResumesSection({
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       )}
-    </>
+    </div>
   );
 }
