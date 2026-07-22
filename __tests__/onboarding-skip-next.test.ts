@@ -9,6 +9,7 @@ import {
 const idle: ImportStepActionState = {
   resumeFileName: null,
   uploadedPhoto: null,
+  constellationHasAction: false,
   connectedLinkedin: false,
   connectedGithub: false,
   importStatuses: {},
@@ -21,7 +22,7 @@ const idle: ImportStepActionState = {
 
 describe('hasImportStepAction', () => {
   it('is false on every data step when untouched', () => {
-    for (const step of ['resume', 'photo', 'accounts', 'platforms'] as const) {
+    for (const step of ['resume', 'photo', 'connect'] as const) {
       expect(hasImportStepAction(step, idle)).toBe(false);
     }
   });
@@ -33,31 +34,30 @@ describe('hasImportStepAction', () => {
     ).toBe(true);
   });
 
-  it('detects account connections and platform input', () => {
-    expect(hasImportStepAction('accounts', { ...idle, connectedGithub: true })).toBe(true);
+  it('detects constellation connect actions', () => {
+    expect(hasImportStepAction('connect', { ...idle, constellationHasAction: true })).toBe(true);
+    expect(hasImportStepAction('connect', { ...idle, connectedGithub: true })).toBe(true);
     expect(
-      hasImportStepAction('accounts', {
+      hasImportStepAction('connect', {
         ...idle,
         importStatuses: { linkedin: 'success' },
       })
     ).toBe(true);
     expect(
-      hasImportStepAction('accounts', {
+      hasImportStepAction('connect', {
         ...idle,
         linkedinProfileInput: 'linkedin.com/in/ada',
       })
     ).toBe(true);
     expect(
-      hasImportStepAction('accounts', {
+      hasImportStepAction('connect', {
         ...idle,
         githubUsername: 'octocat',
       })
     ).toBe(true);
-    expect(hasImportStepAction('platforms', { ...idle, youtubeChannel: '@me' })).toBe(true);
-    expect(hasImportStepAction('platforms', { ...idle, portfolioUrl: 'https://ada.dev' })).toBe(
-      true
-    );
-    expect(hasImportStepAction('platforms', { ...idle, linkUrls: ['https://x.com'] })).toBe(true);
+    expect(hasImportStepAction('connect', { ...idle, youtubeChannel: '@me' })).toBe(true);
+    expect(hasImportStepAction('connect', { ...idle, portfolioUrl: 'https://ada.dev' })).toBe(true);
+    expect(hasImportStepAction('connect', { ...idle, linkUrls: ['https://x.com'] })).toBe(true);
   });
 });
 

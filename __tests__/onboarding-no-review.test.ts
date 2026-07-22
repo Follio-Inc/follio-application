@@ -17,24 +17,17 @@ describe('onboarding lands on builder without review', () => {
     );
   });
 
-  it('drops review from the import step list', () => {
+  it('uses constellation connect as the final data step', () => {
     const src = readFileSync(resolve(process.cwd(), 'app/onboarding/import/page.tsx'), 'utf8');
 
-    expect(src).toContain("['resume', 'photo', 'accounts', 'platforms']");
+    expect(src).toContain("['resume', 'photo', 'connect']");
+    expect(src).toContain('ConstellationField');
+    expect(src).toContain('importConstellationPlatform');
+    expect(src).toContain('youtubeVideos');
     expect(src).toContain("parsed.currentStep === 'review'");
-  });
-
-  it('puts personal portfolio first on the platforms step', () => {
-    const src = readFileSync(resolve(process.cwd(), 'app/onboarding/import/page.tsx'), 'utf8');
-    const platformsIdx = src.indexOf("currentStep === 'platforms'");
-    const portfolioIdx = src.indexOf('Personal portfolio', platformsIdx);
-    const youtubeIdx = src.indexOf('{/* YouTube */}', platformsIdx);
-
-    expect(platformsIdx).toBeGreaterThan(-1);
-    expect(portfolioIdx).toBeGreaterThan(platformsIdx);
-    expect(youtubeIdx).toBeGreaterThan(portfolioIdx);
-    expect(src).toContain("type: 'PORTFOLIO'");
-    expect(src).toContain('portfolioUrl');
+    expect(src).toContain('key="step-connect"');
+    expect(src).not.toContain('STEP 4: ADDITIONAL PLATFORMS');
+    expect(src).not.toContain('STEP 3: CONNECT ACCOUNTS');
   });
 
   it('redirects legacy /onboarding/review bookmarks back to import', () => {

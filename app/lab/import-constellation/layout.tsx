@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Connect profiles · Follio',
+  title: 'Connect your accounts · Follio',
   description:
-    'Attach profiles across careers, engineering, design, and writing — preview of the onboarding connect step.',
+    'Preview of onboarding Step 3 — connect professional profiles to import resume data.',
   robots: { index: false, follow: false },
 };
 

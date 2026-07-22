@@ -1,10 +1,11 @@
 'use client';
 
-import { ArrowRight } from 'lucide-react';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { useState } from 'react';
 
-import { ConstellationField } from './constellation-field';
+import { ConstellationField } from '@/components/onboarding/constellation/constellation-field';
 import { Button } from '@/components/ui/button';
+import { importStepNextLabel } from '@/lib/onboarding/step-action';
 import {
   ONBOARDING_FOOTER,
   ONBOARDING_MAIN,
@@ -15,46 +16,74 @@ import {
   ONBOARDING_STEP_TRACK,
 } from '@/lib/onboarding-ui';
 
+const STEP_INDEX = 2; // Step 3 of 3 in live onboarding; lab still shows as mid-flow preview
+const STEP_COUNT = 3;
+const PROGRESS_PCT = ((STEP_INDEX + 1) / STEP_COUNT) * 100;
+
 /**
- * Preview of a multi-platform connect step.
- * Same shell / chrome / tokens as onboarding — not wired into the live flow yet.
- * Open: /lab/import-constellation
+ * Lab preview of onboarding connect step (constellation).
+ * Live wiring lives in /onboarding/import.
  */
 export default function ImportConstellationLabPage() {
-  const [connectedCount, setConnectedCount] = useState(0);
+  const [hasAction, setHasAction] = useState(false);
+  const primaryNextLabel = importStepNextLabel(hasAction, true);
 
   return (
-    <div className={ONBOARDING_PAGE_SHELL_WIDE}>
-      <div className={ONBOARDING_STEP_TRACK}>
-        <div className="flex items-center gap-1.5" role="list" aria-label="Onboarding steps">
-          <div className="h-1 flex-1 rounded-full bg-primary" role="listitem" aria-current="step" />
-          <div className="h-1 flex-1 rounded-full bg-muted" role="listitem" />
-          <div className="h-1 flex-1 rounded-full bg-muted" role="listitem" />
+    <>
+      <div className="fixed left-0 right-0 top-14 z-40 h-0.5 bg-muted">
+        <div
+          className="h-full bg-primary transition-[width] duration-300"
+          style={{ width: `${PROGRESS_PCT}%` }}
+        />
+      </div>
+
+      <div className={ONBOARDING_PAGE_SHELL_WIDE}>
+        <div className={ONBOARDING_STEP_TRACK}>
+          <div className="flex items-center gap-1.5" role="list" aria-label="Onboarding steps">
+            {Array.from({ length: STEP_COUNT }, (_, i) => (
+              <div
+                key={i}
+                className={`h-1 flex-1 rounded-full ${i <= STEP_INDEX ? 'bg-primary' : 'bg-muted'}`}
+                role="listitem"
+                aria-current={i === STEP_INDEX ? 'step' : undefined}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div className={ONBOARDING_STEP_HEADER}>
+          <p className="text-eyebrow">
+            Step {STEP_INDEX + 1} of {STEP_COUNT}
+          </p>
+          <h1 className={`mt-2 ${ONBOARDING_PAGE_TITLE}`}>Connect your accounts</h1>
+          <p className={ONBOARDING_PAGE_SUBTITLE}>Import data from your professional profiles</p>
+        </div>
+
+        <div className={ONBOARDING_MAIN}>
+          <ConstellationField onHasActionChange={setHasAction} />
+        </div>
+
+        <div className={ONBOARDING_FOOTER}>
+          <div>
+            <Button type="button" variant="ghost" className="gap-2" disabled>
+              <ArrowLeft className="h-4 w-4" />
+              Back
+            </Button>
+          </div>
+          <div className="flex items-center gap-3">
+            <Button
+              type="button"
+              size="lg"
+              variant={hasAction ? 'default' : 'outline'}
+              className="gap-2"
+              disabled
+            >
+              {primaryNextLabel}
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
-
-      <div className={ONBOARDING_STEP_HEADER}>
-        <p className="text-eyebrow">Connect profiles</p>
-        <h1 className={`mt-2 ${ONBOARDING_PAGE_TITLE}`}>Bring everything that represents you</h1>
-        <p className={ONBOARDING_PAGE_SUBTITLE}>
-          Drag marks to arrange the field. Tap without dragging to paste a link. When it looks right,
-          hit Copy seats and we&apos;ll lock the design.
-        </p>
-      </div>
-
-      <div className={ONBOARDING_MAIN}>
-        <ConstellationField onConnectedChange={setConnectedCount} />
-      </div>
-
-      <div className={ONBOARDING_FOOTER}>
-        <Button type="button" variant="ghost" className="gap-2" disabled>
-          Back
-        </Button>
-        <Button type="button" className="gap-2" disabled={connectedCount === 0}>
-          Continue
-          <ArrowRight className="h-4 w-4" />
-        </Button>
-      </div>
-    </div>
+    </>
   );
 }

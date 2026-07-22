@@ -3,14 +3,16 @@
  * Used to switch the footer CTA from "Skip to Next Step" → "Next".
  */
 
-export type ImportOnboardingStep = 'resume' | 'photo' | 'accounts' | 'platforms';
+export type ImportOnboardingStep = 'resume' | 'photo' | 'connect';
 
 export interface ImportStepActionState {
   resumeFileName: string | null;
   uploadedPhoto: string | null;
-  connectedLinkedin: boolean;
-  connectedGithub: boolean;
-  importStatuses: {
+  /** Constellation connect step — any successful import or typed input */
+  constellationHasAction?: boolean;
+  connectedLinkedin?: boolean;
+  connectedGithub?: boolean;
+  importStatuses?: {
     github?: string;
     linkedin?: string;
     youtube?: string;
@@ -18,17 +20,14 @@ export interface ImportStepActionState {
     substack?: string;
     links?: string;
   };
-  /** Pasted LinkedIn URL/username (accounts step) */
   linkedinProfileInput?: string;
-  /** Pasted GitHub URL/username (accounts step) */
   githubUsername?: string;
-  /** Pasted personal portfolio / website URL (platforms step) */
   portfolioUrl?: string;
-  youtubeChannel: string;
-  mediumUsername: string;
-  substackUsername: string;
-  linkUrls: string[];
-  linkInput: string;
+  youtubeChannel?: string;
+  mediumUsername?: string;
+  substackUsername?: string;
+  linkUrls?: string[];
+  linkInput?: string;
 }
 
 function isImportSuccess(status: string | undefined): boolean {
@@ -45,27 +44,24 @@ export function hasImportStepAction(
       return Boolean(state.resumeFileName);
     case 'photo':
       return Boolean(state.uploadedPhoto);
-    case 'accounts':
+    case 'connect':
+      if (state.constellationHasAction) return true;
       return (
-        state.connectedLinkedin ||
-        state.connectedGithub ||
-        isImportSuccess(state.importStatuses.github) ||
-        isImportSuccess(state.importStatuses.linkedin) ||
+        Boolean(state.connectedLinkedin) ||
+        Boolean(state.connectedGithub) ||
+        isImportSuccess(state.importStatuses?.github) ||
+        isImportSuccess(state.importStatuses?.linkedin) ||
+        isImportSuccess(state.importStatuses?.medium) ||
+        isImportSuccess(state.importStatuses?.youtube) ||
+        isImportSuccess(state.importStatuses?.substack) ||
         Boolean(state.linkedinProfileInput?.trim()) ||
-        Boolean(state.githubUsername?.trim())
-      );
-    case 'platforms':
-      return (
+        Boolean(state.githubUsername?.trim()) ||
         Boolean(state.portfolioUrl?.trim()) ||
-        Boolean(state.youtubeChannel.trim()) ||
-        Boolean(state.mediumUsername.trim()) ||
-        Boolean(state.substackUsername.trim()) ||
-        state.linkUrls.length > 0 ||
-        Boolean(state.linkInput.trim()) ||
-        isImportSuccess(state.importStatuses.youtube) ||
-        isImportSuccess(state.importStatuses.medium) ||
-        isImportSuccess(state.importStatuses.substack) ||
-        isImportSuccess(state.importStatuses.links)
+        Boolean(state.youtubeChannel?.trim()) ||
+        Boolean(state.mediumUsername?.trim()) ||
+        Boolean(state.substackUsername?.trim()) ||
+        (state.linkUrls?.length ?? 0) > 0 ||
+        Boolean(state.linkInput?.trim())
       );
     default:
       return false;

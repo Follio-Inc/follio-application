@@ -2,16 +2,23 @@ import { describe, expect, it } from 'vitest';
 
 import {
   PLATFORMS,
+  centerConstellationHorizontally,
   constellationHasOverlap,
   extractGitHubUsername,
   extractLinkedInSlug,
   extractMediumUsername,
   extractSubstackSlug,
   extractYouTubeHandle,
+  expandedHeight,
   expandedWidth,
   EXPAND_WIDTH_RATIO,
+  OAUTH_EXPAND_HEIGHT_RATIO,
+  OAUTH_EXPAND_WIDTH_RATIO,
+  CONNECTED_SCALE,
   layoutConstellation,
-} from '@/app/lab/import-constellation/platforms';
+  platformUsesOAuth,
+  vennBadgeStyle,
+} from '@/lib/onboarding/constellation/platforms';
 
 describe('import constellation parsers', () => {
   it('extracts GitHub usernames from URLs and bare handles', () => {
@@ -43,6 +50,36 @@ describe('import constellation parsers', () => {
   it('expands idle squares by the design ratio', () => {
     expect(expandedWidth(100)).toBe(Math.round(100 * EXPAND_WIDTH_RATIO));
   });
+
+  it('keeps a modest connected visual scale without changing expand ratios', () => {
+    expect(CONNECTED_SCALE).toBeGreaterThan(1);
+    expect(CONNECTED_SCALE).toBeLessThanOrEqual(1.15);
+  });
+
+  it('places the brand badge with a 50% Venn overlap on the square corner', () => {
+    expect(vennBadgeStyle('tl', 20)).toEqual({ left: -10, top: -10 });
+    expect(vennBadgeStyle('tr', 20)).toEqual({ right: -10, top: -10 });
+    expect(vennBadgeStyle('bl', 20)).toEqual({ left: -10, bottom: -10 });
+    expect(vennBadgeStyle('br', 20)).toEqual({ right: -10, bottom: -10 });
+  });
+
+  it('expands GitHub and LinkedIn wider and taller for OAuth + link', () => {
+    const github = PLATFORMS.find((p) => p.id === 'github')!;
+    const linkedin = PLATFORMS.find((p) => p.id === 'linkedin')!;
+    const medium = PLATFORMS.find((p) => p.id === 'medium')!;
+
+    expect(platformUsesOAuth(github)).toBe(true);
+    expect(platformUsesOAuth(linkedin)).toBe(true);
+    expect(platformUsesOAuth(medium)).toBe(false);
+
+    expect(expandedWidth(github)).toBe(Math.round(github.size * OAUTH_EXPAND_WIDTH_RATIO));
+    expect(expandedHeight(github)).toBe(Math.round(github.size * OAUTH_EXPAND_HEIGHT_RATIO));
+    expect(expandedWidth(linkedin)).toBe(Math.round(linkedin.size * OAUTH_EXPAND_WIDTH_RATIO));
+    expect(expandedHeight(linkedin)).toBe(Math.round(linkedin.size * OAUTH_EXPAND_HEIGHT_RATIO));
+
+    expect(expandedWidth(medium)).toBe(Math.round(medium.size * EXPAND_WIDTH_RATIO));
+    expect(expandedHeight(medium)).toBe(medium.size);
+  });
 });
 
 describe('import constellation layout', () => {
@@ -64,6 +101,19 @@ describe('import constellation layout', () => {
     expect(byId.linkedin).toMatchObject({ x: 50, y: 41.8 });
     expect(byId.github).toMatchObject({ x: 66.9, y: 52 });
     expect(byId.behance).toMatchObject({ x: 80.8, y: 18.7 });
+  });
+
+  it('centers the cloud so left and right edge gaps match', () => {
+    const centered = centerConstellationHorizontally(PLATFORMS, canvas.canvasW);
+    let minLeft = Infinity;
+    let maxRight = -Infinity;
+    for (const p of centered) {
+      const halfPct = (p.size / 2 / canvas.canvasW) * 100;
+      minLeft = Math.min(minLeft, p.x - halfPct);
+      maxRight = Math.max(maxRight, p.x + halfPct);
+    }
+    expect(minLeft).toBeCloseTo(100 - maxRight, 5);
+    expect((minLeft + maxRight) / 2).toBeCloseTo(50, 5);
   });
 
   it('pushes neighbors aside when GitHub expands so tiles do not overlap', () => {
@@ -90,8 +140,8 @@ describe('import constellation layout', () => {
         ...canvas,
       });
       const active = expanded[platform.id];
-      const aw = expandedWidth(platform.size);
-      const ah = platform.size;
+      const aw = expandedWidth(platform);
+      const ah = expandedHeight(platform);
       for (const other of PLATFORMS) {
         if (other.id === platform.id) continue;
         const point = expanded[other.id];
@@ -120,8 +170,7 @@ describe('import constellation layout', () => {
     const nearIds = ['portfolio', 'dribbble', 'leetcode'] as const;
     const nearMoved = Math.max(
       ...nearIds.map(
-        (id) =>
-          Math.abs(expanded[id].x - home[id].x) + Math.abs(expanded[id].y - home[id].y)
+        (id) => Math.abs(expanded[id].x - home[id].x) + Math.abs(expanded[id].y - home[id].y)
       )
     );
     const farMoved =

@@ -3,23 +3,16 @@
 import { useUser } from '@clerk/nextjs';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  AlertCircle,
   ArrowLeft,
   ArrowRight,
   Camera,
   CheckCircle2,
   FileText,
-  Github,
-  Link2,
-  Linkedin,
   Loader2,
-  Globe,
-  Plus,
   RotateCcw,
   Trash2,
   Upload,
   User,
-  X,
 } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -34,6 +27,7 @@ import {
   ResumeStartChoice,
   type ResumeStartPath,
 } from '@/components/onboarding/resume-start-choice';
+import { ConstellationField } from '@/components/onboarding/constellation/constellation-field';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -45,27 +39,35 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
 import { Spinner } from '@/components/ui/spinner';
 import { extractGitHubUsername, extractLinkedInSlug } from '@/lib/import/profile-url';
+import {
+  importConstellationOAuth,
+  importConstellationPlatform,
+  type ConstellationImportBundle,
+  type ConstellationLink,
+} from '@/lib/onboarding/constellation/import-adapters';
+import type {
+  BadgeCorner,
+  PlatformDef,
+  PlatformId,
+} from '@/lib/onboarding/constellation/platforms';
+import type { ConstellationConnection } from '@/components/onboarding/constellation/constellation-field';
 import { hasImportStepAction, importStepNextLabel } from '@/lib/onboarding/step-action';
 import {
-  ONBOARDING_CARD_DESCRIPTION,
-  ONBOARDING_CARD_TITLE,
   ONBOARDING_DROPZONE,
   ONBOARDING_DROPZONE_ACTIVE,
   ONBOARDING_FOOTER,
   ONBOARDING_ICON_WELL,
   ONBOARDING_MAIN,
   ONBOARDING_PAGE_SHELL,
+  ONBOARDING_PAGE_SHELL_WIDE,
   ONBOARDING_PAGE_SUBTITLE,
   ONBOARDING_PAGE_TITLE,
   ONBOARDING_STEP_HEADER,
   ONBOARDING_STEP_TRACK,
-  ONBOARDING_SUCCESS_PILL,
   ONBOARDING_SURFACE,
-  ONBOARDING_SURFACE_PAD,
 } from '@/lib/onboarding-ui';
 import { ONBOARDING_TEMPLATE_KEY } from '@/lib/portfolio/templates/onboarding';
 import { getDefaultTemplateId } from '@/lib/portfolio/templates/registry';
@@ -174,36 +176,6 @@ const compressImageForClerk = async (file: File): Promise<File> => {
 };
 
 // ─── SVG Brand Icons ──────────────────────────────────────────────
-function MediumIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-      <path d="M13.54 12a6.8 6.8 0 01-6.77 6.82A6.8 6.8 0 010 12a6.8 6.8 0 016.77-6.82A6.8 6.8 0 0113.54 12zm7.42 0c0 3.54-1.51 6.42-3.38 6.42-1.87 0-3.39-2.88-3.39-6.42s1.52-6.42 3.39-6.42 3.38 2.88 3.38 6.42zm2.94 0c0 3.17-.53 5.75-1.19 5.75-.66 0-1.19-2.58-1.19-5.75s.53-5.75 1.19-5.75c.66 0 1.19 2.58 1.19 5.75z" />
-    </svg>
-  );
-}
-
-function YouTubeIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-      <path
-        d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.016 3.016 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.016 3.016 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"
-        fill="#FF0000"
-      />
-    </svg>
-  );
-}
-
-function SubstackIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-      <path
-        d="M22.539 8.242H1.46V5.406h21.08v2.836zM1.46 10.812V24L12 18.11 22.54 24V10.812H1.46zM22.54 0H1.46v2.836h21.08V0z"
-        fill="#FF6719"
-      />
-    </svg>
-  );
-}
-
 // ─── Types ────────────────────────────────────────────────────────
 type ImportSource = 'resume' | 'github' | 'linkedin' | 'medium' | 'youtube' | 'substack' | 'links';
 
@@ -214,9 +186,9 @@ interface ImportStatus {
   itemsImported?: number;
 }
 
-type OnboardingStep = 'resume' | 'photo' | 'accounts' | 'platforms';
+type OnboardingStep = 'resume' | 'photo' | 'connect';
 
-const STEPS: OnboardingStep[] = ['resume', 'photo', 'accounts', 'platforms'];
+const STEPS: OnboardingStep[] = ['resume', 'photo', 'connect'];
 
 const STEP_META: Record<OnboardingStep, { title: string; subtitle: string }> = {
   resume: {
@@ -227,11 +199,10 @@ const STEP_META: Record<OnboardingStep, { title: string; subtitle: string }> = {
     title: 'Add a profile photo',
     subtitle: 'Upload a photo to make your profile stand out',
   },
-  accounts: {
+  connect: {
     title: 'Connect your accounts',
     subtitle: 'Import data from your professional profiles',
   },
-  platforms: { title: 'Add more platforms', subtitle: 'Link your content and publications' },
 };
 
 const RESUME_UPLOAD_META = {
@@ -282,27 +253,6 @@ async function getCroppedImg(imageSrc: string, pixelCrop: Area): Promise<string>
  * - https://medium.com/@username/some-article → username
  * - medium.com/@username → username
  */
-function extractMediumUsername(input: string): string {
-  const trimmed = input.trim();
-  if (!trimmed) return '';
-
-  // Try parsing as URL
-  try {
-    const url = new URL(trimmed.startsWith('http') ? trimmed : `https://${trimmed}`);
-    if (url.hostname.includes('medium.com')) {
-      const pathParts = url.pathname.split('/').filter(Boolean);
-      if (pathParts.length > 0) {
-        return pathParts[0].replace(/^@/, '');
-      }
-    }
-  } catch {
-    // Not a URL — fall through
-  }
-
-  // @username or plain username
-  return trimmed.replace(/^@/, '');
-}
-
 /**
  * Extract a clean Substack identifier from various input formats:
  * - username → username
@@ -311,42 +261,11 @@ function extractMediumUsername(input: string): string {
  * - https://username.substack.com/p/some-post → username
  * - username.substack.com → username
  */
-function extractSubstackIdentifier(input: string): string {
-  const trimmed = input.trim();
-  if (!trimmed) return '';
-
-  // Try parsing as URL
-  try {
-    const url = new URL(trimmed.startsWith('http') ? trimmed : `https://${trimmed}`);
-    if (url.hostname.includes('substack.com')) {
-      const subdomain = url.hostname.split('.')[0];
-      if (subdomain && subdomain !== 'www' && subdomain !== 'substack') {
-        return subdomain;
-      }
-    }
-  } catch {
-    // Not a URL — fall through
-  }
-
-  // Handle bare "username.substack.com" without protocol
-  const substackMatch = trimmed.match(/^([\w-]+)\.substack\.com/i);
-  if (substackMatch) return substackMatch[1];
-
-  // @username or plain username
-  return trimmed.replace(/^@/, '');
-}
-
 /**
  * Extract a clean YouTube channel identifier from various input formats.
  * The backend's parseChannelInput already handles most formats, but we
  * do a light cleanup here for edge cases.
  */
-function extractYouTubeChannel(input: string): string {
-  const trimmed = input.trim();
-  if (!trimmed) return '';
-  return trimmed;
-}
-
 // ─── Component ────────────────────────────────────────────────────
 export default function OnboardingImportPage() {
   const router = useRouter();
@@ -415,13 +334,6 @@ export default function OnboardingImportPage() {
   }, [isUserLoaded, user, router, isFromBuilder]);
 
   // ─── OAuth states ───────────────────────────────────────────────
-  const [githubConnecting, setGithubConnecting] = useState(false);
-  const [githubDisconnecting, setGithubDisconnecting] = useState(false);
-  const [githubError, setGithubError] = useState<string | null>(null);
-
-  const [linkedinConnecting, setLinkedinConnecting] = useState(false);
-  const [linkedinDisconnecting, setLinkedinDisconnecting] = useState(false);
-  const [linkedinError, setLinkedinError] = useState<string | null>(null);
 
   // ─── Import states ──────────────────────────────────────────────
   const [imports, setImports] = useState<Record<ImportSource, ImportStatus>>({
@@ -441,8 +353,18 @@ export default function OnboardingImportPage() {
   const [youtubeChannel, setYoutubeChannel] = useState('');
   const [substackUsername, setSubstackUsername] = useState('');
   const [portfolioUrl, setPortfolioUrl] = useState('');
+  const [constellationHasAction, setConstellationHasAction] = useState(false);
+  const [constellationLinks, setConstellationLinks] = useState<
+    Partial<Record<PlatformId, ConstellationLink>>
+  >({});
+  const [constellationConnected, setConstellationConnected] = useState<
+    Partial<Record<PlatformId, ConstellationConnection>>
+  >({});
+  const constellationBundlesRef = useRef<Partial<Record<PlatformId, ConstellationImportBundle>>>(
+    {}
+  );
   const [linkUrls, setLinkUrls] = useState<string[]>([]);
-  const [linkInput, setLinkInput] = useState('');
+  const [linkInput] = useState('');
 
   // Photo states
   const [uploadedPhoto, setUploadedPhoto] = useState<string | null>(null);
@@ -483,63 +405,7 @@ export default function OnboardingImportPage() {
     );
   });
 
-  const linkedinName = (() => {
-    const li = importedData.linkedin as Record<string, unknown> | undefined;
-    const liProfile = li?.profile as Record<string, unknown> | undefined;
-    const fromLI = li?.fromLinkedIn as Record<string, unknown> | undefined;
-    if (fromLI?.firstName || fromLI?.lastName) {
-      return [fromLI.firstName, fromLI.lastName].filter(Boolean).join(' ');
-    }
-    if (liProfile?.firstName && liProfile?.lastName)
-      return `${liProfile.firstName} ${liProfile.lastName}`;
-    if (fromLI?.username) return String(fromLI.username);
-    if (connectedLinkedin?.username) return connectedLinkedin.username;
-    if (linkedinProfileInput.trim()) {
-      const slug = extractLinkedInSlug(linkedinProfileInput);
-      if (slug) return slug;
-    }
-    if (connectedLinkedin?.firstName && connectedLinkedin?.lastName)
-      return `${connectedLinkedin.firstName} ${connectedLinkedin.lastName}`;
-    return null;
-  })();
-
-  const linkedinHeadline = (() => {
-    const li = importedData.linkedin as Record<string, unknown> | undefined;
-    const fromLI = li?.fromLinkedIn as Record<string, unknown> | undefined;
-    const profile = li?.profile as Record<string, unknown> | undefined;
-    const headline = (fromLI?.headline || profile?.headline) as string | undefined;
-    return headline?.trim() || null;
-  })();
-
-  /** Avatar from OAuth or from a successful link/username import. */
-  const linkedinAvatarUrl = (() => {
-    if (connectedLinkedin?.imageUrl) return connectedLinkedin.imageUrl;
-    const li = importedData.linkedin as Record<string, unknown> | undefined;
-    const fromLI = li?.fromLinkedIn as Record<string, unknown> | undefined;
-    const profile = li?.profile as Record<string, unknown> | undefined;
-    const fromImport = (fromLI?.avatarUrl || profile?.avatarUrl) as string | undefined;
-    return fromImport || null;
-  })();
-
-  const githubAvatarUrl = (() => {
-    if (connectedGithub?.imageUrl) return connectedGithub.imageUrl;
-    const gh = importedData.github as Record<string, unknown> | undefined;
-    const profile = gh?.profile as Record<string, unknown> | undefined;
-    const githubProfile = gh?.githubProfile as Record<string, unknown> | undefined;
-    const fromImport = (profile?.avatarUrl || githubProfile?.avatarUrl) as string | undefined;
-    return fromImport || null;
-  })();
-
-  const githubDisplayUsername =
-    githubUsernameFromAccount ||
-    (() => {
-      const gh = importedData.github as Record<string, unknown> | undefined;
-      const githubProfile = gh?.githubProfile as Record<string, unknown> | undefined;
-      if (typeof githubProfile?.username === 'string') return githubProfile.username;
-      return extractGitHubUsername(githubUsername) || null;
-    })();
-
-  // ─── State persistence ─────────────────────────────────────────
+  // ─── State persistence (OAuth draft restore) ───────────────────
   const saveImportState = useCallback(async () => {
     const storageKey = getStorageKey(user?.id);
     if (!storageKey) return;
@@ -636,8 +502,10 @@ export default function OnboardingImportPage() {
             const raw =
               parsed.currentStep === 'bubbles' ||
               parsed.currentStep === 'gallery' ||
-              parsed.currentStep === 'review'
-                ? 'platforms'
+              parsed.currentStep === 'review' ||
+              parsed.currentStep === 'accounts' ||
+              parsed.currentStep === 'platforms'
+                ? 'connect'
                 : String(parsed.currentStep);
             if ((STEPS as string[]).includes(raw)) setCurrentStep(raw as OnboardingStep);
           }
@@ -657,71 +525,8 @@ export default function OnboardingImportPage() {
     restoreState();
   }, [hasRestoredPersistedState, isUserLoaded, user]);
 
-  // ─── Auto-import after OAuth ────────────────────────────────────
-  useEffect(() => {
-    if (!isUserLoaded || !hasRestoredPersistedState) return;
-    if (githubUsernameFromAccount && imports.github.status === 'idle') {
-      updateImportStatus('github', { status: 'importing', message: 'Fetching GitHub data...' });
-      fetch('/api/import/github', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: githubUsernameFromAccount }),
-      })
-        .then((r) => r.json())
-        .then((data) => {
-          if (data.error) {
-            updateImportStatus('github', { status: 'error', message: data.error });
-          } else {
-            setImportedData((prev) => ({ ...prev, github: data.data }));
-            updateImportStatus('github', {
-              status: 'success',
-              message: data.message || `Imported ${data.data?.summary?.projects || 0} projects`,
-              itemsImported:
-                (data.data?.summary?.projects || 0) + (data.data?.summary?.skills || 0),
-            });
-            setGithubUsername(githubUsernameFromAccount);
-          }
-        })
-        .catch((err) => {
-          updateImportStatus('github', {
-            status: 'error',
-            message: err instanceof Error ? err.message : 'Failed',
-          });
-        });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isUserLoaded, hasRestoredPersistedState, githubUsernameFromAccount, imports.github.status]);
-
-  useEffect(() => {
-    if (!isUserLoaded || !hasRestoredPersistedState) return;
-    if (connectedLinkedin && imports.linkedin.status === 'idle') {
-      updateImportStatus('linkedin', { status: 'importing', message: 'Fetching LinkedIn data...' });
-      fetch('/api/import/linkedin/oauth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      })
-        .then((r) => r.json())
-        .then((data) => {
-          if (data.error) {
-            updateImportStatus('linkedin', { status: 'error', message: data.error });
-          } else {
-            setImportedData((prev) => ({ ...prev, linkedin: data.data }));
-            updateImportStatus('linkedin', {
-              status: 'success',
-              message: data.message || 'Imported profile',
-              itemsImported: data.data?.summary?.total || 1,
-            });
-          }
-        })
-        .catch((err) =>
-          updateImportStatus('linkedin', {
-            status: 'error',
-            message: err instanceof Error ? err.message : 'Failed',
-          })
-        );
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isUserLoaded, hasRestoredPersistedState, connectedLinkedin, imports.linkedin.status]);
+  // OAuth auto-import for GitHub / LinkedIn is handled inside ConstellationField
+  // once the user lands on the connect step (after redirect restore).
 
   // ─── Helpers ────────────────────────────────────────────────────
   const updateImportStatus = (source: ImportSource, update: Partial<ImportStatus>) => {
@@ -817,373 +622,6 @@ export default function OnboardingImportPage() {
     await processResumeFile(file);
   };
 
-  // ─── GitHub ─────────────────────────────────────────────────────
-  const handleGitHubConnect = async () => {
-    setGithubConnecting(true);
-    setGithubError(null);
-    const primaryEmail = user?.primaryEmailAddress;
-    if (!primaryEmail?.verification?.status || primaryEmail.verification.status !== 'verified') {
-      setGithubError('Please verify your email first to connect GitHub.');
-      setGithubConnecting(false);
-      return;
-    }
-    try {
-      await saveImportState();
-      const externalAccount = await user?.createExternalAccount({
-        strategy: 'oauth_github',
-        redirectUrl: window.location.href,
-      });
-      const url = externalAccount?.verification?.externalVerificationRedirectURL;
-      if (url) window.location.href = url.toString();
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes('already connected')) {
-        await user?.reload();
-        setGithubError(null);
-      } else setGithubError(`Connection failed: ${msg}`);
-      setGithubConnecting(false);
-    }
-  };
-
-  const handleGitHubDisconnect = async () => {
-    if (!connectedGithub) return;
-    setGithubDisconnecting(true);
-    setGithubError(null);
-    try {
-      await connectedGithub.destroy();
-      await user?.reload();
-      updateImportStatus('github', {
-        status: 'idle',
-        message: undefined,
-        itemsImported: undefined,
-      });
-      setGithubUsername('');
-    } catch (err: unknown) {
-      setGithubError(`Failed to disconnect: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      setGithubDisconnecting(false);
-    }
-  };
-
-  const handleGitHubImport = async (overrideUsername?: string) => {
-    const resolved = extractGitHubUsername(overrideUsername ?? githubUsername);
-    if (!resolved) {
-      updateImportStatus('github', {
-        status: 'error',
-        message: 'Enter a GitHub username or profile URL',
-      });
-      return;
-    }
-    updateImportStatus('github', { status: 'importing', message: 'Fetching GitHub data...' });
-    try {
-      const response = await fetch('/api/import/github', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: resolved }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Failed');
-      setImportedData((prev) => ({ ...prev, github: data.data }));
-      updateImportStatus('github', {
-        status: 'success',
-        message: data.message || `Imported ${data.data?.summary?.projects || 0} projects`,
-        itemsImported: (data.data?.summary?.projects || 0) + (data.data?.summary?.skills || 0),
-      });
-      setGithubUsername(resolved);
-    } catch (err) {
-      updateImportStatus('github', {
-        status: 'error',
-        message: err instanceof Error ? err.message : 'Failed',
-      });
-    }
-  };
-
-  // ─── LinkedIn ───────────────────────────────────────────────────
-  const handleLinkedInConnect = async () => {
-    setLinkedinConnecting(true);
-    setLinkedinError(null);
-    const primaryEmail = user?.primaryEmailAddress;
-    if (!primaryEmail?.verification?.status || primaryEmail.verification.status !== 'verified') {
-      setLinkedinError('Please verify your email first.');
-      setLinkedinConnecting(false);
-      return;
-    }
-    try {
-      await saveImportState();
-      const externalAccount = await user?.createExternalAccount({
-        strategy: 'oauth_linkedin_oidc',
-        redirectUrl: window.location.href,
-      });
-      const url = externalAccount?.verification?.externalVerificationRedirectURL;
-      if (url) window.location.href = url.toString();
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes('already connected')) {
-        await user?.reload();
-        setLinkedinError(null);
-      } else setLinkedinError(`Connection failed: ${msg}`);
-      setLinkedinConnecting(false);
-    }
-  };
-
-  const handleLinkedInDisconnect = async () => {
-    if (!connectedLinkedin) return;
-    setLinkedinDisconnecting(true);
-    setLinkedinError(null);
-    try {
-      await connectedLinkedin.destroy();
-      await user?.reload();
-      updateImportStatus('linkedin', {
-        status: 'idle',
-        message: undefined,
-        itemsImported: undefined,
-      });
-      setLinkedinProfileInput('');
-    } catch (err: unknown) {
-      setLinkedinError(`Failed: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      setLinkedinDisconnecting(false);
-    }
-  };
-
-  const handleLinkedInImport = async (overrideInput?: string) => {
-    const pasted = (overrideInput ?? linkedinProfileInput).trim();
-
-    // Prefer OAuth import when the account is connected and no paste override.
-    if (connectedLinkedin && !pasted) {
-      updateImportStatus('linkedin', { status: 'importing', message: 'Fetching LinkedIn data...' });
-      try {
-        const response = await fetch('/api/import/linkedin/oauth', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Failed');
-        setImportedData((prev) => ({ ...prev, linkedin: data.data }));
-        updateImportStatus('linkedin', {
-          status: 'success',
-          message: data.message || 'Imported profile',
-          itemsImported: data.data?.summary?.total || 1,
-        });
-      } catch (err) {
-        updateImportStatus('linkedin', {
-          status: 'error',
-          message: err instanceof Error ? err.message : 'Failed',
-        });
-      }
-      return;
-    }
-
-    const slug = extractLinkedInSlug(pasted);
-    if (!slug) {
-      updateImportStatus('linkedin', {
-        status: 'error',
-        message: 'Enter a LinkedIn profile URL or username',
-      });
-      return;
-    }
-
-    updateImportStatus('linkedin', {
-      status: 'importing',
-      message: 'Fetching LinkedIn profile...',
-    });
-    try {
-      const response = await fetch('/api/import/linkedin/profile', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: pasted }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Failed');
-      setImportedData((prev) => ({ ...prev, linkedin: data.data }));
-      setLinkedinProfileInput(slug);
-      updateImportStatus('linkedin', {
-        status: 'success',
-        message: data.message || 'Imported LinkedIn profile',
-        itemsImported: data.data?.summary?.total || 1,
-      });
-    } catch (err) {
-      updateImportStatus('linkedin', {
-        status: 'error',
-        message: err instanceof Error ? err.message : 'Failed',
-      });
-    }
-  };
-
-  // ─── Medium ─────────────────────────────────────────────────────
-  const handleMediumImport = async () => {
-    const username = extractMediumUsername(mediumUsername);
-    if (!username) {
-      updateImportStatus('medium', {
-        status: 'error',
-        message: 'Please enter your Medium username or profile URL',
-      });
-      return;
-    }
-    updateImportStatus('medium', { status: 'importing', message: 'Fetching Medium posts...' });
-    try {
-      const response = await fetch('/api/import/medium', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Failed to import from Medium');
-      const postCount = data.data?.blogPosts?.length || data.stats?.blogPosts || 0;
-      if (postCount === 0) {
-        updateImportStatus('medium', {
-          status: 'error',
-          message: `No posts found for "${username}". Please check the username and try again.`,
-        });
-        return;
-      }
-      setImportedData((prev) => ({ ...prev, medium: data.data }));
-      updateImportStatus('medium', {
-        status: 'success',
-        message: `Imported ${postCount} posts`,
-        itemsImported: postCount,
-      });
-    } catch (err) {
-      updateImportStatus('medium', {
-        status: 'error',
-        message: err instanceof Error ? err.message : 'Failed to import from Medium',
-      });
-    }
-  };
-
-  // ─── YouTube ────────────────────────────────────────────────────
-  const handleYouTubeImport = async () => {
-    const channel = extractYouTubeChannel(youtubeChannel);
-    if (!channel) {
-      updateImportStatus('youtube', {
-        status: 'error',
-        message: 'Please enter your YouTube channel URL or handle',
-      });
-      return;
-    }
-    updateImportStatus('youtube', { status: 'importing', message: 'Fetching YouTube videos...' });
-    try {
-      const response = await fetch('/api/import/youtube', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channel }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Failed to import from YouTube');
-      const videoCount = data.data?.youtubeVideos?.length || data.stats?.videos || 0;
-      if (videoCount === 0) {
-        updateImportStatus('youtube', {
-          status: 'error',
-          message:
-            'No videos found for this channel. Please check the URL or handle and try again.',
-        });
-        return;
-      }
-      setImportedData((prev) => ({ ...prev, youtube: data.data }));
-      updateImportStatus('youtube', {
-        status: 'success',
-        message: `Imported ${videoCount} videos`,
-        itemsImported: videoCount,
-      });
-    } catch (err) {
-      updateImportStatus('youtube', {
-        status: 'error',
-        message: err instanceof Error ? err.message : 'Failed to import from YouTube',
-      });
-    }
-  };
-
-  // ─── Substack ───────────────────────────────────────────────────
-  const handleSubstackImport = async () => {
-    const identifier = extractSubstackIdentifier(substackUsername);
-    if (!identifier) {
-      updateImportStatus('substack', {
-        status: 'error',
-        message: 'Please enter your Substack name or URL',
-      });
-      return;
-    }
-    updateImportStatus('substack', { status: 'importing', message: 'Fetching Substack posts...' });
-    try {
-      const response = await fetch('/api/import/medium', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ platform: 'substack', identifier }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Failed to import from Substack');
-      const postCount = data.data?.blogPosts?.length || data.stats?.blogPosts || 0;
-      if (postCount === 0) {
-        updateImportStatus('substack', {
-          status: 'error',
-          message: `No posts found for "${identifier}". Please check the name and try again.`,
-        });
-        return;
-      }
-      setImportedData((prev) => ({ ...prev, substack: data.data }));
-      updateImportStatus('substack', {
-        status: 'success',
-        message: `Imported ${postCount} posts`,
-        itemsImported: postCount,
-      });
-    } catch (err) {
-      updateImportStatus('substack', {
-        status: 'error',
-        message: err instanceof Error ? err.message : 'Failed to import from Substack',
-      });
-    }
-  };
-
-  // ─── Links ──────────────────────────────────────────────────────
-  const handleAddLink = () => {
-    const url = linkInput.trim();
-    if (!url) return;
-    try {
-      new URL(url);
-    } catch {
-      updateImportStatus('links', { status: 'error', message: 'Please enter a valid URL' });
-      return;
-    }
-    if (linkUrls.includes(url)) {
-      updateImportStatus('links', { status: 'error', message: 'Link already added' });
-      return;
-    }
-    setLinkUrls((prev) => [...prev, url]);
-    setLinkInput('');
-    updateImportStatus('links', { status: 'idle', message: undefined });
-  };
-
-  const handleRemoveLink = (url: string) => setLinkUrls((prev) => prev.filter((l) => l !== url));
-
-  const handleLinksImport = async () => {
-    if (linkUrls.length === 0) {
-      updateImportStatus('links', { status: 'error', message: 'Add at least one link' });
-      return;
-    }
-    updateImportStatus('links', { status: 'importing', message: 'Importing links...' });
-    try {
-      const response = await fetch('/api/import/links', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ links: linkUrls, saveToProfile: true }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Failed');
-      setImportedData((prev) => ({ ...prev, links: data.data }));
-      const linkCount = data.data?.links?.length || linkUrls.length;
-      updateImportStatus('links', {
-        status: 'success',
-        message: `Imported ${linkCount} links`,
-        itemsImported: linkCount,
-      });
-    } catch (err) {
-      updateImportStatus('links', {
-        status: 'error',
-        message: err instanceof Error ? err.message : 'Failed',
-      });
-    }
-  };
-
   // ─── Photo handling ─────────────────────────────────────────────
   const processPhotoFile = async (file: File) => {
     if (!file.type.startsWith('image/')) {
@@ -1235,6 +673,110 @@ export default function OnboardingImportPage() {
     setCroppedAreaPixels(croppedAreaPx);
   }, []);
 
+  // ─── Constellation connect (replaces accounts + platforms steps) ─
+  const applyConstellationBundle = (
+    platform: PlatformDef,
+    bundle: ConstellationImportBundle,
+    input?: string
+  ) => {
+    constellationBundlesRef.current[platform.id] = bundle;
+
+    if (bundle.dataKey && bundle.data) {
+      setImportedData((prev) => ({ ...prev, [bundle.dataKey!]: bundle.data }));
+      updateImportStatus(bundle.dataKey, {
+        status: 'success',
+        message: `Imported ${platform.label}`,
+        itemsImported: 1,
+      });
+      if (bundle.dataKey === 'github') {
+        const username =
+          (input ? extractGitHubUsername(input) : null) ||
+          githubUsernameFromAccount ||
+          githubUsername;
+        if (username) setGithubUsername(username);
+      }
+      if (bundle.dataKey === 'linkedin' && input) {
+        const slug = extractLinkedInSlug(input);
+        if (slug) setLinkedinProfileInput(slug);
+      }
+      if (bundle.dataKey === 'medium' && input) setMediumUsername(input.trim());
+      if (bundle.dataKey === 'youtube' && input) setYoutubeChannel(input.trim());
+      if (bundle.dataKey === 'substack' && input) setSubstackUsername(input.trim());
+    }
+
+    if (bundle.link) {
+      setConstellationLinks((prev) => ({ ...prev, [platform.id]: bundle.link! }));
+      if (platform.id === 'portfolio') {
+        setPortfolioUrl(bundle.link.url);
+      }
+    }
+  };
+
+  const handleConstellationImport = async (platform: PlatformDef, input: string) => {
+    const bundle = await importConstellationPlatform(platform, input);
+    applyConstellationBundle(platform, bundle, input);
+    return { identity: bundle.identity };
+  };
+
+  const handleConstellationOAuth = async (platform: PlatformDef) => {
+    const bundle = await importConstellationOAuth(platform, {
+      githubUsername: githubUsernameFromAccount,
+    });
+    applyConstellationBundle(platform, bundle);
+    return { identity: bundle.identity };
+  };
+
+  const handleConstellationConnected = (
+    platformId: PlatformId,
+    result: { identity: ConstellationConnection['identity'] },
+    meta: { badgeCorner: BadgeCorner }
+  ) => {
+    setConstellationConnected((prev) => ({
+      ...prev,
+      [platformId]: { identity: result.identity, badgeCorner: meta.badgeCorner },
+    }));
+    setConstellationHasAction(true);
+  };
+
+  const handleConstellationDisconnected = (platformId: PlatformId) => {
+    delete constellationBundlesRef.current[platformId];
+    setConstellationConnected((prev) => {
+      const next = { ...prev };
+      delete next[platformId];
+      return next;
+    });
+    setConstellationLinks((prev) => {
+      const next = { ...prev };
+      delete next[platformId];
+      return next;
+    });
+
+    const dataKeyMap: Partial<
+      Record<PlatformId, 'github' | 'linkedin' | 'medium' | 'youtube' | 'substack'>
+    > = {
+      github: 'github',
+      linkedin: 'linkedin',
+      medium: 'medium',
+      youtube: 'youtube',
+      substack: 'substack',
+    };
+    const dataKey = dataKeyMap[platformId];
+    if (dataKey) {
+      setImportedData((prev) => {
+        const next = { ...prev };
+        delete next[dataKey];
+        return next;
+      });
+      updateImportStatus(dataKey, { status: 'idle', message: undefined, itemsImported: undefined });
+    }
+    if (platformId === 'portfolio') setPortfolioUrl('');
+    if (platformId === 'github') setGithubUsername('');
+    if (platformId === 'linkedin') setLinkedinProfileInput('');
+    if (platformId === 'medium') setMediumUsername('');
+    if (platformId === 'youtube') setYoutubeChannel('');
+    if (platformId === 'substack') setSubstackUsername('');
+  };
+
   // ─── Complete onboarding → builder ─────────────────────────────
   const handleCompleteOnboarding = async () => {
     if (isCompleting) return;
@@ -1283,6 +825,8 @@ export default function OnboardingImportPage() {
       const linkedinData = importedData.linkedin as Record<string, unknown> | undefined;
       const githubData = importedData.github as Record<string, unknown> | undefined;
       const mediumData = importedData.medium as Record<string, unknown> | undefined;
+      const substackData = importedData.substack as Record<string, unknown> | undefined;
+      const youtubeData = importedData.youtube as Record<string, unknown> | undefined;
 
       const resumeProfile = (resumeData?.profile as Record<string, unknown>) || {};
       const linkedinProfile = (linkedinData?.profile as Record<string, unknown>) || {};
@@ -1377,10 +921,22 @@ export default function OnboardingImportPage() {
         ...((linkedinData?.links as Array<Record<string, unknown>>) || []),
         ...((githubData?.links as Array<Record<string, unknown>>) || []),
         ...((mediumData?.links as Array<Record<string, unknown>>) || []),
+        ...((substackData?.links as Array<Record<string, unknown>>) || []),
+        ...((youtubeData?.links as Array<Record<string, unknown>>) || []),
       ];
 
-      // Personal portfolio URL from the platforms step — first so it sorts near the top
-      const trimmedPortfolio = portfolioUrl.trim();
+      // Links attached via constellation (portfolio + platforms without rich APIs)
+      for (const link of Object.values(constellationLinks)) {
+        if (!link?.url) continue;
+        allLinks.push({
+          url: link.url,
+          type: link.type,
+          label: link.label,
+        });
+      }
+
+      // Personal portfolio URL — prefer constellation portfolio, fall back to typed
+      const trimmedPortfolio = constellationLinks.portfolio?.url?.trim() || portfolioUrl.trim();
       if (trimmedPortfolio) {
         const normalizedPortfolio = /^https?:\/\//i.test(trimmedPortfolio)
           ? trimmedPortfolio.replace(/\/+$/, '')
@@ -1392,7 +948,7 @@ export default function OnboardingImportPage() {
         });
       }
 
-      // Custom links added on the platforms step
+      // Custom links added on the platforms step (legacy draft restore)
       for (const raw of linkUrls) {
         const trimmed = raw.trim();
         if (!trimmed) continue;
@@ -1420,7 +976,13 @@ export default function OnboardingImportPage() {
         ...((githubData?.projects as Array<Record<string, unknown>>) || []),
       ];
 
-      const blogPosts = [...((mediumData?.blogPosts as Array<Record<string, unknown>>) || [])];
+      const blogPosts = [
+        ...((mediumData?.blogPosts as Array<Record<string, unknown>>) || []),
+        ...((substackData?.blogPosts as Array<Record<string, unknown>>) || []),
+      ];
+      const youtubeVideos = [
+        ...((youtubeData?.youtubeVideos as Array<Record<string, unknown>>) || []),
+      ];
       const githubProfileAgg = (githubData?.githubProfile as Record<string, unknown>) || undefined;
 
       // Upload avatar to Clerk when we have a data URL; keep original for permanent storage
@@ -1486,6 +1048,7 @@ export default function OnboardingImportPage() {
             contactInfo,
             projects,
             blogPosts,
+            youtubeVideos,
             githubProfile: githubProfileAgg,
           },
         }),
@@ -1523,6 +1086,7 @@ export default function OnboardingImportPage() {
   const hasCurrentStepAction = hasImportStepAction(currentStep, {
     resumeFileName,
     uploadedPhoto,
+    constellationHasAction,
     connectedLinkedin: Boolean(connectedLinkedin),
     connectedGithub: Boolean(connectedGithub),
     importStatuses: {
@@ -1602,37 +1166,6 @@ export default function OnboardingImportPage() {
     currentStep === 'resume' && resumeFileName ? RESUME_UPLOAD_META : STEP_META[currentStep];
 
   // ─── Status badge helper ───────────────────────────────────────
-  const StatusBadge = ({
-    status,
-    message,
-  }: {
-    status: ImportStatus['status'];
-    message?: string;
-  }) => {
-    if (status === 'success' || status === 'added') {
-      return (
-        <span className={ONBOARDING_SUCCESS_PILL}>
-          <CheckCircle2 className="h-3 w-3" />
-          {status === 'added' ? 'Added' : message || 'Done'}
-        </span>
-      );
-    }
-    if (status === 'importing') {
-      return (
-        <span className={ONBOARDING_SUCCESS_PILL}>
-          <Loader2 className="h-3 w-3 animate-spin" /> Importing...
-        </span>
-      );
-    }
-    if (status === 'error') {
-      return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2.5 py-0.5 text-xs font-medium text-destructive">
-          <AlertCircle className="h-3 w-3" /> {message || 'Error'}
-        </span>
-      );
-    }
-    return null;
-  };
 
   // ─── Loading state ─────────────────────────────────────────────
   if (isCheckingProfile) {
@@ -1659,7 +1192,9 @@ export default function OnboardingImportPage() {
         />
       </div>
 
-      <div className={ONBOARDING_PAGE_SHELL}>
+      <div
+        className={currentStep === 'connect' ? ONBOARDING_PAGE_SHELL_WIDE : ONBOARDING_PAGE_SHELL}
+      >
         {/* Step indicator — segmented track with current-step label */}
         <div className={ONBOARDING_STEP_TRACK}>
           <div className="flex items-center gap-1.5" role="list" aria-label="Onboarding steps">
@@ -2001,647 +1536,26 @@ export default function OnboardingImportPage() {
               </motion.div>
             )}
 
-            {/* ─────────────── STEP 3: CONNECT ACCOUNTS ─────────────── */}
-            {currentStep === 'accounts' && (
+            {/* ─────────────── STEP 3: CONNECT PROFILES (constellation) ─────────────── */}
+            {currentStep === 'connect' && (
               <motion.div
-                key="step-accounts"
+                key="step-connect"
                 initial={{ opacity: 0, x: 40 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -40 }}
                 transition={{ duration: 0.3 }}
-                className="space-y-5"
+                className="flex min-h-0 flex-1 flex-col"
               >
-                {/* LinkedIn */}
-                <div className={`${ONBOARDING_SURFACE_PAD} ${ONBOARDING_SURFACE} min-h-[11.5rem]`}>
-                  <div className="flex items-start gap-4">
-                    <div className={ONBOARDING_ICON_WELL}>
-                      <Linkedin className="h-5 w-5 text-foreground" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <h3 className={ONBOARDING_CARD_TITLE}>LinkedIn</h3>
-                          <p className={`mt-0.5 ${ONBOARDING_CARD_DESCRIPTION}`}>
-                            Connect your account, or paste a profile link / username
-                          </p>
-                        </div>
-                        {(connectedLinkedin || imports.linkedin.status === 'success') && (
-                          <StatusBadge
-                            status={
-                              imports.linkedin.status === 'idle'
-                                ? 'success'
-                                : imports.linkedin.status
-                            }
-                            message={linkedinName || 'Connected'}
-                          />
-                        )}
-                      </div>
-
-                      {connectedLinkedin ? (
-                        <div className="mt-4 flex items-center gap-2">
-                          <div className="flex items-center gap-2">
-                            {linkedinAvatarUrl && (
-                              <div className="relative h-7 w-7 overflow-hidden rounded-full ring-1 ring-border/50">
-                                <Image
-                                  src={linkedinAvatarUrl}
-                                  alt=""
-                                  fill
-                                  className="object-cover"
-                                  unoptimized
-                                />
-                              </div>
-                            )}
-                            <span className="text-sm text-muted-foreground">{linkedinName}</span>
-                          </div>
-                          <div className="ml-auto flex items-center gap-1.5">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 text-xs"
-                              onClick={() => handleLinkedInImport()}
-                              disabled={imports.linkedin.status === 'importing'}
-                            >
-                              {imports.linkedin.status === 'importing' ? (
-                                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                              ) : (
-                                <Upload className="mr-1 h-3 w-3" />
-                              )}
-                              {imports.linkedin.status === 'success' ? 'Refresh' : 'Import'}
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 text-xs text-muted-foreground hover:text-destructive"
-                              onClick={handleLinkedInDisconnect}
-                              disabled={linkedinDisconnecting}
-                            >
-                              {linkedinDisconnecting ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : (
-                                <X className="h-3 w-3" />
-                              )}
-                            </Button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="mt-4 space-y-3">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={handleLinkedInConnect}
-                            disabled={linkedinConnecting}
-                            className="gap-1.5"
-                          >
-                            {linkedinConnecting ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <Linkedin className="h-3.5 w-3.5" />
-                            )}
-                            {linkedinConnecting ? 'Connecting...' : 'Connect LinkedIn'}
-                          </Button>
-                          {imports.linkedin.status === 'success' || importedData.linkedin ? (
-                            <div className="rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5">
-                              <div className="flex items-center gap-2">
-                                {linkedinAvatarUrl ? (
-                                  <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full ring-1 ring-border/50">
-                                    <Image
-                                      src={linkedinAvatarUrl}
-                                      alt=""
-                                      fill
-                                      className="object-cover"
-                                      unoptimized
-                                    />
-                                  </div>
-                                ) : (
-                                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-background ring-1 ring-border/50">
-                                    <Linkedin className="h-3.5 w-3.5 text-foreground" />
-                                  </div>
-                                )}
-                                <div className="min-w-0 flex-1">
-                                  <p className="truncate text-sm font-medium text-foreground">
-                                    {linkedinName || 'LinkedIn profile'}
-                                  </p>
-                                  <p className="truncate text-xs text-muted-foreground">
-                                    {linkedinHeadline ||
-                                      imports.linkedin.message ||
-                                      'Profile imported'}
-                                  </p>
-                                </div>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 shrink-0 text-xs text-muted-foreground hover:text-destructive"
-                                  onClick={() => {
-                                    setLinkedinProfileInput('');
-                                    setImportedData((prev) => {
-                                      const next = { ...prev };
-                                      delete next.linkedin;
-                                      return next;
-                                    });
-                                    updateImportStatus('linkedin', {
-                                      status: 'idle',
-                                      message: undefined,
-                                      itemsImported: undefined,
-                                    });
-                                  }}
-                                >
-                                  <X className="h-3 w-3" />
-                                </Button>
-                              </div>
-                            </div>
-                          ) : (
-                            <>
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <span className="h-px flex-1 bg-border/70" />
-                                <span>or paste profile link</span>
-                                <span className="h-px flex-1 bg-border/70" />
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Input
-                                  placeholder="linkedin.com/in/you or username"
-                                  value={linkedinProfileInput}
-                                  onChange={(e) => setLinkedinProfileInput(e.target.value)}
-                                  className="h-9 text-sm"
-                                  onKeyDown={(e) =>
-                                    e.key === 'Enter' && handleLinkedInImport(linkedinProfileInput)
-                                  }
-                                />
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleLinkedInImport(linkedinProfileInput)}
-                                  disabled={
-                                    imports.linkedin.status === 'importing' ||
-                                    !linkedinProfileInput.trim()
-                                  }
-                                  className="shrink-0"
-                                >
-                                  {imports.linkedin.status === 'importing' ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    'Import'
-                                  )}
-                                </Button>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      )}
-
-                      {linkedinError && (
-                        <p className="mt-2 text-xs text-destructive">{linkedinError}</p>
-                      )}
-                      {imports.linkedin.status === 'error' && imports.linkedin.message && (
-                        <p className="mt-2 text-xs text-destructive">{imports.linkedin.message}</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* GitHub */}
-                <div className={`${ONBOARDING_SURFACE_PAD} ${ONBOARDING_SURFACE} min-h-[11.5rem]`}>
-                  <div className="flex items-start gap-4">
-                    <div className={ONBOARDING_ICON_WELL}>
-                      <Github className="h-5 w-5 text-foreground" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <h3 className={ONBOARDING_CARD_TITLE}>GitHub</h3>
-                          <p className={`mt-0.5 ${ONBOARDING_CARD_DESCRIPTION}`}>
-                            Connect your account, or paste a profile link / username
-                          </p>
-                        </div>
-                        {(connectedGithub || imports.github.status === 'success') && (
-                          <StatusBadge
-                            status={
-                              imports.github.status === 'idle' ? 'success' : imports.github.status
-                            }
-                            message={
-                              githubDisplayUsername
-                                ? `@${githubDisplayUsername}`
-                                : githubUsername
-                                  ? `@${extractGitHubUsername(githubUsername) || githubUsername}`
-                                  : 'Imported'
-                            }
-                          />
-                        )}
-                      </div>
-
-                      {connectedGithub ? (
-                        <div className="mt-4 flex items-center gap-2">
-                          <div className="flex items-center gap-2">
-                            {githubAvatarUrl && (
-                              <div className="relative h-7 w-7 overflow-hidden rounded-full ring-1 ring-border/50">
-                                <Image
-                                  src={githubAvatarUrl}
-                                  alt=""
-                                  fill
-                                  className="object-cover"
-                                  unoptimized
-                                />
-                              </div>
-                            )}
-                            <span className="text-sm text-muted-foreground">
-                              @{githubDisplayUsername}
-                            </span>
-                          </div>
-                          <div className="ml-auto flex items-center gap-1.5">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 text-xs"
-                              onClick={() =>
-                                githubDisplayUsername && handleGitHubImport(githubDisplayUsername)
-                              }
-                              disabled={imports.github.status === 'importing'}
-                            >
-                              {imports.github.status === 'importing' ? (
-                                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                              ) : (
-                                <Upload className="mr-1 h-3 w-3" />
-                              )}
-                              {imports.github.status === 'success' ? 'Refresh' : 'Import'}
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 text-xs text-muted-foreground hover:text-destructive"
-                              onClick={handleGitHubDisconnect}
-                              disabled={githubDisconnecting}
-                            >
-                              {githubDisconnecting ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : (
-                                <X className="h-3 w-3" />
-                              )}
-                            </Button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="mt-4 space-y-3">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={handleGitHubConnect}
-                            disabled={githubConnecting}
-                            className="gap-1.5"
-                          >
-                            {githubConnecting ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <Github className="h-3.5 w-3.5" />
-                            )}
-                            {githubConnecting ? 'Connecting...' : 'Connect GitHub'}
-                          </Button>
-                          {imports.github.status === 'success' || importedData.github ? (
-                            <div className="rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5">
-                              <div className="flex items-center gap-2">
-                                {githubAvatarUrl ? (
-                                  <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full ring-1 ring-border/50">
-                                    <Image
-                                      src={githubAvatarUrl}
-                                      alt=""
-                                      fill
-                                      className="object-cover"
-                                      unoptimized
-                                    />
-                                  </div>
-                                ) : (
-                                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-background ring-1 ring-border/50">
-                                    <Github className="h-3.5 w-3.5 text-foreground" />
-                                  </div>
-                                )}
-                                <div className="min-w-0 flex-1">
-                                  <p className="truncate text-sm font-medium text-foreground">
-                                    @{githubDisplayUsername || githubUsername}
-                                  </p>
-                                  {imports.github.message && (
-                                    <p className="truncate text-xs text-muted-foreground">
-                                      {imports.github.message}
-                                    </p>
-                                  )}
-                                </div>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 shrink-0 text-xs text-muted-foreground hover:text-destructive"
-                                  onClick={() => {
-                                    setGithubUsername('');
-                                    setImportedData((prev) => {
-                                      const next = { ...prev };
-                                      delete next.github;
-                                      return next;
-                                    });
-                                    updateImportStatus('github', {
-                                      status: 'idle',
-                                      message: undefined,
-                                      itemsImported: undefined,
-                                    });
-                                  }}
-                                >
-                                  <X className="h-3 w-3" />
-                                </Button>
-                              </div>
-                            </div>
-                          ) : (
-                            <>
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <span className="h-px flex-1 bg-border/70" />
-                                <span>or paste profile link</span>
-                                <span className="h-px flex-1 bg-border/70" />
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Input
-                                  placeholder="github.com/you or username"
-                                  value={githubUsername}
-                                  onChange={(e) => setGithubUsername(e.target.value)}
-                                  className="h-9 text-sm"
-                                  onKeyDown={(e) =>
-                                    e.key === 'Enter' && handleGitHubImport(githubUsername)
-                                  }
-                                />
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleGitHubImport(githubUsername)}
-                                  disabled={
-                                    imports.github.status === 'importing' || !githubUsername.trim()
-                                  }
-                                  className="shrink-0"
-                                >
-                                  {imports.github.status === 'importing' ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    'Import'
-                                  )}
-                                </Button>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      )}
-
-                      {githubError && (
-                        <p className="mt-2 text-xs text-destructive">{githubError}</p>
-                      )}
-                      {imports.github.status === 'error' && imports.github.message && (
-                        <p className="mt-2 text-xs text-destructive">{imports.github.message}</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-
-            {/* ─────────────── STEP 4: ADDITIONAL PLATFORMS ─────────────── */}
-            {currentStep === 'platforms' && (
-              <motion.div
-                key="step-platforms"
-                initial={{ opacity: 0, x: 40 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -40 }}
-                transition={{ duration: 0.3 }}
-                className="space-y-4"
-              >
-                {/* Personal portfolio */}
-                <div className={`${ONBOARDING_SURFACE_PAD} ${ONBOARDING_SURFACE}`}>
-                  <div className="flex items-start gap-4">
-                    <div className={ONBOARDING_ICON_WELL}>
-                      <Globe className="h-5 w-5 text-foreground" />
-                    </div>
-                    <div className="flex-1">
-                      <h3 className={ONBOARDING_CARD_TITLE}>Personal portfolio</h3>
-                      <p className={`mt-0.5 ${ONBOARDING_CARD_DESCRIPTION}`}>
-                        Add your website or portfolio URL
-                      </p>
-                      <div className="mt-3">
-                        <Input
-                          placeholder="https://yoursite.com"
-                          value={portfolioUrl}
-                          onChange={(e) => setPortfolioUrl(e.target.value)}
-                          className="h-9 text-sm"
-                          inputMode="url"
-                          autoComplete="url"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* YouTube */}
-                <div className={`${ONBOARDING_SURFACE_PAD} ${ONBOARDING_SURFACE}`}>
-                  <div className="flex items-start gap-4">
-                    <div className={ONBOARDING_ICON_WELL}>
-                      <YouTubeIcon className="h-5 w-5" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <h3 className={ONBOARDING_CARD_TITLE}>YouTube</h3>
-                        <StatusBadge
-                          status={imports.youtube.status}
-                          message={imports.youtube.message}
-                        />
-                      </div>
-                      <p className={`mt-0.5 ${ONBOARDING_CARD_DESCRIPTION}`}>
-                        Import your latest videos and channel info
-                      </p>
-                      <div className="mt-3 flex items-center gap-2">
-                        <Input
-                          placeholder="@channel or channel URL"
-                          value={youtubeChannel}
-                          onChange={(e) => setYoutubeChannel(e.target.value)}
-                          className="h-9 text-sm"
-                          onKeyDown={(e) => e.key === 'Enter' && handleYouTubeImport()}
-                        />
-                        <Button
-                          size="sm"
-                          onClick={handleYouTubeImport}
-                          disabled={
-                            imports.youtube.status === 'importing' || !youtubeChannel.trim()
-                          }
-                          className="shrink-0"
-                        >
-                          {imports.youtube.status === 'importing' ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            'Import'
-                          )}
-                        </Button>
-                      </div>
-                      {imports.youtube.status === 'error' && imports.youtube.message && (
-                        <p className="mt-2 flex items-center gap-1 text-xs text-destructive">
-                          <AlertCircle className="h-3 w-3 shrink-0" />
-                          {imports.youtube.message}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Medium */}
-                <div className={`${ONBOARDING_SURFACE_PAD} ${ONBOARDING_SURFACE}`}>
-                  <div className="flex items-start gap-4">
-                    <div className={ONBOARDING_ICON_WELL}>
-                      <MediumIcon className="h-5 w-5" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <h3 className={ONBOARDING_CARD_TITLE}>Medium</h3>
-                        <StatusBadge
-                          status={imports.medium.status}
-                          message={imports.medium.message}
-                        />
-                      </div>
-                      <p className={`mt-0.5 ${ONBOARDING_CARD_DESCRIPTION}`}>
-                        Import your published articles and blog posts
-                      </p>
-                      <div className="mt-3 flex items-center gap-2">
-                        <Input
-                          placeholder="@username or medium.com/@username"
-                          value={mediumUsername}
-                          onChange={(e) => setMediumUsername(e.target.value)}
-                          className="h-9 text-sm"
-                          onKeyDown={(e) => e.key === 'Enter' && handleMediumImport()}
-                        />
-                        <Button
-                          size="sm"
-                          onClick={handleMediumImport}
-                          disabled={imports.medium.status === 'importing' || !mediumUsername.trim()}
-                          className="shrink-0"
-                        >
-                          {imports.medium.status === 'importing' ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            'Import'
-                          )}
-                        </Button>
-                      </div>
-                      {imports.medium.status === 'error' && imports.medium.message && (
-                        <p className="mt-2 flex items-center gap-1 text-xs text-destructive">
-                          <AlertCircle className="h-3 w-3 shrink-0" />
-                          {imports.medium.message}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Substack */}
-                <div className={`${ONBOARDING_SURFACE_PAD} ${ONBOARDING_SURFACE}`}>
-                  <div className="flex items-start gap-4">
-                    <div className={ONBOARDING_ICON_WELL}>
-                      <SubstackIcon className="h-5 w-5" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <h3 className={ONBOARDING_CARD_TITLE}>Substack</h3>
-                        <StatusBadge
-                          status={imports.substack.status}
-                          message={imports.substack.message}
-                        />
-                      </div>
-                      <p className={`mt-0.5 ${ONBOARDING_CARD_DESCRIPTION}`}>
-                        Import your newsletter posts and publications
-                      </p>
-                      <div className="mt-3 flex items-center gap-2">
-                        <Input
-                          placeholder="name or yourname.substack.com"
-                          value={substackUsername}
-                          onChange={(e) => setSubstackUsername(e.target.value)}
-                          className="h-9 text-sm"
-                          onKeyDown={(e) => e.key === 'Enter' && handleSubstackImport()}
-                        />
-                        <Button
-                          size="sm"
-                          onClick={handleSubstackImport}
-                          disabled={
-                            imports.substack.status === 'importing' || !substackUsername.trim()
-                          }
-                          className="shrink-0"
-                        >
-                          {imports.substack.status === 'importing' ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            'Import'
-                          )}
-                        </Button>
-                      </div>
-                      {imports.substack.status === 'error' && imports.substack.message && (
-                        <p className="mt-2 flex items-center gap-1 text-xs text-destructive">
-                          <AlertCircle className="h-3 w-3 shrink-0" />
-                          {imports.substack.message}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Links */}
-                <div className={`${ONBOARDING_SURFACE_PAD} ${ONBOARDING_SURFACE}`}>
-                  <div className="flex items-start gap-4">
-                    <div className={ONBOARDING_ICON_WELL}>
-                      <Link2 className="h-5 w-5 text-foreground" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <h3 className={ONBOARDING_CARD_TITLE}>Custom Links</h3>
-                        <StatusBadge
-                          status={imports.links.status}
-                          message={imports.links.message}
-                        />
-                      </div>
-                      <p className={`mt-0.5 ${ONBOARDING_CARD_DESCRIPTION}`}>
-                        Add any other website or social link
-                      </p>
-                      <div className="mt-3 flex items-center gap-2">
-                        <Input
-                          placeholder="https://..."
-                          value={linkInput}
-                          onChange={(e) => setLinkInput(e.target.value)}
-                          className="h-9 text-sm"
-                          onKeyDown={(e) => e.key === 'Enter' && handleAddLink()}
-                        />
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={handleAddLink}
-                          className="shrink-0"
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      {linkUrls.length > 0 && (
-                        <div className="mt-2.5 space-y-1.5">
-                          {linkUrls.map((url) => (
-                            <div
-                              key={url}
-                              className="flex items-center gap-2 rounded-xl bg-muted/40 px-3 py-1.5 text-xs"
-                            >
-                              <Link2 className="h-3 w-3 shrink-0 text-muted-foreground" />
-                              <span className="flex-1 truncate text-muted-foreground">{url}</span>
-                              <button
-                                onClick={() => handleRemoveLink(url)}
-                                className="shrink-0 text-muted-foreground/40 hover:text-destructive"
-                              >
-                                <X className="h-3 w-3" />
-                              </button>
-                            </div>
-                          ))}
-                          <Button
-                            size="sm"
-                            onClick={handleLinksImport}
-                            disabled={imports.links.status === 'importing'}
-                            className="mt-2 w-full"
-                          >
-                            {imports.links.status === 'importing' ? (
-                              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                            ) : null}
-                            Import {linkUrls.length} link{linkUrls.length !== 1 ? 's' : ''}
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                <ConstellationField
+                  importPlatform={handleConstellationImport}
+                  importOAuth={handleConstellationOAuth}
+                  onBeforeOAuthRedirect={saveImportState}
+                  oauthReady={hasRestoredPersistedState && currentStep === 'connect'}
+                  initialConnected={constellationConnected}
+                  onHasActionChange={setConstellationHasAction}
+                  onPlatformConnected={handleConstellationConnected}
+                  onPlatformDisconnected={handleConstellationDisconnected}
+                />
               </motion.div>
             )}
           </AnimatePresence>

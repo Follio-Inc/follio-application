@@ -215,6 +215,22 @@ interface ReviewedData {
     platformIcon?: string;
     source?: string;
   }>;
+  /** YouTube videos from channel import */
+  youtubeVideos?: Array<{
+    videoId: string;
+    title: string;
+    description?: string;
+    url: string;
+    thumbnail?: string;
+    channelId?: string;
+    channelTitle?: string;
+    publishedAt?: string;
+    duration?: string;
+    viewCount?: number;
+    likeCount?: number;
+    commentCount?: number;
+    tags?: string[];
+  }>;
   /** Aggregate GitHub profile (stars, languages, orgs) from onboarding import */
   githubProfile?: {
     username: string;
@@ -1287,6 +1303,82 @@ async function handleReviewedData(
       } catch (err) {
         console.error('[handleReviewedData] Failed to save blog post:', post.url, err);
       }
+    }
+  }
+
+  // Persist YouTube videos from onboarding constellation import
+  if (reviewedData.youtubeVideos?.length) {
+    console.log('[handleReviewedData] Creating YouTube videos:', reviewedData.youtubeVideos.length);
+    for (const video of reviewedData.youtubeVideos) {
+      if (!video.videoId || !video.title || !video.url) continue;
+      try {
+        await db.youTubeVideo.upsert({
+          where: {
+            profileId_videoId: { profileId, videoId: video.videoId },
+          },
+          create: {
+            profileId,
+            videoId: video.videoId,
+            title: video.title,
+            description: video.description,
+            url: video.url,
+            thumbnail: video.thumbnail,
+            channelId: video.channelId,
+            channelTitle: video.channelTitle,
+            publishedAt: video.publishedAt ? new Date(video.publishedAt) : null,
+            duration: video.duration,
+            viewCount: video.viewCount ?? 0,
+            likeCount: video.likeCount ?? 0,
+            commentCount: video.commentCount ?? 0,
+            tags: video.tags || [],
+            source: 'YOUTUBE',
+            isVisible: true,
+            showOnPortfolio: true,
+          },
+          update: {
+            title: video.title,
+            description: video.description,
+            thumbnail: video.thumbnail,
+            viewCount: video.viewCount ?? 0,
+            likeCount: video.likeCount ?? 0,
+            commentCount: video.commentCount ?? 0,
+            duration: video.duration,
+          },
+        });
+      } catch (err) {
+        console.error('[handleReviewedData] Failed to save YouTube video:', video.videoId, err);
+      }
+    }
+
+    try {
+      await db.dataSourceConnection.upsert({
+        where: {
+          profileId_source: { profileId, source: 'YOUTUBE' },
+        },
+        create: {
+          profileId,
+          source: 'YOUTUBE',
+          status: 'CONNECTED',
+          lastImportedAt: new Date(),
+          itemsImported: reviewedData.youtubeVideos.length,
+          metadata: {
+            channelId: reviewedData.youtubeVideos[0]?.channelId,
+            channelTitle: reviewedData.youtubeVideos[0]?.channelTitle,
+          },
+        },
+        update: {
+          status: 'CONNECTED',
+          lastImportedAt: new Date(),
+          itemsImported: reviewedData.youtubeVideos.length,
+          importError: null,
+          metadata: {
+            channelId: reviewedData.youtubeVideos[0]?.channelId,
+            channelTitle: reviewedData.youtubeVideos[0]?.channelTitle,
+          },
+        },
+      });
+    } catch (err) {
+      console.error('[handleReviewedData] Failed to upsert YouTube data source:', err);
     }
   }
 
