@@ -47,8 +47,10 @@ import { isPortfolioEnabled } from '@/lib/features';
    Motion primitives
    ═══════════════════════════════════════════════════════════════════════════ */
 
+// Keep opacity at 1 in both states so SSR / crawlers / OAuth reviewers always
+// see page copy. Animate position only.
 const FADE_UP: Variants = {
-  hidden: { opacity: 0, y: 16 },
+  hidden: { opacity: 1, y: 16 },
   visible: { opacity: 1, y: 0 },
 };
 
@@ -990,52 +992,27 @@ function Hero() {
   // Start fading at 80px (ignores micro-scrolls), fully gone by 160px
   const scrollIndicatorOpacity = useTransform(scrollY, [80, 160], [1, 0]);
 
+  // Hero copy must be visible in the first HTML paint. Google Auth Platform
+  // brand review (and other crawlers) reject homepages that appear blank when
+  // Framer Motion SSR-inlines opacity:0 on the purpose text.
+  const purpose = isPortfolioEnabled()
+    ? 'Follio is a web app for job seekers and professionals to build one living profile and share it as a resume, portfolio, or quick snapshot through a single link — with clean formatting, viewer-adaptive presentation, and AI assistance that helps answer recruiter questions and suggest skills based on market trends.'
+    : 'Follio is a web app for job seekers and professionals to build a living resume you can share, refine, and export — with clean formatting and AI assistance that helps answer recruiter questions and suggest skills based on market trends.';
+
   return (
     <section className="relative flex min-h-[calc(100svh-3.5rem)] items-center overflow-hidden border-b border-border/60">
       <div className="mx-auto w-full max-w-5xl px-5 pb-16 pt-8 text-left sm:px-6 sm:pb-24 sm:pt-16 lg:px-8">
-        <motion.p
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="text-eyebrow"
-        >
-          The living resume
-        </motion.p>
+        <p className="text-eyebrow">The living resume</p>
 
-        <motion.h1
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.06 }}
-          className="text-display mt-4 max-w-3xl text-balance text-[2.4rem] text-foreground sm:mt-5 sm:text-[3.5rem] lg:text-[4rem]"
-        >
+        <h1 className="text-display mt-4 max-w-3xl text-balance text-[2.4rem] text-foreground sm:mt-5 sm:text-[3.5rem] lg:text-[4rem]">
           A resume that does things a PDF never could.
-        </motion.h1>
+        </h1>
 
-        <motion.p
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.14 }}
-          className="mt-5 max-w-2xl text-pretty text-[15px] leading-7 text-muted-foreground sm:mt-6 sm:text-lg sm:leading-8"
-        >
-          {/* Mobile: a tight, scannable promise. Desktop: the full positioning. */}
-          <span className="sm:hidden">
-            {isPortfolioEnabled()
-              ? 'Build one living profile and share it as a resume, portfolio, or quick snapshot — all from a single link.'
-              : 'Build a living resume you can share, refine, and export — all from a single link.'}
-          </span>
-          <span className="hidden sm:inline">
-            {isPortfolioEnabled()
-              ? 'Follio is a web app for job seekers and professionals to build one living profile and share it as a resume, portfolio, or quick snapshot through a single link, with clean formatting, viewer-adaptive presentation, and AI assistance that helps answer recruiter questions and suggest skills based on market trends.'
-              : 'Follio is a web app for job seekers and professionals to build a living resume you can share, refine, and export — with clean formatting and AI assistance that helps answer recruiter questions and suggest skills based on market trends.'}
-          </span>
-        </motion.p>
+        <p className="mt-5 max-w-2xl text-pretty text-[15px] leading-7 text-muted-foreground sm:mt-6 sm:text-lg sm:leading-8">
+          {purpose}
+        </p>
 
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.22 }}
-          className="mt-9 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:gap-4"
-        >
+        <div className="mt-9 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:gap-4">
           <HeroCTA />
           <Link
             href="/sign-in"
@@ -1043,7 +1020,7 @@ function Hero() {
           >
             Sign in
           </Link>
-        </motion.div>
+        </div>
       </div>
 
       <ScrollIndicator opacity={scrollIndicatorOpacity} />

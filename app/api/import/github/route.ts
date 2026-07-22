@@ -1,3 +1,4 @@
+import { extractGitHubUsername, isValidGitHubUsername } from '@/lib/import/profile-url';
 import { getEnhancedGitHubData } from '@/services/github-enhanced.service';
 import { saveEnhancedGitHubToProfile } from '@/services/import/github-enhanced.service';
 import { auth } from '@clerk/nextjs/server';
@@ -12,6 +13,8 @@ import { NextRequest, NextResponse } from 'next/server';
  * - Organization memberships
  * - Language statistics (percentage-based)
  * - Repository topics as skills
+ *
+ * Accepts a bare username, @username, or full github.com profile URL.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -22,30 +25,16 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    let { username } = body;
     const { accessToken, saveToProfile } = body;
+    const rawUsername = typeof body.username === 'string' ? body.username : '';
 
-    if (!username) {
+    if (!rawUsername.trim()) {
       return NextResponse.json({ error: 'GitHub username is required' }, { status: 400 });
     }
 
-    // Extract username from full URL (e.g. https://github.com/username or github.com/username/repo)
-    const trimmed = username.trim();
-    try {
-      const url = new URL(trimmed.startsWith('http') ? trimmed : `https://${trimmed}`);
-      if (url.hostname.includes('github.com')) {
-        const pathParts = url.pathname.split('/').filter(Boolean);
-        if (pathParts.length > 0) {
-          username = pathParts[0];
-        }
-      }
-    } catch {
-      // Not a URL — strip @ prefix if present
-      username = trimmed.replace(/^@/, '');
-    }
+    const username = extractGitHubUsername(rawUsername);
 
-    // Validate username format
-    if (!/^[a-z\d](?:[a-z\d]|-(?=[a-z\d])){0,38}$/i.test(username)) {
+    if (!isValidGitHubUsername(username)) {
       return NextResponse.json({ error: 'Invalid GitHub username format' }, { status: 400 });
     }
 

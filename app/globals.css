@@ -407,7 +407,7 @@
   /* Paper container - the document feel */
   .resume-paper {
     @apply mx-auto bg-white text-gray-900;
-    max-width: 816px; /* 8.5 inches at 96dpi */
+    max-width: 816px; /* 8.5 inches at 96dpi — Letter / continuous */
     min-height: 1056px; /* 11 inches at 96dpi — full US Letter page */
     padding: 48px 56px;
     font-family: var(--rd-font-family, 'Georgia', 'Times New Roman', Times, serif);
@@ -420,6 +420,82 @@
       0 1px 3px rgba(0, 0, 0, 0.08),
       0 8px 30px rgba(0, 0, 0, 0.06);
     border-radius: 2px;
+  }
+
+  /* A4 live view — ISO A4 at 96dpi (210mm × 297mm) */
+  .resume-paper-wrapper[data-page-layout='a4'] .resume-paper {
+    max-width: 794px;
+    min-height: 1123px;
+  }
+
+  /* Paged preview: stack of Letter-height windows with gaps between pages.
+     Paper keeps its normal padding (first-page top unchanged). Page frames
+     only add break insets: bottom on every page, top on page 2+. */
+  .resume-paged-stack {
+    position: relative;
+    width: 100%;
+    max-width: var(--resume-page-width, 816px);
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .resume-paged-measure {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    visibility: hidden;
+    pointer-events: none;
+    z-index: -1;
+  }
+
+  .resume-paged-page {
+    position: relative;
+    box-sizing: border-box;
+    width: 100%;
+    height: var(--resume-page-height, 1056px);
+    padding-top: var(--resume-page-margin-y, 48px);
+    padding-bottom: var(--resume-page-margin-y, 48px);
+    overflow: hidden;
+    border-radius: 2px;
+    box-shadow:
+      0 1px 3px rgba(0, 0, 0, 0.08),
+      0 8px 30px rgba(0, 0, 0, 0.06);
+    background: white;
+  }
+
+  /* First page: no extra top inset — paper padding already provides it */
+  .resume-paged-page--first {
+    padding-top: 0;
+  }
+
+  .resume-paged-page-clip {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .resume-paged-page-inner {
+    width: 100%;
+  }
+
+  /* Shadow lives on the page frame so slices don't double-shadow */
+  .resume-paged-stack .resume-paper {
+    box-shadow: none;
+    border-radius: 0;
+    min-height: 0;
+    max-width: none;
+    width: 100%;
+    background: transparent;
+  }
+
+  .resume-paper-wrapper[data-resume-theme='dark'] .resume-paged-page {
+    background: #111827; /* gray-900 */
+    box-shadow:
+      0 1px 3px rgba(0, 0, 0, 0.3),
+      0 8px 30px rgba(0, 0, 0, 0.2),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.05);
   }
 
   /* Dark mode - inverted paper look */
@@ -435,6 +511,74 @@
   .resume-header {
     text-align: var(--rd-header-alignment, center);
     margin-bottom: var(--rd-header-margin-bottom, 24px);
+  }
+
+  /* Photo compositions — driven by data-header-composition from headerPhotoLayout */
+  .resume-header-identity {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .resume-header[data-header-composition='photo-left'] {
+    text-align: left;
+  }
+
+  .resume-header[data-header-composition='photo-left'] .resume-header-identity {
+    flex-direction: row;
+  }
+
+  .resume-header[data-header-composition='photo-left'] .resume-header-text {
+    flex: 1;
+    min-width: 0;
+    text-align: left;
+  }
+
+  /* Text left, photo pinned to the right of the header row */
+  .resume-header[data-header-composition='photo-right'] {
+    text-align: left;
+  }
+
+  .resume-header[data-header-composition='photo-right'] .resume-header-identity {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+
+  .resume-header[data-header-composition='photo-right'] .resume-header-text {
+    flex: 1;
+    min-width: 0;
+    text-align: left;
+  }
+
+  .resume-header[data-header-composition='photo-above'] {
+    text-align: center;
+  }
+
+  .resume-header[data-header-composition='photo-above'] .resume-header-identity {
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .resume-header[data-header-composition='photo-above-left'] {
+    text-align: left;
+  }
+
+  .resume-header[data-header-composition='photo-above-left'] .resume-header-identity {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .resume-header-photo {
+    width: var(--rd-photo-size, 80px);
+    height: var(--rd-photo-size, 80px);
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
   }
 
   .resume-name {
@@ -1123,8 +1267,8 @@
   }
 
   .resume-sleek-photo {
-    width: 64px;
-    height: 64px;
+    width: var(--rd-photo-size, 64px);
+    height: var(--rd-photo-size, 64px);
     border-radius: 50%;
     object-fit: cover;
     flex-shrink: 0;
@@ -1335,8 +1479,8 @@
   }
 
   .resume-studio-photo {
-    width: 64px;
-    height: 64px;
+    width: var(--rd-photo-size, 64px);
+    height: var(--rd-photo-size, 64px);
     border-radius: 4px;
     object-fit: cover;
     flex-shrink: 0;
@@ -1790,6 +1934,18 @@
     border-radius: 0 !important;
     background: white !important;
     color: black !important;
+  }
+
+  /* Paged on-screen preview → print the full continuous source once */
+  .resume-paged-page {
+    display: none !important;
+  }
+
+  .resume-paged-measure {
+    position: static !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+    z-index: auto !important;
   }
 
   /* Ensure proper page breaks */

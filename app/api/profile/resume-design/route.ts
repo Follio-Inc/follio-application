@@ -13,6 +13,8 @@ import {
   type ResumeDividerStyle,
   type ResumeFontFamily,
   type ResumeHeaderAlignment,
+  type ResumeHeaderPhotoLayout,
+  type ResumePageLayout,
   type ResumeTextStyle,
 } from '@/types';
 
@@ -85,6 +87,13 @@ function validateTextStyleField(
 
 const VALID_HEADER_ALIGNMENTS = new Set<ResumeHeaderAlignment>(['left', 'center', 'right']);
 
+const VALID_HEADER_PHOTO_LAYOUTS = new Set<ResumeHeaderPhotoLayout>([
+  'photo-left',
+  'photo-right',
+  'photo-above',
+  'photo-above-left',
+]);
+
 const VALID_DIVIDER_STYLES = new Set<ResumeDividerStyle>([
   'line',
   'double',
@@ -97,6 +106,10 @@ const VALID_DIVIDER_STYLES = new Set<ResumeDividerStyle>([
 const VALID_DENSITIES = new Set<ResumeDensity>(['compact', 'normal', 'relaxed']);
 
 const VALID_COLOR_THEMES = new Set<ResumeColorTheme>(['light', 'dark', 'system']);
+
+const VALID_PAGE_LAYOUTS = new Set<ResumePageLayout>(['continuous', 'a4', 'letter']);
+/** Accept legacy `paged` on write and normalize to `letter`. */
+const LEGACY_PAGE_LAYOUTS = new Set(['paged']);
 
 /** Validates a CSS hex color string (3-, 4-, 6-, or 8-digit). */
 function isValidHexColor(value: unknown): value is string {
@@ -165,6 +178,27 @@ function validateResumeDesign(body: unknown): {
       };
     }
     design.headerAlignment = raw.headerAlignment as ResumeHeaderAlignment;
+  }
+
+  // headerPhotoLayout
+  if (raw.headerPhotoLayout !== undefined) {
+    if (!VALID_HEADER_PHOTO_LAYOUTS.has(raw.headerPhotoLayout as ResumeHeaderPhotoLayout)) {
+      return {
+        valid: false,
+        data: null,
+        error: `headerPhotoLayout must be one of: ${[...VALID_HEADER_PHOTO_LAYOUTS].join(', ')}`,
+      };
+    }
+    design.headerPhotoLayout = raw.headerPhotoLayout as ResumeHeaderPhotoLayout;
+  }
+
+  // photoSize
+  if (raw.photoSize !== undefined) {
+    const size = Number(raw.photoSize);
+    if (isNaN(size) || size < 40 || size > 120) {
+      return { valid: false, data: null, error: 'photoSize must be a number between 40 and 120' };
+    }
+    design.photoSize = size;
   }
 
   // dividerStyle
@@ -265,6 +299,21 @@ function validateResumeDesign(body: unknown): {
       return { valid: false, data: null, error: 'justifyAll must be a boolean' };
     }
     design.justifyAll = raw.justifyAll;
+  }
+
+  // pageLayout
+  if (raw.pageLayout !== undefined) {
+    if (LEGACY_PAGE_LAYOUTS.has(raw.pageLayout as string)) {
+      design.pageLayout = 'letter';
+    } else if (!VALID_PAGE_LAYOUTS.has(raw.pageLayout as ResumePageLayout)) {
+      return {
+        valid: false,
+        data: null,
+        error: `pageLayout must be one of: ${[...VALID_PAGE_LAYOUTS].join(', ')}`,
+      };
+    } else {
+      design.pageLayout = raw.pageLayout as ResumePageLayout;
+    }
   }
 
   // templateId

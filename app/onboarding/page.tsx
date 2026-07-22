@@ -1,15 +1,14 @@
 import { redirect } from 'next/navigation';
 
 /**
- * Onboarding entry point - redirects to the new step-by-step flow
+ * Onboarding entry point - redirects to the import flow
  *
- * New flow:
+ * Flow:
  * 1. /onboarding/purpose - Select your main purpose (optional)
- * 2. /onboarding/import - Upload resume, connect GitHub, etc.
- * 3. /onboarding/review - Review and edit parsed data step by step
- * 4. /u/[handle] - View your completed profile
+ * 2. /onboarding/import - Upload resume, connect accounts, then create profile
+ * 3. /builder - Edit the resume (no separate review step)
  */
 export default function OnboardingPage() {
-  // Redirect to the new import flow (skipping purpose for now)
+  // Redirect to the import flow (skipping purpose for now)
   redirect('/onboarding/import');
 }

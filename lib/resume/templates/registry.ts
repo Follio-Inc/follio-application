@@ -3,6 +3,10 @@
  *
  * Content stays on Profile relations. Templates only change presentation via
  * `resumeDesign.templateId` (+ optional recommended design defaults on select).
+ *
+ * Photo visibility (`resumeShowPhoto`) is a Profile flag, not part of ResumeDesign.
+ * Each template declares `defaultShowPhoto` so Restore Defaults / template apply
+ * can sync photo on/off to match that template’s intended look.
  */
 
 import { RESUME_DESIGN_DEFAULTS, type ResumeDesign } from '@/types';
@@ -11,12 +15,19 @@ import { type ResumeTemplateId, type ResumeTemplateMeta } from './types';
 
 export const DEFAULT_RESUME_TEMPLATE_ID: ResumeTemplateId = 'classic';
 
+/**
+ * Per-template photo policy (product intent):
+ * - classic / lumen: ATS-first text headers → no photo
+ * - sleek / studio: identity headers designed around an avatar → photo on
+ * - atelier: editorial script header has no photo slot → no photo
+ */
 const TEMPLATES: Record<ResumeTemplateId, ResumeTemplateMeta> = {
   classic: {
     id: 'classic',
     name: 'Classic',
     description: 'Single-column ATS-friendly layout. Clean, centered, timeless.',
     tone: 'plain',
+    defaultShowPhoto: false,
     designDefaults: {
       fontFamily: 'georgia',
       nameFontFamily: 'georgia',
@@ -24,10 +35,12 @@ const TEMPLATES: Record<ResumeTemplateId, ResumeTemplateMeta> = {
       headingFontFamily: 'system',
       contactFontFamily: 'system',
       headerAlignment: 'center',
+      headerPhotoLayout: 'photo-left',
       dividerStyle: 'line',
       density: 'normal',
       headingColor: '#000000',
       accentColor: '#000000',
+      nameFontSize: 28,
       titleFontSize: 15,
       headingFontSize: 12,
       contactFontSize: 12,
@@ -44,6 +57,7 @@ const TEMPLATES: Record<ResumeTemplateId, ResumeTemplateMeta> = {
     description:
       'Single-column ATS-friendly layout. Instrument Sans, quiet spacing, modern elegance.',
     tone: 'plain',
+    defaultShowPhoto: false,
     designDefaults: {
       fontFamily: 'instrument-sans',
       nameFontFamily: 'instrument-sans',
@@ -51,6 +65,7 @@ const TEMPLATES: Record<ResumeTemplateId, ResumeTemplateMeta> = {
       headingFontFamily: 'instrument-sans',
       contactFontFamily: 'instrument-sans',
       headerAlignment: 'left',
+      headerPhotoLayout: 'photo-left',
       dividerStyle: 'line',
       density: 'normal',
       headingColor: '#171717',
@@ -71,6 +86,7 @@ const TEMPLATES: Record<ResumeTemplateId, ResumeTemplateMeta> = {
     name: 'Sleek',
     description: 'Recruiter-style two-column layout with a left label rail and airy typography.',
     tone: 'plain',
+    defaultShowPhoto: true,
     designDefaults: {
       fontFamily: 'lato',
       nameFontFamily: 'lato',
@@ -78,10 +94,13 @@ const TEMPLATES: Record<ResumeTemplateId, ResumeTemplateMeta> = {
       headingFontFamily: 'system',
       contactFontFamily: 'system',
       headerAlignment: 'left',
+      headerPhotoLayout: 'photo-left',
+      photoSize: 64,
       dividerStyle: 'line',
       density: 'normal',
       headingColor: '#1f2d3d',
       accentColor: '#8f9aa8',
+      nameFontSize: 28,
       titleFontSize: 14,
       headingFontSize: 11.5,
       contactFontSize: 11,
@@ -98,6 +117,7 @@ const TEMPLATES: Record<ResumeTemplateId, ResumeTemplateMeta> = {
     description:
       'Single-column layout with a teal header contact card, accent bar, and pill-style dates.',
     tone: 'accent',
+    defaultShowPhoto: true,
     designDefaults: {
       fontFamily: 'open-sans',
       nameFontFamily: 'open-sans',
@@ -105,10 +125,13 @@ const TEMPLATES: Record<ResumeTemplateId, ResumeTemplateMeta> = {
       headingFontFamily: 'system',
       contactFontFamily: 'open-sans',
       headerAlignment: 'left',
+      headerPhotoLayout: 'photo-left',
+      photoSize: 64,
       dividerStyle: 'line',
       density: 'normal',
       headingColor: '#1a1a1a',
       accentColor: '#7a9aa5',
+      nameFontSize: 28,
       titleFontSize: 13,
       headingFontSize: 13,
       contactFontSize: 12,
@@ -125,6 +148,7 @@ const TEMPLATES: Record<ResumeTemplateId, ResumeTemplateMeta> = {
     description:
       'Editorial two-column CV with script name, terracotta accents, skill dots, and a ruler footer.',
     tone: 'accent',
+    defaultShowPhoto: false,
     designDefaults: {
       fontFamily: 'garamond',
       nameFontFamily: 'great-vibes',
@@ -132,6 +156,7 @@ const TEMPLATES: Record<ResumeTemplateId, ResumeTemplateMeta> = {
       headingFontFamily: 'lato',
       contactFontFamily: 'lato',
       headerAlignment: 'left',
+      headerPhotoLayout: 'photo-left',
       dividerStyle: 'none',
       density: 'normal',
       headingColor: '#C25B42',
@@ -171,9 +196,17 @@ export function isValidResumeTemplateId(value: unknown): value is ResumeTemplate
   return typeof value === 'string' && value in TEMPLATES;
 }
 
+/** Whether this template’s default look includes a resume photo. */
+export function getTemplateDefaultShowPhoto(
+  templateId: ResumeTemplateId | string | null | undefined
+): boolean {
+  return getResumeTemplate(getResumeTemplateId(templateId)).defaultShowPhoto;
+}
+
 /**
  * Full design defaults for a template — used by "Restore Defaults".
  * Keeps the selected template; does not switch to the global classic defaults.
+ * Callers should also sync `resumeShowPhoto` via `getTemplateDefaultShowPhoto`.
  */
 export function buildDefaultDesignForTemplate(
   templateId: ResumeTemplateId | string | null | undefined
@@ -191,6 +224,7 @@ export function buildDefaultDesignForTemplate(
  * Build the next resumeDesign when switching templates.
  * Preserves user colors when they already differ from the previous template's
  * recommended accents; always sets templateId and applies typography/layout defaults.
+ * Callers should also sync `resumeShowPhoto` via `getTemplateDefaultShowPhoto`.
  */
 export function buildDesignForTemplateSwitch(
   current: ResumeDesign | null | undefined,
@@ -213,7 +247,7 @@ export function buildDesignForTemplateSwitch(
     ...preserved,
     ...nextMeta.designDefaults,
     templateId: nextTemplateId,
-    // Always keep explicit user theme / justify / sizes if set
+    // Always keep explicit user theme / justify / layout / sizes if set
     colorTheme: current?.colorTheme ?? nextMeta.designDefaults.colorTheme,
     fontSize: current?.fontSize ?? nextMeta.designDefaults.fontSize,
     nameFontSize: current?.nameFontSize ?? nextMeta.designDefaults.nameFontSize,
@@ -221,6 +255,7 @@ export function buildDesignForTemplateSwitch(
     headingFontSize: current?.headingFontSize ?? nextMeta.designDefaults.headingFontSize,
     contactFontSize: current?.contactFontSize ?? nextMeta.designDefaults.contactFontSize,
     justifyAll: current?.justifyAll ?? nextMeta.designDefaults.justifyAll,
+    pageLayout: current?.pageLayout ?? nextMeta.designDefaults.pageLayout,
     headingColor: headingMatchesPrev
       ? (nextMeta.designDefaults.headingColor ?? current?.headingColor)
       : current!.headingColor,

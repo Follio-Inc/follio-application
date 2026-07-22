@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
+import { ONBOARDING_CARD_DESCRIPTION, ONBOARDING_CARD_TITLE } from '@/lib/onboarding-ui';
 import { isPortfolioEnabled } from '@/lib/features';
 import { ONBOARDING_TEMPLATE_KEY } from '@/lib/portfolio/templates/onboarding';
 import { getAllTemplates, getDefaultTemplateId } from '@/lib/portfolio/templates/registry';
@@ -11,10 +12,9 @@ import { TemplateOptionCard, type TemplateOption } from './template-option-card'
 export { ONBOARDING_TEMPLATE_KEY };
 
 /**
- * Template chooser shown during onboarding. Self-managing: it persists the
- * selection to sessionStorage (writing the default on mount if unset) so the
- * choice survives the import → review → complete handoff without the host
- * component needing to thread state through.
+ * Template chooser for onboarding. Self-managing: persists the selection to
+ * sessionStorage (writing the default on mount if unset) so complete can read
+ * it without the host threading state.
  */
 export function OnboardingTemplateChoice() {
   const templates: TemplateOption[] = useMemo(
@@ -65,12 +65,12 @@ export function OnboardingTemplateChoice() {
   return (
     <div className="space-y-3 text-left">
       <div>
-        <h3 className="text-sm font-semibold">Pick a starting style</h3>
-        <p className="text-xs text-muted-foreground">
+        <h3 className={ONBOARDING_CARD_TITLE}>Pick a starting style</h3>
+        <p className={`mt-1 ${ONBOARDING_CARD_DESCRIPTION}`}>
           Choose a look for your portfolio. You can switch anytime from your dashboard.
         </p>
       </div>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {templates.map((template) => (
           <TemplateOptionCard
             key={template.id}

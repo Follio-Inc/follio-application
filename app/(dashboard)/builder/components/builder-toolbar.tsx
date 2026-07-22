@@ -10,6 +10,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useBuilderStore } from './builder-store-provider';
 import { DownloadDialog } from './download-dialog';
 import { ShareDialog } from './share-dialog';
+import { resolveResumePageLayout } from '@/lib/resume/page-layout';
 
 // ─── Types ────────────────────────────────────────────────────────
 
@@ -74,6 +75,7 @@ export function BuilderToolbar() {
           <DownloadDialog
             handle={handle}
             resumeTitle={resumeTitle}
+            resumePageLayout={resolveResumePageLayout(profile.resumeDesign)}
             onShareClick={() => setShareOpen(true)}
           />
 

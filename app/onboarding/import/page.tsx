@@ -13,7 +13,7 @@ import {
   Link2,
   Linkedin,
   Loader2,
-  Pencil,
+  Globe,
   Plus,
   RotateCcw,
   Trash2,
@@ -30,12 +30,45 @@ import Cropper from 'react-easy-crop';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
-import { OnboardingTemplateChoice } from '@/components/portfolio/onboarding-template-choice';
-import { isPortfolioEnabled } from '@/lib/features';
+import {
+  ResumeStartChoice,
+  type ResumeStartPath,
+} from '@/components/onboarding/resume-start-choice';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
 import { Spinner } from '@/components/ui/spinner';
+import { extractGitHubUsername, extractLinkedInSlug } from '@/lib/import/profile-url';
+import { hasImportStepAction, importStepNextLabel } from '@/lib/onboarding/step-action';
+import {
+  ONBOARDING_CARD_DESCRIPTION,
+  ONBOARDING_CARD_TITLE,
+  ONBOARDING_DROPZONE,
+  ONBOARDING_DROPZONE_ACTIVE,
+  ONBOARDING_FOOTER,
+  ONBOARDING_ICON_WELL,
+  ONBOARDING_MAIN,
+  ONBOARDING_PAGE_SHELL,
+  ONBOARDING_PAGE_SUBTITLE,
+  ONBOARDING_PAGE_TITLE,
+  ONBOARDING_STEP_HEADER,
+  ONBOARDING_STEP_TRACK,
+  ONBOARDING_SUCCESS_PILL,
+  ONBOARDING_SURFACE,
+  ONBOARDING_SURFACE_PAD,
+} from '@/lib/onboarding-ui';
+import { ONBOARDING_TEMPLATE_KEY } from '@/lib/portfolio/templates/onboarding';
+import { getDefaultTemplateId } from '@/lib/portfolio/templates/registry';
 import { fileToBase64, getBestResolutionImage, parsePhoneWithCountryCode } from '@/lib/utils';
 
 // ─── Storage Constants ────────────────────────────────────────────
@@ -86,18 +119,61 @@ const getPhotoFromIndexedDB = async (key: string): Promise<string | null> => {
   }
 };
 
-// ─── SVG Brand Icons ──────────────────────────────────────────────
-function FacebookIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-      <path
-        d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"
-        fill="#1877F2"
-      />
-    </svg>
-  );
-}
+const clearPhotosFromIndexedDB = async (): Promise<void> => {
+  try {
+    const db = await openPhotoDatabase();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(UPLOADED_PHOTO_STORE_NAME, 'readwrite');
+      const store = tx.objectStore(UPLOADED_PHOTO_STORE_NAME);
+      const req = store.clear();
+      req.onerror = () => reject(req.error);
+      req.onsuccess = () => resolve();
+    });
+  } catch {
+    // Ignore errors when clearing
+  }
+};
 
+const base64ToFile = async (base64: string, filename: string): Promise<File> => {
+  const response = await fetch(base64);
+  const blob = await response.blob();
+  return new File([blob], filename, { type: blob.type });
+};
+
+/** Compress an image for Clerk's upload size limit (target 512×512). */
+const compressImageForClerk = async (file: File): Promise<File> => {
+  return new Promise((resolve, reject) => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const img = new window.Image();
+
+    img.onload = () => {
+      const targetSize = 512;
+      canvas.width = targetSize;
+      canvas.height = targetSize;
+      if (!ctx) {
+        reject(new Error('No 2d context'));
+        return;
+      }
+      ctx.drawImage(img, 0, 0, targetSize, targetSize);
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            reject(new Error('Failed to compress image'));
+            return;
+          }
+          resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+        },
+        'image/jpeg',
+        0.85
+      );
+    };
+    img.onerror = () => reject(new Error('Failed to load image'));
+    img.src = URL.createObjectURL(file);
+  });
+};
+
+// ─── SVG Brand Icons ──────────────────────────────────────────────
 function MediumIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor">
@@ -129,15 +205,7 @@ function SubstackIcon({ className }: { className?: string }) {
 }
 
 // ─── Types ────────────────────────────────────────────────────────
-type ImportSource =
-  | 'resume'
-  | 'github'
-  | 'linkedin'
-  | 'facebook'
-  | 'medium'
-  | 'youtube'
-  | 'substack'
-  | 'links';
+type ImportSource = 'resume' | 'github' | 'linkedin' | 'medium' | 'youtube' | 'substack' | 'links';
 
 interface ImportStatus {
   source: ImportSource;
@@ -146,14 +214,14 @@ interface ImportStatus {
   itemsImported?: number;
 }
 
-type OnboardingStep = 'resume' | 'photo' | 'accounts' | 'platforms' | 'gallery' | 'review';
+type OnboardingStep = 'resume' | 'photo' | 'accounts' | 'platforms';
 
-const STEPS: OnboardingStep[] = ['resume', 'photo', 'accounts', 'platforms', 'gallery', 'review'];
+const STEPS: OnboardingStep[] = ['resume', 'photo', 'accounts', 'platforms'];
 
 const STEP_META: Record<OnboardingStep, { title: string; subtitle: string }> = {
   resume: {
-    title: 'Upload your resume',
-    subtitle: "We'll extract your experience, education, skills and more",
+    title: 'How do you want to start?',
+    subtitle: 'Upload an existing resume or build one from scratch',
   },
   photo: {
     title: 'Add a profile photo',
@@ -164,17 +232,12 @@ const STEP_META: Record<OnboardingStep, { title: string; subtitle: string }> = {
     subtitle: 'Import data from your professional profiles',
   },
   platforms: { title: 'Add more platforms', subtitle: 'Link your content and publications' },
-  gallery: {
-    title: isPortfolioEnabled() ? 'Portfolio photos' : 'Photos',
-    subtitle: isPortfolioEnabled()
-      ? 'Add up to 3 photos to showcase your work'
-      : 'Add up to 3 photos (optional)',
-  },
-  review: {
-    title: 'Review your profile',
-    subtitle: 'Check everything looks good before creating your profile',
-  },
 };
+
+const RESUME_UPLOAD_META = {
+  title: 'Upload your resume',
+  subtitle: "We'll extract your experience, education, skills and more",
+} as const;
 
 // ─── Image crop helpers ──────────────────────────────────────────
 const createImage = (url: string): Promise<HTMLImageElement> =>
@@ -360,16 +423,11 @@ export default function OnboardingImportPage() {
   const [linkedinDisconnecting, setLinkedinDisconnecting] = useState(false);
   const [linkedinError, setLinkedinError] = useState<string | null>(null);
 
-  const [facebookConnecting, setFacebookConnecting] = useState(false);
-  const [facebookDisconnecting, setFacebookDisconnecting] = useState(false);
-  const [facebookError, setFacebookError] = useState<string | null>(null);
-
   // ─── Import states ──────────────────────────────────────────────
   const [imports, setImports] = useState<Record<ImportSource, ImportStatus>>({
     resume: { source: 'resume', status: 'idle' },
     github: { source: 'github', status: 'idle' },
     linkedin: { source: 'linkedin', status: 'idle' },
-    facebook: { source: 'facebook', status: 'idle' },
     medium: { source: 'medium', status: 'idle' },
     youtube: { source: 'youtube', status: 'idle' },
     substack: { source: 'substack', status: 'idle' },
@@ -378,9 +436,11 @@ export default function OnboardingImportPage() {
 
   // ─── Form states ───────────────────────────────────────────────
   const [githubUsername, setGithubUsername] = useState('');
+  const [linkedinProfileInput, setLinkedinProfileInput] = useState('');
   const [mediumUsername, setMediumUsername] = useState('');
   const [youtubeChannel, setYoutubeChannel] = useState('');
   const [substackUsername, setSubstackUsername] = useState('');
+  const [portfolioUrl, setPortfolioUrl] = useState('');
   const [linkUrls, setLinkUrls] = useState<string[]>([]);
   const [linkInput, setLinkInput] = useState('');
 
@@ -393,18 +453,15 @@ export default function OnboardingImportPage() {
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
   const [isDraggingPhoto, setIsDraggingPhoto] = useState(false);
 
-  // Gallery states
-  const [galleryPhotos, setGalleryPhotos] = useState<string[]>([]);
-  const [isUploadingGallery, setIsUploadingGallery] = useState(false);
-
   // Resume
   const [resumeFileName, setResumeFileName] = useState<string | null>(null);
   const [, setResumeFileUrl] = useState<string | null>(null);
   const [resumeThumbnail, setResumeThumbnail] = useState<string | null>(null);
   const [resumeParsingPromise, setResumeParsingPromise] = useState<Promise<void> | null>(null);
   const [isWaitingForParsing, setIsWaitingForParsing] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
   const [isDraggingResume, setIsDraggingResume] = useState(false);
-
+  const [showDiscardResumeDialog, setShowDiscardResumeDialog] = useState(false);
   // Imported data
   const [importedData, setImportedData] = useState<Record<string, unknown>>({});
 
@@ -430,27 +487,57 @@ export default function OnboardingImportPage() {
     const li = importedData.linkedin as Record<string, unknown> | undefined;
     const liProfile = li?.profile as Record<string, unknown> | undefined;
     const fromLI = li?.fromLinkedIn as Record<string, unknown> | undefined;
-    if (fromLI?.username) return fromLI.username as string;
-    if (connectedLinkedin?.username) return connectedLinkedin.username;
+    if (fromLI?.firstName || fromLI?.lastName) {
+      return [fromLI.firstName, fromLI.lastName].filter(Boolean).join(' ');
+    }
     if (liProfile?.firstName && liProfile?.lastName)
       return `${liProfile.firstName} ${liProfile.lastName}`;
+    if (fromLI?.username) return String(fromLI.username);
+    if (connectedLinkedin?.username) return connectedLinkedin.username;
+    if (linkedinProfileInput.trim()) {
+      const slug = extractLinkedInSlug(linkedinProfileInput);
+      if (slug) return slug;
+    }
     if (connectedLinkedin?.firstName && connectedLinkedin?.lastName)
       return `${connectedLinkedin.firstName} ${connectedLinkedin.lastName}`;
     return null;
   })();
 
-  const connectedFacebook = user?.externalAccounts?.find((a) => {
-    const p = a.provider as string;
-    return p === 'facebook' || p === 'oauth_facebook';
-  });
-
-  const facebookName = (() => {
-    if (connectedFacebook?.firstName && connectedFacebook?.lastName)
-      return `${connectedFacebook.firstName} ${connectedFacebook.lastName}`;
-    if (connectedFacebook?.firstName || connectedFacebook?.lastName)
-      return connectedFacebook?.firstName || connectedFacebook?.lastName;
-    return null;
+  const linkedinHeadline = (() => {
+    const li = importedData.linkedin as Record<string, unknown> | undefined;
+    const fromLI = li?.fromLinkedIn as Record<string, unknown> | undefined;
+    const profile = li?.profile as Record<string, unknown> | undefined;
+    const headline = (fromLI?.headline || profile?.headline) as string | undefined;
+    return headline?.trim() || null;
   })();
+
+  /** Avatar from OAuth or from a successful link/username import. */
+  const linkedinAvatarUrl = (() => {
+    if (connectedLinkedin?.imageUrl) return connectedLinkedin.imageUrl;
+    const li = importedData.linkedin as Record<string, unknown> | undefined;
+    const fromLI = li?.fromLinkedIn as Record<string, unknown> | undefined;
+    const profile = li?.profile as Record<string, unknown> | undefined;
+    const fromImport = (fromLI?.avatarUrl || profile?.avatarUrl) as string | undefined;
+    return fromImport || null;
+  })();
+
+  const githubAvatarUrl = (() => {
+    if (connectedGithub?.imageUrl) return connectedGithub.imageUrl;
+    const gh = importedData.github as Record<string, unknown> | undefined;
+    const profile = gh?.profile as Record<string, unknown> | undefined;
+    const githubProfile = gh?.githubProfile as Record<string, unknown> | undefined;
+    const fromImport = (profile?.avatarUrl || githubProfile?.avatarUrl) as string | undefined;
+    return fromImport || null;
+  })();
+
+  const githubDisplayUsername =
+    githubUsernameFromAccount ||
+    (() => {
+      const gh = importedData.github as Record<string, unknown> | undefined;
+      const githubProfile = gh?.githubProfile as Record<string, unknown> | undefined;
+      if (typeof githubProfile?.username === 'string') return githubProfile.username;
+      return extractGitHubUsername(githubUsername) || null;
+    })();
 
   // ─── State persistence ─────────────────────────────────────────
   const saveImportState = useCallback(async () => {
@@ -464,23 +551,17 @@ export default function OnboardingImportPage() {
         await savePhotoToIndexedDB(uploadedPhotoKey, uploadedPhoto);
       }
 
-      const galleryPhotoKeys: string[] = [];
-      for (let i = 0; i < galleryPhotos.length; i++) {
-        const key = `onboarding_gallery_${user?.id || 'anon'}_${i}`;
-        await savePhotoToIndexedDB(key, galleryPhotos[i]);
-        galleryPhotoKeys.push(key);
-      }
-
       const stateToSave = {
         imports,
         importedData,
         githubUsername,
+        linkedinProfileInput,
         resumeFileName,
         uploadedPhotoKey,
-        galleryPhotoKeys: galleryPhotoKeys.length > 0 ? galleryPhotoKeys : null,
         mediumUsername,
         youtubeChannel,
         substackUsername,
+        portfolioUrl: portfolioUrl.trim() || undefined,
         linkUrls: linkUrls.length > 0 ? linkUrls : undefined,
         currentStep,
       };
@@ -492,13 +573,14 @@ export default function OnboardingImportPage() {
     imports,
     importedData,
     githubUsername,
+    linkedinProfileInput,
     uploadedPhoto,
-    galleryPhotos,
     resumeFileName,
     user?.id,
     mediumUsername,
     youtubeChannel,
     substackUsername,
+    portfolioUrl,
     linkUrls,
     currentStep,
   ]);
@@ -520,6 +602,10 @@ export default function OnboardingImportPage() {
           const parsed = JSON.parse(savedState);
           if (parsed.imports) {
             let restoredImports = parsed.imports;
+            // Drop removed sources (e.g. facebook) and keep only current ImportSource keys
+            const withoutFacebook = { ...(restoredImports as Record<string, ImportStatus>) };
+            delete withoutFacebook.facebook;
+            restoredImports = withoutFacebook;
             // Fix: If resume status is 'added' but parsing promise can't be restored,
             // update status based on whether we have imported data
             if (restoredImports.resume?.status === 'added') {
@@ -532,29 +618,33 @@ export default function OnboardingImportPage() {
                 },
               };
             }
-            setImports(restoredImports);
+            setImports((prev) => ({ ...prev, ...restoredImports }));
           }
           if (parsed.importedData) setImportedData(parsed.importedData);
           if (parsed.githubUsername) setGithubUsername(parsed.githubUsername);
-          if (parsed.resumeFileName) setResumeFileName(parsed.resumeFileName);
+          if (parsed.linkedinProfileInput) setLinkedinProfileInput(parsed.linkedinProfileInput);
+          if (parsed.resumeFileName) {
+            setResumeFileName(parsed.resumeFileName);
+          }
           if (parsed.mediumUsername) setMediumUsername(parsed.mediumUsername);
           if (parsed.youtubeChannel) setYoutubeChannel(parsed.youtubeChannel);
           if (parsed.substackUsername) setSubstackUsername(parsed.substackUsername);
+          if (parsed.portfolioUrl) setPortfolioUrl(parsed.portfolioUrl);
           if (parsed.linkUrls?.length) setLinkUrls(parsed.linkUrls);
-          if (parsed.currentStep && STEPS.includes(parsed.currentStep))
-            setCurrentStep(parsed.currentStep);
+          if (parsed.currentStep) {
+            // Map removed steps onto the nearest remaining step
+            const raw =
+              parsed.currentStep === 'bubbles' ||
+              parsed.currentStep === 'gallery' ||
+              parsed.currentStep === 'review'
+                ? 'platforms'
+                : String(parsed.currentStep);
+            if ((STEPS as string[]).includes(raw)) setCurrentStep(raw as OnboardingStep);
+          }
 
           if (parsed.uploadedPhotoKey) {
             const photoData = await getPhotoFromIndexedDB(parsed.uploadedPhotoKey);
             if (photoData) setUploadedPhoto(photoData);
-          }
-          if (parsed.galleryPhotoKeys?.length) {
-            const restoredGallery: string[] = [];
-            for (const key of parsed.galleryPhotoKeys) {
-              const photoData = await getPhotoFromIndexedDB(key);
-              if (photoData) restoredGallery.push(photoData);
-            }
-            if (restoredGallery.length > 0) setGalleryPhotos(restoredGallery);
           }
           sessionStorage.removeItem(storageKey);
           user.reload().catch(console.error);
@@ -713,6 +803,8 @@ export default function OnboardingImportPage() {
 
   const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    // Allow re-selecting the same file after Remove/Replace
+    e.target.value = '';
     if (!file) return;
     await processResumeFile(file);
   };
@@ -774,9 +866,12 @@ export default function OnboardingImportPage() {
   };
 
   const handleGitHubImport = async (overrideUsername?: string) => {
-    const resolved = (overrideUsername ?? githubUsername).trim();
+    const resolved = extractGitHubUsername(overrideUsername ?? githubUsername);
     if (!resolved) {
-      updateImportStatus('github', { status: 'error', message: 'Please enter a GitHub username' });
+      updateImportStatus('github', {
+        status: 'error',
+        message: 'Enter a GitHub username or profile URL',
+      });
       return;
     }
     updateImportStatus('github', { status: 'importing', message: 'Fetching GitHub data...' });
@@ -843,6 +938,7 @@ export default function OnboardingImportPage() {
         message: undefined,
         itemsImported: undefined,
       });
+      setLinkedinProfileInput('');
     } catch (err: unknown) {
       setLinkedinError(`Failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
@@ -850,19 +946,60 @@ export default function OnboardingImportPage() {
     }
   };
 
-  const handleLinkedInImport = async () => {
-    updateImportStatus('linkedin', { status: 'importing', message: 'Fetching LinkedIn data...' });
+  const handleLinkedInImport = async (overrideInput?: string) => {
+    const pasted = (overrideInput ?? linkedinProfileInput).trim();
+
+    // Prefer OAuth import when the account is connected and no paste override.
+    if (connectedLinkedin && !pasted) {
+      updateImportStatus('linkedin', { status: 'importing', message: 'Fetching LinkedIn data...' });
+      try {
+        const response = await fetch('/api/import/linkedin/oauth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed');
+        setImportedData((prev) => ({ ...prev, linkedin: data.data }));
+        updateImportStatus('linkedin', {
+          status: 'success',
+          message: data.message || 'Imported profile',
+          itemsImported: data.data?.summary?.total || 1,
+        });
+      } catch (err) {
+        updateImportStatus('linkedin', {
+          status: 'error',
+          message: err instanceof Error ? err.message : 'Failed',
+        });
+      }
+      return;
+    }
+
+    const slug = extractLinkedInSlug(pasted);
+    if (!slug) {
+      updateImportStatus('linkedin', {
+        status: 'error',
+        message: 'Enter a LinkedIn profile URL or username',
+      });
+      return;
+    }
+
+    updateImportStatus('linkedin', {
+      status: 'importing',
+      message: 'Fetching LinkedIn profile...',
+    });
     try {
-      const response = await fetch('/api/import/linkedin/oauth', {
+      const response = await fetch('/api/import/linkedin/profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: pasted }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Failed');
       setImportedData((prev) => ({ ...prev, linkedin: data.data }));
+      setLinkedinProfileInput(slug);
       updateImportStatus('linkedin', {
         status: 'success',
-        message: data.message || 'Imported profile',
+        message: data.message || 'Imported LinkedIn profile',
         itemsImported: data.data?.summary?.total || 1,
       });
     } catch (err) {
@@ -870,53 +1007,6 @@ export default function OnboardingImportPage() {
         status: 'error',
         message: err instanceof Error ? err.message : 'Failed',
       });
-    }
-  };
-
-  // ─── Facebook ───────────────────────────────────────────────────
-  const handleFacebookConnect = async () => {
-    setFacebookConnecting(true);
-    setFacebookError(null);
-    const primaryEmail = user?.primaryEmailAddress;
-    if (!primaryEmail?.verification?.status || primaryEmail.verification.status !== 'verified') {
-      setFacebookError('Please verify your email first.');
-      setFacebookConnecting(false);
-      return;
-    }
-    try {
-      await saveImportState();
-      const externalAccount = await user?.createExternalAccount({
-        strategy: 'oauth_facebook',
-        redirectUrl: window.location.href,
-      });
-      const url = externalAccount?.verification?.externalVerificationRedirectURL;
-      if (url) window.location.href = url.toString();
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes('already connected')) {
-        await user?.reload();
-        setFacebookError(null);
-      } else setFacebookError(`Connection failed: ${msg}`);
-      setFacebookConnecting(false);
-    }
-  };
-
-  const handleFacebookDisconnect = async () => {
-    if (!connectedFacebook) return;
-    setFacebookDisconnecting(true);
-    setFacebookError(null);
-    try {
-      await connectedFacebook.destroy();
-      await user?.reload();
-      updateImportStatus('facebook', {
-        status: 'idle',
-        message: undefined,
-        itemsImported: undefined,
-      });
-    } catch (err: unknown) {
-      setFacebookError(`Failed: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      setFacebookDisconnecting(false);
     }
   };
 
@@ -1145,313 +1235,371 @@ export default function OnboardingImportPage() {
     setCroppedAreaPixels(croppedAreaPx);
   }, []);
 
-  // Gallery upload
-  const handleGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-    const remaining = 3 - galleryPhotos.length;
-    if (remaining <= 0) {
-      setError('Maximum 3 portfolio photos');
-      return;
-    }
-    setIsUploadingGallery(true);
+  // ─── Complete onboarding → builder ─────────────────────────────
+  const handleCompleteOnboarding = async () => {
+    if (isCompleting) return;
+    setIsCompleting(true);
     setError(null);
+
     try {
-      const newPhotos: string[] = [];
-      for (let i = 0; i < Math.min(files.length, remaining); i++) {
-        const file = files[i];
-        if (!file.type.startsWith('image/') || file.size > 40 * 1024 * 1024) continue;
-        const base64 = await fileToBase64(file);
-        newPhotos.push(base64);
+      // If resume parsing is still running, wait for it
+      if (resumeParsingPromise) {
+        setIsWaitingForParsing(true);
+        try {
+          await resumeParsingPromise;
+        } finally {
+          setIsWaitingForParsing(false);
+        }
       }
-      if (newPhotos.length === 0) setError('No valid image files selected');
-      else setGalleryPhotos((prev) => [...prev, ...newPhotos].slice(0, 3));
-    } catch {
-      setError('Failed to process gallery images');
-    } finally {
-      setIsUploadingGallery(false);
-      e.target.value = '';
-    }
-  };
 
-  const handleRemoveGalleryPhoto = (index: number) => {
-    setGalleryPhotos((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  // ─── Photo resolution helper ───────────────────────────────────
-
-  // ─── Continue to Review handler ────────────────────────────────
-  const handleGoToReview = async (options?: { skipReview?: boolean }) => {
-    // If resume parsing is still running, wait for it
-    if (resumeParsingPromise) {
-      setIsWaitingForParsing(true);
-      try {
-        await resumeParsingPromise;
-      } finally {
-        setIsWaitingForParsing(false);
-      }
-    }
-
-    // Get best avatar - cropped version for DP
-    let bestAvatarUrl: string | null = null;
-    if (uploadedPhoto && croppedAreaPixels) {
-      try {
-        bestAvatarUrl = await getCroppedImg(uploadedPhoto, croppedAreaPixels);
-      } catch {
+      // Get best avatar - cropped version for DP
+      let bestAvatarUrl: string | null = null;
+      if (uploadedPhoto && croppedAreaPixels) {
+        try {
+          bestAvatarUrl = await getCroppedImg(uploadedPhoto, croppedAreaPixels);
+        } catch {
+          bestAvatarUrl = uploadedPhoto;
+        }
+      } else if (uploadedPhoto) {
         bestAvatarUrl = uploadedPhoto;
       }
-    } else if (uploadedPhoto) {
-      bestAvatarUrl = uploadedPhoto;
-    }
 
-    if (!bestAvatarUrl) {
-      // Try to get from imported data
-      const photos: string[] = [];
-      const gd = importedData.google as Record<string, unknown> | undefined;
-      const gp = gd?.profile as Record<string, unknown> | undefined;
-      if (gp?.avatarUrl) photos.push(gp.avatarUrl as string);
-      const ld = importedData.linkedin as Record<string, unknown> | undefined;
-      const lp = ld?.profile as Record<string, unknown> | undefined;
-      if (lp?.avatarUrl) photos.push(lp.avatarUrl as string);
-      const ghd = importedData.github as Record<string, unknown> | undefined;
-      const ghp = ghd?.profile as Record<string, unknown> | undefined;
-      if (ghp?.avatarUrl) photos.push(ghp.avatarUrl as string);
-      if (user?.imageUrl && user?.hasImage) photos.push(user.imageUrl);
-      if (photos.length > 0) bestAvatarUrl = await getBestResolutionImage(photos);
-    }
+      if (!bestAvatarUrl) {
+        const photos: string[] = [];
+        const gd = importedData.google as Record<string, unknown> | undefined;
+        const gp = gd?.profile as Record<string, unknown> | undefined;
+        if (gp?.avatarUrl) photos.push(gp.avatarUrl as string);
+        const ld = importedData.linkedin as Record<string, unknown> | undefined;
+        const lp = ld?.profile as Record<string, unknown> | undefined;
+        if (lp?.avatarUrl) photos.push(lp.avatarUrl as string);
+        const ghd = importedData.github as Record<string, unknown> | undefined;
+        const ghp = ghd?.profile as Record<string, unknown> | undefined;
+        if (ghp?.avatarUrl) photos.push(ghp.avatarUrl as string);
+        if (user?.imageUrl && user?.hasImage) photos.push(user.imageUrl);
+        if (photos.length > 0) bestAvatarUrl = await getBestResolutionImage(photos);
+      }
 
-    const resumeData = importedData.resume as Record<string, unknown> | undefined;
-    const linkedinData = importedData.linkedin as Record<string, unknown> | undefined;
-    const githubData = importedData.github as Record<string, unknown> | undefined;
-    const mediumData = importedData.medium as Record<string, unknown> | undefined;
+      const resumeData = importedData.resume as Record<string, unknown> | undefined;
+      const linkedinData = importedData.linkedin as Record<string, unknown> | undefined;
+      const githubData = importedData.github as Record<string, unknown> | undefined;
+      const mediumData = importedData.medium as Record<string, unknown> | undefined;
 
-    const resumeProfile = (resumeData?.profile as Record<string, unknown>) || {};
-    const linkedinProfile = (linkedinData?.profile as Record<string, unknown>) || {};
-    const githubProfile = (githubData?.profile as Record<string, unknown>) || {};
-    const resumeContactInfo = resumeData?.contactInfo as Record<string, unknown> | undefined;
+      const resumeProfile = (resumeData?.profile as Record<string, unknown>) || {};
+      const linkedinProfile = (linkedinData?.profile as Record<string, unknown>) || {};
+      const githubProfile = (githubData?.profile as Record<string, unknown>) || {};
+      const resumeContactInfo = resumeData?.contactInfo as Record<string, unknown> | undefined;
 
-    const allNames: Array<{
-      firstName?: string;
-      middleName?: string;
-      lastName?: string;
-      source: string;
-    }> = [];
-    if (user?.firstName || user?.lastName)
-      allNames.push({
-        firstName: user.firstName || undefined,
-        middleName: undefined,
-        lastName: user.lastName || undefined,
-        source: 'SIGNUP',
+      const mergedProfile: Record<string, unknown> = {
+        firstName:
+          resumeProfile.firstName ||
+          linkedinProfile.firstName ||
+          githubProfile.firstName ||
+          user?.firstName,
+        middleName:
+          resumeProfile.middleName || linkedinProfile.middleName || githubProfile.middleName,
+        lastName:
+          resumeProfile.lastName ||
+          linkedinProfile.lastName ||
+          githubProfile.lastName ||
+          user?.lastName,
+        headline: resumeProfile.headline || linkedinProfile.headline || githubProfile.headline,
+        summary: resumeProfile.summary || linkedinProfile.summary || githubProfile.bio,
+        location: resumeProfile.location || linkedinProfile.location || githubProfile.location,
+        avatarUrl: bestAvatarUrl,
+      };
+
+      const allEmails: Array<{ email: string; source: string }> = [];
+      const signupEmail = user?.primaryEmailAddress?.emailAddress;
+      if (signupEmail) allEmails.push({ email: signupEmail, source: 'SIGNUP' });
+      if (resumeContactInfo?.email)
+        allEmails.push({ email: resumeContactInfo.email as string, source: 'RESUME' });
+      if (linkedinData) {
+        const lci = linkedinData.contactInfo as Record<string, unknown> | undefined;
+        if (lci?.email) allEmails.push({ email: lci.email as string, source: 'LINKEDIN' });
+        if (linkedinData.email && typeof linkedinData.email === 'string')
+          allEmails.push({ email: linkedinData.email, source: 'LINKEDIN' });
+      }
+      if (githubData) {
+        const gci = githubData.contactInfo as Record<string, unknown> | undefined;
+        if (gci?.email) allEmails.push({ email: gci.email as string, source: 'GITHUB' });
+      }
+      const seenEmails = new Set<string>();
+      const uniqueEmails = allEmails.filter((e) => {
+        const n = e.email.toLowerCase().trim();
+        if (seenEmails.has(n)) return false;
+        seenEmails.add(n);
+        return true;
       });
-    if (resumeProfile.firstName || resumeProfile.middleName || resumeProfile.lastName)
-      allNames.push({
-        firstName: resumeProfile.firstName as string | undefined,
-        middleName: resumeProfile.middleName as string | undefined,
-        lastName: resumeProfile.lastName as string | undefined,
-        source: 'RESUME',
-      });
-    if (linkedinProfile.firstName || linkedinProfile.middleName || linkedinProfile.lastName)
-      allNames.push({
-        firstName: linkedinProfile.firstName as string | undefined,
-        middleName: linkedinProfile.middleName as string | undefined,
-        lastName: linkedinProfile.lastName as string | undefined,
-        source: 'LINKEDIN',
-      });
-    if (githubProfile.firstName || githubProfile.middleName || githubProfile.lastName)
-      allNames.push({
-        firstName: githubProfile.firstName as string | undefined,
-        middleName: githubProfile.middleName as string | undefined,
-        lastName: githubProfile.lastName as string | undefined,
-        source: 'GITHUB',
-      });
 
-    const mergedProfile: Record<string, unknown> = {
-      firstName:
-        resumeProfile.firstName ||
-        linkedinProfile.firstName ||
-        githubProfile.firstName ||
-        user?.firstName,
-      middleName:
-        resumeProfile.middleName || linkedinProfile.middleName || githubProfile.middleName,
-      lastName:
-        resumeProfile.lastName ||
-        linkedinProfile.lastName ||
-        githubProfile.lastName ||
-        user?.lastName,
-      headline: resumeProfile.headline || linkedinProfile.headline || githubProfile.headline,
-      summary: resumeProfile.summary || linkedinProfile.summary || githubProfile.bio,
-      location: resumeProfile.location || linkedinProfile.location || githubProfile.location,
-      avatarUrl: bestAvatarUrl,
-    };
-
-    const allEmails: Array<{ email: string; source: string }> = [];
-    const signupEmail = user?.primaryEmailAddress?.emailAddress;
-    if (signupEmail) allEmails.push({ email: signupEmail, source: 'SIGNUP' });
-    if (resumeContactInfo?.email)
-      allEmails.push({ email: resumeContactInfo.email as string, source: 'RESUME' });
-    if (linkedinData) {
-      const lci = linkedinData.contactInfo as Record<string, unknown> | undefined;
-      if (lci?.email) allEmails.push({ email: lci.email as string, source: 'LINKEDIN' });
-      if (linkedinData.email && typeof linkedinData.email === 'string')
-        allEmails.push({ email: linkedinData.email, source: 'LINKEDIN' });
-    }
-    if (githubData) {
-      const gci = githubData.contactInfo as Record<string, unknown> | undefined;
-      if (gci?.email) allEmails.push({ email: gci.email as string, source: 'GITHUB' });
-    }
-    const seenEmails = new Set<string>();
-    const uniqueEmails = allEmails.filter((e) => {
-      const n = e.email.toLowerCase().trim();
-      if (seenEmails.has(n)) return false;
-      seenEmails.add(n);
-      return true;
-    });
-
-    const allPhones: Array<{
-      phone?: string;
-      countryCode?: string | null;
-      number?: string;
-      source: string;
-    }> = [];
-    if (resumeContactInfo?.phone) {
-      const parsed = parsePhoneWithCountryCode(resumeContactInfo.phone as string);
-      allPhones.push({
-        phone: resumeContactInfo.phone as string,
-        countryCode: parsed.countryCode,
-        number: parsed.number || (resumeContactInfo.phone as string),
-        source: 'RESUME',
-      });
-    }
-    if (linkedinData) {
-      const lci = linkedinData.contactInfo as Record<string, unknown> | undefined;
-      if (lci?.phone) {
-        const parsed = parsePhoneWithCountryCode(lci.phone as string);
+      const allPhones: Array<{
+        phone?: string;
+        countryCode?: string | null;
+        number?: string;
+        source: string;
+      }> = [];
+      if (resumeContactInfo?.phone) {
+        const parsed = parsePhoneWithCountryCode(resumeContactInfo.phone as string);
         allPhones.push({
-          phone: lci.phone as string,
+          phone: resumeContactInfo.phone as string,
           countryCode: parsed.countryCode,
-          number: parsed.number || (lci.phone as string),
-          source: 'LINKEDIN',
+          number: parsed.number || (resumeContactInfo.phone as string),
+          source: 'RESUME',
         });
       }
-    }
-    const seenPhones = new Set<string>();
-    const uniquePhones = allPhones.filter((p) => {
-      const n = (p.number || p.phone || '').replace(/\D/g, '');
-      if (seenPhones.has(n)) return false;
-      seenPhones.add(n);
-      return true;
-    });
-
-    const contactInfo = {
-      ...(resumeContactInfo || {}),
-      allEmails: uniqueEmails,
-      allPhones: uniquePhones,
-    };
-
-    // Store avatar in IndexedDB if it's a data URL
-    const avatarUrlForStorage = mergedProfile.avatarUrl as string | undefined;
-    if (avatarUrlForStorage?.startsWith('data:')) {
-      try {
-        const photoKey = `uploaded_avatar_${Date.now()}`;
-        await savePhotoToIndexedDB(photoKey, avatarUrlForStorage);
-        mergedProfile.avatarUrl = `indexeddb:${photoKey}`;
-      } catch (err) {
-        console.error('Failed to store photo in IndexedDB:', err);
-        delete mergedProfile.avatarUrl;
-      }
-    }
-
-    // Also store the full uncropped photo if there's one
-    if (uploadedPhoto) {
-      try {
-        const fullPhotoKey = `uploaded_full_photo_${Date.now()}`;
-        await savePhotoToIndexedDB(fullPhotoKey, uploadedPhoto);
-        mergedProfile.fullPhotoUrl = `indexeddb:${fullPhotoKey}`;
-      } catch (err) {
-        console.error('Failed to store full photo:', err);
-      }
-    }
-
-    const allLinks = [
-      ...((resumeData?.links as Array<Record<string, unknown>>) || []),
-      ...((linkedinData?.links as Array<Record<string, unknown>>) || []),
-      ...((githubData?.links as Array<Record<string, unknown>>) || []),
-      ...((mediumData?.links as Array<Record<string, unknown>>) || []),
-    ];
-    const seenUrls = new Set<string>();
-    const uniqueLinks = allLinks.filter((link) => {
-      const url = (link.url as string)?.toLowerCase().trim();
-      if (!url || seenUrls.has(url)) return false;
-      seenUrls.add(url);
-      return true;
-    });
-
-    const galleryPhotoRefs: string[] = [];
-    for (let i = 0; i < galleryPhotos.length; i++) {
-      const photo = galleryPhotos[i];
-      if (photo.startsWith('data:')) {
-        try {
-          const galleryKey = `gallery_photo_${Date.now()}_${i}`;
-          await savePhotoToIndexedDB(galleryKey, photo);
-          galleryPhotoRefs.push(`indexeddb:${galleryKey}`);
-        } catch (err) {
-          console.error('Failed to store gallery photo:', err);
+      if (linkedinData) {
+        const lci = linkedinData.contactInfo as Record<string, unknown> | undefined;
+        if (lci?.phone) {
+          const parsed = parsePhoneWithCountryCode(lci.phone as string);
+          allPhones.push({
+            phone: lci.phone as string,
+            countryCode: parsed.countryCode,
+            number: parsed.number || (lci.phone as string),
+            source: 'LINKEDIN',
+          });
         }
-      } else {
-        galleryPhotoRefs.push(photo);
       }
-    }
+      const seenPhones = new Set<string>();
+      const uniquePhones = allPhones.filter((p) => {
+        const n = (p.number || p.phone || '').replace(/\D/g, '');
+        if (seenPhones.has(n)) return false;
+        seenPhones.add(n);
+        return true;
+      });
 
-    const dataForReview = {
-      profile: mergedProfile,
-      contactInfo,
-      allNames,
-      experiences: resumeData?.experiences || [],
-      educations: resumeData?.educations || [],
-      skills: [
+      const contactInfo = {
+        ...(resumeContactInfo || {}),
+        allEmails: uniqueEmails,
+        allPhones: uniquePhones,
+      };
+
+      const allLinks = [
+        ...((resumeData?.links as Array<Record<string, unknown>>) || []),
+        ...((linkedinData?.links as Array<Record<string, unknown>>) || []),
+        ...((githubData?.links as Array<Record<string, unknown>>) || []),
+        ...((mediumData?.links as Array<Record<string, unknown>>) || []),
+      ];
+
+      // Personal portfolio URL from the platforms step — first so it sorts near the top
+      const trimmedPortfolio = portfolioUrl.trim();
+      if (trimmedPortfolio) {
+        const normalizedPortfolio = /^https?:\/\//i.test(trimmedPortfolio)
+          ? trimmedPortfolio.replace(/\/+$/, '')
+          : `https://${trimmedPortfolio.replace(/\/+$/, '')}`;
+        allLinks.unshift({
+          url: normalizedPortfolio,
+          type: 'PORTFOLIO',
+          label: 'Portfolio',
+        });
+      }
+
+      // Custom links added on the platforms step
+      for (const raw of linkUrls) {
+        const trimmed = raw.trim();
+        if (!trimmed) continue;
+        const url = /^https?:\/\//i.test(trimmed)
+          ? trimmed.replace(/\/+$/, '')
+          : `https://${trimmed.replace(/\/+$/, '')}`;
+        allLinks.push({ url, type: 'OTHER', label: 'Website' });
+      }
+
+      const seenUrls = new Set<string>();
+      const uniqueLinks = allLinks.filter((link) => {
+        const url = (link.url as string)?.toLowerCase().trim();
+        if (!url || seenUrls.has(url)) return false;
+        seenUrls.add(url);
+        return true;
+      });
+
+      const skills = [
         ...((resumeData?.skills as string[]) || []),
         ...((githubData?.skills as string[]) || []),
-      ].filter((s, i, arr) => arr.indexOf(s) === i),
-      links: uniqueLinks,
-      certifications: resumeData?.certifications || [],
-      projects: [
+      ].filter((s, i, arr) => arr.indexOf(s) === i);
+
+      const projects = [
         ...((resumeData?.projects as Array<Record<string, unknown>>) || []),
         ...((githubData?.projects as Array<Record<string, unknown>>) || []),
-      ],
-      // Writing sources (Medium today; Substack/etc. later) — must reach complete → AI agent
-      blogPosts: [...((mediumData?.blogPosts as Array<Record<string, unknown>>) || [])],
-      // Aggregate GitHub profile (stars, languages, orgs) — separate from per-repo projects
-      githubProfile: (githubData?.githubProfile as Record<string, unknown>) || undefined,
-      galleryPhotos: galleryPhotoRefs,
-      _sources: {
-        hasResume: !!resumeData,
-        hasLinkedIn: !!linkedinData,
-        hasGitHub: !!githubData,
-        hasMedium: !!mediumData,
-      },
-      _resumeFileName: resumeFileName || null,
-    };
+      ];
 
-    sessionStorage.setItem('onboarding_parsed_resume', JSON.stringify(dataForReview));
-    // skipReview sends the user straight to the dashboard by auto-submitting the
-    // imported data on the review screen; otherwise they step through the review.
-    router.push(options?.skipReview ? '/onboarding/review?auto=1' : '/onboarding/review');
+      const blogPosts = [...((mediumData?.blogPosts as Array<Record<string, unknown>>) || [])];
+      const githubProfileAgg = (githubData?.githubProfile as Record<string, unknown>) || undefined;
+
+      // Upload avatar to Clerk when we have a data URL; keep original for permanent storage
+      const profileForApi = { ...mergedProfile };
+      let originalAvatarDataUrl: string | undefined;
+      const avatarUrl = profileForApi.avatarUrl;
+      if (typeof avatarUrl === 'string' && avatarUrl.startsWith('data:')) {
+        originalAvatarDataUrl = avatarUrl;
+        try {
+          const originalFile = await base64ToFile(avatarUrl, 'avatar.jpg');
+          const compressedFile = await compressImageForClerk(originalFile);
+          await user?.setProfileImage({ file: compressedFile });
+          await user?.reload();
+          if (user?.imageUrl) {
+            profileForApi.avatarUrl = user.imageUrl;
+          } else {
+            delete profileForApi.avatarUrl;
+          }
+        } catch (uploadErr) {
+          console.error('[Onboarding] Failed to upload avatar to Clerk:', uploadErr);
+          if (user?.imageUrl) {
+            profileForApi.avatarUrl = user.imageUrl;
+          } else {
+            delete profileForApi.avatarUrl;
+          }
+        }
+      }
+
+      const firstName = (profileForApi.firstName as string) || user?.firstName || 'User';
+      const middleName = (profileForApi.middleName as string) || '';
+      const lastName = (profileForApi.lastName as string) || user?.lastName || '';
+
+      try {
+        await user?.update({
+          firstName,
+          lastName: lastName || undefined,
+        });
+      } catch (nameErr) {
+        console.error('[Onboarding] Failed to sync name to Clerk:', nameErr);
+      }
+
+      const selectedTemplateId =
+        sessionStorage.getItem(ONBOARDING_TEMPLATE_KEY) || getDefaultTemplateId();
+
+      const response = await fetch('/api/onboarding/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          firstName,
+          middleName: middleName || undefined,
+          lastName,
+          handle: sessionStorage.getItem('onboarding_handle') || undefined,
+          resumeFileName: resumeFileName || undefined,
+          originalAvatarDataUrl: originalAvatarDataUrl || undefined,
+          targetProfileId: sessionStorage.getItem('importTargetProfileId') || undefined,
+          templateId: selectedTemplateId,
+          reviewedData: {
+            profile: profileForApi,
+            experiences: resumeData?.experiences || [],
+            educations: resumeData?.educations || [],
+            skills,
+            links: uniqueLinks,
+            contactInfo,
+            projects,
+            blogPosts,
+            githubProfile: githubProfileAgg,
+          },
+        }),
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to create your resume');
+      }
+
+      sessionStorage.removeItem('onboarding_parsed_resume');
+      sessionStorage.removeItem('onboarding_handle');
+      sessionStorage.removeItem('importTargetProfileId');
+      sessionStorage.removeItem(ONBOARDING_TEMPLATE_KEY);
+      const storageKey = getStorageKey(user?.id);
+      if (storageKey) sessionStorage.removeItem(storageKey);
+      await clearPhotosFromIndexedDB();
+
+      const returnUrl = sessionStorage.getItem('importReturnUrl');
+      sessionStorage.removeItem('importReturnUrl');
+
+      router.refresh();
+      router.push(returnUrl || '/builder');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setIsCompleting(false);
+      setIsWaitingForParsing(false);
+    }
   };
 
   // ─── Navigation ─────────────────────────────────────────────────
-  const isLastDataStep = STEPS[STEPS.indexOf(currentStep) + 1] === 'review';
+  const isLastDataStep = currentStep === STEPS[STEPS.length - 1];
+
+  const hasCurrentStepAction = hasImportStepAction(currentStep, {
+    resumeFileName,
+    uploadedPhoto,
+    connectedLinkedin: Boolean(connectedLinkedin),
+    connectedGithub: Boolean(connectedGithub),
+    importStatuses: {
+      github: imports.github.status,
+      linkedin: imports.linkedin.status,
+      youtube: imports.youtube.status,
+      medium: imports.medium.status,
+      substack: imports.substack.status,
+      links: imports.links.status,
+    },
+    linkedinProfileInput,
+    githubUsername,
+    portfolioUrl,
+    youtubeChannel,
+    mediumUsername,
+    substackUsername,
+    linkUrls,
+    linkInput,
+  });
+  const primaryNextLabel = importStepNextLabel(hasCurrentStepAction, isLastDataStep);
 
   const goNext = () => {
+    if (isLastDataStep) {
+      void handleCompleteOnboarding();
+      return;
+    }
     const idx = STEPS.indexOf(currentStep);
     if (idx < STEPS.length - 1) {
       setCurrentStep(STEPS[idx + 1]);
     }
   };
 
+  const clearResumeUpload = () => {
+    setResumeFileName(null);
+    setResumeFileUrl(null);
+    setResumeThumbnail(null);
+    setResumeParsingPromise(null);
+    updateImportStatus('resume', {
+      status: 'idle',
+      message: undefined,
+      itemsImported: undefined,
+    });
+    setImportedData((prev) => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { resume: _r, ...rest } = prev;
+      return rest;
+    });
+  };
+
+  const discardResumeAndReturnToChoice = () => {
+    clearResumeUpload();
+    setShowDiscardResumeDialog(false);
+  };
+
   const goBack = () => {
+    // On resume step with a file uploaded, confirm before discarding back to choice
+    if (currentStep === 'resume' && resumeFileName) {
+      setShowDiscardResumeDialog(true);
+      return;
+    }
     const idx = STEPS.indexOf(currentStep);
     if (idx > 0) setCurrentStep(STEPS[idx - 1]);
   };
+
+  const handleResumeStartSelect = (path: ResumeStartPath) => {
+    if (path === 'blank') {
+      clearResumeUpload();
+      goNext();
+      return;
+    }
+    // Stay on this page — open the file picker; loading UI takes over after select
+    document.getElementById('resume-upload')?.click();
+  };
+
+  const showResumeChoice = currentStep === 'resume' && !resumeFileName;
+  const resumeStepMeta =
+    currentStep === 'resume' && resumeFileName ? RESUME_UPLOAD_META : STEP_META[currentStep];
 
   // ─── Status badge helper ───────────────────────────────────────
   const StatusBadge = ({
@@ -1463,7 +1611,7 @@ export default function OnboardingImportPage() {
   }) => {
     if (status === 'success' || status === 'added') {
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+        <span className={ONBOARDING_SUCCESS_PILL}>
           <CheckCircle2 className="h-3 w-3" />
           {status === 'added' ? 'Added' : message || 'Done'}
         </span>
@@ -1471,7 +1619,7 @@ export default function OnboardingImportPage() {
     }
     if (status === 'importing') {
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+        <span className={ONBOARDING_SUCCESS_PILL}>
           <Loader2 className="h-3 w-3 animate-spin" /> Importing...
         </span>
       );
@@ -1501,8 +1649,8 @@ export default function OnboardingImportPage() {
   // ─── Render ─────────────────────────────────────────────────────
   return (
     <>
-      {/* Progress bar */}
-      <div className="fixed left-0 right-0 top-16 z-40 h-0.5 bg-muted">
+      {/* Progress bar — sits just beneath the app header (h-14) */}
+      <div className="fixed left-0 right-0 top-14 z-40 h-0.5 bg-muted">
         <motion.div
           className="h-full bg-primary"
           initial={{ width: '0%' }}
@@ -1511,9 +1659,9 @@ export default function OnboardingImportPage() {
         />
       </div>
 
-      <div className="relative mx-auto max-w-2xl px-4 pb-24 pt-12 sm:px-6">
+      <div className={ONBOARDING_PAGE_SHELL}>
         {/* Step indicator — segmented track with current-step label */}
-        <div className="mb-10">
+        <div className={ONBOARDING_STEP_TRACK}>
           <div className="flex items-center gap-1.5" role="list" aria-label="Onboarding steps">
             {STEPS.map((step, idx) => {
               const reachable = idx <= currentStepIndex;
@@ -1539,67 +1687,64 @@ export default function OnboardingImportPage() {
         {/* Step header */}
         <AnimatePresence mode="wait">
           <motion.div
-            key={currentStep}
+            key={`${currentStep}-${currentStep === 'resume' && resumeFileName ? 'upload' : 'default'}`}
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -12 }}
             transition={{ duration: 0.25, ease: 'easeOut' }}
-            className="mb-10"
+            className={ONBOARDING_STEP_HEADER}
           >
             <p className="text-eyebrow">
               Step {currentStepIndex + 1} of {STEPS.length}
             </p>
-            <h1 className="text-display mt-3 text-2xl sm:text-3xl">
-              {STEP_META[currentStep].title}
-            </h1>
-            <p className="mt-3 text-base text-muted-foreground">
-              {STEP_META[currentStep].subtitle}
-            </p>
+            <h1 className={`mt-2 ${ONBOARDING_PAGE_TITLE}`}>{resumeStepMeta.title}</h1>
+            <p className={ONBOARDING_PAGE_SUBTITLE}>{resumeStepMeta.subtitle}</p>
           </motion.div>
         </AnimatePresence>
 
-        {/* Step content */}
-        <AnimatePresence mode="wait">
-          {/* ─────────────── STEP 1: RESUME ─────────────── */}
-          {currentStep === 'resume' && (
-            <motion.div
-              key="step-resume"
-              initial={{ opacity: 0, x: 40 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -40 }}
-              transition={{ duration: 0.3 }}
-            >
-              <div
-                ref={resumeDropRef}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setIsDraggingResume(true);
-                }}
-                onDragLeave={() => setIsDraggingResume(false)}
-                onDrop={handleResumeDrop}
-                className={`relative mx-auto max-w-md rounded-2xl border-2 border-dashed p-8 text-center transition-all duration-200 ${
-                  isDraggingResume
-                    ? 'scale-[1.02] border-primary bg-primary/5'
-                    : resumeFileName
-                      ? 'border-primary/30 bg-muted/30'
-                      : 'border-border/60 bg-card/50 hover:border-primary/30'
-                }`}
+        {/* Step content — fills leftover viewport */}
+        <div className={ONBOARDING_MAIN}>
+          <AnimatePresence mode="wait">
+            {/* ─────────────── STEP 1: RESUME ─────────────── */}
+            {currentStep === 'resume' && (
+              <motion.div
+                key={`step-resume-${resumeFileName ? 'upload' : 'choice'}`}
+                initial={{ opacity: 0, x: 40 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -40 }}
+                transition={{ duration: 0.3 }}
               >
-                <AnimatePresence mode="wait">
-                  {resumeFileName &&
-                  (imports.resume.status === 'success' ||
-                    imports.resume.status === 'added' ||
-                    imports.resume.status === 'importing') ? (
+                {showResumeChoice ? (
+                  <div className="space-y-4">
+                    <ResumeStartChoice onSelect={handleResumeStartSelect} />
+                    {imports.resume.status === 'error' && imports.resume.message && (
+                      <p className="text-center text-sm text-destructive">
+                        {imports.resume.message}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div
+                    ref={resumeDropRef}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setIsDraggingResume(true);
+                    }}
+                    onDragLeave={() => setIsDraggingResume(false)}
+                    onDrop={handleResumeDrop}
+                    className={`relative mx-auto max-w-md p-8 text-center ${ONBOARDING_DROPZONE} ${
+                      isDraggingResume ? ONBOARDING_DROPZONE_ACTIVE : ''
+                    }`}
+                  >
                     <motion.div
                       key="uploaded"
                       initial={{ scale: 0.9, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0.9, opacity: 0 }}
                       className="flex flex-col items-center gap-4"
                     >
                       <div className="group relative">
                         {resumeThumbnail ? (
-                          <div className="relative h-48 w-36 overflow-hidden rounded-lg border border-border/40 bg-white shadow-md">
+                          <div className="relative h-48 w-36 overflow-hidden rounded-2xl border border-border/50 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
                             <Image
                               src={resumeThumbnail}
                               alt="Resume preview"
@@ -1609,8 +1754,8 @@ export default function OnboardingImportPage() {
                             />
                           </div>
                         ) : (
-                          <div className="flex h-48 w-36 flex-col items-center justify-center gap-2 rounded-lg border border-border/40 bg-muted/50 shadow-md">
-                            <FileText className="h-12 w-12 text-muted-foreground" />
+                          <div className="flex h-48 w-36 flex-col items-center justify-center gap-2 rounded-2xl border border-border/50 bg-muted/40 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+                            <FileText className="h-8 w-8 text-muted-foreground" />
                             <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                               PDF
                             </span>
@@ -1626,14 +1771,18 @@ export default function OnboardingImportPage() {
                             className="mt-2 space-y-1.5"
                           >
                             <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-                              <Loader2 className="h-3 w-3 animate-spin text-primary" /> AI parsing
-                              in background...
+                              <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                              AI parsing in background...
                             </p>
                             <div className="mx-auto h-1 w-32 overflow-hidden rounded-full bg-muted">
                               <motion.div
-                                className="h-full rounded-full bg-primary/60"
+                                className="h-full rounded-full bg-foreground/35"
                                 animate={{ x: ['-100%', '100%'] }}
-                                transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+                                transition={{
+                                  duration: 1.5,
+                                  repeat: Infinity,
+                                  ease: 'easeInOut',
+                                }}
                                 style={{ width: '50%' }}
                               />
                             </div>
@@ -1644,18 +1793,22 @@ export default function OnboardingImportPage() {
                         )}
                         {imports.resume.status === 'importing' && (
                           <p className="mt-1 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-                            <Loader2 className="h-3 w-3 animate-spin text-primary" /> Uploading...
+                            <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />{' '}
+                            Uploading...
                           </p>
                         )}
                         {imports.resume.status === 'success' && imports.resume.message && (
                           <motion.p
                             initial={{ opacity: 0, scale: 0.9 }}
                             animate={{ opacity: 1, scale: 1 }}
-                            className="mt-1 text-xs text-primary"
+                            className="mt-1 text-xs text-muted-foreground"
                           >
                             <CheckCircle2 className="mr-1 inline h-3 w-3" />
                             {imports.resume.message}
                           </motion.p>
+                        )}
+                        {imports.resume.status === 'error' && imports.resume.message && (
+                          <p className="mt-2 text-sm text-destructive">{imports.resume.message}</p>
                         )}
                       </div>
                       <div className="flex items-center gap-2">
@@ -1670,61 +1823,14 @@ export default function OnboardingImportPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => {
-                            setResumeFileName(null);
-                            setResumeFileUrl(null);
-                            setResumeThumbnail(null);
-                            updateImportStatus('resume', {
-                              status: 'idle',
-                              message: undefined,
-                              itemsImported: undefined,
-                            });
-                            setImportedData((prev) => {
-                              // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                              const { resume: _r, ...rest } = prev;
-                              return rest;
-                            });
-                          }}
+                          onClick={() => setShowDiscardResumeDialog(true)}
                           className="gap-1.5 text-muted-foreground hover:text-foreground"
                         >
                           <Trash2 className="h-3.5 w-3.5" /> Remove
                         </Button>
                       </div>
                     </motion.div>
-                  ) : (
-                    <motion.div
-                      key="placeholder"
-                      initial={{ scale: 0.9, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0.9, opacity: 0 }}
-                      className="flex flex-col items-center gap-4"
-                    >
-                      <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-muted/60">
-                        {imports.resume.status === 'importing' ? (
-                          <Loader2 className="h-10 w-10 animate-spin text-muted-foreground" />
-                        ) : (
-                          <FileText className="h-10 w-10 text-muted-foreground/60" />
-                        )}
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium">
-                          {isDraggingResume ? 'Drop your resume here' : 'Drag & drop your resume'}
-                        </p>
-                        <p className="mt-1 text-xs text-muted-foreground">PDF format, up to 10MB</p>
-                      </div>
-                      <Button
-                        onClick={() => document.getElementById('resume-upload')?.click()}
-                        disabled={imports.resume.status === 'importing'}
-                        className="gap-1.5"
-                      >
-                        <Upload className="h-4 w-4" /> Choose file
-                      </Button>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-                {imports.resume.status === 'error' && imports.resume.message && (
-                  <p className="mt-4 text-sm text-destructive">{imports.resume.message}</p>
+                  </div>
                 )}
 
                 <input
@@ -1734,209 +1840,210 @@ export default function OnboardingImportPage() {
                   className="hidden"
                   onChange={handleResumeUpload}
                 />
-              </div>
-            </motion.div>
-          )}
+              </motion.div>
+            )}
 
-          {/* ─────────────── STEP 2: PROFILE PHOTO ─────────────── */}
-          {currentStep === 'photo' && (
-            <motion.div
-              key="step-photo"
-              initial={{ opacity: 0, x: 40 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -40 }}
-              transition={{ duration: 0.3 }}
-            >
-              <div className="mx-auto max-w-4xl">
-                {uploadedPhoto ? (
-                  <div className="flex flex-col items-stretch gap-6 md:flex-row">
-                    {/* Crop area — fills available height */}
-                    <div className="relative aspect-square w-full overflow-hidden rounded-2xl border border-border/40 bg-black/5 md:aspect-square md:h-[min(70vh,32rem)] md:w-auto md:flex-shrink-0">
-                      <Cropper
-                        image={uploadedPhoto}
-                        crop={photoCrop}
-                        zoom={photoZoom}
-                        rotation={photoRotation}
-                        aspect={1}
-                        onCropChange={setPhotoCrop}
-                        onCropComplete={onCropComplete}
-                        onZoomChange={setPhotoZoom}
-                        cropShape="rect"
-                        showGrid={true}
-                        style={{
-                          containerStyle: { borderRadius: '1rem' },
-                          cropAreaStyle: { border: '2px solid hsl(var(--primary))' },
-                        }}
-                      />
-                    </div>
-
-                    {/* Controls — sidebar on desktop, below on mobile */}
-                    <div className="flex flex-col justify-between gap-4 rounded-xl border border-border/40 bg-card/80 p-5 backdrop-blur-sm md:w-56">
-                      <div className="space-y-5">
-                        {/* Zoom */}
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <label className="text-xs font-medium text-muted-foreground">
-                              Zoom
-                            </label>
-                            <span className="text-xs text-muted-foreground">
-                              {Math.round(photoZoom * 100)}%
-                            </span>
-                          </div>
-                          <Slider
-                            value={photoZoom}
-                            min={1}
-                            max={3}
-                            step={0.01}
-                            onChange={setPhotoZoom}
-                          />
-                        </div>
-
-                        {/* Tilt correction */}
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <label className="text-xs font-medium text-muted-foreground">
-                              Tilt correction
-                            </label>
-                            <span className="text-xs text-muted-foreground">{photoRotation}°</span>
-                          </div>
-                          <Slider
-                            value={photoRotation}
-                            min={-45}
-                            max={45}
-                            step={1}
-                            onChange={setPhotoRotation}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Action buttons */}
-                      <div className="flex flex-col gap-2 pt-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setPhotoRotation(0);
-                            setPhotoZoom(1);
-                            setPhotoCrop({ x: 0, y: 0 });
+            {/* ─────────────── STEP 2: PROFILE PHOTO ─────────────── */}
+            {currentStep === 'photo' && (
+              <motion.div
+                key="step-photo"
+                initial={{ opacity: 0, x: 40 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -40 }}
+                transition={{ duration: 0.3 }}
+              >
+                <div className="mx-auto w-full max-w-sm">
+                  {uploadedPhoto ? (
+                    <div className="flex flex-col gap-3">
+                      {/* Crop area — same square frame as empty state */}
+                      <div className="relative aspect-square w-full overflow-hidden rounded-2xl border border-border/50 bg-black/5">
+                        <Cropper
+                          image={uploadedPhoto}
+                          crop={photoCrop}
+                          zoom={photoZoom}
+                          rotation={photoRotation}
+                          aspect={1}
+                          onCropChange={setPhotoCrop}
+                          onCropComplete={onCropComplete}
+                          onZoomChange={setPhotoZoom}
+                          cropShape="rect"
+                          showGrid={true}
+                          style={{
+                            containerStyle: { borderRadius: '1rem' },
+                            cropAreaStyle: { border: '2px solid hsl(var(--foreground) / 0.35)' },
                           }}
-                          className="w-full gap-1.5"
-                        >
-                          <RotateCcw className="h-3.5 w-3.5" /> Reset
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => document.getElementById('photo-upload')?.click()}
-                          className="w-full gap-1.5"
-                        >
-                          <Camera className="h-3.5 w-3.5" /> Reupload
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={handleRemovePhoto}
-                          className="w-full gap-1.5 text-muted-foreground hover:text-destructive"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" /> Remove
-                        </Button>
+                        />
+                      </div>
+
+                      {/* Thin control bar — same width as square */}
+                      <div className={`flex flex-col gap-3 px-3.5 py-3 ${ONBOARDING_SURFACE}`}>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="min-w-0 space-y-1.5">
+                            <div className="flex items-center justify-between gap-2">
+                              <label className="text-[11px] font-medium text-muted-foreground">
+                                Zoom
+                              </label>
+                              <span className="text-[11px] tabular-nums text-muted-foreground">
+                                {Math.round(photoZoom * 100)}%
+                              </span>
+                            </div>
+                            <Slider
+                              value={photoZoom}
+                              min={1}
+                              max={3}
+                              step={0.01}
+                              size="sm"
+                              onChange={setPhotoZoom}
+                              aria-label="Zoom"
+                            />
+                          </div>
+                          <div className="min-w-0 space-y-1.5">
+                            <div className="flex items-center justify-between gap-2">
+                              <label className="text-[11px] font-medium text-muted-foreground">
+                                Tilt
+                              </label>
+                              <span className="text-[11px] tabular-nums text-muted-foreground">
+                                {photoRotation}°
+                              </span>
+                            </div>
+                            <Slider
+                              value={photoRotation}
+                              min={-45}
+                              max={45}
+                              step={1}
+                              size="sm"
+                              onChange={setPhotoRotation}
+                              aria-label="Tilt correction"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-1 border-t border-border/40 pt-2.5">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setPhotoRotation(0);
+                              setPhotoZoom(1);
+                              setPhotoCrop({ x: 0, y: 0 });
+                            }}
+                            className="h-8 gap-1.5 px-2 text-xs text-muted-foreground"
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" /> Reset
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => document.getElementById('photo-upload')?.click()}
+                            className="h-8 gap-1.5 px-2 text-xs text-muted-foreground"
+                          >
+                            <Camera className="h-3.5 w-3.5" /> Replace
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleRemovePhoto}
+                            className="h-8 gap-1.5 px-2 text-xs text-muted-foreground hover:text-destructive"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" /> Remove
+                          </Button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ) : (
-                  <div
-                    ref={photoDropRef}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      setIsDraggingPhoto(true);
-                    }}
-                    onDragLeave={() => setIsDraggingPhoto(false)}
-                    onDrop={handlePhotoDrop}
-                    className={`flex flex-col items-center gap-4 rounded-2xl border-2 border-dashed p-12 text-center transition-all duration-200 ${
-                      isDraggingPhoto
-                        ? 'scale-[1.02] border-primary bg-primary/5'
-                        : 'border-border/60 bg-card/50 hover:border-primary/30'
-                    }`}
-                  >
-                    <div className="flex h-24 w-24 items-center justify-center rounded-full bg-muted/60">
-                      {isUploadingPhoto ? (
-                        <Loader2 className="h-12 w-12 animate-spin text-muted-foreground" />
-                      ) : (
-                        <User className="h-12 w-12 text-muted-foreground/50" />
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium">
-                        {isDraggingPhoto ? 'Drop your photo here' : 'Drag & drop your photo'}
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        JPG, PNG or WebP. Drag the square area to select your display picture.
-                      </p>
-                    </div>
-                    <Button
-                      onClick={() => document.getElementById('photo-upload')?.click()}
-                      disabled={isUploadingPhoto}
-                      className="gap-1.5"
+                  ) : (
+                    <div
+                      ref={photoDropRef}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setIsDraggingPhoto(true);
+                      }}
+                      onDragLeave={() => setIsDraggingPhoto(false)}
+                      onDrop={handlePhotoDrop}
+                      className={`flex aspect-square w-full flex-col items-center justify-center gap-4 p-8 text-center ${ONBOARDING_DROPZONE} ${
+                        isDraggingPhoto ? ONBOARDING_DROPZONE_ACTIVE : 'hover:border-border'
+                      }`}
                     >
-                      <Upload className="h-4 w-4" /> Choose photo
-                    </Button>
-                  </div>
-                )}
-
-                {error && <p className="mt-4 text-center text-sm text-destructive">{error}</p>}
-
-                <input
-                  id="photo-upload"
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handlePhotoUpload}
-                />
-              </div>
-            </motion.div>
-          )}
-
-          {/* ─────────────── STEP 3: CONNECT ACCOUNTS ─────────────── */}
-          {currentStep === 'accounts' && (
-            <motion.div
-              key="step-accounts"
-              initial={{ opacity: 0, x: 40 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -40 }}
-              transition={{ duration: 0.3 }}
-              className="space-y-4"
-            >
-              {/* LinkedIn */}
-              <div className="rounded-xl border border-border/40 bg-card/80 p-5 backdrop-blur-sm">
-                <div className="flex items-start gap-4">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-muted">
-                    <Linkedin className="h-6 w-6 text-foreground" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
+                      <div className={ONBOARDING_ICON_WELL}>
+                        {isUploadingPhoto ? (
+                          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                        ) : (
+                          <User className="h-5 w-5 text-muted-foreground/50" />
+                        )}
+                      </div>
                       <div>
-                        <h3 className="font-semibold">LinkedIn</h3>
-                        <p className="text-xs text-muted-foreground">
-                          Import your headline, work experience, education, and profile photo
+                        <p className="text-sm font-medium">
+                          {isDraggingPhoto ? 'Drop your photo here' : 'Drag & drop your photo'}
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          JPG, PNG or WebP · Square crop
                         </p>
                       </div>
-                      {connectedLinkedin && (
-                        <StatusBadge
-                          status={
-                            imports.linkedin.status === 'idle' ? 'success' : imports.linkedin.status
-                          }
-                          message={linkedinName || 'Connected'}
-                        />
-                      )}
+                      <Button
+                        onClick={() => document.getElementById('photo-upload')?.click()}
+                        disabled={isUploadingPhoto}
+                        className="gap-1.5"
+                      >
+                        <Upload className="h-4 w-4" /> Choose photo
+                      </Button>
                     </div>
-                    <div className="mt-3 flex items-center gap-2">
+                  )}
+
+                  {error && <p className="mt-4 text-center text-sm text-destructive">{error}</p>}
+
+                  <input
+                    id="photo-upload"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handlePhotoUpload}
+                  />
+                </div>
+              </motion.div>
+            )}
+
+            {/* ─────────────── STEP 3: CONNECT ACCOUNTS ─────────────── */}
+            {currentStep === 'accounts' && (
+              <motion.div
+                key="step-accounts"
+                initial={{ opacity: 0, x: 40 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -40 }}
+                transition={{ duration: 0.3 }}
+                className="space-y-5"
+              >
+                {/* LinkedIn */}
+                <div className={`${ONBOARDING_SURFACE_PAD} ${ONBOARDING_SURFACE} min-h-[11.5rem]`}>
+                  <div className="flex items-start gap-4">
+                    <div className={ONBOARDING_ICON_WELL}>
+                      <Linkedin className="h-5 w-5 text-foreground" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <h3 className={ONBOARDING_CARD_TITLE}>LinkedIn</h3>
+                          <p className={`mt-0.5 ${ONBOARDING_CARD_DESCRIPTION}`}>
+                            Connect your account, or paste a profile link / username
+                          </p>
+                        </div>
+                        {(connectedLinkedin || imports.linkedin.status === 'success') && (
+                          <StatusBadge
+                            status={
+                              imports.linkedin.status === 'idle'
+                                ? 'success'
+                                : imports.linkedin.status
+                            }
+                            message={linkedinName || 'Connected'}
+                          />
+                        )}
+                      </div>
+
                       {connectedLinkedin ? (
-                        <>
+                        <div className="mt-4 flex items-center gap-2">
                           <div className="flex items-center gap-2">
-                            {connectedLinkedin.imageUrl && (
+                            {linkedinAvatarUrl && (
                               <div className="relative h-7 w-7 overflow-hidden rounded-full ring-1 ring-border/50">
                                 <Image
-                                  src={connectedLinkedin.imageUrl}
+                                  src={linkedinAvatarUrl}
                                   alt=""
                                   fill
                                   className="object-cover"
@@ -1951,7 +2058,7 @@ export default function OnboardingImportPage() {
                               variant="ghost"
                               size="sm"
                               className="h-7 text-xs"
-                              onClick={handleLinkedInImport}
+                              onClick={() => handleLinkedInImport()}
                               disabled={imports.linkedin.status === 'importing'}
                             >
                               {imports.linkedin.status === 'importing' ? (
@@ -1975,69 +2082,158 @@ export default function OnboardingImportPage() {
                               )}
                             </Button>
                           </div>
-                        </>
+                        </div>
                       ) : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={handleLinkedInConnect}
-                          disabled={linkedinConnecting}
-                          className="gap-1.5"
-                        >
-                          {linkedinConnecting ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        <div className="mt-4 space-y-3">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleLinkedInConnect}
+                            disabled={linkedinConnecting}
+                            className="gap-1.5"
+                          >
+                            {linkedinConnecting ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Linkedin className="h-3.5 w-3.5" />
+                            )}
+                            {linkedinConnecting ? 'Connecting...' : 'Connect LinkedIn'}
+                          </Button>
+                          {imports.linkedin.status === 'success' || importedData.linkedin ? (
+                            <div className="rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5">
+                              <div className="flex items-center gap-2">
+                                {linkedinAvatarUrl ? (
+                                  <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full ring-1 ring-border/50">
+                                    <Image
+                                      src={linkedinAvatarUrl}
+                                      alt=""
+                                      fill
+                                      className="object-cover"
+                                      unoptimized
+                                    />
+                                  </div>
+                                ) : (
+                                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-background ring-1 ring-border/50">
+                                    <Linkedin className="h-3.5 w-3.5 text-foreground" />
+                                  </div>
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate text-sm font-medium text-foreground">
+                                    {linkedinName || 'LinkedIn profile'}
+                                  </p>
+                                  <p className="truncate text-xs text-muted-foreground">
+                                    {linkedinHeadline ||
+                                      imports.linkedin.message ||
+                                      'Profile imported'}
+                                  </p>
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 shrink-0 text-xs text-muted-foreground hover:text-destructive"
+                                  onClick={() => {
+                                    setLinkedinProfileInput('');
+                                    setImportedData((prev) => {
+                                      const next = { ...prev };
+                                      delete next.linkedin;
+                                      return next;
+                                    });
+                                    updateImportStatus('linkedin', {
+                                      status: 'idle',
+                                      message: undefined,
+                                      itemsImported: undefined,
+                                    });
+                                  }}
+                                >
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </div>
                           ) : (
-                            <Linkedin className="h-3.5 w-3.5" />
+                            <>
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <span className="h-px flex-1 bg-border/70" />
+                                <span>or paste profile link</span>
+                                <span className="h-px flex-1 bg-border/70" />
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Input
+                                  placeholder="linkedin.com/in/you or username"
+                                  value={linkedinProfileInput}
+                                  onChange={(e) => setLinkedinProfileInput(e.target.value)}
+                                  className="h-9 text-sm"
+                                  onKeyDown={(e) =>
+                                    e.key === 'Enter' && handleLinkedInImport(linkedinProfileInput)
+                                  }
+                                />
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleLinkedInImport(linkedinProfileInput)}
+                                  disabled={
+                                    imports.linkedin.status === 'importing' ||
+                                    !linkedinProfileInput.trim()
+                                  }
+                                  className="shrink-0"
+                                >
+                                  {imports.linkedin.status === 'importing' ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    'Import'
+                                  )}
+                                </Button>
+                              </div>
+                            </>
                           )}
-                          {linkedinConnecting ? 'Connecting...' : 'Connect LinkedIn'}
-                        </Button>
+                        </div>
+                      )}
+
+                      {linkedinError && (
+                        <p className="mt-2 text-xs text-destructive">{linkedinError}</p>
+                      )}
+                      {imports.linkedin.status === 'error' && imports.linkedin.message && (
+                        <p className="mt-2 text-xs text-destructive">{imports.linkedin.message}</p>
                       )}
                     </div>
-                    {linkedinError && (
-                      <p className="mt-2 text-xs text-destructive">{linkedinError}</p>
-                    )}
-                    {imports.linkedin.status === 'error' && imports.linkedin.message && (
-                      <p className="mt-2 text-xs text-destructive">{imports.linkedin.message}</p>
-                    )}
                   </div>
                 </div>
-              </div>
 
-              {/* GitHub */}
-              <div className="rounded-xl border border-border/40 bg-card/80 p-5 backdrop-blur-sm">
-                <div className="flex items-start gap-4">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-muted">
-                    <Github className="h-6 w-6 text-foreground" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="font-semibold">GitHub</h3>
-                        <p className="text-xs text-muted-foreground">
-                          Import your repositories, programming languages, and contribution stats
-                        </p>
-                      </div>
-                      {(connectedGithub || imports.github.status === 'success') && (
-                        <StatusBadge
-                          status={
-                            imports.github.status === 'idle' ? 'success' : imports.github.status
-                          }
-                          message={
-                            githubUsernameFromAccount
-                              ? `@${githubUsernameFromAccount}`
-                              : 'Connected'
-                          }
-                        />
-                      )}
+                {/* GitHub */}
+                <div className={`${ONBOARDING_SURFACE_PAD} ${ONBOARDING_SURFACE} min-h-[11.5rem]`}>
+                  <div className="flex items-start gap-4">
+                    <div className={ONBOARDING_ICON_WELL}>
+                      <Github className="h-5 w-5 text-foreground" />
                     </div>
-                    <div className="mt-3 flex items-center gap-2">
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <h3 className={ONBOARDING_CARD_TITLE}>GitHub</h3>
+                          <p className={`mt-0.5 ${ONBOARDING_CARD_DESCRIPTION}`}>
+                            Connect your account, or paste a profile link / username
+                          </p>
+                        </div>
+                        {(connectedGithub || imports.github.status === 'success') && (
+                          <StatusBadge
+                            status={
+                              imports.github.status === 'idle' ? 'success' : imports.github.status
+                            }
+                            message={
+                              githubDisplayUsername
+                                ? `@${githubDisplayUsername}`
+                                : githubUsername
+                                  ? `@${extractGitHubUsername(githubUsername) || githubUsername}`
+                                  : 'Imported'
+                            }
+                          />
+                        )}
+                      </div>
+
                       {connectedGithub ? (
-                        <>
+                        <div className="mt-4 flex items-center gap-2">
                           <div className="flex items-center gap-2">
-                            {connectedGithub.imageUrl && (
+                            {githubAvatarUrl && (
                               <div className="relative h-7 w-7 overflow-hidden rounded-full ring-1 ring-border/50">
                                 <Image
-                                  src={connectedGithub.imageUrl}
+                                  src={githubAvatarUrl}
                                   alt=""
                                   fill
                                   className="object-cover"
@@ -2046,7 +2242,7 @@ export default function OnboardingImportPage() {
                               </div>
                             )}
                             <span className="text-sm text-muted-foreground">
-                              @{githubUsernameFromAccount}
+                              @{githubDisplayUsername}
                             </span>
                           </div>
                           <div className="ml-auto flex items-center gap-1.5">
@@ -2055,8 +2251,7 @@ export default function OnboardingImportPage() {
                               size="sm"
                               className="h-7 text-xs"
                               onClick={() =>
-                                githubUsernameFromAccount &&
-                                handleGitHubImport(githubUsernameFromAccount)
+                                githubDisplayUsername && handleGitHubImport(githubDisplayUsername)
                               }
                               disabled={imports.github.status === 'importing'}
                             >
@@ -2081,651 +2276,437 @@ export default function OnboardingImportPage() {
                               )}
                             </Button>
                           </div>
-                        </>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={handleGitHubConnect}
-                          disabled={githubConnecting}
-                          className="gap-1.5"
-                        >
-                          {githubConnecting ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Github className="h-3.5 w-3.5" />
-                          )}
-                          {githubConnecting ? 'Connecting...' : 'Connect GitHub'}
-                        </Button>
-                      )}
-                    </div>
-                    {githubError && <p className="mt-2 text-xs text-destructive">{githubError}</p>}
-                    {imports.github.status === 'error' && imports.github.message && (
-                      <p className="mt-2 text-xs text-destructive">{imports.github.message}</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Facebook */}
-              <div className="rounded-xl border border-border/40 bg-card/80 p-5 backdrop-blur-sm">
-                <div className="flex items-start gap-4">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-muted">
-                    <FacebookIcon className="h-6 w-6" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="font-semibold">Facebook</h3>
-                        <p className="text-xs text-muted-foreground">
-                          Import your name, profile photo, and basic info
-                        </p>
-                      </div>
-                      {connectedFacebook && (
-                        <StatusBadge status="success" message={facebookName || 'Connected'} />
-                      )}
-                    </div>
-                    <div className="mt-3 flex items-center gap-2">
-                      {connectedFacebook ? (
-                        <>
-                          <div className="flex items-center gap-2">
-                            {connectedFacebook.imageUrl && (
-                              <div className="relative h-7 w-7 overflow-hidden rounded-full ring-1 ring-border/50">
-                                <Image
-                                  src={connectedFacebook.imageUrl}
-                                  alt=""
-                                  fill
-                                  className="object-cover"
-                                  unoptimized
-                                />
-                              </div>
-                            )}
-                            <span className="text-sm text-muted-foreground">{facebookName}</span>
-                          </div>
-                          <div className="ml-auto">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 text-xs text-muted-foreground hover:text-destructive"
-                              onClick={handleFacebookDisconnect}
-                              disabled={facebookDisconnecting}
-                            >
-                              {facebookDisconnecting ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : (
-                                <X className="h-3 w-3" />
-                              )}
-                              <span className="ml-1">Disconnect</span>
-                            </Button>
-                          </div>
-                        </>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={handleFacebookConnect}
-                          disabled={facebookConnecting}
-                          className="gap-1.5"
-                        >
-                          {facebookConnecting ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <FacebookIcon className="h-3.5 w-3.5" />
-                          )}
-                          {facebookConnecting ? 'Connecting...' : 'Connect Facebook'}
-                        </Button>
-                      )}
-                    </div>
-                    {facebookError && (
-                      <p className="mt-2 text-xs text-destructive">{facebookError}</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          )}
-
-          {/* ─────────────── STEP 4: ADDITIONAL PLATFORMS ─────────────── */}
-          {currentStep === 'platforms' && (
-            <motion.div
-              key="step-platforms"
-              initial={{ opacity: 0, x: 40 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -40 }}
-              transition={{ duration: 0.3 }}
-              className="space-y-4"
-            >
-              {/* YouTube */}
-              <div className="rounded-xl border border-border/40 bg-card/80 p-5 backdrop-blur-sm">
-                <div className="flex items-start gap-4">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-                    <YouTubeIcon className="h-5 w-5" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-semibold">YouTube</h3>
-                      <StatusBadge
-                        status={imports.youtube.status}
-                        message={imports.youtube.message}
-                      />
-                    </div>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      Import your latest videos and channel info
-                    </p>
-                    <div className="mt-3 flex items-center gap-2">
-                      <Input
-                        placeholder="@channel or channel URL"
-                        value={youtubeChannel}
-                        onChange={(e) => setYoutubeChannel(e.target.value)}
-                        className="h-9 text-sm"
-                        onKeyDown={(e) => e.key === 'Enter' && handleYouTubeImport()}
-                      />
-                      <Button
-                        size="sm"
-                        onClick={handleYouTubeImport}
-                        disabled={imports.youtube.status === 'importing' || !youtubeChannel.trim()}
-                        className="shrink-0"
-                      >
-                        {imports.youtube.status === 'importing' ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          'Import'
-                        )}
-                      </Button>
-                    </div>
-                    {imports.youtube.status === 'error' && imports.youtube.message && (
-                      <p className="mt-2 flex items-center gap-1 text-xs text-destructive">
-                        <AlertCircle className="h-3 w-3 shrink-0" />
-                        {imports.youtube.message}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Medium */}
-              <div className="rounded-xl border border-border/40 bg-card/80 p-5 backdrop-blur-sm">
-                <div className="flex items-start gap-4">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-                    <MediumIcon className="h-5 w-5" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-semibold">Medium</h3>
-                      <StatusBadge
-                        status={imports.medium.status}
-                        message={imports.medium.message}
-                      />
-                    </div>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      Import your published articles and blog posts
-                    </p>
-                    <div className="mt-3 flex items-center gap-2">
-                      <Input
-                        placeholder="@username or medium.com/@username"
-                        value={mediumUsername}
-                        onChange={(e) => setMediumUsername(e.target.value)}
-                        className="h-9 text-sm"
-                        onKeyDown={(e) => e.key === 'Enter' && handleMediumImport()}
-                      />
-                      <Button
-                        size="sm"
-                        onClick={handleMediumImport}
-                        disabled={imports.medium.status === 'importing' || !mediumUsername.trim()}
-                        className="shrink-0"
-                      >
-                        {imports.medium.status === 'importing' ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          'Import'
-                        )}
-                      </Button>
-                    </div>
-                    {imports.medium.status === 'error' && imports.medium.message && (
-                      <p className="mt-2 flex items-center gap-1 text-xs text-destructive">
-                        <AlertCircle className="h-3 w-3 shrink-0" />
-                        {imports.medium.message}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Substack */}
-              <div className="rounded-xl border border-border/40 bg-card/80 p-5 backdrop-blur-sm">
-                <div className="flex items-start gap-4">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-                    <SubstackIcon className="h-5 w-5" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-semibold">Substack</h3>
-                      <StatusBadge
-                        status={imports.substack.status}
-                        message={imports.substack.message}
-                      />
-                    </div>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      Import your newsletter posts and publications
-                    </p>
-                    <div className="mt-3 flex items-center gap-2">
-                      <Input
-                        placeholder="name or yourname.substack.com"
-                        value={substackUsername}
-                        onChange={(e) => setSubstackUsername(e.target.value)}
-                        className="h-9 text-sm"
-                        onKeyDown={(e) => e.key === 'Enter' && handleSubstackImport()}
-                      />
-                      <Button
-                        size="sm"
-                        onClick={handleSubstackImport}
-                        disabled={
-                          imports.substack.status === 'importing' || !substackUsername.trim()
-                        }
-                        className="shrink-0"
-                      >
-                        {imports.substack.status === 'importing' ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          'Import'
-                        )}
-                      </Button>
-                    </div>
-                    {imports.substack.status === 'error' && imports.substack.message && (
-                      <p className="mt-2 flex items-center gap-1 text-xs text-destructive">
-                        <AlertCircle className="h-3 w-3 shrink-0" />
-                        {imports.substack.message}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Links */}
-              <div className="rounded-xl border border-border/40 bg-card/80 p-5 backdrop-blur-sm">
-                <div className="flex items-start gap-4">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-                    <Link2 className="h-5 w-5 text-muted-foreground" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-semibold">Custom Links</h3>
-                      <StatusBadge status={imports.links.status} message={imports.links.message} />
-                    </div>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      Add any other website, portfolio, or social link
-                    </p>
-                    <div className="mt-3 flex items-center gap-2">
-                      <Input
-                        placeholder="https://..."
-                        value={linkInput}
-                        onChange={(e) => setLinkInput(e.target.value)}
-                        className="h-9 text-sm"
-                        onKeyDown={(e) => e.key === 'Enter' && handleAddLink()}
-                      />
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleAddLink}
-                        className="shrink-0"
-                      >
-                        <Plus className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    {linkUrls.length > 0 && (
-                      <div className="mt-2.5 space-y-1.5">
-                        {linkUrls.map((url) => (
-                          <div
-                            key={url}
-                            className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-1.5 text-xs"
-                          >
-                            <Link2 className="h-3 w-3 shrink-0 text-muted-foreground" />
-                            <span className="flex-1 truncate text-muted-foreground">{url}</span>
-                            <button
-                              onClick={() => handleRemoveLink(url)}
-                              className="shrink-0 text-muted-foreground/40 hover:text-destructive"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </div>
-                        ))}
-                        <Button
-                          size="sm"
-                          onClick={handleLinksImport}
-                          disabled={imports.links.status === 'importing'}
-                          className="mt-2 w-full"
-                        >
-                          {imports.links.status === 'importing' ? (
-                            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                          ) : null}
-                          Import {linkUrls.length} link{linkUrls.length !== 1 ? 's' : ''}
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          )}
-
-          {/* ─────────────── STEP 5: PORTFOLIO PHOTOS ─────────────── */}
-          {currentStep === 'gallery' && (
-            <motion.div
-              key="step-gallery"
-              initial={{ opacity: 0, x: 40 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -40 }}
-              transition={{ duration: 0.3 }}
-            >
-              <div className="mx-auto max-w-lg">
-                <div className="grid grid-cols-3 gap-4">
-                  {[0, 1, 2].map((idx) => (
-                    <div key={idx} className="aspect-square">
-                      {galleryPhotos[idx] ? (
-                        <div className="group relative h-full w-full overflow-hidden rounded-xl border border-border/40 shadow-sm">
-                          <Image
-                            src={galleryPhotos[idx]}
-                            alt={`Portfolio ${idx + 1}`}
-                            fill
-                            className="object-cover"
-                            unoptimized
-                          />
-                          <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
-                            <button
-                              onClick={() => handleRemoveGalleryPhoto(idx)}
-                              className="flex h-8 w-8 items-center justify-center rounded-full bg-destructive text-white shadow-md"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </div>
-                          <div className="absolute bottom-2 right-2 rounded-full bg-primary p-1 opacity-0 shadow-sm group-hover:opacity-0">
-                            <CheckCircle2 className="h-3 w-3 text-primary-foreground" />
-                          </div>
                         </div>
                       ) : (
-                        <button
-                          onClick={() => document.getElementById('gallery-upload')?.click()}
-                          disabled={isUploadingGallery}
-                          className="flex h-full w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border/60 bg-card/50 transition-all hover:border-primary/30 hover:bg-primary/5"
-                        >
-                          {isUploadingGallery ? (
-                            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                        <div className="mt-4 space-y-3">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleGitHubConnect}
+                            disabled={githubConnecting}
+                            className="gap-1.5"
+                          >
+                            {githubConnecting ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Github className="h-3.5 w-3.5" />
+                            )}
+                            {githubConnecting ? 'Connecting...' : 'Connect GitHub'}
+                          </Button>
+                          {imports.github.status === 'success' || importedData.github ? (
+                            <div className="rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5">
+                              <div className="flex items-center gap-2">
+                                {githubAvatarUrl ? (
+                                  <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full ring-1 ring-border/50">
+                                    <Image
+                                      src={githubAvatarUrl}
+                                      alt=""
+                                      fill
+                                      className="object-cover"
+                                      unoptimized
+                                    />
+                                  </div>
+                                ) : (
+                                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-background ring-1 ring-border/50">
+                                    <Github className="h-3.5 w-3.5 text-foreground" />
+                                  </div>
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate text-sm font-medium text-foreground">
+                                    @{githubDisplayUsername || githubUsername}
+                                  </p>
+                                  {imports.github.message && (
+                                    <p className="truncate text-xs text-muted-foreground">
+                                      {imports.github.message}
+                                    </p>
+                                  )}
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 shrink-0 text-xs text-muted-foreground hover:text-destructive"
+                                  onClick={() => {
+                                    setGithubUsername('');
+                                    setImportedData((prev) => {
+                                      const next = { ...prev };
+                                      delete next.github;
+                                      return next;
+                                    });
+                                    updateImportStatus('github', {
+                                      status: 'idle',
+                                      message: undefined,
+                                      itemsImported: undefined,
+                                    });
+                                  }}
+                                >
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </div>
                           ) : (
                             <>
-                              <Plus className="h-8 w-8 text-muted-foreground/40" />
-                              <span className="text-xs text-muted-foreground">Add photo</span>
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <span className="h-px flex-1 bg-border/70" />
+                                <span>or paste profile link</span>
+                                <span className="h-px flex-1 bg-border/70" />
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Input
+                                  placeholder="github.com/you or username"
+                                  value={githubUsername}
+                                  onChange={(e) => setGithubUsername(e.target.value)}
+                                  className="h-9 text-sm"
+                                  onKeyDown={(e) =>
+                                    e.key === 'Enter' && handleGitHubImport(githubUsername)
+                                  }
+                                />
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleGitHubImport(githubUsername)}
+                                  disabled={
+                                    imports.github.status === 'importing' || !githubUsername.trim()
+                                  }
+                                  className="shrink-0"
+                                >
+                                  {imports.github.status === 'importing' ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    'Import'
+                                  )}
+                                </Button>
+                              </div>
                             </>
                           )}
-                        </button>
+                        </div>
+                      )}
+
+                      {githubError && (
+                        <p className="mt-2 text-xs text-destructive">{githubError}</p>
+                      )}
+                      {imports.github.status === 'error' && imports.github.message && (
+                        <p className="mt-2 text-xs text-destructive">{imports.github.message}</p>
                       )}
                     </div>
-                  ))}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {/* ─────────────── STEP 4: ADDITIONAL PLATFORMS ─────────────── */}
+            {currentStep === 'platforms' && (
+              <motion.div
+                key="step-platforms"
+                initial={{ opacity: 0, x: 40 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -40 }}
+                transition={{ duration: 0.3 }}
+                className="space-y-4"
+              >
+                {/* Personal portfolio */}
+                <div className={`${ONBOARDING_SURFACE_PAD} ${ONBOARDING_SURFACE}`}>
+                  <div className="flex items-start gap-4">
+                    <div className={ONBOARDING_ICON_WELL}>
+                      <Globe className="h-5 w-5 text-foreground" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className={ONBOARDING_CARD_TITLE}>Personal portfolio</h3>
+                      <p className={`mt-0.5 ${ONBOARDING_CARD_DESCRIPTION}`}>
+                        Add your website or portfolio URL
+                      </p>
+                      <div className="mt-3">
+                        <Input
+                          placeholder="https://yoursite.com"
+                          value={portfolioUrl}
+                          onChange={(e) => setPortfolioUrl(e.target.value)}
+                          className="h-9 text-sm"
+                          inputMode="url"
+                          autoComplete="url"
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                <p className="mt-4 text-center text-xs text-muted-foreground">
-                  {galleryPhotos.length}/3 photos added. These will be displayed in your portfolio
-                  showcase.
-                </p>
+                {/* YouTube */}
+                <div className={`${ONBOARDING_SURFACE_PAD} ${ONBOARDING_SURFACE}`}>
+                  <div className="flex items-start gap-4">
+                    <div className={ONBOARDING_ICON_WELL}>
+                      <YouTubeIcon className="h-5 w-5" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <h3 className={ONBOARDING_CARD_TITLE}>YouTube</h3>
+                        <StatusBadge
+                          status={imports.youtube.status}
+                          message={imports.youtube.message}
+                        />
+                      </div>
+                      <p className={`mt-0.5 ${ONBOARDING_CARD_DESCRIPTION}`}>
+                        Import your latest videos and channel info
+                      </p>
+                      <div className="mt-3 flex items-center gap-2">
+                        <Input
+                          placeholder="@channel or channel URL"
+                          value={youtubeChannel}
+                          onChange={(e) => setYoutubeChannel(e.target.value)}
+                          className="h-9 text-sm"
+                          onKeyDown={(e) => e.key === 'Enter' && handleYouTubeImport()}
+                        />
+                        <Button
+                          size="sm"
+                          onClick={handleYouTubeImport}
+                          disabled={
+                            imports.youtube.status === 'importing' || !youtubeChannel.trim()
+                          }
+                          className="shrink-0"
+                        >
+                          {imports.youtube.status === 'importing' ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            'Import'
+                          )}
+                        </Button>
+                      </div>
+                      {imports.youtube.status === 'error' && imports.youtube.message && (
+                        <p className="mt-2 flex items-center gap-1 text-xs text-destructive">
+                          <AlertCircle className="h-3 w-3 shrink-0" />
+                          {imports.youtube.message}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
 
-                {error && <p className="mt-2 text-center text-sm text-destructive">{error}</p>}
+                {/* Medium */}
+                <div className={`${ONBOARDING_SURFACE_PAD} ${ONBOARDING_SURFACE}`}>
+                  <div className="flex items-start gap-4">
+                    <div className={ONBOARDING_ICON_WELL}>
+                      <MediumIcon className="h-5 w-5" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <h3 className={ONBOARDING_CARD_TITLE}>Medium</h3>
+                        <StatusBadge
+                          status={imports.medium.status}
+                          message={imports.medium.message}
+                        />
+                      </div>
+                      <p className={`mt-0.5 ${ONBOARDING_CARD_DESCRIPTION}`}>
+                        Import your published articles and blog posts
+                      </p>
+                      <div className="mt-3 flex items-center gap-2">
+                        <Input
+                          placeholder="@username or medium.com/@username"
+                          value={mediumUsername}
+                          onChange={(e) => setMediumUsername(e.target.value)}
+                          className="h-9 text-sm"
+                          onKeyDown={(e) => e.key === 'Enter' && handleMediumImport()}
+                        />
+                        <Button
+                          size="sm"
+                          onClick={handleMediumImport}
+                          disabled={imports.medium.status === 'importing' || !mediumUsername.trim()}
+                          className="shrink-0"
+                        >
+                          {imports.medium.status === 'importing' ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            'Import'
+                          )}
+                        </Button>
+                      </div>
+                      {imports.medium.status === 'error' && imports.medium.message && (
+                        <p className="mt-2 flex items-center gap-1 text-xs text-destructive">
+                          <AlertCircle className="h-3 w-3 shrink-0" />
+                          {imports.medium.message}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
 
-                <input
-                  id="gallery-upload"
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={handleGalleryUpload}
-                />
-              </div>
-            </motion.div>
-          )}
+                {/* Substack */}
+                <div className={`${ONBOARDING_SURFACE_PAD} ${ONBOARDING_SURFACE}`}>
+                  <div className="flex items-start gap-4">
+                    <div className={ONBOARDING_ICON_WELL}>
+                      <SubstackIcon className="h-5 w-5" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <h3 className={ONBOARDING_CARD_TITLE}>Substack</h3>
+                        <StatusBadge
+                          status={imports.substack.status}
+                          message={imports.substack.message}
+                        />
+                      </div>
+                      <p className={`mt-0.5 ${ONBOARDING_CARD_DESCRIPTION}`}>
+                        Import your newsletter posts and publications
+                      </p>
+                      <div className="mt-3 flex items-center gap-2">
+                        <Input
+                          placeholder="name or yourname.substack.com"
+                          value={substackUsername}
+                          onChange={(e) => setSubstackUsername(e.target.value)}
+                          className="h-9 text-sm"
+                          onKeyDown={(e) => e.key === 'Enter' && handleSubstackImport()}
+                        />
+                        <Button
+                          size="sm"
+                          onClick={handleSubstackImport}
+                          disabled={
+                            imports.substack.status === 'importing' || !substackUsername.trim()
+                          }
+                          className="shrink-0"
+                        >
+                          {imports.substack.status === 'importing' ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            'Import'
+                          )}
+                        </Button>
+                      </div>
+                      {imports.substack.status === 'error' && imports.substack.message && (
+                        <p className="mt-2 flex items-center gap-1 text-xs text-destructive">
+                          <AlertCircle className="h-3 w-3 shrink-0" />
+                          {imports.substack.message}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
 
-          {/* ─────────────── STEP 6: REVIEW (transition) ─────────────── */}
-          {currentStep === 'review' && (
+                {/* Links */}
+                <div className={`${ONBOARDING_SURFACE_PAD} ${ONBOARDING_SURFACE}`}>
+                  <div className="flex items-start gap-4">
+                    <div className={ONBOARDING_ICON_WELL}>
+                      <Link2 className="h-5 w-5 text-foreground" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <h3 className={ONBOARDING_CARD_TITLE}>Custom Links</h3>
+                        <StatusBadge
+                          status={imports.links.status}
+                          message={imports.links.message}
+                        />
+                      </div>
+                      <p className={`mt-0.5 ${ONBOARDING_CARD_DESCRIPTION}`}>
+                        Add any other website or social link
+                      </p>
+                      <div className="mt-3 flex items-center gap-2">
+                        <Input
+                          placeholder="https://..."
+                          value={linkInput}
+                          onChange={(e) => setLinkInput(e.target.value)}
+                          className="h-9 text-sm"
+                          onKeyDown={(e) => e.key === 'Enter' && handleAddLink()}
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleAddLink}
+                          className="shrink-0"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      {linkUrls.length > 0 && (
+                        <div className="mt-2.5 space-y-1.5">
+                          {linkUrls.map((url) => (
+                            <div
+                              key={url}
+                              className="flex items-center gap-2 rounded-xl bg-muted/40 px-3 py-1.5 text-xs"
+                            >
+                              <Link2 className="h-3 w-3 shrink-0 text-muted-foreground" />
+                              <span className="flex-1 truncate text-muted-foreground">{url}</span>
+                              <button
+                                onClick={() => handleRemoveLink(url)}
+                                className="shrink-0 text-muted-foreground/40 hover:text-destructive"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                          ))}
+                          <Button
+                            size="sm"
+                            onClick={handleLinksImport}
+                            disabled={imports.links.status === 'importing'}
+                            className="mt-2 w-full"
+                          >
+                            {imports.links.status === 'importing' ? (
+                              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                            ) : null}
+                            Import {linkUrls.length} link{linkUrls.length !== 1 ? 's' : ''}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Error */}
+          {error && currentStep !== 'photo' && (
             <motion.div
-              key="step-review"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.4, ease: 'easeOut' }}
-              className="text-center"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="mt-4 rounded-2xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
             >
-              <div className="mx-auto max-w-md space-y-6">
-                {/* Animated checkmark icon */}
-                <motion.div
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  transition={{ type: 'spring', stiffness: 200, damping: 15, delay: 0.2 }}
-                  className="mx-auto flex h-20 w-20 items-center justify-center rounded-2xl bg-primary/10"
-                >
-                  <motion.div
-                    initial={{ scale: 0, rotate: -180 }}
-                    animate={{ scale: 1, rotate: 0 }}
-                    transition={{ type: 'spring', stiffness: 200, damping: 12, delay: 0.4 }}
-                  >
-                    <CheckCircle2 className="h-10 w-10 text-primary" />
-                  </motion.div>
-                </motion.div>
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.5 }}
-                >
-                  <h2 className="text-xl font-bold">All set!</h2>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    We&apos;ve gathered your data. Head straight to your dashboard, or review the
-                    details first if you&apos;d like.
-                  </p>
-                </motion.div>
-
-                {/* Summary of what was collected */}
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.6 }}
-                  className="space-y-2 text-left"
-                >
-                  {(imports.resume.status === 'success' || imports.resume.status === 'added') && (
-                    <motion.div
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.7 }}
-                      className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-3 text-sm"
-                    >
-                      {imports.resume.status === 'added' && resumeParsingPromise ? (
-                        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
-                      ) : (
-                        <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
-                      )}
-                      <span className="flex-1">Resume: {resumeFileName}</span>
-                      {imports.resume.status === 'added' && resumeParsingPromise && (
-                        <span className="text-xs text-muted-foreground">Processing...</span>
-                      )}
-                    </motion.div>
-                  )}
-                  {uploadedPhoto && (
-                    <motion.div
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.8 }}
-                      className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-3 text-sm"
-                    >
-                      <CheckCircle2 className="h-4 w-4 text-primary" />
-                      <span>Profile photo uploaded</span>
-                    </motion.div>
-                  )}
-                  {(connectedLinkedin || imports.linkedin.status === 'success') && (
-                    <motion.div
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.9 }}
-                      className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-3 text-sm"
-                    >
-                      <CheckCircle2 className="h-4 w-4 text-primary" />
-                      <span>LinkedIn: {linkedinName || 'Connected'}</span>
-                    </motion.div>
-                  )}
-                  {(connectedGithub || imports.github.status === 'success') && (
-                    <motion.div
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 1.0 }}
-                      className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-3 text-sm"
-                    >
-                      <CheckCircle2 className="h-4 w-4 text-primary" />
-                      <span>GitHub: @{githubUsernameFromAccount || githubUsername}</span>
-                    </motion.div>
-                  )}
-                  {connectedFacebook && (
-                    <motion.div
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 1.1 }}
-                      className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-3 text-sm"
-                    >
-                      <CheckCircle2 className="h-4 w-4 text-primary" />
-                      <span>Facebook: {facebookName || 'Connected'}</span>
-                    </motion.div>
-                  )}
-                  {galleryPhotos.length > 0 && (
-                    <motion.div
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 1.2 }}
-                      className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-3 text-sm"
-                    >
-                      <CheckCircle2 className="h-4 w-4 text-primary" />
-                      <span>
-                        {galleryPhotos.length} portfolio photo
-                        {galleryPhotos.length !== 1 ? 's' : ''}
-                      </span>
-                    </motion.div>
-                  )}
-
-                  {/* Show if nothing was collected */}
-                  {imports.resume.status === 'idle' &&
-                    !uploadedPhoto &&
-                    !connectedLinkedin &&
-                    imports.linkedin.status !== 'success' &&
-                    !connectedGithub &&
-                    imports.github.status !== 'success' &&
-                    !connectedFacebook &&
-                    galleryPhotos.length === 0 && (
-                      <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: 0.7 }}
-                        className="rounded-lg border border-muted bg-muted/30 p-4 text-center text-sm text-muted-foreground"
-                      >
-                        No data imported yet. You can still review and fill in details manually.
-                      </motion.div>
-                    )}
-                </motion.div>
-              </div>
-
-              {/* Starting template picker — choice persists to the review/complete flow.
-                  Placed outside the narrow summary column so previews have room. */}
-              {isPortfolioEnabled() && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 1.3 }}
-                  className="mx-auto mt-8 max-w-2xl border-t pt-6"
-                >
-                  <OnboardingTemplateChoice />
-                </motion.div>
-              )}
+              {error}
             </motion.div>
           )}
-        </AnimatePresence>
+        </div>
 
-        {/* Error */}
-        {error && currentStep !== 'photo' && currentStep !== 'gallery' && (
+        {/* Navigation — hidden on resume choice (options are the CTAs) */}
+        {!showResumeChoice && (
           <motion.div
+            className={ONBOARDING_FOOTER}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="mt-4 rounded-lg bg-destructive/10 p-3 text-sm text-destructive"
+            transition={{ delay: 0.3 }}
           >
-            {error}
+            <div>
+              {(currentStepIndex > 0 || Boolean(resumeFileName)) && (
+                <Button
+                  variant="ghost"
+                  onClick={goBack}
+                  disabled={isCompleting || isWaitingForParsing}
+                  className="gap-1.5"
+                >
+                  <ArrowLeft className="h-4 w-4" /> Back
+                </Button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={goNext}
+                disabled={isCompleting || isWaitingForParsing}
+                className="gap-1.5 px-6"
+                size="lg"
+                variant={hasCurrentStepAction ? 'default' : 'outline'}
+              >
+                {isCompleting || isWaitingForParsing ? (
+                  <>
+                    <Spinner size="sm" />
+                    {isWaitingForParsing ? 'Finalizing...' : 'Creating resume...'}
+                  </>
+                ) : (
+                  <>
+                    {primaryNextLabel}
+                    <ArrowRight className="h-4 w-4" />
+                  </>
+                )}
+              </Button>
+            </div>
           </motion.div>
         )}
-
-        {/* Navigation */}
-        <motion.div
-          className="mt-12 flex items-center justify-between border-t border-border/60 pt-6"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.3 }}
-        >
-          <div>
-            {currentStepIndex > 0 && (
-              <Button variant="ghost" onClick={goBack} className="gap-1.5">
-                <ArrowLeft className="h-4 w-4" /> Back
-              </Button>
-            )}
-          </div>
-
-          <div className="flex items-center gap-3">
-            {/* Skip on optional steps */}
-            {currentStep !== 'review' && (
-              <Button variant="ghost" onClick={goNext} className="text-muted-foreground">
-                Skip
-              </Button>
-            )}
-
-            {currentStep === 'review' ? (
-              <div className="flex items-center gap-3">
-                {/* Secondary: review everything step by step (optional) */}
-                <Button
-                  onClick={() => handleGoToReview()}
-                  disabled={isWaitingForParsing}
-                  variant="outline"
-                  size="lg"
-                  className="gap-2"
-                >
-                  <Pencil className="h-4 w-4" />
-                  Review details
-                </Button>
-
-                {/* Primary: skip review and go straight to the dashboard */}
-                <Button
-                  onClick={() => handleGoToReview({ skipReview: true })}
-                  disabled={isWaitingForParsing}
-                  className="gap-2 px-8"
-                  size="lg"
-                >
-                  {isWaitingForParsing ? (
-                    <>
-                      <Spinner size="sm" />
-                      Finalizing...
-                    </>
-                  ) : (
-                    <>
-                      Go to Dashboard
-                      <ArrowRight className="h-4 w-4" />
-                    </>
-                  )}
-                </Button>
-              </div>
-            ) : isLastDataStep ? (
-              <Button onClick={goNext} className="gap-2 px-6" size="lg">
-                Review
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            ) : (
-              <Button onClick={goNext} className="gap-1.5" size="lg">
-                Next
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
-        </motion.div>
       </div>
 
-      {/* ─── Full-screen parsing progress overlay ─── */}
+      {/* ─── Full-screen parsing / complete progress overlay ─── */}
       <AnimatePresence>
-        {isWaitingForParsing && (
+        {(isWaitingForParsing || isCompleting) && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -2753,14 +2734,22 @@ export default function OnboardingImportPage() {
               </div>
 
               <div className="space-y-1.5">
-                <h3 className="text-section-title text-lg">Reading your resume</h3>
+                <h3 className="text-section-title text-lg">
+                  {isWaitingForParsing ? 'Reading your resume' : 'Creating your resume'}
+                </h3>
                 <p className="text-sm text-muted-foreground">
-                  Extracting experience, skills, and education
-                  {resumeFileName && (
+                  {isWaitingForParsing ? (
                     <>
-                      {' '}
-                      from <span className="font-medium text-foreground">{resumeFileName}</span>
+                      Extracting experience, skills, and education
+                      {resumeFileName && (
+                        <>
+                          {' '}
+                          from <span className="font-medium text-foreground">{resumeFileName}</span>
+                        </>
+                      )}
                     </>
+                  ) : (
+                    'Setting up your profile so you can edit it in the builder'
                   )}
                 </p>
               </div>
@@ -2775,12 +2764,31 @@ export default function OnboardingImportPage() {
                     transition={{ duration: 15, ease: 'easeOut', times: [0, 0.2, 0.5, 0.8, 1] }}
                   />
                 </div>
-                <p className="text-xs text-muted-foreground">This usually takes 10–30 seconds.</p>
+                <p className="text-xs text-muted-foreground">
+                  {isWaitingForParsing ? 'This usually takes 10–30 seconds.' : 'Almost there…'}
+                </p>
               </div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      <AlertDialog open={showDiscardResumeDialog} onOpenChange={setShowDiscardResumeDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard uploaded resume?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {resumeFileName
+                ? `This will remove "${resumeFileName}" and any data we've extracted from it. You can upload again or start blank.`
+                : "This will remove your uploaded resume and any data we've extracted from it. You can upload again or start blank."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep resume</AlertDialogCancel>
+            <AlertDialogAction onClick={discardResumeAndReturnToChoice}>Discard</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

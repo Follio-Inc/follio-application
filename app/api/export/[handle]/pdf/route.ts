@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import type { PdfLayout } from '@/services/export.service';
 import { generateResumePDF } from '@/services/export.service';
 import { getProfileByHandle } from '@/services/profile.service';
+import type { PdfLayout } from '@/types';
 
 import { assertResumeExportAccess, contentDispositionAttachment } from '../access';
 
-const VALID_LAYOUTS = new Set<PdfLayout>(['paged', 'continuous']);
+const VALID_LAYOUTS = new Set<string>(['continuous', 'a4', 'letter', 'paged']);
+
+function normalizeLayoutParam(raw: string): PdfLayout {
+  if (raw === 'continuous' || raw === 'a4' || raw === 'letter') return raw;
+  // Legacy `paged` and unknown values → Letter
+  return 'letter';
+}
 
 /**
  * PDF generation launches a headless Chromium instance, which requires the
@@ -24,11 +30,12 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 /**
- * GET /api/export/[handle]/pdf?layout=paged|continuous
+ * GET /api/export/[handle]/pdf?layout=continuous|a4|letter
  * Export profile as a downloadable PDF resume.
  *
  * Query params:
- *  - `layout` – `'paged'` (default) or `'continuous'`.
+ *  - `layout` – `'continuous'`, `'a4'`, or `'letter'` (default `'letter'`).
+ *    Legacy `'paged'` is accepted and treated as `'letter'`.
  *
  * The profile owner may always download their own PDF, regardless of
  * visibility settings. External visitors are subject to the normal
@@ -41,11 +48,10 @@ export async function GET(
   const { handle } = await params;
 
   try {
-    // Parse layout from query string, default to 'paged'
-    const layoutParam = request.nextUrl.searchParams.get('layout') ?? 'paged';
-    const layout: PdfLayout = VALID_LAYOUTS.has(layoutParam as PdfLayout)
-      ? (layoutParam as PdfLayout)
-      : 'paged';
+    const layoutParam = request.nextUrl.searchParams.get('layout') ?? 'letter';
+    const layout = VALID_LAYOUTS.has(layoutParam)
+      ? normalizeLayoutParam(layoutParam)
+      : ('letter' as PdfLayout);
 
     const profile = await getProfileByHandle(handle);
 

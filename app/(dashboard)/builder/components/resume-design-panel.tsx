@@ -27,6 +27,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { ResumeColorThemeSwitch } from '@/components/resume-color-theme-switch';
+import { ResumePageLayoutSwitch } from '@/components/resume-page-layout-switch';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -42,6 +43,11 @@ import { Slider } from '@/components/ui/slider';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import {
+  getHeaderLayoutSectionLabel,
+  HEADER_PHOTO_LAYOUT_OPTIONS,
+  HEADER_TEXT_ALIGNMENT_OPTIONS,
+} from '@/lib/resume/header-layout';
+import {
   RESUME_DESIGN_DEFAULTS,
   RESUME_FONT_LABELS,
   RESUME_FONT_MAP,
@@ -50,15 +56,20 @@ import {
   type ResumeDividerStyle,
   type ResumeFontFamily,
   type ResumeHeaderAlignment,
+  type ResumeHeaderPhotoLayout,
 } from '@/types';
 
 import { ResumeFontLoader } from '@/app/u/[handle]/views/resume-font-loader';
-import { buildDefaultDesignForTemplate } from '@/lib/resume/templates';
+import { buildDefaultDesignForTemplate, getTemplateDefaultShowPhoto } from '@/lib/resume/templates';
 
 import { useJustifyAll } from '../lib/use-justify-all';
 import { useBuilderStore } from './builder-store-provider';
 
 // ─── Constants ────────────────────────────────────────────────────
+
+const PHOTO_SIZE_MIN = 40;
+const PHOTO_SIZE_MAX = 120;
+const PHOTO_SIZE_STEP = 4;
 
 const PRESET_COLORS = [
   '#0f172a', // Deep Ink
@@ -166,40 +177,120 @@ function ColorPicker({ value, onChange, label }: ColorPickerProps) {
   );
 }
 
-// ─── Alignment Selector ───────────────────────────────────────────
+// ─── Header Layout Selector (same control; options adapt to photo) ─
 
-interface AlignmentSelectorProps {
-  value: ResumeHeaderAlignment;
-  onChange: (alignment: ResumeHeaderAlignment) => void;
+interface HeaderLayoutSelectorProps {
+  alignment: ResumeHeaderAlignment;
+  photoLayout: ResumeHeaderPhotoLayout;
+  showPhoto: boolean;
+  onAlignmentChange: (alignment: ResumeHeaderAlignment) => void;
+  onPhotoLayoutChange: (layout: ResumeHeaderPhotoLayout) => void;
 }
 
-function AlignmentSelector({ value, onChange }: AlignmentSelectorProps) {
-  const options: { value: ResumeHeaderAlignment; icon: typeof AlignLeft; label: string }[] = [
-    { value: 'left', icon: AlignLeft, label: 'Left' },
-    { value: 'center', icon: AlignCenter, label: 'Center' },
-    { value: 'right', icon: AlignRight, label: 'Right' },
-  ];
+function HeaderLayoutSelector({
+  alignment,
+  photoLayout,
+  showPhoto,
+  onAlignmentChange,
+  onPhotoLayoutChange,
+}: HeaderLayoutSelectorProps) {
+  const textIcons: Record<ResumeHeaderAlignment, typeof AlignLeft> = {
+    left: AlignLeft,
+    center: AlignCenter,
+    right: AlignRight,
+  };
+  const photoIcons: Record<ResumeHeaderPhotoLayout, typeof AlignLeft> = {
+    'photo-left': AlignLeft,
+    'photo-right': AlignRight,
+    'photo-above': AlignCenter,
+    'photo-above-left': AlignLeft,
+  };
 
   return (
     <div className="space-y-2">
-      <Label className="text-xs font-medium text-muted-foreground">Header Alignment</Label>
-      <div className="flex gap-1">
-        {options.map((opt) => {
-          const Icon = opt.icon;
-          return (
-            <Button
-              key={opt.value}
-              type="button"
-              variant={value === opt.value ? 'default' : 'outline'}
-              size="sm"
-              className="h-8 flex-1 gap-1.5 px-2 text-xs"
-              onClick={() => onChange(opt.value)}
-            >
-              <Icon className="h-3.5 w-3.5" />
-              {opt.label}
-            </Button>
-          );
-        })}
+      <Label className="text-xs font-medium text-muted-foreground">
+        {getHeaderLayoutSectionLabel(showPhoto)}
+      </Label>
+      {showPhoto ? (
+        <div className="grid grid-cols-2 gap-1">
+          {HEADER_PHOTO_LAYOUT_OPTIONS.map((opt) => {
+            const Icon = photoIcons[opt.value];
+            return (
+              <Tooltip key={opt.value}>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant={photoLayout === opt.value ? 'default' : 'outline'}
+                    size="sm"
+                    className="h-8 gap-1.5 px-2 text-xs"
+                    onClick={() => onPhotoLayoutChange(opt.value)}
+                    aria-label={opt.description}
+                  >
+                    <Icon className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{opt.label}</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-xs">
+                  {opt.description}
+                </TooltipContent>
+              </Tooltip>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="flex gap-1">
+          {HEADER_TEXT_ALIGNMENT_OPTIONS.map((opt) => {
+            const Icon = textIcons[opt.value];
+            return (
+              <Button
+                key={opt.value}
+                type="button"
+                variant={alignment === opt.value ? 'default' : 'outline'}
+                size="sm"
+                className="h-8 flex-1 gap-1.5 px-2 text-xs"
+                onClick={() => onAlignmentChange(opt.value)}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {opt.label}
+              </Button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Photo Size Slider ────────────────────────────────────────────
+
+function PhotoSizeSlider({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (photoSize: number) => void;
+}) {
+  return (
+    <div className="space-y-2.5">
+      <Label className="text-xs font-medium text-muted-foreground">Photo size</Label>
+      <div className="flex items-center gap-3">
+        <span
+          aria-hidden
+          className="size-2.5 shrink-0 rounded-full border border-foreground/25 bg-foreground/10"
+        />
+        <Slider
+          size="sm"
+          value={value}
+          min={PHOTO_SIZE_MIN}
+          max={PHOTO_SIZE_MAX}
+          step={PHOTO_SIZE_STEP}
+          onChange={onChange}
+          aria-label="Photo size"
+        />
+        <span
+          aria-hidden
+          className="size-4 shrink-0 rounded-full border border-foreground/25 bg-foreground/10"
+        />
       </div>
     </div>
   );
@@ -330,8 +421,28 @@ export function ResumeDesignPanel({ open, onCloseAction }: ResumeDesignPanelProp
   );
 
   const handleReset = useCallback(() => {
-    updateDesign(buildDefaultDesignForTemplate(design.templateId));
-  }, [updateDesign, design.templateId]);
+    const nextDesign = buildDefaultDesignForTemplate(design.templateId);
+    updateDesign(nextDesign);
+
+    const nextShowPhoto = getTemplateDefaultShowPhoto(nextDesign.templateId);
+    const previousShowPhoto = Boolean(draftProfile.resumeShowPhoto);
+    if (previousShowPhoto === nextShowPhoto) return;
+
+    commitInlineChange({
+      resumeShowPhoto: nextShowPhoto,
+    } as Partial<typeof draftProfile>);
+
+    void fetch('/api/profile', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resumeShowPhoto: nextShowPhoto }),
+    }).catch((err) => {
+      console.error('Failed to sync resume photo visibility:', err);
+      commitInlineChange({
+        resumeShowPhoto: previousShowPhoto,
+      } as Partial<typeof draftProfile>);
+    });
+  }, [updateDesign, design.templateId, commitInlineChange, draftProfile.resumeShowPhoto]);
 
   // Clean up timeout on unmount
   useEffect(() => {
@@ -410,6 +521,13 @@ export function ResumeDesignPanel({ open, onCloseAction }: ResumeDesignPanelProp
                     value={design.colorTheme}
                     onChange={(colorTheme) => updateDesign({ colorTheme })}
                   />
+                  <div className="space-y-1.5 pt-1">
+                    <Label className="text-xs font-medium text-muted-foreground">Page layout</Label>
+                    <ResumePageLayoutSwitch
+                      value={design.pageLayout}
+                      onChange={(pageLayout) => updateDesign({ pageLayout })}
+                    />
+                  </div>
                 </section>
 
                 <Separator />
@@ -495,10 +613,20 @@ export function ResumeDesignPanel({ open, onCloseAction }: ResumeDesignPanelProp
                     Layout
                   </h3>
 
-                  <AlignmentSelector
-                    value={design.headerAlignment}
-                    onChange={(headerAlignment) => updateDesign({ headerAlignment })}
+                  <HeaderLayoutSelector
+                    alignment={design.headerAlignment}
+                    photoLayout={design.headerPhotoLayout}
+                    showPhoto={Boolean(draftProfile.resumeShowPhoto && draftProfile.avatarUrl)}
+                    onAlignmentChange={(headerAlignment) => updateDesign({ headerAlignment })}
+                    onPhotoLayoutChange={(headerPhotoLayout) => updateDesign({ headerPhotoLayout })}
                   />
+
+                  {Boolean(draftProfile.resumeShowPhoto && draftProfile.avatarUrl) && (
+                    <PhotoSizeSlider
+                      value={design.photoSize}
+                      onChange={(photoSize) => updateDesign({ photoSize })}
+                    />
+                  )}
 
                   <div className="space-y-2">
                     <Label className="text-xs font-medium text-muted-foreground">
@@ -574,9 +702,9 @@ export function ResumeDesignPanel({ open, onCloseAction }: ResumeDesignPanelProp
                     <AlertDialogHeader>
                       <AlertDialogTitle>Restore default design?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        This will reset colors, typography, layout, and spacing to the defaults for
-                        your selected template. Your template will not change. This action cannot be
-                        undone.
+                        This will reset colors, typography, emphasis, alignment, layout, spacing,
+                        and photo visibility to the defaults for your selected template. Your
+                        template will not change. This action cannot be undone.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

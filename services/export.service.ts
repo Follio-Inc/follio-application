@@ -18,13 +18,16 @@ import {
 import { logger } from '@/lib/logger';
 import { cleanPhoneDisplay } from '@/lib/phone';
 import { formatAtelierYearRange } from '@/lib/resume/atelier';
+import { isPhotoBeforeText, resolveHeaderComposition } from '@/lib/resume/header-layout';
 import { resolveResumeColorTheme } from '@/lib/resume-color-theme';
 import {
   buildResumeDesignStyleAttr,
+  mergeResumeDesign,
   parseResumeDesign,
   resolveResumeFonts,
 } from '@/lib/resume-design';
 import { getResumeTemplateId, isResumeAtelierRailSectionType } from '@/lib/resume/templates';
+import { getResumePageSize } from '@/lib/resume/page-layout';
 import { formatDate } from '@/lib/utils';
 import type {
   CustomSectionContent,
@@ -33,12 +36,22 @@ import type {
   InterestItem,
   JSONResume,
   LanguageItem,
+  PdfLayout,
   ProfileSection,
   PublicationItem,
   ResumeFontFamily,
   VolunteeringItem,
 } from '@/types';
 import { HEADER_SECTION_TYPES } from '@/types';
+
+export type { PdfLayout };
+
+/** Normalize legacy `paged` query values to Letter. */
+function normalizePdfLayout(layout: string | undefined): PdfLayout {
+  if (layout === 'continuous' || layout === 'a4' || layout === 'letter') return layout;
+  if (layout === 'paged') return 'letter';
+  return 'letter';
+}
 
 const serviceLogger = logger.child({ source: 'export-service' });
 
@@ -1033,6 +1046,53 @@ const RESUME_CSS = `
     text-align: var(--rd-header-alignment, center);
     margin-bottom: var(--rd-header-margin-bottom, 24px);
   }
+  .resume-header-identity {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    min-width: 0;
+    width: 100%;
+  }
+  .resume-header[data-header-composition='photo-left'] {
+    text-align: left;
+  }
+  .resume-header[data-header-composition='photo-left'] .resume-header-identity {
+    flex-direction: row;
+  }
+  .resume-header[data-header-composition='photo-left'] .resume-header-text {
+    flex: 1;
+    min-width: 0;
+    text-align: left;
+  }
+  .resume-header[data-header-composition='photo-right'] {
+    text-align: left;
+  }
+  .resume-header[data-header-composition='photo-right'] .resume-header-identity {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+  .resume-header[data-header-composition='photo-right'] .resume-header-text {
+    flex: 1;
+    min-width: 0;
+    text-align: left;
+  }
+  .resume-header[data-header-composition='photo-above'] {
+    text-align: center;
+  }
+  .resume-header[data-header-composition='photo-above'] .resume-header-identity {
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  .resume-header[data-header-composition='photo-above-left'] {
+    text-align: left;
+  }
+  .resume-header[data-header-composition='photo-above-left'] .resume-header-identity {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
   .resume-name {
     font-family: var(--rd-font-name, inherit);
     font-size: var(--rd-name-font-size, 28px);
@@ -1063,8 +1123,8 @@ const RESUME_CSS = `
   }
   .resume-contact-separator { color: #999; }
   .resume-header-photo {
-    width: 80px;
-    height: 80px;
+    width: var(--rd-photo-size, 80px);
+    height: var(--rd-photo-size, 80px);
     border-radius: 50%;
     object-fit: cover;
     flex-shrink: 0;
@@ -1315,7 +1375,7 @@ const RESUME_CSS = `
   }
   .resume-sleek-identity { display: flex; align-items: center; gap: 16px; min-width: 0; }
   .resume-sleek-photo {
-    width: 64px; height: 64px; border-radius: 50%;
+    width: var(--rd-photo-size, 64px); height: var(--rd-photo-size, 64px); border-radius: 50%;
     object-fit: cover; flex-shrink: 0;
   }
   .resume-paper--sleek .resume-name {
@@ -1391,7 +1451,7 @@ const RESUME_CSS = `
     width: 14px; background: var(--rd-accent-color, #7a9aa5);
   }
   .resume-studio-photo {
-    width: 64px; height: 64px; border-radius: 4px;
+    width: var(--rd-photo-size, 64px); height: var(--rd-photo-size, 64px); border-radius: 4px;
     object-fit: cover; flex-shrink: 0;
   }
   .resume-studio-identity-text { min-width: 0; }
@@ -1638,7 +1698,9 @@ export function toPDFHtml(profile: FullProfile): string {
     })();
 
     // ── Header HTML ────────────────────────────────────────
-    const showPhoto = profile.resumeShowPhoto && profile.avatarUrl;
+    const showPhoto = Boolean(profile.resumeShowPhoto && profile.avatarUrl);
+    const mergedDesign = mergeResumeDesign(parsedDesign);
+    const headerComposition = resolveHeaderComposition(showPhoto, mergedDesign.headerPhotoLayout);
     const contactLineHtml =
       contactItems.length > 0
         ? `<p class="resume-contact-line">${contactItems
@@ -1649,23 +1711,33 @@ export function toPDFHtml(profile: FullProfile): string {
             .join('')}</p>`
         : '';
 
+    const identityTextHtml = `
+          <div class="resume-header-text min-w-0">
+            <h1 class="resume-name">${escapeHtml(fullName)}</h1>
+            ${profile.headline ? `<p class="resume-headline">${escapeHtml(profile.headline)}</p>` : ''}
+            ${contactLineHtml}
+          </div>`;
+    const photoHtml = showPhoto
+      ? `<img src="${safeUrl(profile.avatarUrl)}" alt="${escapeHtml(fullName)}" class="resume-header-photo" />`
+      : '';
+
     let headerHtml: string;
-    if (showPhoto) {
+    if (headerComposition === 'text') {
       headerHtml = `
-      <header class="resume-header" style="display:flex;align-items:flex-start;gap:16px;">
-        <img src="${safeUrl(profile.avatarUrl)}" alt="${escapeHtml(fullName)}" class="resume-header-photo" />
-        <div style="min-width:0;flex:1;">
-          <h1 class="resume-name">${escapeHtml(fullName)}</h1>
-          ${profile.headline ? `<p class="resume-headline">${escapeHtml(profile.headline)}</p>` : ''}
-          ${contactLineHtml}
-        </div>
-      </header>`;
-    } else {
-      headerHtml = `
-      <header class="resume-header">
+      <header class="resume-header" data-header-composition="text">
         <h1 class="resume-name">${escapeHtml(fullName)}</h1>
         ${profile.headline ? `<p class="resume-headline">${escapeHtml(profile.headline)}</p>` : ''}
         ${contactLineHtml}
+      </header>`;
+    } else {
+      const identityInner = isPhotoBeforeText(headerComposition)
+        ? `${photoHtml}${identityTextHtml}`
+        : `${identityTextHtml}${photoHtml}`;
+      headerHtml = `
+      <header class="resume-header" data-header-composition="${headerComposition}">
+        <div class="resume-header-identity">
+          ${identityInner}
+        </div>
       </header>`;
     }
 
@@ -1781,7 +1853,7 @@ export function toPDFHtml(profile: FullProfile): string {
         if (!seenFields.has(id)) orderedValues.push(value);
       }
 
-      const photoHtml = showPhoto
+      const studioPhotoHtml = showPhoto
         ? `<img src="${safeUrl(profile.avatarUrl)}" alt="${escapeHtml(fullName)}" class="resume-studio-photo" />`
         : '';
       const contactListHtml =
@@ -1790,15 +1862,22 @@ export function toPDFHtml(profile: FullProfile): string {
               .map((value) => `<li class="resume-studio-contact-item">${escapeHtml(value)}</li>`)
               .join('')}</ul>`
           : '';
-
-      articleInnerHtml = `
-      <header class="resume-header resume-studio-header">
-        <div class="resume-studio-identity">
-          ${photoHtml}
-          <div class="resume-studio-identity-text">
+      const studioTextHtml = `
+          <div class="resume-studio-identity-text resume-header-text">
             <h1 class="resume-name">${escapeHtml(fullName)}</h1>
             ${profile.headline ? `<p class="resume-headline">${escapeHtml(profile.headline)}</p>` : ''}
-          </div>
+          </div>`;
+      const studioIdentityInner =
+        !showPhoto || headerComposition === 'text'
+          ? studioTextHtml
+          : isPhotoBeforeText(headerComposition)
+            ? `${studioPhotoHtml}${studioTextHtml}`
+            : `${studioTextHtml}${studioPhotoHtml}`;
+
+      articleInnerHtml = `
+      <header class="resume-header resume-studio-header" data-header-composition="${headerComposition}">
+        <div class="resume-studio-identity resume-header-identity">
+          ${studioIdentityInner}
         </div>
         ${contactListHtml}
       </header>
@@ -1809,7 +1888,7 @@ export function toPDFHtml(profile: FullProfile): string {
         .join('\n');
 
       if (isSleek) {
-        const photoHtml = showPhoto
+        const sleekPhotoHtml = showPhoto
           ? `<img src="${safeUrl(profile.avatarUrl)}" alt="${escapeHtml(fullName)}" class="resume-sleek-photo" />`
           : '';
         const contactListHtml =
@@ -1818,14 +1897,21 @@ export function toPDFHtml(profile: FullProfile): string {
                 .map((item) => `<li class="resume-sleek-contact-item">${escapeHtml(item)}</li>`)
                 .join('')}</ul>`
             : '';
-        const sleekHeaderHtml = `
-      <header class="resume-header resume-sleek-header">
-        <div class="resume-sleek-identity">
-          ${photoHtml}
-          <div style="min-width:0;">
+        const sleekTextHtml = `
+          <div class="resume-header-text" style="min-width:0;">
             <h1 class="resume-name">${escapeHtml(fullName)}</h1>
             ${profile.headline ? `<p class="resume-headline">${escapeHtml(profile.headline)}</p>` : ''}
-          </div>
+          </div>`;
+        const sleekIdentityInner =
+          !showPhoto || headerComposition === 'text'
+            ? sleekTextHtml
+            : isPhotoBeforeText(headerComposition)
+              ? `${sleekPhotoHtml}${sleekTextHtml}`
+              : `${sleekTextHtml}${sleekPhotoHtml}`;
+        const sleekHeaderHtml = `
+      <header class="resume-header resume-sleek-header" data-header-composition="${headerComposition}">
+        <div class="resume-sleek-identity resume-header-identity">
+          ${sleekIdentityInner}
         </div>
         ${contactListHtml}
       </header>`;
@@ -1871,14 +1957,13 @@ export function toPDFHtml(profile: FullProfile): string {
 // ═══════════════════════════════════════════════════════════════════
 
 /**
- * PDF layout mode.
- * - `'paged'`      – Standard Letter pages with automatic page breaks.
- * - `'continuous'`  – Single long page trimmed to content height.
+ * PDF options.
+ * - `'continuous'` — single long page trimmed to content height
+ * - `'a4'`         — ISO A4 pages with page breaks
+ * - `'letter'`     — US Letter pages with page breaks
  */
-export type PdfLayout = 'paged' | 'continuous';
-
 interface PdfOptions {
-  /** @default 'paged' */
+  /** @default 'letter' */
   layout?: PdfLayout;
 }
 
@@ -1970,14 +2055,21 @@ async function launchBrowser(): Promise<Browser> {
  * The HTML (from `toPDFHtml`) is rendered in headless Chrome via
  * Puppeteer and converted to PDF with the chosen layout mode:
  *
- *  - `'paged'` (default) — standard Letter-size pages with page breaks.
- *  - `'continuous'`       — single page trimmed to the actual content height.
+ *  - `'letter'` (default) — US Letter pages with page breaks
+ *  - `'a4'`               — ISO A4 pages with page breaks
+ *  - `'continuous'`       — single page trimmed to content height
  */
 export async function generateResumePDF(
   profile: FullProfile,
-  { layout = 'paged' }: PdfOptions = {}
+  { layout: rawLayout = 'letter' }: PdfOptions = {}
 ): Promise<Buffer> {
-  const html = toPDFHtml(profile);
+  const layout = normalizePdfLayout(rawLayout);
+  const pageSize = getResumePageSize(layout);
+  const paperWidthOverride =
+    layout === 'a4'
+      ? `<style>.resume-paper{max-width:${pageSize.widthPx}px;width:${pageSize.widthPx}px;}</style>`
+      : '';
+  const html = toPDFHtml(profile).replace('</head>', `${paperWidthOverride}</head>`);
 
   const browser = await launchBrowser();
 
@@ -1998,18 +2090,18 @@ export async function generateResumePDF(
         return paper ? paper.scrollHeight : document.body.scrollHeight;
       });
 
-      // Width = 816px (8.5″ at 96 dpi). Height = content + breathing room.
+      // Width = Letter (8.5″ at 96 dpi). Height = content + breathing room.
       pdfBuffer = await page.pdf({
-        width: '816px',
+        width: `${pageSize.widthPx}px`,
         height: `${contentHeight + 20}px`,
         printBackground: true,
         margin: { top: '0px', right: '0px', bottom: '0px', left: '0px' },
       });
     } else {
-      // Standard Letter pages. Margins are applied by the PDF renderer;
+      // A4 or Letter pages. Margins are applied by the PDF renderer;
       // the .resume-paper element's own padding handles the inner spacing.
       pdfBuffer = await page.pdf({
-        format: 'Letter',
+        format: pageSize.pdfFormat,
         printBackground: true,
         margin: { top: '0px', right: '0px', bottom: '0px', left: '0px' },
       });

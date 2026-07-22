@@ -17,6 +17,8 @@ import {
   buildDesignForTemplateSwitch,
   getAllResumeTemplates,
   getResumeTemplate,
+  getResumeTemplateId,
+  getTemplateDefaultShowPhoto,
   type ResumeTemplateId,
 } from '@/lib/resume/templates';
 import { cn } from '@/lib/utils';
@@ -53,7 +55,12 @@ function GalleryResumePreview({
   const [scale, setScale] = useState(0);
 
   const previewProfile = useMemo(
-    () => ({ ...profile, resumeDesign: design }) as PublicProfile,
+    () =>
+      ({
+        ...profile,
+        resumeDesign: design,
+        resumeShowPhoto: getTemplateDefaultShowPhoto(getResumeTemplateId(design.templateId)),
+      }) as PublicProfile,
     [profile, design]
   );
 

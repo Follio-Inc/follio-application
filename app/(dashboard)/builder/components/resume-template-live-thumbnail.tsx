@@ -3,7 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { CleanResumeView } from '@/app/u/[handle]/views/clean-resume-view';
-import { buildDesignForTemplateSwitch, type ResumeTemplateId } from '@/lib/resume/templates';
+import {
+  buildDesignForTemplateSwitch,
+  getTemplateDefaultShowPhoto,
+  type ResumeTemplateId,
+} from '@/lib/resume/templates';
 import { cn } from '@/lib/utils';
 import type { PublicProfile, ResumeDesign } from '@/types';
 
@@ -44,6 +48,8 @@ export function ResumeTemplateLiveThumbnail({
     return {
       ...profile,
       resumeDesign: nextDesign,
+      // Preview the template’s default photo policy so cards match Restore Defaults.
+      resumeShowPhoto: getTemplateDefaultShowPhoto(templateId),
     } as PublicProfile;
   }, [profile, currentDesign, templateId]);
 

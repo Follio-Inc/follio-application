@@ -1,7 +1,12 @@
+import { getClerkAuthorizedParties, warnIfClerkDevelopmentKeysInProduction } from '@/lib/clerk-env';
 import { isPortfolioEnabled } from '@/lib/features';
 import { extractHandleFromHost, isMainDomain } from '@/lib/url';
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
+
+warnIfClerkDevelopmentKeysInProduction();
+
+const authorizedParties = getClerkAuthorizedParties();
 
 type SubdomainRewriteRequest = {
   nextUrl: {
@@ -68,31 +73,34 @@ export function getSubdomainRewriteUrl(req: SubdomainRewriteRequest) {
   return url;
 }
 
-export default clerkMiddleware(async (auth, req) => {
-  // Allow Clerk's internal sign-out requests without interference
-  // This prevents "Failed to fetch" errors during sign-out
-  const pathname = req.nextUrl.pathname;
-  if (pathname.includes('clerk') || pathname.includes('__clerk')) {
-    return NextResponse.next();
-  }
-
-  // --- Subdomain routing ---
-  // Detect user subdomains: username.follio.me → rewrite to /u/username
-  const rewriteUrl = getSubdomainRewriteUrl(req);
-  if (rewriteUrl) {
-    return NextResponse.rewrite(rewriteUrl);
-  }
-
-  // Protect dashboard and builder routes
-  if (isProtectedRoute(req)) {
-    const { userId } = await auth();
-    if (!userId) {
-      const signInUrl = new URL('/sign-in', req.url);
-      signInUrl.searchParams.set('redirect_url', req.url);
-      return NextResponse.redirect(signInUrl);
+export default clerkMiddleware(
+  async (auth, req) => {
+    // Allow Clerk's internal sign-out requests without interference
+    // This prevents "Failed to fetch" errors during sign-out
+    const pathname = req.nextUrl.pathname;
+    if (pathname.includes('clerk') || pathname.includes('__clerk')) {
+      return NextResponse.next();
     }
-  }
-});
+
+    // --- Subdomain routing ---
+    // Detect user subdomains: username.follio.me → rewrite to /u/username
+    const rewriteUrl = getSubdomainRewriteUrl(req);
+    if (rewriteUrl) {
+      return NextResponse.rewrite(rewriteUrl);
+    }
+
+    // Protect dashboard and builder routes
+    if (isProtectedRoute(req)) {
+      const { userId } = await auth();
+      if (!userId) {
+        const signInUrl = new URL('/sign-in', req.url);
+        signInUrl.searchParams.set('redirect_url', req.url);
+        return NextResponse.redirect(signInUrl);
+      }
+    }
+  },
+  authorizedParties ? { authorizedParties } : {}
+);
 
 export const config = {
   matcher: [

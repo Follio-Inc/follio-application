@@ -6,15 +6,19 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
+import {
+  ONBOARDING_CARD_DESCRIPTION,
+  ONBOARDING_CARD_TITLE,
+  ONBOARDING_FOOTER,
+  ONBOARDING_PAGE_SHELL,
+  ONBOARDING_PAGE_SUBTITLE,
+  ONBOARDING_PAGE_TITLE,
+  ONBOARDING_SURFACE_INTERACTIVE,
+  ONBOARDING_SURFACE_PAD,
+  ONBOARDING_SURFACE_SELECTED,
+} from '@/lib/onboarding-ui';
+import { cn } from '@/lib/utils';
 
 const PURPOSE_OPTIONS = [
   { value: 'JOB_SEARCH', label: 'Job search', description: 'Looking for new opportunities' },
@@ -40,7 +44,6 @@ export default function OnboardingPurposePage() {
     setError(null);
 
     try {
-      // Save purpose if selected (optional)
       if (purpose) {
         const response = await fetch('/api/onboarding/purpose', {
           method: 'POST',
@@ -54,7 +57,6 @@ export default function OnboardingPurposePage() {
         }
       }
 
-      // Navigate to import hub
       router.push('/onboarding/import');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
@@ -68,8 +70,7 @@ export default function OnboardingPurposePage() {
 
   return (
     <>
-      {/* Progress bar — sits just beneath the app header */}
-      <div className="fixed left-0 right-0 top-16 z-40 h-0.5 bg-muted">
+      <div className="fixed left-0 right-0 top-14 z-40 h-0.5 bg-muted">
         <motion.div
           className="h-full bg-primary"
           initial={{ width: '0%' }}
@@ -78,17 +79,16 @@ export default function OnboardingPurposePage() {
         />
       </div>
 
-      <div className="mx-auto max-w-xl px-4 pb-24 pt-16 sm:px-6">
-        {/* Step header */}
+      <div className={ONBOARDING_PAGE_SHELL}>
         <motion.header
-          className="mb-10"
+          className="mb-5 shrink-0"
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, ease: 'easeOut' }}
         >
           <p className="text-eyebrow">Welcome to Follio</p>
-          <h1 className="text-display mt-3 text-3xl sm:text-4xl">What brings you here?</h1>
-          <p className="mt-3 text-base text-muted-foreground">
+          <h1 className={`mt-2 ${ONBOARDING_PAGE_TITLE}`}>What brings you here?</h1>
+          <p className={ONBOARDING_PAGE_SUBTITLE}>
             A quick note to help us tailor your profile. You can change this anytime in settings.
           </p>
         </motion.header>
@@ -97,47 +97,60 @@ export default function OnboardingPurposePage() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.08, ease: 'easeOut' }}
-          className="space-y-8"
+          className="flex min-h-0 flex-1 flex-col space-y-5"
         >
-          <div className="space-y-2">
-            <Label htmlFor="purpose">Main purpose</Label>
-            <Select value={purpose} onValueChange={setPurpose}>
-              <SelectTrigger id="purpose" className="h-11 w-full">
-                <SelectValue placeholder="Select your main purpose…" />
-              </SelectTrigger>
-              <SelectContent>
-                {PURPOSE_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    <div className="flex flex-col items-start">
-                      <span>{option.label}</span>
-                      <span className="text-xs text-muted-foreground">{option.description}</span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">Optional — pick the closest match.</p>
+          <div
+            className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-3.5"
+            role="group"
+            aria-label="Main purpose"
+          >
+            {PURPOSE_OPTIONS.map((option, index) => {
+              const selected = purpose === option.value;
+              return (
+                <motion.button
+                  key={option.value}
+                  type="button"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.28, delay: 0.06 + index * 0.04, ease: 'easeOut' }}
+                  onClick={() => setPurpose(option.value)}
+                  aria-pressed={selected}
+                  className={cn(
+                    `${ONBOARDING_SURFACE_PAD} text-left`,
+                    ONBOARDING_SURFACE_INTERACTIVE,
+                    selected && ONBOARDING_SURFACE_SELECTED
+                  )}
+                >
+                  <span className={`block ${ONBOARDING_CARD_TITLE} sm:text-[15px]`}>
+                    {option.label}
+                  </span>
+                  <span className={`mt-1 block ${ONBOARDING_CARD_DESCRIPTION}`}>
+                    {option.description}
+                  </span>
+                </motion.button>
+              );
+            })}
           </div>
+
+          <p className={ONBOARDING_CARD_DESCRIPTION}>Optional — pick the closest match.</p>
 
           {error && (
             <div
               role="alert"
-              className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+              className="rounded-2xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
             >
               {error}
             </div>
           )}
 
-          <div className="flex items-center justify-between border-t border-border/60 pt-6">
+          <div className={ONBOARDING_FOOTER}>
+            <div />
             <Button
-              variant="ghost"
-              onClick={handleSkip}
+              onClick={purpose ? handleContinue : handleSkip}
               disabled={isLoading}
-              className="text-muted-foreground"
+              className="gap-2"
+              variant={purpose ? 'default' : 'outline'}
             >
-              Skip for now
-            </Button>
-            <Button onClick={handleContinue} disabled={isLoading} className="gap-2" size="lg">
               {isLoading ? (
                 <>
                   <Spinner size="sm" />
@@ -145,7 +158,7 @@ export default function OnboardingPurposePage() {
                 </>
               ) : (
                 <>
-                  Continue
+                  {purpose ? 'Continue' : 'Skip to Next Step'}
                   <ArrowRight className="h-4 w-4" />
                 </>
               )}

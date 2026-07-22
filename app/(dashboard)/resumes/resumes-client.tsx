@@ -25,6 +25,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { cn } from '@/lib/utils';
 import { isPortfolioEnabled } from '@/lib/features';
+import type { ResumePageLayout } from '@/types';
 
 import { DownloadDialog } from '@/app/(dashboard)/builder/components/download-dialog';
 import { ShareDialog } from '@/components/share-dialog';
@@ -74,6 +75,8 @@ export interface ResumeItem {
   headline: string | null;
   updatedAt: string;
   createdAt: string;
+  /** Live resume page layout — gates download options. */
+  pageLayout: ResumePageLayout;
 }
 
 interface ResumeDashboardClientProps {
@@ -166,6 +169,7 @@ function createPlaceholderResume(resume: UploadCreatedResume): ResumeItem {
     headline: null,
     updatedAt: now,
     createdAt: now,
+    pageLayout: 'continuous',
   };
 }
 
@@ -822,6 +826,7 @@ export function ResumeDashboardClient({
         <DownloadDialog
           handle={downloadingResume.handle}
           resumeTitle={downloadingResume.resumeTitle}
+          resumePageLayout={downloadingResume.pageLayout}
           open={downloadDialogOpen}
           onOpenChange={(open) => {
             setDownloadDialogOpen(open);

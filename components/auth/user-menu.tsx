@@ -36,6 +36,8 @@ export function UserMenu() {
   const [copied, setCopied] = useState(false);
   const [handle, setHandle] = useState<string | null>(null);
   const [profileStatus, setProfileStatus] = useState<string | null>(null);
+  // null = still checking; false = incomplete onboarding (no Profile yet)
+  const [hasWorkspaceAccess, setHasWorkspaceAccess] = useState<boolean | null>(null);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -49,9 +51,14 @@ export function UserMenu() {
         const data = await res.json();
         setHandle(data.profile?.handle || null);
         setProfileStatus(data.profile?.status || null);
+        setHasWorkspaceAccess(Boolean(data.profile));
+      } else {
+        setHandle(null);
+        setProfileStatus(null);
+        setHasWorkspaceAccess(false);
       }
     } catch {
-      // silent
+      setHasWorkspaceAccess(false);
     }
   }, []);
 
@@ -215,44 +222,49 @@ export function UserMenu() {
             </>
           )}
 
-          <DropdownMenuSeparator className="my-0 bg-border/60" />
+          {/* Workspace links only after onboarding created a Profile.
+              Incomplete accounts stay on /onboarding — no escape hatches
+              into an empty dashboard shell. */}
+          {hasWorkspaceAccess ? (
+            <>
+              <DropdownMenuSeparator className="my-0 bg-border/60" />
 
-          {/* Primary navigation — workspace surfaces a signed-in user
-              moves between from anywhere in the app. */}
-          <DropdownMenuGroup className="p-2">
-            <DropdownMenuItem asChild>
-              <Link
-                href="/dashboard"
-                className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 transition-colors"
-              >
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/50">
-                  <LayoutDashboard className="h-4 w-4 text-muted-foreground" />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-sm font-medium">Dashboard</span>
-                  <span className="text-[11px] text-muted-foreground">
-                    {portfolioEnabled ? 'Your portfolio overview' : 'Your workspace overview'}
-                  </span>
-                </div>
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link
-                href="/resumes"
-                className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 transition-colors"
-              >
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/50">
-                  <FileText className="h-4 w-4 text-muted-foreground" />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-sm font-medium">Resumes</span>
-                  <span className="text-[11px] text-muted-foreground">
-                    Create and manage resumes
-                  </span>
-                </div>
-              </Link>
-            </DropdownMenuItem>
-          </DropdownMenuGroup>
+              <DropdownMenuGroup className="p-2">
+                <DropdownMenuItem asChild>
+                  <Link
+                    href="/dashboard"
+                    className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 transition-colors"
+                  >
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/50">
+                      <LayoutDashboard className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium">Dashboard</span>
+                      <span className="text-[11px] text-muted-foreground">
+                        {portfolioEnabled ? 'Your portfolio overview' : 'Your workspace overview'}
+                      </span>
+                    </div>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link
+                    href="/resumes"
+                    className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 transition-colors"
+                  >
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/50">
+                      <FileText className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium">Resumes</span>
+                      <span className="text-[11px] text-muted-foreground">
+                        Create and manage resumes
+                      </span>
+                    </div>
+                  </Link>
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+            </>
+          ) : null}
 
           <DropdownMenuSeparator className="my-0 bg-border/60" />
 
@@ -260,19 +272,20 @@ export function UserMenu() {
 
           <DropdownMenuSeparator className="my-0 bg-border/60" />
 
-          {/* Footer — quieter, account-level actions. Settings and
-              sign-out share the same compact row treatment so neither
-              competes with the primary nav above. */}
+          {/* Footer — quieter, account-level actions. Settings (when
+              onboarded) and sign-out share the same compact row treatment. */}
           <DropdownMenuGroup className="p-2">
-            <DropdownMenuItem asChild>
-              <Link
-                href="/settings"
-                className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-colors hover:text-foreground"
-              >
-                <Settings className="h-4 w-4" />
-                <span className="text-sm font-medium">Settings</span>
-              </Link>
-            </DropdownMenuItem>
+            {hasWorkspaceAccess ? (
+              <DropdownMenuItem asChild>
+                <Link
+                  href="/settings"
+                  className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <Settings className="h-4 w-4" />
+                  <span className="text-sm font-medium">Settings</span>
+                </Link>
+              </DropdownMenuItem>
+            ) : null}
             <DropdownMenuItem
               className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-colors focus:bg-destructive/5 focus:text-destructive"
               onClick={handleSignOut}

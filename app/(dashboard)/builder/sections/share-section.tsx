@@ -19,6 +19,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 import { isPortfolioEnabled } from '@/lib/features';
+import { buildResumePdfUrl } from '@/lib/hooks/use-resume-download';
+import { resolveResumePageLayout } from '@/lib/resume-design';
 import { getPortfolioUrl, getResumeUrl } from '@/lib/url';
 import type { FullProfile } from '@/types';
 
@@ -134,7 +136,9 @@ export function ShareSection({ profile }: ShareSectionProps) {
   const handleExportPDF = async () => {
     setIsExporting('pdf');
     try {
-      const response = await fetch(`/api/export/${profile.handle}/pdf`);
+      const layout = resolveResumePageLayout(profile.resumeDesign);
+      const pdfUrl = buildResumePdfUrl(profile.handle, layout, window.location.search);
+      const response = await fetch(pdfUrl);
       if (!response.ok) throw new Error('Export failed');
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);

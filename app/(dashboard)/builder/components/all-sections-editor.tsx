@@ -1216,37 +1216,6 @@ export function AllSectionsEditor() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      {/* Section jump nav — quick scroll to any section on long resumes */}
-      {orderedSections.length > 3 && (
-        <nav
-          aria-label="Jump to section"
-          className="scrollbar-thin -mx-1 mb-4 flex gap-1.5 overflow-x-auto pb-1"
-        >
-          {orderedSections.map((section) => {
-            const navTitle =
-              section.type === 'CUSTOM'
-                ? section.title || section.customName || 'Custom'
-                : SECTION_TITLES[section.type] || section.title;
-            const isActive = expandedSection === section.id;
-
-            return (
-              <button
-                key={section.id}
-                type="button"
-                onClick={() => jumpToSection(section.id)}
-                className={cn(
-                  'shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-                  isActive
-                    ? 'border-primary/40 bg-primary/10 text-primary'
-                    : 'border-border/60 bg-background text-muted-foreground hover:border-border hover:text-foreground'
-                )}
-              >
-                {navTitle}
-              </button>
-            );
-          })}
-        </nav>
-      )}
       <div className="space-y-3 pl-5">
         {/* Pinned sections (BASIC_INFO) — always at top, not draggable */}
         {pinnedSections.map((section) => renderSectionCard(section))}

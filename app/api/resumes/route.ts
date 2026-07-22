@@ -7,8 +7,10 @@ import { ensurePrimaryProfile } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { handleApiError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { resolveResumePageLayout } from '@/lib/resume/page-layout';
 import { generateUniqueResumeTitle } from '@/lib/resume-title';
 import { MAX_RESUMES_PER_USER } from '@/lib/validations';
+import type { ResumeDesign } from '@/types';
 
 /**
  * Convert a Prisma JsonValue (which can be `null`) to a valid nullable JSON input.
@@ -617,11 +619,25 @@ export async function GET() {
         headline: true,
         updatedAt: true,
         createdAt: true,
+        resumeDesign: true,
       },
     });
 
     return NextResponse.json({
-      resumes,
+      resumes: resumes.map((r) => ({
+        id: r.id,
+        handle: r.handle,
+        resumeTitle: r.resumeTitle,
+        status: r.status,
+        resumeVisibility: r.resumeVisibility,
+        firstName: r.firstName,
+        middleName: r.middleName,
+        lastName: r.lastName,
+        headline: r.headline,
+        updatedAt: r.updatedAt,
+        createdAt: r.createdAt,
+        pageLayout: resolveResumePageLayout((r.resumeDesign as ResumeDesign | null) ?? null),
+      })),
       activeProfileId,
       primaryProfileId,
     });

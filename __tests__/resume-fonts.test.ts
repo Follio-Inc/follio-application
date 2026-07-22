@@ -61,6 +61,24 @@ describe('resolveResumeFonts', () => {
       contact: 'system',
     });
   });
+
+  it('uses template body font when only templateId is set', () => {
+    expect(resolveResumeFonts({ templateId: 'studio' })).toEqual({
+      body: 'open-sans',
+      name: 'open-sans',
+      title: 'open-sans',
+      heading: 'system',
+      contact: 'open-sans',
+    });
+
+    expect(resolveResumeFonts({ templateId: 'lumen' })).toEqual({
+      body: 'instrument-sans',
+      name: 'instrument-sans',
+      title: 'instrument-sans',
+      heading: 'instrument-sans',
+      contact: 'instrument-sans',
+    });
+  });
 });
 
 describe('buildResumeDesignStyles fonts', () => {
@@ -87,6 +105,11 @@ describe('buildResumeDesignStyles fonts', () => {
     expect(styles['--rd-name-text-decoration']).toBe('underline');
     expect(styles['--rd-title-font-style']).toBe('italic');
   });
+
+  it('emits photo size CSS variable', () => {
+    const styles = buildResumeDesignStyles({ photoSize: 96 }) as Record<string, string>;
+    expect(styles['--rd-photo-size']).toBe('96px');
+  });
 });
 
 describe('mergeResumeDesign', () => {
@@ -97,6 +120,13 @@ describe('mergeResumeDesign', () => {
     expect(merged.titleFontFamily).toBe('roboto');
     expect(merged.headingFontFamily).toBe('system');
     expect(merged.contactFontFamily).toBe('system');
+  });
+
+  it('uses template photo size when unset', () => {
+    expect(mergeResumeDesign({ templateId: 'classic' }).photoSize).toBe(80);
+    expect(mergeResumeDesign({ templateId: 'sleek' }).photoSize).toBe(64);
+    expect(mergeResumeDesign({ templateId: 'studio' }).photoSize).toBe(64);
+    expect(mergeResumeDesign({ templateId: 'sleek', photoSize: 100 }).photoSize).toBe(100);
   });
 
   it('uses template title/heading/contact sizes when unset', () => {

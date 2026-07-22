@@ -19,5 +19,6 @@ export {
   getAllResumeTemplates,
   getResumeTemplate,
   getResumeTemplateId,
+  getTemplateDefaultShowPhoto,
   isValidResumeTemplateId,
 } from './registry';

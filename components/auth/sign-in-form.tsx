@@ -3,7 +3,6 @@
 import { useSignIn } from '@clerk/nextjs';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { Logo } from '@/components/Logo';
@@ -15,7 +14,6 @@ import { Separator } from '@/components/ui/separator';
 
 export function SignInForm() {
   const { isLoaded, signIn, setActive } = useSignIn();
-  const router = useRouter();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -39,7 +37,9 @@ export function SignInForm() {
 
       if (result.status === 'complete') {
         await setActive({ session: result.createdSessionId });
-        router.push('/');
+        // Full document navigation so home can route incomplete accounts to
+        // onboarding without App Router soft-nav blank pages.
+        window.location.assign('/');
       } else {
         // Handle other statuses (e.g., needs_factor_two)
         setError('Additional verification required. Please try again.');

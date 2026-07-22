@@ -4,6 +4,8 @@ import { redirect } from 'next/navigation';
 import { ensurePrimaryProfile, makeProfilePortfolioReady } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { isPortfolioEnabled } from '@/lib/features';
+import { resolveResumePageLayout } from '@/lib/resume/page-layout';
+import type { ResumeDesign } from '@/types';
 
 import { DashboardClient, type DashboardData } from './dashboard-client';
 
@@ -56,6 +58,7 @@ export default async function DashboardPage() {
       summary: true,
       updatedAt: true,
       createdAt: true,
+      resumeDesign: true,
       _count: {
         select: {
           workExperiences: true,
@@ -136,6 +139,7 @@ export default async function DashboardPage() {
     headline: r.headline,
     updatedAt: r.updatedAt.toISOString(),
     createdAt: r.createdAt.toISOString(),
+    pageLayout: resolveResumePageLayout((r.resumeDesign as ResumeDesign | null) ?? null),
   }));
 
   const data: DashboardData = {
