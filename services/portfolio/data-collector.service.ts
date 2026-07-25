@@ -117,7 +117,6 @@ export async function collectProfileData(profileId: string): Promise<CollectedPr
     endDate: w.endDate ? safeISODate(w.endDate) : null,
     isCurrent: w.isCurrent,
     bullets: w.bullets || [],
-    tags: w.tags || [],
     source: w.source,
   }));
 

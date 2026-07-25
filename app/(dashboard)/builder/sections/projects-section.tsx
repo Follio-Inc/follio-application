@@ -12,7 +12,6 @@ import {
   Plus,
   Star,
   Trash2,
-  X,
 } from 'lucide-react';
 import { useCallback, useState } from 'react';
 
@@ -35,7 +34,9 @@ import { notifyProfileUpdated } from '@/lib/events';
 import { useReorderPersist } from '@/lib/hooks/use-reorder-persist';
 import { cn } from '@/lib/utils';
 
+import { EntryInlineForm } from '../components/entry-inline-form';
 import { SortableCardList } from '../components/sortable-card-list';
+import { useEntryFormDirty, type RegisterEntryEditGuard } from '../lib/entry-edit-guard';
 
 import type { Project } from '@/types';
 import type { DateExtractor } from '../components/sortable-card-list';
@@ -51,6 +52,8 @@ interface ProjectsSectionProps {
   onUpdate: (projects: Project[]) => void;
   autoEditId?: string | 'new';
   onEditComplete?: () => void;
+  /** Registers dirty-state with the parent Back control in focused edit mode. */
+  onRegisterEditGuard?: RegisterEntryEditGuard;
   /** When true, renders without Card wrapper for use inside accordion sections */
   embedded?: boolean;
 }
@@ -75,6 +78,7 @@ export function ProjectsSection({
   onUpdate,
   autoEditId,
   onEditComplete,
+  onRegisterEditGuard,
   embedded,
 }: ProjectsSectionProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(!!autoEditId);
@@ -96,6 +100,11 @@ export function ProjectsSection({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const { resetBaseline, actionsRef, attentionKey } = useEntryFormDirty(formData, {
+    enabled: Boolean(autoEditId),
+    onRegister: onRegisterEditGuard,
+  });
+
   const persistOrder = useReorderPersist<Project>('project', onUpdate);
 
   const handleReorder = useCallback(
@@ -113,10 +122,14 @@ export function ProjectsSection({
   const handleOpenDialog = (project?: Project) => {
     if (project) {
       setEditingProject(project);
-      setFormData(project);
+      const next = { ...project };
+      setFormData(next);
+      resetBaseline(next);
     } else {
       setEditingProject(null);
-      setFormData(emptyProject);
+      const next = { ...emptyProject };
+      setFormData(next);
+      resetBaseline(next);
     }
     setError(null);
     setIsDialogOpen(true);
@@ -203,6 +216,7 @@ export function ProjectsSection({
 
       onUpdate(projects.filter((p) => p.id !== projectId));
       notifyProfileUpdated();
+      if (autoEditId) onEditComplete?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -247,16 +261,21 @@ export function ProjectsSection({
   // ── Inline form (auto-edit mode) ──
 
   const renderInlineForm = () => (
-    <div className="space-y-4 rounded-lg border border-primary/20 bg-card p-4 ring-1 ring-primary/10">
-      <div className="flex items-center gap-2 rounded-md bg-primary/5 px-3 py-2 text-xs font-medium text-primary">
-        <div className="h-1.5 w-1.5 rounded-full bg-primary" />
-        {editingProject ? 'Editing project' : 'Adding new project'} — save or discard to continue
-      </div>
-
-      {error && (
-        <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
-      )}
-
+    <EntryInlineForm
+      banner={
+        editingProject
+          ? 'Editing project — save or discard to continue'
+          : 'Adding new project — save or discard to continue'
+      }
+      error={error}
+      onSave={handleSave}
+      onDiscard={() => onEditComplete?.()}
+      canSave={Boolean(formData.title)}
+      isSaving={isLoading}
+      actionsRef={actionsRef}
+      attentionKey={attentionKey}
+      onDelete={editingProject ? () => void handleDelete(editingProject.id) : undefined}
+    >
       <div className="space-y-2">
         <Label>Project Title *</Label>
         <Input
@@ -376,29 +395,7 @@ export function ProjectsSection({
         />
         <Label>Featured project (show prominently)</Label>
       </div>
-
-      <div className="flex items-center gap-2 border-t pt-4">
-        <Button
-          onClick={handleSave}
-          disabled={!formData.title || isLoading}
-          size="sm"
-          className="gap-2"
-        >
-          {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {isLoading ? 'Saving...' : 'Save'}
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onEditComplete?.()}
-          disabled={isLoading}
-          className="gap-2"
-        >
-          <X className="mr-1 h-4 w-4" />
-          Discard
-        </Button>
-      </div>
-    </div>
+    </EntryInlineForm>
   );
 
   // Auto-edit mode: render only the inline form

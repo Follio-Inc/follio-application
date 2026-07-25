@@ -22,3 +22,15 @@ export {
   getTemplateDefaultShowPhoto,
   isValidResumeTemplateId,
 } from './registry';
+
+export {
+  buildOnboardingResumePreviewProfile,
+  hasSufficientResumePreviewData,
+  isUsingSampleResumePreview,
+  resolveResumeTemplatePreviewProfile,
+  type OnboardingResumePreviewDraft,
+  type ResumePreviewSufficiencyInput,
+  type ResumeTemplatePreviewDataPolicy,
+} from './preview-profile';
+
+export { buildResumePreviewSections, RESUME_TEMPLATE_SAMPLE_PROFILE } from './sample-profile';

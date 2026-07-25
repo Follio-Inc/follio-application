@@ -1,6 +1,7 @@
 'use client';
 
-import { Check, Edit2, Eye, EyeOff, Mail, Phone, Plus, Star, X } from 'lucide-react';
+import { Check, Eye, EyeOff, Mail, Pencil, Phone, Plus, Trash2, X } from 'lucide-react';
+import { useUser } from '@clerk/nextjs';
 import { useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -9,12 +10,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { PhoneInput, formatStandardPhone, type PhoneValue } from '@/components/ui/phone-input';
 import { Spinner } from '@/components/ui/spinner';
+import { formatContactSourceLabel } from '@/lib/contact/source-label';
 import {
   useContactManager,
   type ContactData,
   type EmailEntry,
   type PhoneEntry,
 } from '@/lib/hooks/use-contact-manager';
+import { cn } from '@/lib/utils';
 
 // ============================================================================
 // Types
@@ -91,6 +94,7 @@ interface EmailListItemProps {
   isLoading: boolean;
   isVerifying: boolean;
   verificationCode: string;
+  sourceLabel: string;
   onVerificationCodeChange: (code: string) => void;
   onStartVerify: () => void;
   onCancelVerify: () => void;
@@ -107,6 +111,7 @@ function EmailListItem({
   isLoading,
   isVerifying,
   verificationCode,
+  sourceLabel,
   onVerificationCodeChange,
   onStartVerify,
   onCancelVerify,
@@ -118,79 +123,80 @@ function EmailListItem({
 }: EmailListItemProps) {
   return (
     <div
-      className={`rounded-xl border p-3.5 transition-colors ${
-        isPrimary ? 'border-primary/30 bg-primary/5' : 'border-border bg-background'
-      }`}
+      className={cn(
+        'rounded-xl border border-border/70 bg-background p-3.5 transition-colors',
+        isPrimary && 'border-primary/30 bg-primary/5'
+      )}
     >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          {isPrimary && <Star className="h-4 w-4 fill-primary text-primary" />}
-          <div>
-            <p className={`text-sm ${isPrimary ? 'font-medium' : ''}`}>{item.email}</p>
-            <div className="mt-0.5 flex items-center gap-2">
-              <Badge variant={getSourceBadgeVariant(item.source)} className="text-xs">
-                {item.source.toLowerCase()}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-3">
+          <Mail className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/50" aria-hidden />
+          <div className="min-w-0">
+            <p className={cn('truncate text-sm', isPrimary ? 'font-medium' : 'font-normal')}>
+              {item.email}
+            </p>
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              <Badge
+                variant={getSourceBadgeVariant(item.source)}
+                className="h-5 px-1.5 text-[11px] font-medium"
+              >
+                {sourceLabel}
               </Badge>
               {item.verified ? (
-                <Badge variant="outline" className="text-xs text-primary">
-                  <Check className="mr-1 h-3 w-3" />
+                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-primary">
+                  <Check className="h-3 w-3" aria-hidden />
                   Verified
-                </Badge>
+                </span>
               ) : item.clerkEmailId ? (
-                <Badge variant="outline" className="text-xs text-muted-foreground">
-                  Pending Verification
-                </Badge>
+                <span className="text-[11px] font-medium text-muted-foreground">
+                  Pending verification
+                </span>
               ) : (
-                <Badge variant="outline" className="text-xs text-muted-foreground">
-                  Not Added
-                </Badge>
+                <span className="text-[11px] font-medium text-muted-foreground">Not added</span>
               )}
-              {isPrimary && <span className="text-xs font-medium text-primary">Primary</span>}
+              {isPrimary && <span className="text-[11px] font-medium text-primary">Primary</span>}
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1">
           {isLoading ? (
             <Spinner className="h-4 w-4" />
           ) : (
             <>
-              {/* For unverified Clerk emails: show verify button */}
               {item.clerkEmailId && !item.verified && !isVerifying && (
-                <Button variant="outline" size="sm" onClick={onStartVerify} className="h-7 text-xs">
-                  Enter Code
+                <Button variant="outline" size="sm" onClick={onStartVerify} className="h-8">
+                  Enter code
                 </Button>
               )}
 
-              {/* For imported emails not in Clerk: show add & verify button */}
               {!item.clerkEmailId && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={onAddAndVerify}
-                  className="h-7 text-xs"
-                >
-                  Add & Verify
+                <Button variant="outline" size="sm" onClick={onAddAndVerify} className="h-8">
+                  Add & verify
                 </Button>
               )}
 
-              {/* Make primary - only for verified emails */}
               {!isPrimary && item.verified && (
-                <Button variant="ghost" size="sm" onClick={onMakePrimary} className="h-7 text-xs">
-                  <Star className="mr-1 h-3 w-3" />
-                  Make Primary
-                </Button>
-              )}
-
-              {/* Delete - not for primary */}
-              {!isPrimary && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={onDelete}
-                  className="h-7 text-xs text-muted-foreground hover:text-destructive"
+                  onClick={onMakePrimary}
+                  className="h-8 text-muted-foreground"
                 >
-                  <X className="h-3 w-3" />
+                  Make primary
+                </Button>
+              )}
+
+              {!isPrimary && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={onDelete}
+                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                  title="Delete email"
+                  aria-label="Delete email"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
                 </Button>
               )}
             </>
@@ -198,26 +204,35 @@ function EmailListItem({
         </div>
       </div>
 
-      {/* Verification code input */}
       {isVerifying && (
-        <div className="mt-3 flex items-center gap-2 border-t pt-3">
+        <div className="mt-3 flex flex-col gap-2 border-t border-border/60 pt-3 sm:flex-row sm:items-center">
           <Input
             type="text"
-            placeholder="Enter 6-digit code"
+            inputMode="numeric"
+            placeholder="6-digit code"
             value={verificationCode}
             onChange={(e) => onVerificationCodeChange(e.target.value)}
-            className="w-32"
+            className="sm:w-36"
             maxLength={6}
+            aria-label="Verification code"
           />
-          <Button size="sm" onClick={onVerifyCode} disabled={verificationCode.length < 6}>
-            Verify
-          </Button>
-          <Button variant="ghost" size="sm" onClick={onResendCode}>
-            Resend
-          </Button>
-          <Button variant="ghost" size="sm" onClick={onCancelVerify}>
-            <X className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button size="sm" onClick={onVerifyCode} disabled={verificationCode.length < 6}>
+              Verify
+            </Button>
+            <Button variant="ghost" size="sm" onClick={onResendCode}>
+              Resend
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={onCancelVerify}
+              aria-label="Cancel verification"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       )}
     </div>
@@ -273,23 +288,20 @@ function PhoneListItem({
 
   if (isEditing) {
     return (
-      <div className="rounded-xl border border-primary p-3.5">
-        <div className="space-y-2">
-          <PhoneInput
-            value={editingValue}
-            onChange={onEditingValueChange}
-            placeholder="Phone number"
-          />
-          <div className="flex items-center justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={onCancelEdit} className="h-7 text-xs">
-              <X className="mr-1 h-3 w-3" />
-              Cancel
-            </Button>
-            <Button variant="default" size="sm" onClick={onSaveEdit} className="h-7 text-xs">
-              <Check className="mr-1 h-3 w-3" />
-              Save
-            </Button>
-          </div>
+      <div className="space-y-3 rounded-xl border border-primary/40 bg-primary/5 p-3.5">
+        <PhoneInput
+          value={editingValue}
+          onChange={onEditingValueChange}
+          placeholder="Phone number"
+        />
+        <div className="flex items-center justify-end gap-1 border-t border-border/60 pt-3">
+          <Button variant="ghost" size="sm" onClick={onCancelEdit}>
+            Cancel
+          </Button>
+          <Button size="sm" onClick={onSaveEdit}>
+            <Check className="mr-1.5 h-3.5 w-3.5" />
+            Save
+          </Button>
         </div>
       </div>
     );
@@ -297,54 +309,60 @@ function PhoneListItem({
 
   return (
     <div
-      className={`flex items-center justify-between rounded-xl border p-3.5 transition-colors ${
-        isPrimary
-          ? 'border-primary/30 bg-primary/5'
-          : 'border-border bg-background hover:bg-muted/30'
-      }`}
+      className={cn(
+        'flex items-start justify-between gap-3 rounded-xl border border-border/70 bg-background p-3.5 transition-colors',
+        isPrimary ? 'border-primary/30 bg-primary/5' : 'hover:bg-muted/30'
+      )}
     >
-      <div className="flex items-center gap-3">
-        {isPrimary && <Star className="h-4 w-4 fill-primary text-primary" />}
-        <div>
-          <p className={`text-sm ${isPrimary ? 'font-medium' : ''}`}>{displayPhone}</p>
-          <div className="mt-0.5 flex items-center gap-2">
+      <div className="flex min-w-0 items-start gap-3">
+        <Phone className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/50" aria-hidden />
+        <div className="min-w-0">
+          <p className={cn('text-sm', isPrimary ? 'font-medium' : 'font-normal')}>{displayPhone}</p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
             {!hasCountryCode && (
-              <Badge variant="outline" className="text-xs text-muted-foreground">
-                No country code
-              </Badge>
+              <span className="text-[11px] font-medium text-muted-foreground">No country code</span>
             )}
-            <Badge variant={getSourceBadgeVariant(item.source)} className="text-xs">
-              {item.source.toLowerCase()}
+            <Badge
+              variant={getSourceBadgeVariant(item.source)}
+              className="h-5 px-1.5 text-[11px] font-medium"
+            >
+              {formatContactSourceLabel(item.source)}
             </Badge>
-            {isPrimary && <span className="text-xs font-medium text-primary">Primary</span>}
+            {isPrimary && <span className="text-[11px] font-medium text-primary">Primary</span>}
           </div>
         </div>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-1">
         <Button
           variant="ghost"
-          size="sm"
+          size="icon"
           onClick={onStartEdit}
-          className="h-7 text-xs"
-          title="Edit phone number and country code"
+          className="h-8 w-8 text-muted-foreground"
+          title="Edit phone number"
+          aria-label="Edit phone number"
         >
-          <Edit2 className="mr-1 h-3 w-3" />
-          Edit
+          <Pencil className="h-3.5 w-3.5" />
         </Button>
         {!isPrimary && (
-          <Button variant="ghost" size="sm" onClick={onMakePrimary} className="h-7 text-xs">
-            <Star className="mr-1 h-3 w-3" />
-            Make Primary
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onMakePrimary}
+            className="h-8 text-muted-foreground"
+          >
+            Make primary
           </Button>
         )}
         {canDelete && (
           <Button
             variant="ghost"
-            size="sm"
+            size="icon"
             onClick={onDelete}
-            className="h-7 text-xs text-muted-foreground hover:text-destructive"
+            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+            title="Delete phone"
+            aria-label="Delete phone"
           >
-            <X className="h-3 w-3" />
+            <Trash2 className="h-3.5 w-3.5" />
           </Button>
         )}
       </div>
@@ -367,6 +385,8 @@ export function ContactSection({
   onEmailPublicChange,
   onPhonePublicChange,
 }: ContactSectionProps) {
+  const { user } = useUser();
+
   // Use the contact manager hook
   const {
     contactData,
@@ -442,10 +462,10 @@ export function ContactSection({
   const content = (
     <div className="space-y-10">
       {/* Emails Section */}
-      <div>
+      <section>
         <div className="mb-1.5 flex items-center gap-2">
-          <Mail className="h-4 w-4 text-muted-foreground" />
-          <span className="text-section-title">Email addresses</span>
+          <Mail className="h-4 w-4 text-muted-foreground" aria-hidden />
+          <h3 className="text-section-title">Email addresses</h3>
           {onEmailPublicChange && (
             <button
               type="button"
@@ -454,9 +474,10 @@ export function ContactSection({
                 e.preventDefault();
                 onEmailPublicChange(!emailPublic);
               }}
-              className={`ml-auto rounded-md p-1.5 transition-colors hover:bg-muted ${
+              className={cn(
+                'ml-auto rounded-md p-1.5 transition-colors hover:bg-muted',
                 emailPublic ? 'text-foreground' : 'text-muted-foreground'
-              }`}
+              )}
               title={
                 emailPublic ? 'Hide primary email from resume' : 'Show primary email on resume'
               }
@@ -466,21 +487,21 @@ export function ContactSection({
           )}
         </div>
         <p className="mb-4 text-sm leading-6 text-muted-foreground">
-          The primary email is used for login and shown on your profile. Emails must be verified
-          before they can be set as primary.
+          Primary email is used for login and shown on your profile. Verify an address before
+          setting it as primary.
         </p>
 
-        {/* Error message */}
         {emailError && (
-          <div className="mb-3 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+          <div className="mb-3 flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
             <span className="flex-1">{emailError}</span>
             <Button
               variant="ghost"
-              size="sm"
-              className="h-5 shrink-0 px-1 text-destructive hover:text-destructive"
+              size="icon"
+              className="h-7 w-7 shrink-0 text-destructive hover:text-destructive"
               onClick={clearEmailError}
+              aria-label="Dismiss error"
             >
-              <X className="h-3 w-3" />
+              <X className="h-3.5 w-3.5" />
             </Button>
           </div>
         )}
@@ -502,6 +523,10 @@ export function ContactSection({
                   isLoading={isLoading}
                   isVerifying={isVerifying}
                   verificationCode={verificationCode}
+                  sourceLabel={formatContactSourceLabel(item.source, {
+                    email: item.email,
+                    externalAccounts: user?.externalAccounts,
+                  })}
                   onVerificationCodeChange={setVerificationCode}
                   onStartVerify={() => {
                     setVerifyingEmailId(item.clerkEmailId!);
@@ -525,17 +550,16 @@ export function ContactSection({
             })}
           </div>
         ) : (
-          <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+          <div className="rounded-xl border border-dashed border-border/60 bg-muted/30 px-6 py-8 text-center text-sm text-muted-foreground">
             No email addresses yet. Add one below.
           </div>
         )}
 
-        {/* Add Email Input */}
         {showEmailInput ? (
-          <div className="mt-3 flex items-center gap-2">
+          <div className="mt-3 flex flex-col gap-2 rounded-xl border border-border/70 bg-background p-3 sm:flex-row sm:items-center">
             <Input
               type="email"
-              placeholder="Enter email address"
+              placeholder="name@example.com"
               value={newEmailInput}
               onChange={(e) => setNewEmailInput(e.target.value)}
               onKeyDown={(e) => {
@@ -546,27 +570,31 @@ export function ContactSection({
                   setNewEmailInput('');
                 }
               }}
-              className="flex-1"
+              className="flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0"
               autoFocus
               disabled={!!emailOperationLoading}
             />
-            <Button
-              size="sm"
-              onClick={handleAddEmail}
-              disabled={!newEmailInput.trim() || !!emailOperationLoading}
-            >
-              {emailOperationLoading ? <Spinner className="h-4 w-4" /> : 'Add & Verify'}
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                setShowEmailInput(false);
-                setNewEmailInput('');
-              }}
-            >
-              <X className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button
+                size="sm"
+                onClick={handleAddEmail}
+                disabled={!newEmailInput.trim() || !!emailOperationLoading}
+              >
+                {emailOperationLoading ? <Spinner className="h-4 w-4" /> : 'Add & verify'}
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8"
+                onClick={() => {
+                  setShowEmailInput(false);
+                  setNewEmailInput('');
+                }}
+                aria-label="Cancel adding email"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         ) : (
           <Button
@@ -575,17 +603,17 @@ export function ContactSection({
             className="mt-3"
             onClick={() => setShowEmailInput(true)}
           >
-            <Plus className="mr-1 h-4 w-4" />
-            Add Email
+            <Plus className="mr-1.5 h-3.5 w-3.5" />
+            Add email
           </Button>
         )}
-      </div>
+      </section>
 
       {/* Phones Section */}
-      <div>
+      <section className="border-t border-border/60 pt-10">
         <div className="mb-1.5 flex items-center gap-2">
-          <Phone className="h-4 w-4 text-muted-foreground" />
-          <span className="text-section-title">Contact phone</span>
+          <Phone className="h-4 w-4 text-muted-foreground" aria-hidden />
+          <h3 className="text-section-title">Phone numbers</h3>
           {onPhonePublicChange && (
             <button
               type="button"
@@ -594,9 +622,10 @@ export function ContactSection({
                 e.preventDefault();
                 onPhonePublicChange(!phonePublic);
               }}
-              className={`ml-auto rounded-md p-1.5 transition-colors hover:bg-muted ${
+              className={cn(
+                'ml-auto rounded-md p-1.5 transition-colors hover:bg-muted',
                 phonePublic ? 'text-foreground' : 'text-muted-foreground'
-              }`}
+              )}
               title={
                 phonePublic ? 'Hide primary phone from resume' : 'Show primary phone on resume'
               }
@@ -606,11 +635,11 @@ export function ContactSection({
           )}
         </div>
         <p className="mb-4 text-sm leading-6 text-muted-foreground">
-          Choose which phone number to display on your public profile.
+          Choose which number appears as primary on your profile.
         </p>
 
         {contactData.allPhones && contactData.allPhones.length > 0 ? (
-          <div className="space-y-2">
+          <div className="mb-3 space-y-2">
             {contactData.allPhones.map((item, idx) => {
               const isPrimary = idx === (contactData.primaryPhoneIndex ?? 0);
               const isEditing = editingPhoneIndex === idx;
@@ -636,23 +665,19 @@ export function ContactSection({
             })}
           </div>
         ) : (
-          <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+          <div className="mb-3 rounded-xl border border-dashed border-border/60 bg-muted/30 px-6 py-8 text-center text-sm text-muted-foreground">
             No phone numbers yet. Add one below.
           </div>
         )}
 
-        {/* Add Phone Input */}
         {showPhoneInput ? (
-          <div className="mt-3 space-y-2">
+          <div className="space-y-3 rounded-xl border border-border/70 bg-background p-3.5">
             <PhoneInput
               value={newPhoneInput}
               onChange={setNewPhoneInput}
               placeholder="Phone number"
             />
-            <div className="flex items-center gap-2">
-              <Button size="sm" onClick={handleAddPhone} disabled={!newPhoneInput.number.trim()}>
-                Add
-              </Button>
+            <div className="flex items-center justify-end gap-1 border-t border-border/60 pt-3">
               <Button
                 size="sm"
                 variant="ghost"
@@ -663,20 +688,19 @@ export function ContactSection({
               >
                 Cancel
               </Button>
+              <Button size="sm" onClick={handleAddPhone} disabled={!newPhoneInput.number.trim()}>
+                <Plus className="mr-1.5 h-3.5 w-3.5" />
+                Add
+              </Button>
             </div>
           </div>
         ) : (
-          <Button
-            variant="outline"
-            size="sm"
-            className="mt-3"
-            onClick={() => setShowPhoneInput(true)}
-          >
-            <Plus className="mr-1 h-4 w-4" />
-            Add Phone
+          <Button variant="outline" size="sm" onClick={() => setShowPhoneInput(true)}>
+            <Plus className="mr-1.5 h-3.5 w-3.5" />
+            Add phone
           </Button>
         )}
-      </div>
+      </section>
     </div>
   );
 

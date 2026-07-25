@@ -6,6 +6,7 @@
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 
+import { AccountDeletionError, deleteAccountCompletely } from '@/lib/account/delete-account';
 import { db } from '@/lib/db';
 
 /**
@@ -13,10 +14,11 @@ import { db } from '@/lib/db';
  * Permanently delete the user's account from both Clerk and database
  *
  * This is an irreversible operation that:
- * 1. Deletes all user data from the database (cascades to profile, experiences, etc.)
- * 2. Deletes the user from Clerk authentication
+ * 1. Deletes the user from Clerk authentication (required — must succeed)
+ * 2. Deletes all user data from the database (cascades to profile, experiences, etc.)
  *
- * The user must be authenticated and the request must include confirmation.
+ * Clerk is deleted first so the user cannot sign back in and recreate an account
+ * if database cleanup fails. The user must be authenticated.
  */
 export async function DELETE() {
   try {
@@ -29,56 +31,16 @@ export async function DELETE() {
       );
     }
 
-    // Find the user in our database
-    const user = await db.user.findUnique({
-      where: { clerkId },
-      include: {
-        profile: {
-          select: {
-            id: true,
-            handle: true,
-          },
-        },
-      },
-    });
+    console.log(`[DELETE /api/account] Starting account deletion for clerkId: ${clerkId}`);
 
-    if (!user) {
-      return NextResponse.json(
-        { error: 'Not found', message: 'User account not found' },
-        { status: 404 }
-      );
-    }
-
-    console.log(
-      `[DELETE /api/account] Starting account deletion for user: ${user.id}, clerkId: ${clerkId}`
+    const clerk = await clerkClient();
+    const result = await deleteAccountCompletely(clerkId, (id) =>
+      clerk.users.deleteUser(id).then(() => undefined)
     );
 
-    // Step 1: Delete from our database
-    // Due to cascading deletes in Prisma schema, this will delete:
-    // - Profile (and all related: contactInfo, links, workExperiences, educations,
-    //   skills, skillGroups, projects, awards, certifications, sections, rawImports,
-    //   dataSourceConnections, githubProfile)
-    // - ImportJobs
-    // - ImportLogs
-    // - ShareTokens
-    await db.user.delete({
-      where: { id: user.id },
-    });
-
-    console.log(`[DELETE /api/account] Deleted user from database: ${user.id}`);
-
-    // Step 2: Delete from Clerk
-    // This removes the authentication record and any associated data in Clerk
-    try {
-      const clerk = await clerkClient();
-      await clerk.users.deleteUser(clerkId);
-      console.log(`[DELETE /api/account] Deleted user from Clerk: ${clerkId}`);
-    } catch (clerkError) {
-      // Log the error but don't fail the request
-      // The database data is already deleted, which is the important part
-      // The Clerk user will be orphaned but harmless
-      console.error(`[DELETE /api/account] Failed to delete from Clerk (non-fatal):`, clerkError);
-    }
+    console.log(
+      `[DELETE /api/account] Deleted account — clerkId: ${clerkId}, userId: ${result.userId}, dbDeleted: ${result.databaseDeleted}`
+    );
 
     return NextResponse.json({
       success: true,
@@ -86,6 +48,17 @@ export async function DELETE() {
     });
   } catch (error) {
     console.error('[DELETE /api/account] Error deleting account:', error);
+
+    if (error instanceof AccountDeletionError) {
+      return NextResponse.json(
+        {
+          error: error.code,
+          message: error.message,
+        },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json(
       {
         error: 'Internal server error',

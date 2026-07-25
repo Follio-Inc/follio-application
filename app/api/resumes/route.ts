@@ -340,7 +340,6 @@ async function cloneProfile(
         bullets: item.bullets,
         bulletsHtml: item.bulletsHtml,
         metrics: nullableJson(item.metrics),
-        tags: item.tags,
         isVisible: item.isVisible,
         source: item.source,
         sortOrder: item.sortOrder,
@@ -379,6 +378,7 @@ async function cloneProfile(
         profileId: profile.id,
         name: group.name,
         sortOrder: group.sortOrder,
+        skillsHtml: group.skillsHtml,
       },
       select: { id: true },
     });

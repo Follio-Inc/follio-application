@@ -37,6 +37,7 @@ import {
   Sparkles,
   Trash2,
   User,
+  Users,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -60,6 +61,7 @@ const SECTION_ICONS: Record<SectionType, React.ComponentType<{ className?: strin
   VOLUNTEERING: Heart,
   LANGUAGES: Globe,
   INTERESTS: Sparkles,
+  REFERENCES: Users,
   CUSTOM: LayoutGrid,
 };
 

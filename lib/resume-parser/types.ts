@@ -105,6 +105,8 @@ export interface ParsedResume {
   summary: string;
   links: string[];
   skills: string[];
+  /** Category + skills when the resume used grouped skill lines */
+  skillGroups?: Array<{ name: string; skills: string[] }>;
   workExperiences: {
     company: string;
     title: string;

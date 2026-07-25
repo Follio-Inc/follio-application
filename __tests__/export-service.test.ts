@@ -677,4 +677,82 @@ describe('toPDFHtml', () => {
     expect(html).toContain('resume-skills-stack');
     expect(html).toContain('Acme Corp');
   });
+
+  it('renders categorized skills as bold label + colon + csv without hanging indent', () => {
+    const html = toPDFHtml(
+      makeProfile({
+        skillGroups: [
+          {
+            id: 'sg1',
+            profileId: 'p1',
+            name: 'Languages',
+            sortOrder: 0,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            skills: [
+              {
+                id: 's1',
+                profileId: 'p1',
+                name: 'TypeScript',
+                level: null,
+                sortOrder: 0,
+                isVisible: true,
+                source: 'MANUAL',
+                groupId: 'sg1',
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              },
+              {
+                id: 's2',
+                profileId: 'p1',
+                name: 'Python',
+                level: null,
+                sortOrder: 1,
+                isVisible: true,
+                source: 'MANUAL',
+                groupId: 'sg1',
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              },
+            ],
+          },
+          {
+            id: 'sg2',
+            profileId: 'p1',
+            name: 'Tools',
+            sortOrder: 1,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            skills: [
+              {
+                id: 's3',
+                profileId: 'p1',
+                name: 'Docker',
+                level: null,
+                sortOrder: 0,
+                isVisible: true,
+                source: 'MANUAL',
+                groupId: 'sg2',
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              },
+            ],
+          },
+        ],
+      } as unknown as Partial<FullProfile>)
+    );
+
+    expect(html).toContain('resume-skills-grouped');
+    expect(html).toContain('resume-skill-group-name');
+    expect(html).toContain('Languages');
+    expect(html).toContain('TypeScript, Python');
+    expect(html).toContain('Tools');
+    expect(html).toContain('Docker');
+    expect(html).toMatch(
+      /<span class="resume-skill-group-name">Languages: <\/span><span class="resume-skill-group-items">TypeScript, Python<\/span>/
+    );
+    expect(html).toContain(
+      '.resume-skill-group { font-size: 13px; margin: 0; text-align: justify; line-height: 1.45; }'
+    );
+  });
 });

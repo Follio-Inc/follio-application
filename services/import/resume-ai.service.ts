@@ -50,6 +50,7 @@ export interface ParsedResumeAI {
   workExperiences: WorkExperienceAI[];
   educations: EducationAI[];
   skills: string[];
+  skillGroups?: Array<{ name: string; skills: string[] }>;
   links: LinkAI[];
   certifications: CertificationAI[];
   projects: ProjectAI[];
@@ -136,6 +137,7 @@ export interface NormalizedResumeData {
     endDate?: string;
   }>;
   skills: string[];
+  skillGroups?: Array<{ name: string; skills: string[] }>;
   links: Array<{
     type: string;
     url: string;
@@ -183,7 +185,7 @@ CRITICAL RULES:
 1. Extract EVERY piece of information - do not skip any work experiences, education, projects, or skills
 2. For dates, preserve the format as written (e.g., "Jan 2024", "2024", "January 2024", "01/2024")
 3. "Present", "Current", "Now", or similar means the position is ongoing - set isCurrent: true and endDate: "Present"
-4. Skills should be individual items, not categories (split "Python, Java, C++" into separate items)
+4. Prefer skillGroups when the resume lists skills by category (e.g. "Languages: Python, Java"). Always also include a flat skills array of every individual skill
 5. For work experience bullets, include ALL bullet points/achievements
 6. If a field is genuinely not present, omit it entirely (don't use null, empty strings, or "N/A")
 7. The name is usually on the first line - split into firstName, middleName (optional), and lastName
@@ -227,7 +229,13 @@ Return this EXACT JSON structure:
       "gpa": "string (if mentioned, e.g., '3.8/4.0')"
     }
   ],
-  "skills": ["string (individual skill - split compound skills into separate items)"],
+  "skillGroups": [
+    {
+      "name": "string (category name e.g. Languages, Frameworks, Tools)",
+      "skills": ["string (individual skills in this category)"]
+    }
+  ],
+  "skills": ["string (flat list of all individual skills - same names as in skillGroups)"],
   "certifications": [
     {
       "name": "string (certification name)",
@@ -369,6 +377,12 @@ function validateAndCleanResponse(parsed: unknown): ParsedResumeAI {
       location: getString(edu, 'location'),
     })),
     skills: getStringArray(data, 'skills'),
+    skillGroups: getArray(data.skillGroups)
+      .map((group) => ({
+        name: getString(group, 'name') || 'Skills',
+        skills: getStringArray(group, 'skills'),
+      }))
+      .filter((group) => group.skills.length > 0),
     links: getArray(data.links).map((link) => ({
       type: getString(link, 'type') || 'website',
       url: getString(link, 'url') || '',
@@ -557,6 +571,24 @@ export function normalizeAIData(
   normalized.skills = (parsed.skills || [])
     .map((s) => sanitize(s))
     .filter((s): s is string => !!s && s.length > 0);
+
+  if (parsed.skillGroups?.length) {
+    normalized.skillGroups = parsed.skillGroups
+      .map((group) => ({
+        name: sanitize(group.name) || 'Skills',
+        skills: (group.skills || [])
+          .map((s) => sanitize(s))
+          .filter((s): s is string => !!s && s.length > 0),
+      }))
+      .filter((group) => group.skills.length > 0);
+
+    // Ensure flat skills includes every grouped skill
+    if (normalized.skills.length === 0) {
+      normalized.skills = normalized.skillGroups.flatMap((group) => group.skills);
+    }
+  } else if (normalized.skills.length > 0) {
+    normalized.skillGroups = [{ name: 'Skills', skills: normalized.skills }];
+  }
 
   // Links
   for (const link of parsed.links || []) {

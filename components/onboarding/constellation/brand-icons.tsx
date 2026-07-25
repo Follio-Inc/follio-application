@@ -21,7 +21,9 @@ function Svg({
   );
 }
 
-export function BrandIcon({ id, className }: { id: PlatformId; className?: string }) {
+export type BrandIconId = PlatformId | 'twitter' | 'hashnode' | 'devto' | 'other';
+
+export function BrandIcon({ id, className }: { id: BrandIconId; className?: string }) {
   switch (id) {
     case 'linkedin':
       return (
@@ -220,6 +222,46 @@ export function BrandIcon({ id, className }: { id: PlatformId; className?: strin
             stroke="currentColor"
             strokeWidth="1.6"
             strokeLinecap="round"
+          />
+        </Svg>
+      );
+    case 'twitter':
+      return (
+        <Svg className={cn(className, 'text-[#0F1419]')} viewBox="0 0 24 24">
+          <path
+            fill="currentColor"
+            d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.727-8.851L1.254 2.25H8.08l4.253 5.622L18.244 2.25zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77z"
+          />
+        </Svg>
+      );
+    case 'hashnode':
+      return (
+        <Svg className={className} viewBox="0 0 24 24">
+          <path
+            fill="#2962FF"
+            d="M22.351 8.019l-6.37-6.37a5.63 5.63 0 00-7.962 0l-6.37 6.37a5.63 5.63 0 000 7.962l6.37 6.37a5.63 5.63 0 007.962 0l6.37-6.37a5.63 5.63 0 000-7.962zM12 15.968a3.968 3.968 0 110-7.936 3.968 3.968 0 010 7.936z"
+          />
+        </Svg>
+      );
+    case 'devto':
+      return (
+        <Svg className={cn(className, 'text-[#0A0A0A]')} viewBox="0 0 24 24">
+          <path
+            fill="currentColor"
+            d="M7.83 10.22c-.36 0-.45.2-.45.46v2.64c0 .28.09.46.45.46h1.05c1.1 0 1.75-.67 1.75-1.78v-.02c0-1.1-.65-1.76-1.75-1.76H7.83zm.35.72h.63c.52 0 .82.27.82 1.02v.06c0 .75-.3 1.02-.82 1.02h-.63v-2.1zM13.2 13.76h-1.24V10.24h1.12c.36 0 .5.17.5.48v2.56c0 .28-.1.48-.38.48zm-.02-4.24h-1.84c-.37 0-.55.2-.55.54v4.44c0 .34.18.54.55.54h1.84c1.26 0 2.02-.84 2.02-2.76v-.02c0-1.9-.76-2.74-2.02-2.74zm5.56 1.1c-.68 0-1.14.38-1.28.98h-.02v-.74h-.9v3.9h.95v-1.72c0-.72.38-1.1.94-1.1.52 0 .78.3.78.88v1.94h.96v-2.1c0-1.14-.62-1.84-1.43-1.84zM2.5 5.5A1.5 1.5 0 014 4h16a1.5 1.5 0 011.5 1.5v13A1.5 1.5 0 0120 20H4a1.5 1.5 0 01-1.5-1.5v-13z"
+          />
+        </Svg>
+      );
+    case 'other':
+      return (
+        <Svg className={cn(className, 'text-muted-foreground')} viewBox="0 0 24 24">
+          <path
+            fill="currentColor"
+            d="M14.78 3.65a3.9 3.9 0 015.52 5.52l-2.12 2.12a.75.75 0 11-1.06-1.06l2.12-2.12a2.4 2.4 0 10-3.4-3.4l-3.18 3.18a2.4 2.4 0 000 3.4.75.75 0 01-1.06 1.06 3.9 3.9 0 010-5.52l3.18-3.18zm-5.56 16.7a3.9 3.9 0 01-5.52-5.52l2.12-2.12a.75.75 0 111.06 1.06l-2.12 2.12a2.4 2.4 0 103.4 3.4l3.18-3.18a2.4 2.4 0 000-3.4.75.75 0 011.06-1.06 3.9 3.9 0 010 5.52l-3.18 3.18z"
+          />
+          <path
+            fill="currentColor"
+            d="M8.47 14.47a.75.75 0 010-1.06l6-6a.75.75 0 111.06 1.06l-6 6a.75.75 0 01-1.06 0z"
           />
         </Svg>
       );

@@ -28,6 +28,7 @@ import { CustomSection } from './custom-section';
 import { InterestsSection } from './interests-section';
 import { LanguagesSection } from './languages-section';
 import { PublicationsSection } from './publications-section';
+import { ReferencesSection } from './references-section';
 import { VolunteeringSection } from './volunteering-section';
 
 import type { Award, Certification, FullProfile, ProfileSection } from '@/types';
@@ -53,6 +54,7 @@ const SECTION_TITLES: Record<string, string> = {
   VOLUNTEERING: 'Volunteering',
   LANGUAGES: 'Languages',
   INTERESTS: 'Interests',
+  REFERENCES: 'References',
   CUSTOM: 'Custom Section',
   SHARE: 'Share & Publish',
   SETTINGS: 'Settings',
@@ -265,6 +267,9 @@ export function SectionEditor({ sectionType, section }: SectionEditorProps) {
 
       case 'INTERESTS':
         return <InterestsSection section={section} profileId={draftProfile.id} />;
+
+      case 'REFERENCES':
+        return <ReferencesSection section={section} profileId={draftProfile.id} />;
 
       case 'CUSTOM':
         return <CustomSection section={section} profileId={draftProfile.id} />;

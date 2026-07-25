@@ -16,13 +16,13 @@ import {
   ONBOARDING_STEP_TRACK,
 } from '@/lib/onboarding-ui';
 
-const STEP_INDEX = 2; // Step 3 of 3 in live onboarding; lab still shows as mid-flow preview
-const STEP_COUNT = 3;
+const STEP_INDEX = 0; // Lab-only preview; live onboarding is resume-only for now
+const STEP_COUNT = 1;
 const PROGRESS_PCT = ((STEP_INDEX + 1) / STEP_COUNT) * 100;
 
 /**
  * Lab preview of onboarding connect step (constellation).
- * Live wiring lives in /onboarding/import.
+ * Connect is not in the live onboarding path; wiring remains in /onboarding/import for re-enable.
  */
 export default function ImportConstellationLabPage() {
   const [hasAction, setHasAction] = useState(false);

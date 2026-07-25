@@ -65,8 +65,8 @@ describe('onboarding resume start choice', () => {
 
     // Once a file is selected, choice is replaced by the loading/preview UI
     expect(src).toContain("showResumeChoice = currentStep === 'resume' && !resumeFileName");
-    expect(src).toContain('AI parsing in');
-    expect(src).toContain('You can continue to the next step while we parse');
+    expect(src).toContain('Reading your resume');
+    expect(src).toContain('Opening the builder so you can watch it come together');
   });
 
   it('confirms before discarding an uploaded resume back to the choice screen', () => {

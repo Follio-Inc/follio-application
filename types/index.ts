@@ -750,6 +750,15 @@ export const SECTION_CONFIGS: SectionConfig[] = [
     category: 'body',
   },
   {
+    type: 'REFERENCES',
+    defaultTitle: 'References',
+    icon: 'Users',
+    description: 'Professional references',
+    isRemovable: true,
+    hasItems: true,
+    category: 'body',
+  },
+  {
     type: 'CUSTOM',
     defaultTitle: 'Custom Section',
     icon: 'LayoutGrid',
@@ -867,4 +876,25 @@ export interface InterestItem {
  */
 export interface InterestsSectionContent {
   items: InterestItem[];
+}
+
+/**
+ * Professional reference item
+ */
+export interface ReferenceItem {
+  id: string;
+  name: string;
+  title?: string;
+  company?: string;
+  email?: string;
+  phone?: string;
+  relationship?: string;
+  isVisible?: boolean;
+}
+
+/**
+ * References section content
+ */
+export interface ReferencesSectionContent {
+  items: ReferenceItem[];
 }

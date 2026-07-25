@@ -11,6 +11,7 @@ import {
   LayoutGrid,
   Plus,
   Sparkles,
+  Users,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -82,6 +83,12 @@ const AVAILABLE_SECTIONS: {
     title: 'Interests',
     description: 'Share your hobbies and interests',
     icon: Sparkles,
+  },
+  {
+    type: 'REFERENCES',
+    title: 'References',
+    description: 'Add professional references',
+    icon: Users,
   },
   {
     type: 'CUSTOM',

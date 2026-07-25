@@ -272,7 +272,6 @@ describe('Validation Schemas', () => {
         endDate: '2024-01-01',
         isCurrent: false,
         bullets: ['Developed web applications', 'Built APIs', 'Led team'],
-        tags: ['JavaScript', 'React'],
       };
       expect(() => WorkExperienceSchema.parse(data)).not.toThrow();
     });

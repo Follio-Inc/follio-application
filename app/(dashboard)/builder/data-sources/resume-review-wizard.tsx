@@ -861,15 +861,10 @@ export function ResumeReviewWizard({
                     : `Save ${counts.total} change${counts.total === 1 ? '' : 's'}`}
               </Button>
             ) : (
-              <>
-                <Button variant="ghost" onClick={goNext} className="text-muted-foreground">
-                  Skip
-                </Button>
-                <Button onClick={goNext}>
-                  Next
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </>
+              <Button onClick={goNext}>
+                Next
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
             )}
           </div>
         </div>

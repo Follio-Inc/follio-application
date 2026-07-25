@@ -106,7 +106,6 @@ export function buildSnapViewUserPrompt(profile: PublicProfile): string {
     isCurrent: w.isCurrent,
     bullets: w.bullets,
     metrics: w.metrics,
-    tags: w.tags,
   }));
 
   const educations = (profile.educations ?? []).map((e) => ({

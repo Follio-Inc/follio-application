@@ -48,6 +48,8 @@ interface RichTextEditorProps {
   value: string;
   /** Called with the updated HTML string */
   onChange: (html: string) => void;
+  /** Called when the editor loses focus (after content is current) */
+  onBlur?: () => void;
   /** Placeholder text */
   placeholder?: string;
   /** Additional class for the editor container */
@@ -153,6 +155,7 @@ function ToolbarButton({
 export function RichTextEditor({
   value,
   onChange,
+  onBlur,
   placeholder,
   className,
   minHeight = '160px',
@@ -205,6 +208,12 @@ export function RichTextEditor({
     onUpdate: ({ editor: ed }) => {
       isInternalUpdate.current = true;
       onChange(ed.getHTML());
+    },
+    onBlur: ({ event }) => {
+      const related = event.relatedTarget as Node | null;
+      const root = (event.target as HTMLElement | null)?.closest?.('[data-rich-text-editor]');
+      if (related && root?.contains(related)) return;
+      onBlur?.();
     },
   });
 
@@ -275,6 +284,7 @@ export function RichTextEditor({
   return (
     <TooltipProvider delayDuration={300}>
       <div
+        data-rich-text-editor
         className={cn(
           'rounded-lg border border-input shadow-sm transition-colors focus-within:ring-1 focus-within:ring-ring',
           disabled && 'cursor-not-allowed opacity-50',

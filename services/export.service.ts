@@ -28,6 +28,7 @@ import {
 } from '@/lib/resume-design';
 import { getResumeTemplateId, isResumeAtelierRailSectionType } from '@/lib/resume/templates';
 import { getResumePageSize } from '@/lib/resume/page-layout';
+import { resolveSkillCategoryLabel, skillGroupsHaveCategoryLabels } from '@/lib/skills/groups';
 import { formatDate } from '@/lib/utils';
 import type {
   CustomSectionContent,
@@ -39,6 +40,7 @@ import type {
   PdfLayout,
   ProfileSection,
   PublicationItem,
+  ReferenceItem,
   ResumeFontFamily,
   VolunteeringItem,
 } from '@/types';
@@ -392,15 +394,38 @@ export function toPlainText(profile: FullProfile): string {
           }
           break;
 
-        case 'SKILLS':
-          if (visibleSkills.length > 0) {
+        case 'SKILLS': {
+          const visibleSkillGroups = profile.skillGroups
+            .map((g) => ({
+              ...g,
+              skills: g.skills.filter((s) => s.isVisible !== false),
+            }))
+            .filter((g) => g.skills.length > 0 || !isHtmlEmpty(g.skillsHtml));
+          const groupNames = visibleSkillGroups.map((g) => g.name);
+          const hasLabels = skillGroupsHaveCategoryLabels(visibleSkillGroups);
+
+          if (visibleSkillGroups.length > 0) {
             lines.push('SKILLS');
             lines.push('-'.repeat(50));
-            const skillNames = visibleSkills.map((s) => s.name);
-            lines.push(skillNames.join(', '));
+            for (const group of visibleSkillGroups) {
+              const label = resolveSkillCategoryLabel(group.name, groupNames);
+              const fromHtml =
+                group.skillsHtml && !isHtmlEmpty(group.skillsHtml)
+                  ? stripHtmlTags(group.skillsHtml).replace(/\n+/g, ', ')
+                  : '';
+              const items = fromHtml || group.skills.map((s) => s.name).join(', ');
+              if (!items.trim()) continue;
+              lines.push(label ? `${label}: ${items}` : items);
+            }
+            lines.push('');
+          } else if (visibleSkills.length > 0) {
+            lines.push('SKILLS');
+            lines.push('-'.repeat(50));
+            lines.push(visibleSkills.map((s) => s.name).join(', '));
             lines.push('');
           }
           break;
+        }
 
         case 'PROJECTS':
           if (visibleProjects.length > 0) {
@@ -708,29 +733,25 @@ function skillsSectionHtml(profile: FullProfile, options: { stacked?: boolean } 
   const { stacked = false } = options;
   const visibleSkillGroups = profile.skillGroups
     .map((g) => ({ ...g, skills: g.skills.filter((s) => s.isVisible !== false) }))
-    .filter((g) => g.skills.length > 0);
+    .filter((g) => g.skills.length > 0 || !isHtmlEmpty(g.skillsHtml));
   const visibleSkills = profile.skills.filter((s) => s.isVisible !== false);
-  const flatSkills =
-    visibleSkillGroups.length > 0 ? visibleSkillGroups.flatMap((g) => g.skills) : visibleSkills;
+  const groupNames = visibleSkillGroups.map((g) => g.name);
+  const hasCategoryLabels = skillGroupsHaveCategoryLabels(visibleSkillGroups);
+  const hasRichHtml = visibleSkillGroups.some((g) => g.skillsHtml && !isHtmlEmpty(g.skillsHtml));
 
-  if (stacked) {
-    const names = flatSkills.map((s) => s.name);
-    if (names.length === 0) return '';
-    return `
-  <section class="resume-section">
-    ${sectionDividerHtml('SKILLS')}
-    <ul class="resume-skills-stack">${names
-      .map((name) => `<li class="resume-skills-stack-item">${escapeHtml(name)}</li>`)
-      .join('')}</ul>
-  </section>`;
-  }
-
-  if (visibleSkillGroups.length > 0) {
+  if (visibleSkillGroups.length > 0 && (hasCategoryLabels || hasRichHtml)) {
     const groups = visibleSkillGroups
-      .map(
-        (g) =>
-          `<div class="resume-skill-group"><span class="resume-skill-group-name">${escapeHtml(g.name)}:</span> <span class="resume-skill-group-items">${g.skills.map((s) => escapeHtml(s.name)).join(', ')}</span></div>`
-      )
+      .map((g) => {
+        const label = resolveSkillCategoryLabel(g.name, groupNames);
+        const labelHtml = label
+          ? `<span class="resume-skill-group-name">${escapeHtml(label)}: </span>`
+          : '';
+        if (g.skillsHtml && !isHtmlEmpty(g.skillsHtml)) {
+          return `<div class="resume-skill-group">${labelHtml}<div class="resume-skill-group-items resume-rich-html resume-skill-group-rich">${sanitizeRichHtml(g.skillsHtml)}</div></div>`;
+        }
+        const items = g.skills.map((s) => escapeHtml(s.name)).join(', ');
+        return `<div class="resume-skill-group">${labelHtml}<span class="resume-skill-group-items">${items}</span></div>`;
+      })
       .join('');
     return `
   <section class="resume-section">
@@ -739,11 +760,27 @@ function skillsSectionHtml(profile: FullProfile, options: { stacked?: boolean } 
   </section>`;
   }
 
-  if (visibleSkills.length === 0) return '';
+  const flatNames =
+    visibleSkillGroups.length > 0
+      ? visibleSkillGroups.flatMap((g) => g.skills.map((s) => s.name))
+      : visibleSkills.map((s) => s.name);
+
+  if (flatNames.length === 0) return '';
+
+  if (stacked) {
+    return `
+  <section class="resume-section">
+    ${sectionDividerHtml('SKILLS')}
+    <ul class="resume-skills-stack">${flatNames
+      .map((name) => `<li class="resume-skills-stack-item">${escapeHtml(name)}</li>`)
+      .join('')}</ul>
+  </section>`;
+  }
+
   return `
   <section class="resume-section">
     ${sectionDividerHtml('SKILLS')}
-    <p class="resume-skills-flat">${visibleSkills.map((s) => escapeHtml(s.name)).join(', ')}</p>
+    <p class="resume-skills-flat">${flatNames.map((name) => escapeHtml(name)).join(', ')}</p>
   </section>`;
 }
 
@@ -931,6 +968,37 @@ function interestsSectionHtml(items: InterestItem[]): string {
   </section>`;
 }
 
+function referencesSectionHtml(items: ReferenceItem[]): string {
+  if (!items || items.length === 0) return '';
+
+  const entries = items
+    .filter((r) => r.isVisible !== false)
+    .map((ref) => {
+      const roleLine = [ref.title, ref.company].filter(Boolean).join(', ');
+      const contactLine = [ref.email, ref.phone].filter(Boolean).join(' · ');
+      return `
+      <div class="resume-reference">
+        <p class="resume-reference-name">${escapeHtml(ref.name)}</p>
+        ${roleLine ? `<p class="resume-reference-role">${escapeHtml(roleLine)}</p>` : ''}
+        ${
+          ref.relationship
+            ? `<p class="resume-reference-relationship">${escapeHtml(ref.relationship)}</p>`
+            : ''
+        }
+        ${contactLine ? `<p class="resume-reference-contact">${escapeHtml(contactLine)}</p>` : ''}
+      </div>`;
+    })
+    .join('');
+
+  if (!entries) return '';
+
+  return `
+  <section class="resume-section">
+    ${sectionDividerHtml('REFERENCES')}
+    <div class="resume-entries resume-entries-compact">${entries}</div>
+  </section>`;
+}
+
 function customSectionHtml(section: ProfileSection): string {
   const content = section.customContent as CustomSectionContent | null;
   const items = content?.items || [];
@@ -1012,6 +1080,8 @@ function renderSectionHtml(
       return languagesSectionHtml(getCustomContentItems<LanguageItem>(section));
     case 'INTERESTS':
       return interestsSectionHtml(getCustomContentItems<InterestItem>(section));
+    case 'REFERENCES':
+      return referencesSectionHtml(getCustomContentItems<ReferenceItem>(section));
     case 'CUSTOM':
       return customSectionHtml(section);
     default:
@@ -1240,12 +1310,19 @@ const RESUME_CSS = `
   .resume-rich-html em { font-style: italic; }
   .resume-rich-html u { text-decoration: underline; }
 
-  /* Skills */
+  /* Skills — justified by default; category lines wrap flush left */
   .resume-skills-grouped { display: flex; flex-direction: column; gap: 4px; }
-  .resume-skill-group { font-size: 13px; }
+  .resume-skill-group { font-size: 13px; margin: 0; text-align: justify; line-height: 1.45; }
   .resume-skill-group-name { font-weight: 600; }
-  .resume-skill-group-items { color: #555; }
-  .resume-skills-flat { font-size: 13px; margin: 0; }
+  .resume-skill-group-items { color: inherit; }
+  .resume-skill-group-rich { display: inline; }
+  .resume-skill-group-rich > p { display: inline; margin: 0; }
+  .resume-skill-group-rich > p + p { display: block; margin-top: 0.15em; }
+  .resume-skill-group-rich > ul,
+  .resume-skill-group-rich > ol { display: block; margin: 4px 0 0 0; padding-left: 18px; }
+  .resume-skill-group-rich > ul li,
+  .resume-skill-group-rich > ol li { margin-bottom: 2px; }
+  .resume-skills-flat { font-size: 13px; margin: 0; text-align: justify; line-height: 1.45; }
 
   /* Inline entries (certs, awards) */
   .resume-entry-inline { font-size: 13px; margin-bottom: 4px; }
@@ -1263,6 +1340,13 @@ const RESUME_CSS = `
 
   /* Languages & Interests */
   .resume-languages, .resume-interests { font-size: 13px; margin: 0; }
+
+  /* References */
+  .resume-reference { margin-bottom: 10px; }
+  .resume-reference-name { font-weight: 600; margin: 0; }
+  .resume-reference-role, .resume-reference-relationship, .resume-reference-contact {
+    font-size: 12px; margin: 2px 0 0; color: #555;
+  }
 
   /* Freeform */
   .resume-freeform { font-size: 13px; white-space: pre-wrap; margin: 0; }
@@ -1300,7 +1384,7 @@ const RESUME_CSS = `
     color: var(--rd-accent-color-dark, #888);
     opacity: 0.6;
   }
-  [data-resume-theme='dark'] .resume-skill-group-items { color: #a0a0a0; }
+  [data-resume-theme='dark'] .resume-skill-group-items { color: inherit; }
   [data-resume-theme='dark'] .resume-entry-inline-issuer { color: #a0a0a0; }
   [data-resume-theme='dark'] .resume-entry-inline-date { color: #888; }
   [data-resume-theme='dark'] .resume-entry-inline-description { color: #888; }

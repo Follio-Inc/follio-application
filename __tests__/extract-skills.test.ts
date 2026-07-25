@@ -6,6 +6,7 @@
 
 import {
   extractIndividualSkills,
+  extractSkillGroups,
   extractSkills,
   parseSkillsFromText,
 } from '@/lib/resume-parser/extract-skills';
@@ -112,6 +113,37 @@ describe('extractIndividualSkills', () => {
   it('handles colon with nothing after it', () => {
     const result = extractIndividualSkills(['Languages:']);
     expect(result).toEqual([]);
+  });
+});
+
+// ── extractSkillGroups ───────────────────────────────────────
+
+describe('extractSkillGroups', () => {
+  it('keeps category names with comma-separated skills', () => {
+    expect(extractSkillGroups(['Languages: Python, Java, Go'])).toEqual([
+      { name: 'Languages', skills: ['Python', 'Java', 'Go'] },
+    ]);
+  });
+
+  it('puts uncategorized skills under Skills', () => {
+    expect(extractSkillGroups(['React, Node.js, Express'])).toEqual([
+      { name: 'Skills', skills: ['React', 'Node.js', 'Express'] },
+    ]);
+  });
+
+  it('supports multiple categories', () => {
+    expect(extractSkillGroups(['Languages: Python, Java', 'Frameworks: React, Django'])).toEqual([
+      { name: 'Languages', skills: ['Python', 'Java'] },
+      { name: 'Frameworks', skills: ['React', 'Django'] },
+    ]);
+  });
+
+  it('deduplicates across categories', () => {
+    const result = extractSkillGroups(['Languages: Python, Java', 'Tools: Python, Docker']);
+    expect(result).toEqual([
+      { name: 'Languages', skills: ['Python', 'Java'] },
+      { name: 'Tools', skills: ['Docker'] },
+    ]);
   });
 });
 

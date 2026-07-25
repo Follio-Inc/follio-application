@@ -14,7 +14,7 @@
 import { extractEducation } from './extract-education';
 import { extractProfile } from './extract-profile';
 import { extractProject } from './extract-project';
-import { extractIndividualSkills, extractSkills } from './extract-skills';
+import { extractIndividualSkills, extractSkillGroups, extractSkills } from './extract-skills';
 import { extractWorkExperience } from './extract-work-experience';
 import { groupLinesIntoSections, PROFILE_SECTION } from './group-lines-into-sections';
 import { groupTextItemsIntoLines } from './group-text-items-into-lines';
@@ -137,9 +137,13 @@ function convertToAppFormat(
     }
   }
 
-  // Extract individual skills from skill descriptions
+  // Extract individual skills and category groups from skill descriptions
   const skillDescriptions = resume.skills.descriptions;
-  const individualSkills = extractIndividualSkills(skillDescriptions);
+  const skillGroups = extractSkillGroups(skillDescriptions);
+  const individualSkills =
+    skillGroups.length > 0
+      ? skillGroups.flatMap((group) => group.skills)
+      : extractIndividualSkills(skillDescriptions);
 
   // Convert work experiences
   const workExperiences = resume.workExperiences.map((exp) => {
@@ -231,6 +235,7 @@ function convertToAppFormat(
     summary: resume.profile.summary,
     links,
     skills: individualSkills,
+    skillGroups: skillGroups.length > 0 ? skillGroups : undefined,
     workExperiences,
     educations,
     projects,

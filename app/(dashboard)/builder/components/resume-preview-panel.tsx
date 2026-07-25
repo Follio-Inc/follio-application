@@ -20,6 +20,7 @@ import {
 import { useJustifyAll } from '../lib/use-justify-all';
 import { useBuilderStore } from './builder-store-provider';
 import { PreviewFloatingActions } from './preview-floating-actions';
+import { ResumeConstructionOverlay, useResumeConstruction } from './resume-construction-overlay';
 
 // Zoom modal is only mounted when the user clicks the resume — defer its
 // chunk so it doesn't bloat the initial preview bundle.
@@ -56,6 +57,7 @@ export function ResumePreviewPanel() {
   // top-right. Stored in state (not a ref) so the action component
   // re-renders once the DOM node is available and can portal into it.
   const [kebabAnchor, setKebabAnchor] = useState<HTMLDivElement | null>(null);
+  const construction = useResumeConstruction();
 
   const { allJustified, justifyAll: handleJustifyAll } = useJustifyAll();
 
@@ -127,7 +129,7 @@ export function ResumePreviewPanel() {
     <div className="relative flex h-full flex-col">
       {/* ── Slim panel header — labels the column, keeps the surface calm ── */}
       <div className="flex h-12 shrink-0 items-center justify-between border-b border-border/60 px-6">
-        <span className="text-eyebrow">Preview</span>
+        <span className="text-eyebrow">{construction.active ? 'Building resume' : 'Preview'}</span>
         <div className="flex items-center gap-2">
           <ResumePageLayoutSwitch
             variant="compact"
@@ -142,6 +144,13 @@ export function ResumePreviewPanel() {
         </div>
       </div>
 
+      <ResumeConstructionOverlay
+        active={construction.active}
+        progress={construction.progress}
+        status={construction.status}
+        showRefreshHint={construction.showRefreshHint}
+      />
+
       {/* ── Scrollable preview area ─────────────────────────────────── */}
       <div
         ref={containerRef}
@@ -154,7 +163,9 @@ export function ResumePreviewPanel() {
               (e.g. ResumeActions copy/print buttons), and nesting buttons
               is invalid HTML and causes a React hydration error. The
               click-to-zoom affordance is provided by the absolutely
-              positioned overlay button below. */}
+              positioned overlay button below.
+              Construction overlay is a status chip only — resume stays fully
+              visible so the handoff feels instant. */}
           <div
             className={cn(
               'group block w-full overflow-hidden rounded-md',

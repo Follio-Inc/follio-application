@@ -23,7 +23,6 @@ function minimalProfile(): PublicProfile {
         isCurrent: true,
         bullets: ['Built compilers that scaled'],
         metrics: [],
-        tags: [],
       },
     ],
     educations: [],

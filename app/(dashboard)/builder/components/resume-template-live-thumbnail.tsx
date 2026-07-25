@@ -30,8 +30,9 @@ interface ResumeTemplateLiveThumbnailProps {
 }
 
 /**
- * Miniature, non-interactive resume preview for a specific template,
- * rendered from the user's live draft (not sample data).
+ * Miniature, non-interactive resume preview for a specific template.
+ * Renders whatever profile the parent passes (builder: live draft;
+ * onboarding gallery may pass a sample when the draft is sparse).
  */
 export function ResumeTemplateLiveThumbnail({
   profile,

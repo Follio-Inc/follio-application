@@ -17,12 +17,13 @@ import {
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import * as pdfjsLib from 'pdfjs-dist';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Area, Point } from 'react-easy-crop';
 import Cropper from 'react-easy-crop';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
+import { ResumeTemplateGallery } from '@/app/(dashboard)/builder/components/resume-template-gallery';
 import {
   ResumeStartChoice,
   type ResumeStartPath,
@@ -55,6 +56,12 @@ import type {
 } from '@/lib/onboarding/constellation/platforms';
 import type { ConstellationConnection } from '@/components/onboarding/constellation/constellation-field';
 import { hasImportStepAction, importStepNextLabel } from '@/lib/onboarding/step-action';
+import { RESUME_CONSTRUCTION_SESSION_KEY } from '@/lib/onboarding/resume-construction';
+import {
+  mergeImportedProjects,
+  normalizeReviewBlogPost,
+  normalizeReviewProject,
+} from '@/lib/onboarding/review-import';
 import {
   ONBOARDING_DROPZONE,
   ONBOARDING_DROPZONE_ACTIVE,
@@ -71,7 +78,15 @@ import {
 } from '@/lib/onboarding-ui';
 import { ONBOARDING_TEMPLATE_KEY } from '@/lib/portfolio/templates/onboarding';
 import { getDefaultTemplateId } from '@/lib/portfolio/templates/registry';
+import {
+  buildDefaultDesignForTemplate,
+  buildOnboardingResumePreviewProfile,
+  DEFAULT_RESUME_TEMPLATE_ID,
+  getResumeTemplateId,
+  getTemplateDefaultShowPhoto,
+} from '@/lib/resume/templates';
 import { fileToBase64, getBestResolutionImage, parsePhoneWithCountryCode } from '@/lib/utils';
+import type { ResumeDesign } from '@/types';
 
 // ─── Storage Constants ────────────────────────────────────────────
 const ONBOARDING_IMPORT_STATE_KEY_PREFIX = 'follio_onboarding_import_state_';
@@ -188,7 +203,14 @@ interface ImportStatus {
 
 type OnboardingStep = 'resume' | 'photo' | 'connect';
 
-const STEPS: OnboardingStep[] = ['resume', 'photo', 'connect'];
+/**
+ * Active onboarding path:
+ * - blank → guided build (/onboarding/build?step=…) → builder
+ * - upload → parse → builder (with construction reveal)
+ * Photo and connect step UI below is intentionally retained but not listed here,
+ * so it stays out of the framework until we re-enable it.
+ */
+const STEPS: OnboardingStep[] = ['resume'];
 
 const STEP_META: Record<OnboardingStep, { title: string; subtitle: string }> = {
   resume: {
@@ -380,12 +402,19 @@ export default function OnboardingImportPage() {
   const [, setResumeFileUrl] = useState<string | null>(null);
   const [resumeThumbnail, setResumeThumbnail] = useState<string | null>(null);
   const [resumeParsingPromise, setResumeParsingPromise] = useState<Promise<void> | null>(null);
+  const resumeParsingPromiseRef = useRef<Promise<void> | null>(null);
   const [isWaitingForParsing, setIsWaitingForParsing] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
+  const [templateGalleryOpen, setTemplateGalleryOpen] = useState(false);
+  const defaultResumeDesign = useMemo(
+    () => buildDefaultDesignForTemplate(DEFAULT_RESUME_TEMPLATE_ID),
+    []
+  );
   const [isDraggingResume, setIsDraggingResume] = useState(false);
   const [showDiscardResumeDialog, setShowDiscardResumeDialog] = useState(false);
   // Imported data
   const [importedData, setImportedData] = useState<Record<string, unknown>>({});
+  const importedDataRef = useRef<Record<string, unknown>>({});
 
   // drag ref
   const resumeDropRef = useRef<HTMLDivElement | null>(null);
@@ -486,7 +515,10 @@ export default function OnboardingImportPage() {
             }
             setImports((prev) => ({ ...prev, ...restoredImports }));
           }
-          if (parsed.importedData) setImportedData(parsed.importedData);
+          if (parsed.importedData) {
+            importedDataRef.current = parsed.importedData;
+            setImportedData(parsed.importedData);
+          }
           if (parsed.githubUsername) setGithubUsername(parsed.githubUsername);
           if (parsed.linkedinProfileInput) setLinkedinProfileInput(parsed.linkedinProfileInput);
           if (parsed.resumeFileName) {
@@ -498,14 +530,16 @@ export default function OnboardingImportPage() {
           if (parsed.portfolioUrl) setPortfolioUrl(parsed.portfolioUrl);
           if (parsed.linkUrls?.length) setLinkUrls(parsed.linkUrls);
           if (parsed.currentStep) {
-            // Map removed steps onto the nearest remaining step
+            // Map removed / inactive steps onto the remaining active step
             const raw =
               parsed.currentStep === 'bubbles' ||
               parsed.currentStep === 'gallery' ||
               parsed.currentStep === 'review' ||
               parsed.currentStep === 'accounts' ||
-              parsed.currentStep === 'platforms'
-                ? 'connect'
+              parsed.currentStep === 'platforms' ||
+              parsed.currentStep === 'photo' ||
+              parsed.currentStep === 'connect'
+                ? 'resume'
                 : String(parsed.currentStep);
             if ((STEPS as string[]).includes(raw)) setCurrentStep(raw as OnboardingStep);
           }
@@ -546,10 +580,10 @@ export default function OnboardingImportPage() {
   };
 
   // ─── Resume Handlers ───────────────────────────────────────────
-  const processResumeFile = async (file: File) => {
+  const processResumeFile = async (file: File): Promise<Promise<void> | null> => {
     if (file.type !== 'application/pdf') {
       updateImportStatus('resume', { status: 'error', message: 'Only PDF files are supported.' });
-      return;
+      return null;
     }
     setResumeFileName(file.name);
     setResumeFileUrl(URL.createObjectURL(file));
@@ -586,7 +620,11 @@ export default function OnboardingImportPage() {
         const response = await fetch('/api/import/resume', { method: 'POST', body: formData });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Failed to parse resume');
-        setImportedData((prev) => ({ ...prev, resume: data.data }));
+        setImportedData((prev) => {
+          const next = { ...prev, resume: data.data };
+          importedDataRef.current = next;
+          return next;
+        });
         const itemCount = countResumeItems(data.data);
         updateImportStatus('resume', {
           status: 'success',
@@ -598,12 +636,16 @@ export default function OnboardingImportPage() {
           status: 'error',
           message: err instanceof Error ? err.message : 'Failed',
         });
+        throw err;
       } finally {
+        resumeParsingPromiseRef.current = null;
         setResumeParsingPromise(null);
       }
     })();
 
+    resumeParsingPromiseRef.current = parsingPromise;
     setResumeParsingPromise(parsingPromise);
+    return parsingPromise;
   };
 
   const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -611,7 +653,11 @@ export default function OnboardingImportPage() {
     // Allow re-selecting the same file after Remove/Replace
     e.target.value = '';
     if (!file) return;
-    await processResumeFile(file);
+    const parsingPromise = await processResumeFile(file);
+    if (parsingPromise) {
+      // Upload path: wait for parse, then choose a resume template
+      void openTemplateGalleryAfterParse(parsingPromise);
+    }
   };
 
   const handleResumeDrop = async (e: React.DragEvent) => {
@@ -619,7 +665,10 @@ export default function OnboardingImportPage() {
     setIsDraggingResume(false);
     const file = e.dataTransfer.files?.[0];
     if (!file) return;
-    await processResumeFile(file);
+    const parsingPromise = await processResumeFile(file);
+    if (parsingPromise) {
+      void openTemplateGalleryAfterParse(parsingPromise);
+    }
   };
 
   // ─── Photo handling ─────────────────────────────────────────────
@@ -682,7 +731,11 @@ export default function OnboardingImportPage() {
     constellationBundlesRef.current[platform.id] = bundle;
 
     if (bundle.dataKey && bundle.data) {
-      setImportedData((prev) => ({ ...prev, [bundle.dataKey!]: bundle.data }));
+      setImportedData((prev) => {
+        const next = { ...prev, [bundle.dataKey!]: bundle.data };
+        importedDataRef.current = next;
+        return next;
+      });
       updateImportStatus(bundle.dataKey, {
         status: 'success',
         message: `Imported ${platform.label}`,
@@ -765,6 +818,7 @@ export default function OnboardingImportPage() {
       setImportedData((prev) => {
         const next = { ...prev };
         delete next[dataKey];
+        importedDataRef.current = next;
         return next;
       });
       updateImportStatus(dataKey, { status: 'idle', message: undefined, itemsImported: undefined });
@@ -778,17 +832,112 @@ export default function OnboardingImportPage() {
   };
 
   // ─── Complete onboarding → builder ─────────────────────────────
-  const handleCompleteOnboarding = async () => {
+  const templatePreviewProfile = useMemo(() => {
+    const resumeData = (importedData.resume ?? importedDataRef.current.resume) as
+      | Record<string, unknown>
+      | undefined;
+    const profile = (resumeData?.profile as Record<string, unknown>) || {};
+    const contactInfo = resumeData?.contactInfo as Record<string, unknown> | undefined;
+    const experiences = (resumeData?.experiences as Array<Record<string, unknown>>) || [];
+    const educations = (resumeData?.educations as Array<Record<string, unknown>>) || [];
+    const rawSkills = resumeData?.skills;
+    const skills = Array.isArray(rawSkills)
+      ? rawSkills.map((skill) =>
+          typeof skill === 'string' ? skill : ((skill as { name?: string })?.name ?? '')
+        )
+      : [];
+    const resumeSkillGroups = resumeData?.skillGroups as
+      | Array<{ name: string; skills?: string[] }>
+      | undefined;
+
+    return buildOnboardingResumePreviewProfile({
+      profile: {
+        firstName: (profile.firstName as string) || user?.firstName || null,
+        middleName: (profile.middleName as string) || null,
+        lastName: (profile.lastName as string) || user?.lastName || null,
+        headline: (profile.headline as string) || null,
+        summary: (profile.summary as string) || null,
+        location: (profile.location as string) || null,
+        avatarUrl: user?.imageUrl || null,
+      },
+      experiences: experiences.map((exp) => ({
+        id: (exp.id as string) || undefined,
+        company: String(exp.company || ''),
+        role: String(exp.role || ''),
+        location: (exp.location as string) || null,
+        startDate: (exp.startDate as string) || null,
+        endDate: (exp.endDate as string) || null,
+        isCurrent: Boolean(exp.isCurrent),
+        bullets: Array.isArray(exp.bullets) ? (exp.bullets as string[]) : [],
+        bulletsHtml: (exp.bulletsHtml as string) || null,
+        isVisible: exp.isVisible !== false,
+      })),
+      educations: educations.map((edu) => ({
+        id: (edu.id as string) || undefined,
+        institution: String(edu.institution || ''),
+        degree: (edu.degree as string) || null,
+        fieldOfStudy: (edu.fieldOfStudy as string) || null,
+        location: (edu.location as string) || null,
+        startDate: (edu.startDate as string) || null,
+        endDate: (edu.endDate as string) || null,
+        gpa: (edu.gpa as string) || null,
+        description: (edu.description as string) || null,
+        isVisible: edu.isVisible !== false,
+      })),
+      skills,
+      skillGroups: resumeSkillGroups?.map((group, index) => ({
+        id: `upload-sg-${index}`,
+        name: group.name || 'Skills',
+        skills: group.skills || [],
+      })),
+      contactInfo: {
+        email: (contactInfo?.email as string) || user?.primaryEmailAddress?.emailAddress || null,
+        phone: (contactInfo?.phone as string) || null,
+        website: null,
+      },
+    });
+  }, [
+    importedData.resume,
+    user?.firstName,
+    user?.lastName,
+    user?.imageUrl,
+    user?.primaryEmailAddress?.emailAddress,
+  ]);
+
+  const openTemplateGalleryAfterParse = async (parsingPromise: Promise<void>) => {
+    if (isCompleting || templateGalleryOpen) return;
+    setError(null);
+    setIsWaitingForParsing(true);
+    try {
+      await parsingPromise;
+      setTemplateGalleryOpen(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to read resume');
+    } finally {
+      setIsWaitingForParsing(false);
+    }
+  };
+
+  const handleResumeTemplateSelect = (design: ResumeDesign) => {
+    setTemplateGalleryOpen(false);
+    void handleCompleteOnboarding({ fromUpload: true, resumeDesign: design });
+  };
+
+  const handleCompleteOnboarding = async (opts?: {
+    fromUpload?: boolean;
+    resumeDesign?: ResumeDesign;
+  }) => {
     if (isCompleting) return;
     setIsCompleting(true);
     setError(null);
 
     try {
       // If resume parsing is still running, wait for it
-      if (resumeParsingPromise) {
+      const pendingParse = resumeParsingPromiseRef.current ?? resumeParsingPromise;
+      if (pendingParse) {
         setIsWaitingForParsing(true);
         try {
-          await resumeParsingPromise;
+          await pendingParse;
         } finally {
           setIsWaitingForParsing(false);
         }
@@ -821,12 +970,12 @@ export default function OnboardingImportPage() {
         if (photos.length > 0) bestAvatarUrl = await getBestResolutionImage(photos);
       }
 
-      const resumeData = importedData.resume as Record<string, unknown> | undefined;
-      const linkedinData = importedData.linkedin as Record<string, unknown> | undefined;
-      const githubData = importedData.github as Record<string, unknown> | undefined;
-      const mediumData = importedData.medium as Record<string, unknown> | undefined;
-      const substackData = importedData.substack as Record<string, unknown> | undefined;
-      const youtubeData = importedData.youtube as Record<string, unknown> | undefined;
+      const resumeData = importedDataRef.current.resume as Record<string, unknown> | undefined;
+      const linkedinData = importedDataRef.current.linkedin as Record<string, unknown> | undefined;
+      const githubData = importedDataRef.current.github as Record<string, unknown> | undefined;
+      const mediumData = importedDataRef.current.medium as Record<string, unknown> | undefined;
+      const substackData = importedDataRef.current.substack as Record<string, unknown> | undefined;
+      const youtubeData = importedDataRef.current.youtube as Record<string, unknown> | undefined;
 
       const resumeProfile = (resumeData?.profile as Record<string, unknown>) || {};
       const linkedinProfile = (linkedinData?.profile as Record<string, unknown>) || {};
@@ -971,15 +1120,28 @@ export default function OnboardingImportPage() {
         ...((githubData?.skills as string[]) || []),
       ].filter((s, i, arr) => arr.indexOf(s) === i);
 
-      const projects = [
-        ...((resumeData?.projects as Array<Record<string, unknown>>) || []),
-        ...((githubData?.projects as Array<Record<string, unknown>>) || []),
-      ];
+      const resumeSkillGroups = resumeData?.skillGroups as
+        | Array<{ name: string; skills: string[] }>
+        | undefined;
+      const skillGroups =
+        resumeSkillGroups && resumeSkillGroups.length > 0
+          ? resumeSkillGroups
+          : skills.length > 0
+            ? [{ name: 'Skills', skills }]
+            : [];
+
+      const resumeProjects = ((resumeData?.projects as Array<Record<string, unknown>>) || []).map(
+        (proj) => normalizeReviewProject(proj, { forceSource: 'RESUME' })
+      );
+      const githubProjects = ((githubData?.projects as Array<Record<string, unknown>>) || []).map(
+        (proj) => normalizeReviewProject(proj, { forceSource: 'GITHUB' })
+      );
+      const projects = mergeImportedProjects(resumeProjects, githubProjects);
 
       const blogPosts = [
         ...((mediumData?.blogPosts as Array<Record<string, unknown>>) || []),
         ...((substackData?.blogPosts as Array<Record<string, unknown>>) || []),
-      ];
+      ].map((post) => normalizeReviewBlogPost(post));
       const youtubeVideos = [
         ...((youtubeData?.youtubeVideos as Array<Record<string, unknown>>) || []),
       ];
@@ -1027,6 +1189,11 @@ export default function OnboardingImportPage() {
       const selectedTemplateId =
         sessionStorage.getItem(ONBOARDING_TEMPLATE_KEY) || getDefaultTemplateId();
 
+      const selectedResumeDesign = opts?.resumeDesign;
+      const selectedResumeShowPhoto = selectedResumeDesign
+        ? getTemplateDefaultShowPhoto(getResumeTemplateId(selectedResumeDesign.templateId))
+        : undefined;
+
       const response = await fetch('/api/onboarding/complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1039,11 +1206,14 @@ export default function OnboardingImportPage() {
           originalAvatarDataUrl: originalAvatarDataUrl || undefined,
           targetProfileId: sessionStorage.getItem('importTargetProfileId') || undefined,
           templateId: selectedTemplateId,
+          resumeDesign: selectedResumeDesign,
+          resumeShowPhoto: selectedResumeShowPhoto,
           reviewedData: {
             profile: profileForApi,
             experiences: resumeData?.experiences || [],
             educations: resumeData?.educations || [],
             skills,
+            skillGroups,
             links: uniqueLinks,
             contactInfo,
             projects,
@@ -1069,6 +1239,11 @@ export default function OnboardingImportPage() {
 
       const returnUrl = sessionStorage.getItem('importReturnUrl');
       sessionStorage.removeItem('importReturnUrl');
+
+      // Upload path: builder preview plays a construction reveal
+      if (opts?.fromUpload && !returnUrl) {
+        sessionStorage.setItem(RESUME_CONSTRUCTION_SESSION_KEY, '1');
+      }
 
       router.refresh();
       router.push(returnUrl || '/builder');
@@ -1110,7 +1285,17 @@ export default function OnboardingImportPage() {
 
   const goNext = () => {
     if (isLastDataStep) {
-      void handleCompleteOnboarding();
+      // Upload path: choose template first (same as auto-complete after parse)
+      if (resumeFileName) {
+        const pendingParse = resumeParsingPromiseRef.current ?? resumeParsingPromise;
+        if (pendingParse) {
+          void openTemplateGalleryAfterParse(pendingParse);
+        } else {
+          setTemplateGalleryOpen(true);
+        }
+        return;
+      }
+      void handleCompleteOnboarding({ fromUpload: Boolean(resumeFileName) });
       return;
     }
     const idx = STEPS.indexOf(currentStep);
@@ -1123,6 +1308,7 @@ export default function OnboardingImportPage() {
     setResumeFileName(null);
     setResumeFileUrl(null);
     setResumeThumbnail(null);
+    resumeParsingPromiseRef.current = null;
     setResumeParsingPromise(null);
     updateImportStatus('resume', {
       status: 'idle',
@@ -1132,6 +1318,7 @@ export default function OnboardingImportPage() {
     setImportedData((prev) => {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { resume: _r, ...rest } = prev;
+      importedDataRef.current = rest;
       return rest;
     });
   };
@@ -1154,7 +1341,35 @@ export default function OnboardingImportPage() {
   const handleResumeStartSelect = (path: ResumeStartPath) => {
     if (path === 'blank') {
       clearResumeUpload();
-      goNext();
+      // Blank path: seed signup name/email, then walk through guided build
+      const allNames: Array<{ firstName?: string; lastName?: string; source: string }> = [];
+      if (user?.firstName || user?.lastName) {
+        allNames.push({
+          firstName: user.firstName || undefined,
+          lastName: user.lastName || undefined,
+          source: 'SIGNUP',
+        });
+      }
+      const signupEmail = user?.primaryEmailAddress?.emailAddress;
+      const dataForReview = {
+        profile: {
+          firstName: user?.firstName || undefined,
+          lastName: user?.lastName || undefined,
+        },
+        contactInfo: {
+          allEmails: signupEmail ? [{ email: signupEmail, source: 'SIGNUP' }] : [],
+          allPhones: [],
+        },
+        allNames,
+        experiences: [],
+        educations: [],
+        skillGroups: [{ name: '', skills: [] }],
+        links: [],
+        projects: [],
+        _sources: { hasResume: false, hasLinkedIn: false, hasGitHub: false },
+      };
+      sessionStorage.setItem('onboarding_parsed_resume', JSON.stringify(dataForReview));
+      router.push('/onboarding/build?step=profile');
       return;
     }
     // Stay on this page — open the file picker; loading UI takes over after select
@@ -1183,41 +1398,45 @@ export default function OnboardingImportPage() {
   return (
     <>
       {/* Progress bar — sits just beneath the app header (h-14) */}
-      <div className="fixed left-0 right-0 top-14 z-40 h-0.5 bg-muted">
-        <motion.div
-          className="h-full bg-primary"
-          initial={{ width: '0%' }}
-          animate={{ width: `${progressPercent}%` }}
-          transition={{ duration: 0.4, ease: 'easeOut' }}
-        />
-      </div>
+      {STEPS.length > 1 && (
+        <div className="fixed left-0 right-0 top-14 z-40 h-0.5 bg-muted">
+          <motion.div
+            className="h-full bg-primary"
+            initial={{ width: '0%' }}
+            animate={{ width: `${progressPercent}%` }}
+            transition={{ duration: 0.4, ease: 'easeOut' }}
+          />
+        </div>
+      )}
 
       <div
         className={currentStep === 'connect' ? ONBOARDING_PAGE_SHELL_WIDE : ONBOARDING_PAGE_SHELL}
       >
         {/* Step indicator — segmented track with current-step label */}
-        <div className={ONBOARDING_STEP_TRACK}>
-          <div className="flex items-center gap-1.5" role="list" aria-label="Onboarding steps">
-            {STEPS.map((step, idx) => {
-              const reachable = idx <= currentStepIndex;
-              return (
-                <button
-                  key={step}
-                  type="button"
-                  aria-label={STEP_META[step].title}
-                  aria-current={idx === currentStepIndex ? 'step' : undefined}
-                  disabled={!reachable}
-                  onClick={() => {
-                    if (reachable) setCurrentStep(step);
-                  }}
-                  className={`h-1 flex-1 rounded-full transition-colors duration-200 ${
-                    idx <= currentStepIndex ? 'bg-primary' : 'bg-muted'
-                  } ${reachable ? 'cursor-pointer' : 'cursor-default'}`}
-                />
-              );
-            })}
+        {STEPS.length > 1 && (
+          <div className={ONBOARDING_STEP_TRACK}>
+            <div className="flex items-center gap-1.5" role="list" aria-label="Onboarding steps">
+              {STEPS.map((step, idx) => {
+                const reachable = idx <= currentStepIndex;
+                return (
+                  <button
+                    key={step}
+                    type="button"
+                    aria-label={STEP_META[step].title}
+                    aria-current={idx === currentStepIndex ? 'step' : undefined}
+                    disabled={!reachable}
+                    onClick={() => {
+                      if (reachable) setCurrentStep(step);
+                    }}
+                    className={`h-1 flex-1 rounded-full transition-colors duration-200 ${
+                      idx <= currentStepIndex ? 'bg-primary' : 'bg-muted'
+                    } ${reachable ? 'cursor-pointer' : 'cursor-default'}`}
+                  />
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Step header */}
         <AnimatePresence mode="wait">
@@ -1229,10 +1448,14 @@ export default function OnboardingImportPage() {
             transition={{ duration: 0.25, ease: 'easeOut' }}
             className={ONBOARDING_STEP_HEADER}
           >
-            <p className="text-eyebrow">
-              Step {currentStepIndex + 1} of {STEPS.length}
-            </p>
-            <h1 className={`mt-2 ${ONBOARDING_PAGE_TITLE}`}>{resumeStepMeta.title}</h1>
+            {STEPS.length > 1 && (
+              <p className="text-eyebrow">
+                Step {currentStepIndex + 1} of {STEPS.length}
+              </p>
+            )}
+            <h1 className={`${STEPS.length > 1 ? 'mt-2' : ''}${ONBOARDING_PAGE_TITLE}`}>
+              {resumeStepMeta.title}
+            </h1>
             <p className={ONBOARDING_PAGE_SUBTITLE}>{resumeStepMeta.subtitle}</p>
           </motion.div>
         </AnimatePresence>
@@ -1307,7 +1530,7 @@ export default function OnboardingImportPage() {
                           >
                             <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
                               <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                              AI parsing in background...
+                              Reading your resume…
                             </p>
                             <div className="mx-auto h-1 w-32 overflow-hidden rounded-full bg-muted">
                               <motion.div
@@ -1322,7 +1545,7 @@ export default function OnboardingImportPage() {
                               />
                             </div>
                             <p className="text-[10px] text-muted-foreground/60">
-                              You can continue to the next step while we parse
+                              Opening the builder so you can watch it come together
                             </p>
                           </motion.div>
                         )}
@@ -1649,7 +1872,7 @@ export default function OnboardingImportPage() {
 
               <div className="space-y-1.5">
                 <h3 className="text-section-title text-lg">
-                  {isWaitingForParsing ? 'Reading your resume' : 'Creating your resume'}
+                  {isWaitingForParsing ? 'Reading your resume' : 'Opening your resume'}
                 </h3>
                 <p className="text-sm text-muted-foreground">
                   {isWaitingForParsing ? (
@@ -1663,7 +1886,7 @@ export default function OnboardingImportPage() {
                       )}
                     </>
                   ) : (
-                    'Setting up your profile so you can edit it in the builder'
+                    'Taking you to the builder'
                   )}
                 </p>
               </div>
@@ -1703,6 +1926,19 @@ export default function OnboardingImportPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ResumeTemplateGallery
+        profile={templatePreviewProfile}
+        currentDesign={defaultResumeDesign}
+        currentTemplateId={DEFAULT_RESUME_TEMPLATE_ID}
+        previewDataPolicy="sample-when-sparse"
+        open={templateGalleryOpen}
+        onOpenChange={setTemplateGalleryOpen}
+        hideTrigger
+        title="Choose your resume template"
+        applyLabel="Create my Follio"
+        onSelect={handleResumeTemplateSelect}
+      />
     </>
   );
 }

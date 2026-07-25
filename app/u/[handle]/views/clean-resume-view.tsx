@@ -25,6 +25,7 @@ import {
   resolveResumePageLayout,
 } from '@/lib/resume-design';
 import { isPagedPageLayout } from '@/lib/resume/page-layout';
+import { resolveSkillCategoryLabel, skillGroupsHaveCategoryLabels } from '@/lib/skills/groups';
 import { formatDate } from '@/lib/utils';
 import { applyVisibilityFilter, type FilteredProfile } from '@/lib/visibility';
 import type {
@@ -35,6 +36,7 @@ import type {
   ProfileSection,
   PublicationItem,
   PublicProfile,
+  ReferenceItem,
   VolunteeringItem,
 } from '@/types';
 import { HEADER_SECTION_TYPES, type ResumeDesign } from '@/types';
@@ -395,7 +397,6 @@ interface ExperienceEntryProps {
   bullets: string[];
   /** Complete editor HTML — when present, rendered directly for perfect fidelity. */
   bulletsHtml?: string | null;
-  tags?: string[];
 }
 
 function ExperienceEntry({
@@ -485,7 +486,6 @@ function ExperienceSection({
             isCurrent={exp.isCurrent}
             bullets={exp.bullets}
             bulletsHtml={exp.bulletsHtml}
-            tags={exp.tags}
             variant={variant}
           />
         ))}
@@ -570,58 +570,65 @@ function SkillsSection({
   stacked = false,
 }: {
   profile: PublicProfile;
-  /** Atelier: one skill per line, no proficiency bars. */
+  /** Atelier: one skill per line when categories are absent and content is plain. */
   stacked?: boolean;
 }) {
   const { skills, skillGroups } = profile;
+  const visibleGroups = (skillGroups ?? []).filter(
+    (group) => group.skills.length > 0 || !isHtmlEmpty(group.skillsHtml)
+  );
+  const groupNames = visibleGroups.map((group) => group.name);
+  const hasCategoryLabels = skillGroupsHaveCategoryLabels(visibleGroups);
+  const hasRichHtml = visibleGroups.some(
+    (group) => group.skillsHtml && !isHtmlEmpty(group.skillsHtml)
+  );
 
-  // If we have skill groups, display grouped (already filtered by applyVisibilityFilter)
-  if (skillGroups && skillGroups.length > 0) {
-    if (stacked) {
-      const names = skillGroups.flatMap((group) => group.skills.map((s) => s.name));
-      if (names.length === 0) return null;
-      return (
-        <section className="resume-section">
-          <SectionDivider title="SKILLS" />
-          <ul className="resume-skills-stack">
-            {names.map((name) => (
-              <li key={name} className="resume-skills-stack-item">
-                {name}
-              </li>
-            ))}
-          </ul>
-        </section>
-      );
-    }
-
+  // Rich HTML (and/or category labels): render each group with optional bold label.
+  if (visibleGroups.length > 0 && (hasCategoryLabels || hasRichHtml)) {
     return (
       <section className="resume-section">
         <SectionDivider title="SKILLS" />
         <div className="resume-skills-grouped">
-          {skillGroups.map((group) => (
-            <div key={group.id} className="resume-skill-group">
-              <span className="resume-skill-group-name">{group.name}:</span>{' '}
-              <span className="resume-skill-group-items">
-                {group.skills.map((s) => s.name).join(', ')}
-              </span>
-            </div>
-          ))}
+          {visibleGroups.map((group) => {
+            const label = resolveSkillCategoryLabel(group.name, groupNames);
+            const html =
+              group.skillsHtml && !isHtmlEmpty(group.skillsHtml) ? group.skillsHtml : null;
+            const items = group.skills.map((s) => s.name).join(', ');
+
+            return (
+              <div key={group.id} className="resume-skill-group">
+                {label ? <span className="resume-skill-group-name">{label}: </span> : null}
+                {html ? (
+                  <div
+                    className="resume-skill-group-items resume-rich-html resume-skill-group-rich"
+                    dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(html) }}
+                  />
+                ) : (
+                  <span className="resume-skill-group-items">{items}</span>
+                )}
+              </div>
+            );
+          })}
         </div>
       </section>
     );
   }
 
-  // Otherwise, display flat list (already filtered by applyVisibilityFilter)
-  if (!skills || skills.length === 0) return null;
+  const flatNames =
+    visibleGroups.length > 0
+      ? visibleGroups.flatMap((group) => group.skills.map((s) => s.name))
+      : (skills ?? []).map((s) => s.name);
+
+  if (flatNames.length === 0) return null;
 
   if (stacked) {
     return (
       <section className="resume-section">
         <SectionDivider title="SKILLS" />
         <ul className="resume-skills-stack">
-          {skills.map((s) => (
-            <li key={s.id} className="resume-skills-stack-item">
-              {s.name}
+          {flatNames.map((name) => (
+            <li key={name} className="resume-skills-stack-item">
+              {name}
             </li>
           ))}
         </ul>
@@ -632,7 +639,7 @@ function SkillsSection({
   return (
     <section className="resume-section">
       <SectionDivider title="SKILLS" />
-      <p className="resume-skills-flat">{skills.map((s) => s.name).join(', ')}</p>
+      <p className="resume-skills-flat">{flatNames.join(', ')}</p>
     </section>
   );
 }
@@ -898,6 +905,37 @@ function InterestsSection({ items }: { items: InterestItem[] }) {
 }
 
 // ============================================================================
+// REFERENCES SECTION
+// ============================================================================
+
+function ReferencesSection({ items }: { items: ReferenceItem[] }) {
+  if (!items || items.length === 0) return null;
+
+  return (
+    <section className="resume-section">
+      <SectionDivider title="REFERENCES" />
+      <div className="resume-entries resume-entries-compact">
+        {items.map((ref) => {
+          const roleLine = [ref.title, ref.company].filter(Boolean).join(', ');
+          const contactLine = [ref.email, ref.phone].filter(Boolean).join(' · ');
+
+          return (
+            <div key={ref.id} className="resume-reference">
+              <p className="resume-reference-name">{ref.name}</p>
+              {roleLine && <p className="resume-reference-role">{roleLine}</p>}
+              {ref.relationship && (
+                <p className="resume-reference-relationship">{ref.relationship}</p>
+              )}
+              {contactLine && <p className="resume-reference-contact">{contactLine}</p>}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+// ============================================================================
 // CUSTOM SECTIONS
 // ============================================================================
 
@@ -1065,6 +1103,13 @@ export function CleanResumeView({ profile: rawProfile, authState }: CleanResumeV
       case 'INTERESTS':
         return (
           <InterestsSection key={section.id} items={getCustomContentItems<InterestItem>(section)} />
+        );
+      case 'REFERENCES':
+        return (
+          <ReferencesSection
+            key={section.id}
+            items={getCustomContentItems<ReferenceItem>(section)}
+          />
         );
       case 'CUSTOM':
         return <CustomSection key={section.id} section={section} />;

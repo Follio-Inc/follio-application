@@ -287,6 +287,44 @@
     }
   }
 
+  /* Soft breathe when Back is blocked by unsaved entry edits */
+  .animate-save-attention {
+    animation: save-attention-anim 900ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  @keyframes save-attention-anim {
+    0% {
+      box-shadow:
+        0 0 0 0 hsl(var(--primary) / 0),
+        0 0 0 0 hsl(var(--primary) / 0);
+    }
+    35% {
+      box-shadow:
+        0 0 0 1px hsl(var(--primary) / 0.18),
+        0 8px 24px -12px hsl(var(--primary) / 0.28);
+    }
+    100% {
+      box-shadow:
+        0 0 0 1px hsl(var(--primary) / 0.06),
+        0 0 0 0 hsl(var(--primary) / 0);
+    }
+  }
+
+  .animate-save-attention-copy {
+    animation: save-attention-copy-anim 420ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  @keyframes save-attention-copy-anim {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
   .stagger-1 {
     animation-delay: 0.1s;
   }
@@ -960,7 +998,9 @@
     text-decoration: underline;
   }
 
-  /* Skills */
+  /* Skills — justified by default (matches summary / bullets).
+     Category lines are inline "BoldCategory: csv…" so wrapped lines share
+     the same left margin as the category name (no hanging indent / grid). */
   .resume-skills-grouped {
     display: flex;
     flex-direction: column;
@@ -969,6 +1009,9 @@
 
   .resume-skill-group {
     font-size: 13px;
+    margin: 0;
+    text-align: justify;
+    line-height: 1.45;
   }
 
   .resume-skill-group-name {
@@ -976,16 +1019,42 @@
   }
 
   .resume-skill-group-items {
-    color: #555;
+    color: inherit;
   }
 
-  .resume-paper-wrapper[data-resume-theme='dark'] .resume-skill-group-items {
-    color: #a0a0a0;
+  /* Inline first paragraph after "Category: " so CSV wraps flush left;
+     lists and subsequent blocks stay full-width under the category. */
+  .resume-skill-group-rich {
+    display: inline;
+  }
+
+  .resume-skill-group-rich > p {
+    display: inline;
+    margin: 0;
+  }
+
+  .resume-skill-group-rich > p + p {
+    display: block;
+    margin-top: 0.15em;
+  }
+
+  .resume-skill-group-rich > ul,
+  .resume-skill-group-rich > ol {
+    display: block;
+    margin: 4px 0 0 0;
+    padding-left: 18px;
+  }
+
+  .resume-skill-group-rich > ul li,
+  .resume-skill-group-rich > ol li {
+    margin-bottom: 2px;
   }
 
   .resume-skills-flat {
     font-size: 13px;
     margin: 0;
+    text-align: justify;
+    line-height: 1.45;
   }
 
   /* Inline entries (certifications, awards) */
@@ -1074,6 +1143,30 @@
     margin: 0;
   }
 
+  /* References */
+  .resume-reference {
+    margin-bottom: 10px;
+  }
+
+  .resume-reference-name {
+    font-weight: 600;
+    margin: 0;
+  }
+
+  .resume-reference-role,
+  .resume-reference-relationship,
+  .resume-reference-contact {
+    font-size: 12px;
+    margin: 2px 0 0;
+    color: #555;
+  }
+
+  .resume-paper-wrapper[data-resume-theme='dark'] .resume-reference-role,
+  .resume-paper-wrapper[data-resume-theme='dark'] .resume-reference-relationship,
+  .resume-paper-wrapper[data-resume-theme='dark'] .resume-reference-contact {
+    color: #888;
+  }
+
   /* Freeform content */
   .resume-freeform {
     font-size: 13px;
@@ -1145,7 +1238,10 @@
   }
 
   .resume-paper.resume-justify-all .resume-skills-grouped,
+  .resume-paper.resume-justify-all .resume-skill-group,
   .resume-paper.resume-justify-all .resume-skills-flat,
+  .resume-paper.resume-justify-all .resume-skills-stack,
+  .resume-paper.resume-justify-all .resume-skills-stack-item,
   .resume-paper.resume-justify-all .resume-entry-tags,
   .resume-paper.resume-justify-all .resume-entry-tech {
     text-align: justify;
@@ -1968,11 +2064,13 @@
   .resume-entry-subtitle,
   .resume-entry-date,
   .resume-entry-tech,
-  .resume-skill-group-items,
   .resume-entry-inline-issuer,
   .resume-entry-inline-date,
   .resume-publication-authors,
   .resume-publication-meta,
+  .resume-reference-role,
+  .resume-reference-relationship,
+  .resume-reference-contact,
   .resume-entry-details {
     color: #444 !important;
   }
@@ -2038,11 +2136,13 @@
 
 .tiptap p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
-  float: left;
   pointer-events: none;
-  height: 0;
   color: hsl(var(--muted-foreground));
   opacity: 0.5;
+  white-space: pre-wrap;
+  float: left;
+  height: 0;
+  width: 100%;
 }
 
 /* Bullet list styles */

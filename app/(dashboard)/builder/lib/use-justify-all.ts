@@ -47,6 +47,11 @@ function isProfileContentFullyJustified(profile: FullProfile): boolean {
     if (!isHtmlFullyJustified(award.description)) return false;
   }
 
+  // Skill groups
+  for (const group of profile.skillGroups ?? []) {
+    if (!isHtmlFullyJustified(group.skillsHtml)) return false;
+  }
+
   // Custom sections (publications, volunteering, custom, etc.)
   for (const section of profile.sections ?? []) {
     if (!section.customContent) continue;
@@ -101,6 +106,14 @@ function buildJustifyUpdates(profile: FullProfile): Partial<FullProfile> {
     updates.awards = profile.awards.map((a) => ({
       ...a,
       description: justifyHtmlContent(a.description),
+    }));
+  }
+
+  // Skill groups
+  if ((profile.skillGroups ?? []).some((g) => !isHtmlFullyJustified(g.skillsHtml))) {
+    updates.skillGroups = profile.skillGroups.map((g) => ({
+      ...g,
+      skillsHtml: justifyHtmlContent(g.skillsHtml),
     }));
   }
 

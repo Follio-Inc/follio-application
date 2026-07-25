@@ -163,7 +163,7 @@ export function PhoneInput({
 
         {/* Dropdown */}
         {open && (
-          <div className="absolute left-0 top-full z-50 mt-1 w-[280px] rounded-lg border bg-popover p-0 shadow-md">
+          <div className="absolute left-0 top-full z-50 mt-1 w-[320px] rounded-lg border bg-popover p-0 shadow-md">
             {/* Search Input */}
             <div className="border-b p-2">
               <div className="relative">
@@ -219,10 +219,14 @@ export function PhoneInput({
                           isSelected && 'bg-accent'
                         )}
                       >
-                        <span className="w-5 text-center">{country.flag}</span>
-                        <span className="flex-1 truncate text-left">{country.name}</span>
-                        <span className="text-muted-foreground">{country.dialCode}</span>
-                        {isSelected && <Check className="h-4 w-4" />}
+                        <span className="w-5 shrink-0 text-center">{country.flag}</span>
+                        <span className="min-w-0 flex-1 truncate text-left">
+                          {country.name}{' '}
+                          <span className="tabular-nums text-muted-foreground">
+                            ({country.dialCode})
+                          </span>
+                        </span>
+                        {isSelected && <Check className="h-4 w-4 shrink-0" />}
                       </button>
                     );
                   })
