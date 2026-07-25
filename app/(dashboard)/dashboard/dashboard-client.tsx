@@ -4,10 +4,10 @@ import {
   Check,
   Copy,
   ExternalLink,
+  FilePenLine,
   Globe,
   Link2,
   Lock,
-  MoreVertical,
   Pencil,
   Share2,
 } from 'lucide-react';
@@ -17,17 +17,14 @@ import { useCallback, useState } from 'react';
 import { ShareDialog } from '@/components/share-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { isPortfolioEnabled } from '@/lib/features';
 import { getPortfolioUrl } from '@/lib/url';
+import { cn } from '@/lib/utils';
 
 import { DashboardResumesSection, type DashboardResumeItem } from './dashboard-resumes-section';
+import { DashboardSectionHeader } from './dashboard-section-header';
 import { PortfolioThumbnail } from './portfolio-thumbnail';
 
 // ─── Types ────────────────────────────────────────────────────────
@@ -62,6 +59,15 @@ const VISIBILITY_CONFIG: Record<string, { label: string; icon: typeof Globe }> =
   PRIVATE: { label: 'Private', icon: Lock },
 };
 
+const documentsTabTriggerClass = cn(
+  'relative h-auto rounded-none border-0 bg-transparent px-0 pb-3 pt-0 shadow-none',
+  'text-sm font-medium text-muted-foreground',
+  'after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:origin-left after:scale-x-0 after:bg-foreground after:transition-transform',
+  'data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none',
+  'data-[state=active]:after:scale-x-100',
+  'focus-visible:ring-0 focus-visible:ring-offset-0'
+);
+
 // ─── Component ────────────────────────────────────────────────────
 
 export function DashboardClient({ data }: DashboardClientProps) {
@@ -72,12 +78,10 @@ export function DashboardClient({ data }: DashboardClientProps) {
   const [portfolioVisibility, setPortfolioVisibility] = useState(
     portfolioProfile.portfolioVisibility
   );
+  const [documentsTab, setDocumentsTab] = useState('resumes');
 
   const portfolioUrl = getPortfolioUrl(portfolioProfile.handle);
   const displayUrl = portfolioUrl.replace(/^https?:\/\//, '');
-  const ownerName = [portfolioProfile.firstName, portfolioProfile.lastName]
-    .filter(Boolean)
-    .join(' ');
 
   const handleCopy = useCallback(async () => {
     try {
@@ -90,39 +94,23 @@ export function DashboardClient({ data }: DashboardClientProps) {
   }, [portfolioUrl]);
 
   return (
-    <div className="space-y-12">
-      {/* ═══════════════════════════════════════════════════════════
-          Page header
-          ═══════════════════════════════════════════════════════════ */}
-      <header className="space-y-1.5">
-        <p className="text-eyebrow">Workspace</p>
-        <h1 className="text-display text-2xl text-foreground sm:text-3xl">
-          {ownerName ? `Welcome back, ${portfolioProfile.firstName}` : 'Dashboard'}
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          {portfolioEnabled
-            ? 'Manage your live portfolio and tailored resumes, all in one place.'
-            : 'Manage your tailored resumes in one place.'}
-        </p>
-      </header>
+    <div className="space-y-8 sm:space-y-10">
+      <h1 className="sr-only">Dashboard</h1>
 
-      {/* ═══════════════════════════════════════════════════════════
-          Portfolio
-          ═══════════════════════════════════════════════════════════ */}
+      {/* ── Portfolio (public site) ─────────────────────────────── */}
       {portfolioEnabled && (
-        <section className="space-y-4">
-          <SectionHeader title="Portfolio">
+        <section className="space-y-3">
+          <DashboardSectionHeader title="Portfolio">
             <VisibilityBadge visibility={portfolioVisibility} />
-          </SectionHeader>
+          </DashboardSectionHeader>
 
           <div className="surface-raised overflow-hidden">
             <PortfolioThumbnail handle={portfolioProfile.handle} />
 
-            {/* Action bar */}
-            <div className="space-y-3 border-t border-border/60 p-4">
-              {/* URL row */}
-              <div className="flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground">
-                <Globe className="h-4 w-4 shrink-0" />
+            {/* Compact meta + actions on one row */}
+            <div className="flex flex-col gap-3 border-t border-border/60 p-3 sm:flex-row sm:items-center sm:gap-4 sm:px-4 sm:py-3">
+              <div className="flex min-w-0 flex-1 items-center gap-1.5 text-sm text-muted-foreground">
+                <Globe className="h-3.5 w-3.5 shrink-0" />
                 <span className="min-w-0 truncate font-medium text-foreground">{displayUrl}</span>
                 <TooltipProvider delayDuration={300}>
                   <Tooltip>
@@ -130,14 +118,14 @@ export function DashboardClient({ data }: DashboardClientProps) {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 shrink-0 text-muted-foreground"
+                        className="h-7 w-7 shrink-0 text-muted-foreground"
                         onClick={() => void handleCopy()}
                         aria-label={copied ? 'Copied' : 'Copy link'}
                       >
                         {copied ? (
-                          <Check className="h-4 w-4 text-success" />
+                          <Check className="h-3.5 w-3.5 text-success" />
                         ) : (
-                          <Copy className="h-4 w-4" />
+                          <Copy className="h-3.5 w-3.5" />
                         )}
                       </Button>
                     </TooltipTrigger>
@@ -148,75 +136,28 @@ export function DashboardClient({ data }: DashboardClientProps) {
                 </TooltipProvider>
               </div>
 
-              {/* Primary actions */}
-              <div className="flex items-center gap-2">
+              <div className="flex shrink-0 items-center gap-2">
                 <Button size="sm" className="gap-1.5" asChild>
                   <Link href="/dashboard/portfolio/edit">
                     <Pencil className="h-3.5 w-3.5" />
                     Edit
                   </Link>
                 </Button>
-                <Button size="sm" className="gap-1.5" asChild>
+                <Button size="sm" variant="outline" className="gap-1.5" asChild>
                   <Link href={`/u/${portfolioProfile.handle}`} target="_blank">
                     <ExternalLink className="h-3.5 w-3.5" />
                     View
                   </Link>
                 </Button>
-                <Button size="sm" className="gap-1.5" onClick={() => setShareDialogOpen(true)}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5"
+                  onClick={() => setShareDialogOpen(true)}
+                >
                   <Share2 className="h-3.5 w-3.5" />
                   Share
                 </Button>
-
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="ml-auto h-8 w-8 shrink-0"
-                      aria-label="More portfolio actions"
-                    >
-                      <MoreVertical className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuItem asChild>
-                      <Link href="/dashboard/portfolio/edit" className="gap-2">
-                        <Pencil className="h-4 w-4 text-muted-foreground" />
-                        Edit
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link
-                        href={`/u/${portfolioProfile.handle}`}
-                        target="_blank"
-                        className="gap-2"
-                      >
-                        <ExternalLink className="h-4 w-4 text-muted-foreground" />
-                        View
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      className="gap-2"
-                      onSelect={(event) => {
-                        event.preventDefault();
-                        setShareDialogOpen(true);
-                      }}
-                    >
-                      <Share2 className="h-4 w-4 text-muted-foreground" />
-                      Share
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      className="gap-2"
-                      onSelect={(event) => {
-                        event.preventDefault();
-                        void handleCopy();
-                      }}
-                    >
-                      <Copy className="h-4 w-4 text-muted-foreground" />
-                      Copy link
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
               </div>
             </div>
           </div>
@@ -238,15 +179,40 @@ export function DashboardClient({ data }: DashboardClientProps) {
         />
       )}
 
-      {/* ═══════════════════════════════════════════════════════════
-          Resumes
-          ═══════════════════════════════════════════════════════════ */}
-      <section>
-        <DashboardResumesSection
-          initialResumes={resumes}
-          initialActiveProfileId={activeProfileId}
-          initialPrimaryProfileId={primaryProfileId}
-        />
+      {portfolioEnabled && <div className="hairline border-t" aria-hidden />}
+
+      {/* ── Documents: resumes + cover letters ─────────────────── */}
+      <section className="space-y-4">
+        <Tabs value={documentsTab} onValueChange={setDocumentsTab} className="space-y-4">
+          <div className="border-b border-border/60">
+            <TabsList className="h-auto w-full justify-start gap-6 rounded-none bg-transparent p-0">
+              <TabsTrigger value="resumes" className={documentsTabTriggerClass}>
+                <span className="inline-flex items-center gap-2">
+                  Resumes
+                  <span className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-medium tabular-nums leading-none text-muted-foreground">
+                    {resumes.length}
+                  </span>
+                </span>
+              </TabsTrigger>
+              <TabsTrigger value="cover-letters" className={documentsTabTriggerClass}>
+                Cover letters
+              </TabsTrigger>
+            </TabsList>
+          </div>
+
+          <TabsContent value="resumes" className="mt-0 focus-visible:outline-none">
+            <DashboardResumesSection
+              initialResumes={resumes}
+              initialActiveProfileId={activeProfileId}
+              initialPrimaryProfileId={primaryProfileId}
+              embedded
+            />
+          </TabsContent>
+
+          <TabsContent value="cover-letters" className="mt-0 focus-visible:outline-none">
+            <CoverLettersEmptyState />
+          </TabsContent>
+        </Tabs>
       </section>
     </div>
   );
@@ -254,27 +220,14 @@ export function DashboardClient({ data }: DashboardClientProps) {
 
 // ─── Sub-components ───────────────────────────────────────────────
 
-/** Section heading with optional count and right-side controls. */
-function SectionHeader({
-  title,
-  count,
-  children,
-}: {
-  title: string;
-  count?: number;
-  children?: React.ReactNode;
-}) {
+function CoverLettersEmptyState() {
   return (
-    <div className="flex items-center justify-between gap-3">
-      <div className="flex items-center gap-2.5">
-        <h2 className="text-section-title">{title}</h2>
-        {count !== undefined && (
-          <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular-nums leading-none text-muted-foreground">
-            {count}
-          </span>
-        )}
-      </div>
-      {children && <div className="flex items-center gap-1">{children}</div>}
+    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/60 bg-muted/10 px-6 py-14 text-center">
+      <FilePenLine className="h-7 w-7 text-muted-foreground" strokeWidth={1.5} />
+      <p className="mt-4 text-sm font-medium text-foreground">No cover letters yet</p>
+      <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+        Write and manage cover letters next to your resumes. This space is ready for them.
+      </p>
     </div>
   );
 }

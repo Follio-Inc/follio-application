@@ -62,10 +62,10 @@ describe('hasImportStepAction', () => {
 });
 
 describe('importStepNextLabel', () => {
-  it('says Skip until the user acts, then Next or Open resume on the last step', () => {
-    expect(importStepNextLabel(false, false)).toBe('Skip to Next Step');
-    expect(importStepNextLabel(false, true)).toBe('Skip & open resume');
+  it('says Skip until the user acts, then Next or Choose template on the last step', () => {
+    expect(importStepNextLabel(false, false)).toBe('Skip');
+    expect(importStepNextLabel(false, true)).toBe('Skip');
     expect(importStepNextLabel(true, false)).toBe('Next');
-    expect(importStepNextLabel(true, true)).toBe('Open resume');
+    expect(importStepNextLabel(true, true)).toBe('Choose template');
   });
 });

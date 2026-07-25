@@ -643,7 +643,6 @@ export function ContactSection({
             {contactData.allPhones.map((item, idx) => {
               const isPrimary = idx === (contactData.primaryPhoneIndex ?? 0);
               const isEditing = editingPhoneIndex === idx;
-              const canDelete = !isPrimary && contactData.allPhones!.length > 1;
 
               return (
                 <PhoneListItem
@@ -658,8 +657,16 @@ export function ContactSection({
                   onCancelEdit={handleCancelEditPhone}
                   onSaveEdit={handleSaveEditPhone}
                   onMakePrimary={() => setPrimaryPhone(idx)}
-                  onDelete={() => deletePhone(idx)}
-                  canDelete={canDelete}
+                  onDelete={() => {
+                    deletePhone(idx);
+                    if (editingPhoneIndex === idx) {
+                      setEditingPhoneIndex(null);
+                      setEditingPhoneValue({ countryCode: null, number: '' });
+                    } else if (editingPhoneIndex !== null && editingPhoneIndex > idx) {
+                      setEditingPhoneIndex(editingPhoneIndex - 1);
+                    }
+                  }}
+                  canDelete
                 />
               );
             })}

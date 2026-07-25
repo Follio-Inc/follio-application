@@ -20,7 +20,7 @@ const PORTFOLIO_CONTENT_WIDTH = 1280;
 const ASPECT_RATIO = 21 / 9;
 
 /** Maximum visible height (px) for the thumbnail container. */
-const MAX_HEIGHT = 320;
+const MAX_HEIGHT = 260;
 
 /**
  * Delay (ms) after iframe `load` event before measuring the focus element.

@@ -33,7 +33,7 @@ import { getPortfolioPath, getResumePath } from '@/lib/url';
 import { cn } from '@/lib/utils';
 
 import { ImportDataDialog } from './components/import-data-dialog';
-import { ImportResumeDialog } from './components/import-resume-dialog';
+import { ImportResumeDialog } from '@/components/resume/import-resume-dialog';
 import { UnsavedChangesDialog } from './components/unsaved-changes-dialog';
 import { BasicInfoForm } from './sections/basic-info-form';
 import { EducationSection } from './sections/education-section';

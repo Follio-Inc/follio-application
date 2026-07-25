@@ -29,6 +29,7 @@ import {
   type ResumeStartPath,
 } from '@/components/onboarding/resume-start-choice';
 import { ConstellationField } from '@/components/onboarding/constellation/constellation-field';
+import { ResumeParsingOverlay } from '@/components/resume/resume-parsing-overlay';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -84,6 +85,7 @@ import {
   DEFAULT_RESUME_TEMPLATE_ID,
   getResumeTemplateId,
   getTemplateDefaultShowPhoto,
+  TEMPLATE_PREVIEW_ON_CREATE,
 } from '@/lib/resume/templates';
 import { fileToBase64, getBestResolutionImage, parsePhoneWithCountryCode } from '@/lib/utils';
 import type { ResumeDesign } from '@/types';
@@ -1827,7 +1829,7 @@ export default function OnboardingImportPage() {
                 {isCompleting || isWaitingForParsing ? (
                   <>
                     <Spinner size="sm" />
-                    {isWaitingForParsing ? 'Finalizing...' : 'Creating resume...'}
+                    {isWaitingForParsing ? 'Reading resume…' : 'Creating resume…'}
                   </>
                 ) : (
                   <>
@@ -1841,74 +1843,11 @@ export default function OnboardingImportPage() {
         )}
       </div>
 
-      {/* ─── Full-screen parsing / complete progress overlay ─── */}
-      <AnimatePresence>
-        {(isWaitingForParsing || isCompleting) && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm"
-          >
-            <motion.div
-              initial={{ scale: 0.98, opacity: 0, y: 12 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.98, opacity: 0, y: 12 }}
-              transition={{ duration: 0.2, ease: 'easeOut' }}
-              className="surface-raised mx-4 max-w-sm space-y-6 p-8 text-center"
-            >
-              {/* Single calm spinner */}
-              <div className="relative mx-auto h-12 w-12">
-                <div className="absolute inset-0 rounded-full border-2 border-border" />
-                <motion.div
-                  className="absolute inset-0 rounded-full border-2 border-primary border-t-transparent"
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
-                />
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <FileText className="h-5 w-5 text-muted-foreground" />
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <h3 className="text-section-title text-lg">
-                  {isWaitingForParsing ? 'Reading your resume' : 'Opening your resume'}
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  {isWaitingForParsing ? (
-                    <>
-                      Extracting experience, skills, and education
-                      {resumeFileName && (
-                        <>
-                          {' '}
-                          from <span className="font-medium text-foreground">{resumeFileName}</span>
-                        </>
-                      )}
-                    </>
-                  ) : (
-                    'Taking you to the builder'
-                  )}
-                </p>
-              </div>
-
-              {/* Animated progress bar */}
-              <div className="space-y-2">
-                <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                  <motion.div
-                    className="h-full rounded-full bg-primary"
-                    initial={{ width: '5%' }}
-                    animate={{ width: ['5%', '40%', '65%', '85%', '92%'] }}
-                    transition={{ duration: 15, ease: 'easeOut', times: [0, 0.2, 0.5, 0.8, 1] }}
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {isWaitingForParsing ? 'This usually takes 10–30 seconds.' : 'Almost there…'}
-                </p>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <ResumeParsingOverlay
+        active={isWaitingForParsing || isCompleting}
+        phase={isWaitingForParsing ? 'parsing' : 'finalizing'}
+        fileName={resumeFileName}
+      />
 
       <AlertDialog open={showDiscardResumeDialog} onOpenChange={setShowDiscardResumeDialog}>
         <AlertDialogContent>
@@ -1931,12 +1870,12 @@ export default function OnboardingImportPage() {
         profile={templatePreviewProfile}
         currentDesign={defaultResumeDesign}
         currentTemplateId={DEFAULT_RESUME_TEMPLATE_ID}
-        previewDataPolicy="sample-when-sparse"
+        previewDataPolicy={TEMPLATE_PREVIEW_ON_CREATE}
         open={templateGalleryOpen}
         onOpenChange={setTemplateGalleryOpen}
         hideTrigger
         title="Choose your resume template"
-        applyLabel="Create my Follio"
+        applyLabel="Create resume"
         onSelect={handleResumeTemplateSelect}
       />
     </>

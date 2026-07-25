@@ -21,6 +21,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -44,8 +54,11 @@ export type ShareDialogVariant = 'resume' | 'portfolio';
  * Accepts both FullProfile (from builder) and lightweight objects (from resumes dashboard).
  */
 export interface ShareDialogProfile {
+  /** Profile / resume id — used to detect when another resume is already public. */
+  id?: string;
   handle: string;
   firstName: string | null;
+  resumeTitle?: string | null;
   resumeVisibility?: ContentVisibility | null;
   portfolioVisibility?: ContentVisibility | null;
 }
@@ -67,6 +80,11 @@ export interface ShareDialogProps {
   onVisibilityChange?: (visibility: ContentVisibility) => void;
   /** When true, hides the default trigger button (use with controlled open/onOpenChange). */
   hideTrigger?: boolean;
+  /**
+   * Vanity username for the public resume URL (follio.me/{username}).
+   * Falls back to profile.handle when omitted; refreshed from /api/resumes on open.
+   */
+  vanityUsername?: string | null;
 }
 
 type VisibilityOption = {
@@ -78,9 +96,17 @@ type VisibilityOption = {
   badgeVariant: 'default' | 'secondary' | 'outline';
 };
 
-// A resume contains personal contact details, so it deliberately has no
-// openly-public mode — only a secure (unguessable) link or fully private.
+// Resumes support Public (one per account at follio.me/username), Unlisted
+// (opaque /r/{key} link), or Private.
 const RESUME_VISIBILITY_OPTIONS: VisibilityOption[] = [
+  {
+    value: 'PUBLIC',
+    label: 'Public',
+    description: 'Anyone can view at your Follio URL',
+    icon: Globe,
+    color: 'text-foreground',
+    badgeVariant: 'default',
+  },
   {
     value: 'UNLISTED',
     label: 'Unlisted',
@@ -299,12 +325,8 @@ const WEBMAIL_PROVIDERS: Record<string, WebmailProvider> = {
   },
 };
 
-/**
- * Legacy PUBLIC resumes are surfaced as UNLISTED since the resume no longer
- * supports an openly-public mode.
- */
 function normalizeResumeVisibility(v: ContentVisibility | null | undefined): ContentVisibility {
-  return v === 'PUBLIC' ? 'UNLISTED' : (v ?? 'PRIVATE');
+  return v ?? 'PRIVATE';
 }
 
 function normalizePortfolioVisibility(v: ContentVisibility | null | undefined): ContentVisibility {
@@ -359,6 +381,7 @@ export function ShareDialog({
   onBeforeOpen,
   onVisibilityChange,
   hideTrigger,
+  vanityUsername: vanityUsernameProp,
 }: ShareDialogProps) {
   const { user: clerkUser } = useUser();
 
@@ -372,7 +395,7 @@ export function ShareDialog({
   const dialogTitle = isPortfolio ? 'Share Portfolio' : 'Share Resume';
   const dialogDescription = isPortfolio
     ? 'Control access and share your portfolio.'
-    : 'Control access and share your resume.';
+    : 'Control access and share your resume. Only one resume can be public.';
   const triggerTooltip = isPortfolio ? 'Share your portfolio' : 'Share your resume';
 
   // Visibility state.
@@ -389,6 +412,12 @@ export function ShareDialog({
   const [isRegeneratingKey, setIsRegeneratingKey] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [showRegenConfirm, setShowRegenConfirm] = useState(false);
+  const [vanityUsername, setVanityUsername] = useState<string>(
+    vanityUsernameProp || profile.handle
+  );
+  const [pendingPublicConfirm, setPendingPublicConfirm] = useState<{
+    title: string;
+  } | null>(null);
 
   // Copyable message state
   const [shareMessage, setShareMessage] = useState('');
@@ -402,7 +431,10 @@ export function ShareDialog({
   // Computed share URL
   const shareUrl = isPortfolio
     ? getPortfolioUrl(profile.handle, contentVisibility === 'UNLISTED' ? unlistedKey : null)
-    : getResumeUrl(profile.handle, contentVisibility === 'UNLISTED' ? unlistedKey : null);
+    : getResumeUrl(
+        vanityUsername || profile.handle,
+        contentVisibility === 'UNLISTED' ? unlistedKey : null
+      );
 
   // ── Fetch unlisted key on open ──────────────────────────────────────
 
@@ -421,6 +453,24 @@ export function ShareDialog({
     }
   }, []);
 
+  const refreshVanityUsername = useCallback(async () => {
+    if (vanityUsernameProp) {
+      setVanityUsername(vanityUsernameProp);
+      return;
+    }
+    try {
+      const res = await fetch('/api/resumes');
+      if (res.ok) {
+        const data = await res.json();
+        if (typeof data.vanityUsername === 'string' && data.vanityUsername) {
+          setVanityUsername(data.vanityUsername);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch vanity username:', err);
+    }
+  }, [vanityUsernameProp]);
+
   useEffect(() => {
     if (open) {
       // Reset visibility state when opening with a (possibly) different profile
@@ -431,6 +481,8 @@ export function ShareDialog({
       );
       setShowRegenConfirm(false);
       setSavedVisibility(false);
+      setPendingPublicConfirm(null);
+      setVanityUsername(vanityUsernameProp || profile.handle);
 
       const init = async () => {
         setIsInitializing(true);
@@ -438,7 +490,7 @@ export function ShareDialog({
           if (onBeforeOpen) {
             await onBeforeOpen();
           }
-          await fetchUnlistedKey();
+          await Promise.all([fetchUnlistedKey(), refreshVanityUsername()]);
         } finally {
           setIsInitializing(false);
         }
@@ -448,9 +500,12 @@ export function ShareDialog({
   }, [
     open,
     fetchUnlistedKey,
+    refreshVanityUsername,
     onBeforeOpen,
     profile.portfolioVisibility,
     profile.resumeVisibility,
+    profile.handle,
+    vanityUsernameProp,
     variant,
   ]);
 
@@ -461,7 +516,7 @@ export function ShareDialog({
 
   // ── Visibility change ────────────────────────────────────────────────
 
-  const handleVisibilityChange = async (value: ContentVisibility) => {
+  const persistVisibility = async (value: ContentVisibility) => {
     const prev = contentVisibility;
     setContentVisibility(value);
     setSavingVisibility(true);
@@ -476,6 +531,11 @@ export function ShareDialog({
       });
 
       if (!res.ok) throw new Error('Failed to update visibility');
+
+      const data = await res.json().catch(() => ({}));
+      if (typeof data.vanityUsername === 'string' && data.vanityUsername) {
+        setVanityUsername(data.vanityUsername);
+      }
 
       // Notify parent so it can sync local state
       onVisibilityChange?.(value);
@@ -494,6 +554,51 @@ export function ShareDialog({
     } finally {
       setSavingVisibility(false);
     }
+  };
+
+  const handleVisibilityChange = async (value: ContentVisibility) => {
+    if (value === contentVisibility) return;
+
+    // Only one resume can be public — confirm before replacing another.
+    if (!isPortfolio && value === 'PUBLIC') {
+      try {
+        const res = await fetch('/api/resumes');
+        if (res.ok) {
+          const data = await res.json();
+          if (typeof data.vanityUsername === 'string' && data.vanityUsername) {
+            setVanityUsername(data.vanityUsername);
+          }
+          const otherPublic = (
+            data.resumes as Array<{
+              id: string;
+              handle: string;
+              resumeTitle: string;
+              resumeVisibility: string;
+            }>
+          ).find(
+            (r) =>
+              r.resumeVisibility === 'PUBLIC' &&
+              r.handle !== profile.handle &&
+              (!profile.id || r.id !== profile.id)
+          );
+          if (otherPublic) {
+            setPendingPublicConfirm({
+              title: otherPublic.resumeTitle || 'another resume',
+            });
+            return;
+          }
+        }
+      } catch (err) {
+        console.error('Failed to check existing public resume:', err);
+      }
+    }
+
+    await persistVisibility(value);
+  };
+
+  const confirmReplacePublic = async () => {
+    setPendingPublicConfirm(null);
+    await persistVisibility('PUBLIC');
   };
 
   // ── Regenerate secure link ───────────────────────────────────────────
@@ -590,263 +695,292 @@ export function ShareDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      {!hideTrigger && (
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <DialogTrigger asChild>
-                <Button
-                  variant="default"
-                  size="sm"
-                  className="h-8 gap-1.5 px-3.5 text-xs shadow-sm"
-                >
-                  <Share2 className="h-3.5 w-3.5" />
-                  Share
-                </Button>
-              </DialogTrigger>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              <p>{triggerTooltip}</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      )}
-
-      <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-[480px]">
-        <DialogHeader className="px-5 pb-3 pt-5">
-          <DialogTitle className="text-base">{dialogTitle}</DialogTitle>
-          <DialogDescription className="text-xs">{dialogDescription}</DialogDescription>
-        </DialogHeader>
-
-        <div className="max-h-[calc(85vh-80px)] overflow-y-auto">
-          {/* ─── Access Section ──────────────────────────────────────── */}
-          <div className="px-5 pb-4">
-            <div className="mb-2 flex items-center justify-between">
-              <h3 className="text-xs font-medium text-muted-foreground">General access</h3>
-              <Badge
-                variant={currentVisibility.badgeVariant}
-                className="h-5 gap-1 px-1.5 text-[10px]"
-              >
-                <CurrentIcon className={`h-2.5 w-2.5 ${currentVisibility.color}`} />
-                {currentVisibility.label}
-              </Badge>
-            </div>
-
-            <div className="flex gap-1.5">
-              {visibilityOptions.map((option) => {
-                const Icon = option.icon;
-                const isActive = contentVisibility === option.value;
-                return (
-                  <button
-                    key={option.value}
-                    onClick={() => handleVisibilityChange(option.value)}
-                    disabled={savingVisibility || isInitializing}
-                    className={`flex flex-1 flex-col items-center gap-1 rounded-lg px-2 py-2 text-center transition-colors ${
-                      isActive ? 'bg-primary/10 ring-1 ring-primary/20' : 'hover:bg-muted/60'
-                    } ${savingVisibility || isInitializing ? 'opacity-60' : ''}`}
-                  >
-                    <Icon
-                      className={`h-4 w-4 ${isActive ? option.color : 'text-muted-foreground'}`}
-                    />
-                    <span
-                      className={`text-xs font-medium ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
-                    >
-                      {option.label}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-            <div className="mt-1.5 flex items-center gap-1.5">
-              <p className="text-[11px] text-muted-foreground">{currentVisibility.description}</p>
-              {savingVisibility && (
-                <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                  <Loader2 className="h-2.5 w-2.5 animate-spin" />
-                  Saving…
-                </span>
-              )}
-              {savedVisibility && !savingVisibility && (
-                <span className="flex items-center gap-1 text-[11px] text-primary">
-                  <Check className="h-2.5 w-2.5" />
-                  Saved
-                </span>
-              )}
-            </div>
-          </div>
-
-          <Separator />
-
-          {/* ─── Link Section ──────────────────────────────────────── */}
-          <div className="px-5 py-4">
-            <div className="mb-2 flex items-center gap-2">
-              <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
-              <h3 className="text-xs font-medium text-muted-foreground">Share link</h3>
-            </div>
-
-            {contentVisibility === 'PRIVATE' ? (
-              <div className="rounded-lg border border-dashed bg-muted/30 px-3 py-2 text-center">
-                <p className="text-xs text-muted-foreground">
-                  Change access to Public or Unlisted to get a link.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {/* URL display & copy */}
-                <div className="flex items-center gap-2">
-                  <div className="min-w-0 flex-1 rounded-md border bg-muted/30 px-2.5 py-1.5">
-                    {isLoadingKey && contentVisibility === 'UNLISTED' ? (
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                        Generating...
-                      </div>
-                    ) : (
-                      <code className="block truncate text-[11px] text-muted-foreground">
-                        {shareUrl}
-                      </code>
-                    )}
-                  </div>
+    <>
+      <Dialog open={open} onOpenChange={setOpen}>
+        {!hideTrigger && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DialogTrigger asChild>
                   <Button
-                    variant="outline"
+                    variant="default"
                     size="sm"
-                    onClick={handleCopyLink}
-                    disabled={isLoadingKey}
-                    className="h-7 shrink-0 gap-1 px-2 text-xs"
+                    className="h-8 gap-1.5 px-3.5 text-xs shadow-sm"
                   >
-                    {copiedLink ? (
-                      <Check className="h-3 w-3 text-primary" />
-                    ) : (
-                      <Copy className="h-3 w-3" />
-                    )}
-                    {copiedLink ? 'Copied!' : 'Copy'}
+                    <Share2 className="h-3.5 w-3.5" />
+                    Share
                   </Button>
-                </div>
+                </DialogTrigger>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                <p>{triggerTooltip}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
 
-                {/* Preview link */}
-                <div className="flex items-center justify-end">
-                  <a
-                    href={shareUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
-                  >
-                    <Eye className="h-2.5 w-2.5" />
-                    Preview
-                    <ExternalLink className="h-2 w-2" />
-                  </a>
-                </div>
+        <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-[480px]">
+          <DialogHeader className="px-5 pb-3 pt-5">
+            <DialogTitle className="text-base">{dialogTitle}</DialogTitle>
+            <DialogDescription className="text-xs">{dialogDescription}</DialogDescription>
+          </DialogHeader>
 
-                {/* Regenerate link — cautious two-step */}
-                {contentVisibility === 'UNLISTED' && (
-                  <div className="mt-1">
-                    {!showRegenConfirm ? (
-                      <button
-                        onClick={() => setShowRegenConfirm(true)}
-                        className="inline-flex items-center gap-1 text-[11px] text-muted-foreground/60 transition-colors hover:text-muted-foreground"
+          <div className="max-h-[calc(85vh-80px)] overflow-y-auto">
+            {/* ─── Access Section ──────────────────────────────────────── */}
+            <div className="px-5 pb-4">
+              <div className="mb-2 flex items-center justify-between">
+                <h3 className="text-xs font-medium text-muted-foreground">General access</h3>
+                <Badge
+                  variant={currentVisibility.badgeVariant}
+                  className="h-5 gap-1 px-1.5 text-[10px]"
+                >
+                  <CurrentIcon className={`h-2.5 w-2.5 ${currentVisibility.color}`} />
+                  {currentVisibility.label}
+                </Badge>
+              </div>
+
+              <div className="flex gap-1.5">
+                {visibilityOptions.map((option) => {
+                  const Icon = option.icon;
+                  const isActive = contentVisibility === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      onClick={() => handleVisibilityChange(option.value)}
+                      disabled={savingVisibility || isInitializing}
+                      className={`flex flex-1 flex-col items-center gap-1 rounded-lg px-2 py-2 text-center transition-colors ${
+                        isActive ? 'bg-primary/10 ring-1 ring-primary/20' : 'hover:bg-muted/60'
+                      } ${savingVisibility || isInitializing ? 'opacity-60' : ''}`}
+                    >
+                      <Icon
+                        className={`h-4 w-4 ${isActive ? option.color : 'text-muted-foreground'}`}
+                      />
+                      <span
+                        className={`text-xs font-medium ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
                       >
-                        <RotateCcw className="h-2.5 w-2.5" />
-                        Revoke &amp; generate new link
-                      </button>
-                    ) : (
-                      <div className="space-y-1.5 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2">
-                        <div className="flex items-start gap-1.5">
-                          <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-destructive" />
-                          <p className="text-[11px] text-destructive">
-                            This will generate a new link and{' '}
-                            <strong>permanently break all previously shared links</strong>. Anyone
-                            with the old link will lose access.
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            onClick={async () => {
-                              await handleRegenerateKey();
-                              setShowRegenConfirm(false);
-                            }}
-                            disabled={isRegeneratingKey}
-                            size="sm"
-                            variant="destructive"
-                            className="h-6 gap-1 px-2 text-[11px]"
-                          >
-                            {isRegeneratingKey ? (
-                              <Loader2 className="h-2.5 w-2.5 animate-spin" />
-                            ) : (
-                              <RotateCcw className="h-2.5 w-2.5" />
-                            )}
-                            {isRegeneratingKey ? 'Generating...' : 'Revoke & regenerate'}
-                          </Button>
-                          <button
-                            onClick={() => setShowRegenConfirm(false)}
-                            className="text-[11px] text-muted-foreground transition-colors hover:text-foreground"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                        {option.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="mt-1.5 flex items-center gap-1.5">
+                <p className="text-[11px] text-muted-foreground">{currentVisibility.description}</p>
+                {savingVisibility && (
+                  <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                    <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                    Saving…
+                  </span>
+                )}
+                {savedVisibility && !savingVisibility && (
+                  <span className="flex items-center gap-1 text-[11px] text-primary">
+                    <Check className="h-2.5 w-2.5" />
+                    Saved
+                  </span>
                 )}
               </div>
-            )}
-          </div>
-
-          <Separator />
-
-          {/* ─── Copyable Message Section ─────────────────────────── */}
-          <div className="px-5 pb-5 pt-4">
-            <div className="mb-2 flex items-center gap-2">
-              <MessageSquareText className="h-3.5 w-3.5 text-muted-foreground" />
-              <h3 className="text-xs font-medium text-muted-foreground">Share message</h3>
             </div>
 
-            {contentVisibility === 'PRIVATE' ? (
-              <p className="text-xs text-muted-foreground">
-                Make your {contentLabel} Public or Unlisted to get a shareable message.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                <p className="text-[11px] text-muted-foreground">
-                  Edit the message below, then copy &amp; paste it into any email or chat.
-                </p>
-                <textarea
-                  ref={textareaRef}
-                  value={shareMessage}
-                  onChange={(e) => setShareMessage(e.target.value)}
-                  className="w-full resize-none overflow-y-auto rounded-md border bg-muted/30 px-3 py-2 text-xs leading-relaxed text-foreground outline-none transition-colors focus:ring-1 focus:ring-ring"
-                  rows={4}
-                  style={{ maxHeight: '12rem' }}
-                />
-                <div className="flex items-center justify-end gap-2">
-                  {webmailProvider && (
+            <Separator />
+
+            {/* ─── Link Section ──────────────────────────────────────── */}
+            <div className="px-5 py-4">
+              <div className="mb-2 flex items-center gap-2">
+                <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
+                <h3 className="text-xs font-medium text-muted-foreground">Share link</h3>
+              </div>
+
+              {contentVisibility === 'PRIVATE' ? (
+                <div className="rounded-lg border border-dashed bg-muted/30 px-3 py-2 text-center">
+                  <p className="text-xs text-muted-foreground">
+                    Change access to Public or Unlisted to get a link.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {/* URL display & copy */}
+                  <div className="flex items-center gap-2">
+                    <div className="min-w-0 flex-1 rounded-md border bg-muted/30 px-2.5 py-1.5">
+                      {isLoadingKey && contentVisibility === 'UNLISTED' ? (
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          Generating...
+                        </div>
+                      ) : (
+                        <code className="block truncate text-[11px] text-muted-foreground">
+                          {shareUrl}
+                        </code>
+                      )}
+                    </div>
                     <Button
-                      onClick={handleSendViaEmail}
-                      size="sm"
                       variant="outline"
+                      size="sm"
+                      onClick={handleCopyLink}
+                      disabled={isLoadingKey}
+                      className="h-7 shrink-0 gap-1 px-2 text-xs"
+                    >
+                      {copiedLink ? (
+                        <Check className="h-3 w-3 text-primary" />
+                      ) : (
+                        <Copy className="h-3 w-3" />
+                      )}
+                      {copiedLink ? 'Copied!' : 'Copy'}
+                    </Button>
+                  </div>
+
+                  {/* Preview link */}
+                  <div className="flex items-center justify-end">
+                    <a
+                      href={shareUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
+                    >
+                      <Eye className="h-2.5 w-2.5" />
+                      Preview
+                      <ExternalLink className="h-2 w-2" />
+                    </a>
+                  </div>
+
+                  {/* Regenerate link — cautious two-step */}
+                  {contentVisibility === 'UNLISTED' && (
+                    <div className="mt-1">
+                      {!showRegenConfirm ? (
+                        <button
+                          onClick={() => setShowRegenConfirm(true)}
+                          className="inline-flex items-center gap-1 text-[11px] text-muted-foreground/60 transition-colors hover:text-muted-foreground"
+                        >
+                          <RotateCcw className="h-2.5 w-2.5" />
+                          Revoke &amp; generate new link
+                        </button>
+                      ) : (
+                        <div className="space-y-1.5 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2">
+                          <div className="flex items-start gap-1.5">
+                            <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-destructive" />
+                            <p className="text-[11px] text-destructive">
+                              This will generate a new link and{' '}
+                              <strong>permanently break all previously shared links</strong>. Anyone
+                              with the old link will lose access.
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              onClick={async () => {
+                                await handleRegenerateKey();
+                                setShowRegenConfirm(false);
+                              }}
+                              disabled={isRegeneratingKey}
+                              size="sm"
+                              variant="destructive"
+                              className="h-6 gap-1 px-2 text-[11px]"
+                            >
+                              {isRegeneratingKey ? (
+                                <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                              ) : (
+                                <RotateCcw className="h-2.5 w-2.5" />
+                              )}
+                              {isRegeneratingKey ? 'Generating...' : 'Revoke & regenerate'}
+                            </Button>
+                            <button
+                              onClick={() => setShowRegenConfirm(false)}
+                              className="text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <Separator />
+
+            {/* ─── Copyable Message Section ─────────────────────────── */}
+            <div className="px-5 pb-5 pt-4">
+              <div className="mb-2 flex items-center gap-2">
+                <MessageSquareText className="h-3.5 w-3.5 text-muted-foreground" />
+                <h3 className="text-xs font-medium text-muted-foreground">Share message</h3>
+              </div>
+
+              {contentVisibility === 'PRIVATE' ? (
+                <p className="text-xs text-muted-foreground">
+                  Make your {contentLabel} Public or Unlisted to get a shareable message.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-[11px] text-muted-foreground">
+                    Edit the message below, then copy &amp; paste it into any email or chat.
+                  </p>
+                  <textarea
+                    ref={textareaRef}
+                    value={shareMessage}
+                    onChange={(e) => setShareMessage(e.target.value)}
+                    className="w-full resize-none overflow-y-auto rounded-md border bg-muted/30 px-3 py-2 text-xs leading-relaxed text-foreground outline-none transition-colors focus:ring-1 focus:ring-ring"
+                    rows={4}
+                    style={{ maxHeight: '12rem' }}
+                  />
+                  <div className="flex items-center justify-end gap-2">
+                    {webmailProvider && (
+                      <Button
+                        onClick={handleSendViaEmail}
+                        size="sm"
+                        variant="outline"
+                        className="h-7 gap-1.5 px-3 text-xs"
+                      >
+                        {webmailProvider.logo}
+                        Send via {webmailProvider.name}
+                      </Button>
+                    )}
+                    <Button
+                      onClick={handleCopyMessage}
+                      size="sm"
+                      variant={copiedMessage ? 'outline' : 'default'}
                       className="h-7 gap-1.5 px-3 text-xs"
                     >
-                      {webmailProvider.logo}
-                      Send via {webmailProvider.name}
+                      {copiedMessage ? (
+                        <Check className="h-3 w-3 text-primary" />
+                      ) : (
+                        <ClipboardCopy className="h-3 w-3" />
+                      )}
+                      {copiedMessage ? 'Copied!' : 'Copy message'}
                     </Button>
-                  )}
-                  <Button
-                    onClick={handleCopyMessage}
-                    size="sm"
-                    variant={copiedMessage ? 'outline' : 'default'}
-                    className="h-7 gap-1.5 px-3 text-xs"
-                  >
-                    {copiedMessage ? (
-                      <Check className="h-3 w-3 text-primary" />
-                    ) : (
-                      <ClipboardCopy className="h-3 w-3" />
-                    )}
-                    {copiedMessage ? 'Copied!' : 'Copy message'}
-                  </Button>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={pendingPublicConfirm !== null}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setPendingPublicConfirm(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Make this your public resume?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Only one resume can be public. Making this public will switch{' '}
+              <strong>{pendingPublicConfirm?.title}</strong> to Unlisted. Your public URL (
+              follio.me/{vanityUsername || profile.handle}) will then show this resume.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={savingVisibility}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => void confirmReplacePublic()}
+              disabled={savingVisibility}
+            >
+              Make this public
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

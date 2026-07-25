@@ -4,6 +4,7 @@ import { FileText, Loader2, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { PortfolioResumeBadge } from './portfolio-resume-badge';
+import { PublicResumeBadge } from './public-resume-badge';
 
 // ─── Constants ────────────────────────────────────────────────────
 
@@ -44,7 +45,12 @@ interface ResumeThumbnailProps {
   className?: string;
   /** Override the maximum visible height (px). Defaults to 260. */
   maxHeight?: number;
-  /** Show the portfolio badge overlay (primary resume only). */
+  /** Show the Public badge overlay. */
+  showPublicBadge?: boolean;
+  /**
+   * Show the Portfolio badge overlay (portfolio product only).
+   * Ignored when `showPublicBadge` is true so Public wins.
+   */
   showPortfolioBadge?: boolean;
 }
 
@@ -53,6 +59,7 @@ export function ResumeThumbnail({
   isImporting = false,
   className,
   maxHeight,
+  showPublicBadge = false,
   showPortfolioBadge = false,
 }: ResumeThumbnailProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -113,7 +120,11 @@ export function ResumeThumbnail({
         maxHeight: `${maxHeight ?? MAX_HEIGHT}px`,
       }}
     >
-      {showPortfolioBadge && <PortfolioResumeBadge />}
+      {showPublicBadge ? (
+        <PublicResumeBadge />
+      ) : showPortfolioBadge ? (
+        <PortfolioResumeBadge />
+      ) : null}
 
       {/* Import-in-progress overlay */}
       {isImporting && (

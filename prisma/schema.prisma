@@ -51,6 +51,9 @@ model Profile {
   isArchived             Boolean                @default(false)
   handle                 String                 @unique
   status                 ProfileStatus          @default(DRAFT)
+  /// New resumes (blank/clone/upload) always start PRIVATE. At most one
+  /// non-archived PUBLIC resume per user is enforced by a partial unique index
+  /// (see migration `one_public_resume_per_user`).
   resumeVisibility       ContentVisibility      @default(PRIVATE)
   portfolioVisibility    ContentVisibility      @default(PUBLIC)
   linksVisibility        ContentVisibility      @default(PUBLIC)

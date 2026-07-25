@@ -21,13 +21,17 @@ export {
   getResumeTemplateId,
   getTemplateDefaultShowPhoto,
   isValidResumeTemplateId,
+  sanitizeResumeDesign,
 } from './registry';
 
 export {
   buildOnboardingResumePreviewProfile,
+  buildSparseResumePreviewProfile,
   hasSufficientResumePreviewData,
   isUsingSampleResumePreview,
   resolveResumeTemplatePreviewProfile,
+  TEMPLATE_PREVIEW_IN_BUILDER,
+  TEMPLATE_PREVIEW_ON_CREATE,
   type OnboardingResumePreviewDraft,
   type ResumePreviewSufficiencyInput,
   type ResumeTemplatePreviewDataPolicy,

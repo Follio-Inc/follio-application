@@ -29,7 +29,7 @@ export async function generateMetadata({ params }: ResumePageProps): Promise<Met
   return {
     title,
     description,
-    // Unlisted resumes should not be indexed
+    // Unlisted and private resumes should not be indexed
     robots:
       profile.resumeVisibility === 'UNLISTED' || profile.resumeVisibility === 'PRIVATE'
         ? { index: false, follow: false }
@@ -70,23 +70,26 @@ export default async function ResumePage({ params, searchParams }: ResumePagePro
   const isOwner = authState === 'owner';
   const resumeVisibility = profile.resumeVisibility || 'PRIVATE';
 
-  // Resume access model — a resume is a PII document, so there is no openly
-  // "public" mode (which would let anyone discover it by guessing handles like
-  // adam1, adam2, …). Access is intentionally decoupled from the portfolio's
-  // publish `status`:
-  //   - Owner: always allowed (even while the profile is still a DRAFT).
+  // Resume access model:
+  //   - Owner: always allowed.
   //   - PRIVATE: owner only.
-  //   - UNLISTED (and any legacy PUBLIC rows): only with a valid share token or
-  //     unlisted key, so the resume can never be enumerated.
+  //   - PUBLIC: anyone (canonical URL is /{username}; this path remains for
+  //     backwards compatibility and owner previews).
+  //   - UNLISTED: only with a valid share token or unlisted key. Prefer the
+  //     opaque /r/{key} share URL so the username is not leaked.
   if (!isOwner) {
     if (resumeVisibility === 'PRIVATE') {
       notFound();
     }
 
-    const isValidToken = token ? await validateShareToken(handle, token, 'resume') : false;
-    const isValidKey = key ? await validateUnlistedKey(handle, key) : false;
-    if (!isValidToken && !isValidKey) {
-      notFound();
+    if (resumeVisibility === 'PUBLIC') {
+      // Allowed — public resumes are openly viewable.
+    } else {
+      const isValidToken = token ? await validateShareToken(handle, token, 'resume') : false;
+      const isValidKey = key ? await validateUnlistedKey(handle, key) : false;
+      if (!isValidToken && !isValidKey) {
+        notFound();
+      }
     }
   }
 

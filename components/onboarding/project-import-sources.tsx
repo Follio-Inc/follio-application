@@ -10,6 +10,11 @@ import { Input } from '@/components/ui/input';
 import { importConstellationPlatform } from '@/lib/onboarding/constellation/import-adapters';
 import { PLATFORM_BY_ID, type PlatformId } from '@/lib/onboarding/constellation/platforms';
 import {
+  resolveProjectImportPrefill,
+  type PrefillLink,
+  type ProjectImportSourceId,
+} from '@/lib/onboarding/project-import-prefill';
+import {
   mergeImportedBlogPosts,
   mergeImportedProjects,
   normalizeReviewBlogPost,
@@ -19,7 +24,7 @@ import {
 } from '@/lib/onboarding/review-import';
 import { cn } from '@/lib/utils';
 
-type ImportSourceId = Extract<PlatformId, 'github' | 'medium' | 'substack' | 'devpost'>;
+type ImportSourceId = Extract<PlatformId, ProjectImportSourceId>;
 
 type SourceDef = {
   id: ImportSourceId;
@@ -82,6 +87,10 @@ interface ProjectImportSourcesProps {
     title?: string;
   }>;
   existingBlogPosts?: Array<{ url?: string | null }>;
+  /** Links already shared earlier (Links step / constellation) — used to prefill import inputs */
+  existingLinks?: PrefillLink[];
+  /** GitHub username from an earlier import profile, if any */
+  githubProfileUsername?: string | null;
   onImported: (result: ProjectImportResult) => void;
   className?: string;
 }
@@ -89,6 +98,8 @@ interface ProjectImportSourcesProps {
 export function ProjectImportSources({
   existingProjects,
   existingBlogPosts = [],
+  existingLinks = [],
+  githubProfileUsername,
   onImported,
   className,
 }: ProjectImportSourcesProps) {
@@ -99,6 +110,7 @@ export function ProjectImportSources({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [importedIds, setImportedIds] = useState<Set<ImportSourceId>>(new Set());
+  const [prefilledFromPriorLink, setPrefilledFromPriorLink] = useState(false);
 
   const githubUsername =
     user?.externalAccounts?.find((acc) => acc.provider === 'github')?.username || undefined;
@@ -111,14 +123,23 @@ export function ProjectImportSources({
     if (activeId === id) {
       setActiveId(null);
       setInput('');
+      setPrefilledFromPriorLink(false);
       return;
     }
     setActiveId(id);
-    if (id === 'github' && githubUsername) {
-      setInput(githubUsername);
-    } else {
-      setInput('');
-    }
+
+    const knownHandle =
+      id === 'github' ? githubProfileUsername?.trim() || githubUsername || null : null;
+    const prefill = resolveProjectImportPrefill(id, existingLinks, { knownHandle });
+    setInput(prefill);
+    setPrefilledFromPriorLink(
+      Boolean(prefill) &&
+        existingLinks.some(
+          (link) =>
+            (link.url || '').trim().replace(/\/+$/, '').toLowerCase() ===
+            prefill.trim().replace(/\/+$/, '').toLowerCase()
+        )
+    );
   };
 
   const runImport = async () => {
@@ -181,6 +202,7 @@ export function ProjectImportSources({
       setSuccess(result.message);
       setActiveId(null);
       setInput('');
+      setPrefilledFromPriorLink(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : `Failed to import from ${active.label}`);
     } finally {
@@ -264,7 +286,11 @@ export function ProjectImportSources({
               )}
             </Button>
           </div>
-          {active.id === 'github' && githubUsername ? (
+          {prefilledFromPriorLink ? (
+            <p className="text-xs text-muted-foreground">
+              Using the {active.label} link you shared earlier — edit it if needed, then import.
+            </p>
+          ) : active.id === 'github' && githubUsername ? (
             <p className="text-xs text-muted-foreground">
               Connected as @{githubUsername} — import with one click, or paste another username.
             </p>

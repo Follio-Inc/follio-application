@@ -1,9 +1,12 @@
 /**
  * Resume template preview profile resolution.
  *
- * Builder always previews with the live user draft.
- * Onboarding may fall back to a filled sample when Experience, Education,
- * and Skills are incomplete — first impressions of templates should look good.
+ * Two policies, one place:
+ * - TEMPLATE_PREVIEW_ON_CREATE (`sample-when-sparse`): first template pick after
+ *   upload/blank (onboarding, dashboard, builder new-resume). Falls back to the
+ *   archetype sample when the draft is not yet “good enough”.
+ * - TEMPLATE_PREVIEW_IN_BUILDER (`always-user`): changing templates inside the
+ *   builder Design panel. Always the live draft — never swap in sample data.
  */
 
 import { parseCommaSeparatedSkills } from '@/lib/skills/groups';
@@ -14,16 +17,34 @@ import { buildResumePreviewSections, RESUME_TEMPLATE_SAMPLE_PROFILE } from './sa
 
 /** How template previews choose content. */
 export type ResumeTemplatePreviewDataPolicy =
-  /** Always use the provided profile (builder / Design panel). */
+  /** Always use the provided profile (builder Design panel). */
   | 'always-user'
   /**
-   * Use user content only when Experience, Education, and Skills are present;
-   * otherwise show the archetype sample (onboarding first impression).
+   * Use user content only when the draft is “good enough” for a first impression;
+   * otherwise show the archetype sample (upload/blank creation flows).
    */
   | 'sample-when-sparse';
 
+/**
+ * First-time template pick (upload / blank anywhere).
+ * May show sample content when Name, Email, Experience, Education, or Skills are missing.
+ */
+export const TEMPLATE_PREVIEW_ON_CREATE: ResumeTemplatePreviewDataPolicy = 'sample-when-sparse';
+
+/**
+ * Switching templates inside the builder. Always the user’s live draft.
+ * Do not use TEMPLATE_PREVIEW_ON_CREATE here.
+ */
+export const TEMPLATE_PREVIEW_IN_BUILDER: ResumeTemplatePreviewDataPolicy = 'always-user';
+
 /** Minimal shape for sufficiency checks (builder profile or onboarding draft). */
 export interface ResumePreviewSufficiencyInput {
+  firstName?: string | null;
+  middleName?: string | null;
+  lastName?: string | null;
+  /** Convenience for drafts that store email outside `contactInfo`. */
+  email?: string | null;
+  contactInfo?: { email?: string | null } | null;
   workExperiences?: readonly unknown[] | null;
   /** Onboarding build page uses `experiences`; builder uses `workExperiences`. */
   experiences?: readonly unknown[] | null;
@@ -35,6 +56,15 @@ export interface ResumePreviewSufficiencyInput {
         skillsText?: string | null;
       }[]
     | null;
+}
+
+function hasDisplayName(input: ResumePreviewSufficiencyInput): boolean {
+  return Boolean(input.firstName?.trim() || input.middleName?.trim() || input.lastName?.trim());
+}
+
+function hasEmail(input: ResumePreviewSufficiencyInput): boolean {
+  const email = input.contactInfo?.email ?? input.email;
+  return Boolean(email?.trim());
 }
 
 function countSkills(input: ResumePreviewSufficiencyInput): number {
@@ -53,34 +83,65 @@ function countSkills(input: ResumePreviewSufficiencyInput): number {
 }
 
 /**
- * True when the draft has at least one experience, one education, and one skill.
- * Used only for onboarding template preview fallback — not for builder.
+ * True when Follio should preview templates with the user’s own data.
+ *
+ * Requires Name, Email, ≥1 Experience, ≥1 Education, and ≥1 Skill.
+ * Used only with TEMPLATE_PREVIEW_ON_CREATE — never for builder template switches.
  */
 export function hasSufficientResumePreviewData(input: ResumePreviewSufficiencyInput): boolean {
-  const experienceCount =
+  const hasExperience =
     (input.workExperiences?.length ?? 0) > 0 || (input.experiences?.length ?? 0) > 0;
-  const educationCount = (input.educations?.length ?? 0) > 0;
-  return experienceCount && educationCount && countSkills(input) > 0;
+  const hasEducation = (input.educations?.length ?? 0) > 0;
+  return (
+    hasDisplayName(input) &&
+    hasEmail(input) &&
+    hasExperience &&
+    hasEducation &&
+    countSkills(input) > 0
+  );
 }
 
 /**
  * Resolve which profile to render inside the shared template gallery.
- * Builder must pass `always-user` (default) so sparse drafts still show as-is.
+ * Prefer TEMPLATE_PREVIEW_IN_BUILDER (default) so sparse drafts still show as-is.
  */
 export function resolveResumeTemplatePreviewProfile(
   userProfile: PublicProfile,
-  policy: ResumeTemplatePreviewDataPolicy = 'always-user'
+  policy: ResumeTemplatePreviewDataPolicy = TEMPLATE_PREVIEW_IN_BUILDER
 ): PublicProfile {
-  if (policy === 'always-user') return userProfile;
+  if (policy === TEMPLATE_PREVIEW_IN_BUILDER) return userProfile;
   if (hasSufficientResumePreviewData(userProfile)) return userProfile;
   return RESUME_TEMPLATE_SAMPLE_PROFILE;
 }
 
 export function isUsingSampleResumePreview(
   userProfile: PublicProfile,
-  policy: ResumeTemplatePreviewDataPolicy = 'always-user'
+  policy: ResumeTemplatePreviewDataPolicy = TEMPLATE_PREVIEW_IN_BUILDER
 ): boolean {
-  return policy === 'sample-when-sparse' && !hasSufficientResumePreviewData(userProfile);
+  return policy === TEMPLATE_PREVIEW_ON_CREATE && !hasSufficientResumePreviewData(userProfile);
+}
+
+/**
+ * Empty draft for blank-resume template picks.
+ * Resolves to the archetype sample under TEMPLATE_PREVIEW_ON_CREATE.
+ */
+export function buildSparseResumePreviewProfile(): PublicProfile {
+  return {
+    ...RESUME_TEMPLATE_SAMPLE_PROFILE,
+    firstName: null,
+    middleName: null,
+    lastName: null,
+    headline: null,
+    summary: null,
+    avatarUrl: null,
+    contactInfo: { email: null, phone: null, website: null },
+    workExperiences: [],
+    educations: [],
+    skills: [],
+    skillGroups: [],
+    projects: [],
+    links: [],
+  } as PublicProfile;
 }
 
 /** Loose onboarding draft → PublicProfile for live template previews. */

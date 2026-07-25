@@ -196,6 +196,14 @@ export function isValidResumeTemplateId(value: unknown): value is ResumeTemplate
   return typeof value === 'string' && value in TEMPLATES;
 }
 
+/** Accept a client-sent design only when `templateId` is a known resume template. */
+export function sanitizeResumeDesign(raw: unknown): ResumeDesign | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const design = raw as ResumeDesign;
+  if (!isValidResumeTemplateId(design.templateId)) return undefined;
+  return design;
+}
+
 /** Whether this template’s default look includes a resume photo. */
 export function getTemplateDefaultShowPhoto(
   templateId: ResumeTemplateId | string | null | undefined

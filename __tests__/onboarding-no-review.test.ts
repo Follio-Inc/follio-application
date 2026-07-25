@@ -42,7 +42,7 @@ describe('onboarding blank build + upload builder paths', () => {
     expect(src).toContain("router.push('/onboarding/build?step=profile')");
     expect(src).toContain('openTemplateGalleryAfterParse');
     expect(src).toContain('ResumeTemplateGallery');
-    expect(src).toContain('previewDataPolicy="sample-when-sparse"');
+    expect(src).toContain('previewDataPolicy={TEMPLATE_PREVIEW_ON_CREATE}');
     expect(src).toContain('resumeDesign: selectedResumeDesign');
     expect(src).toContain('fromUpload: true');
     expect(src).toContain('RESUME_CONSTRUCTION_SESSION_KEY');
@@ -72,7 +72,7 @@ describe('onboarding blank build + upload builder paths', () => {
     expect(src).toContain('addMoreLinkSlot');
     expect(src).toContain('Username or full profile URL both work');
     expect(src).toContain('ResumeTemplateGallery');
-    expect(src).toContain('previewDataPolicy="sample-when-sparse"');
+    expect(src).toContain('previewDataPolicy={TEMPLATE_PREVIEW_ON_CREATE}');
     expect(src).toContain('handleOpenTemplateGallery');
     expect(src).toContain('resumeDesign: selectedResumeDesign');
     expect(src).not.toContain("redirect('/onboarding/import')");

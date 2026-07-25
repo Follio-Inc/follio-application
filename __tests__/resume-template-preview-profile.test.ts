@@ -1,9 +1,12 @@
 import {
   buildOnboardingResumePreviewProfile,
+  buildSparseResumePreviewProfile,
   hasSufficientResumePreviewData,
   isUsingSampleResumePreview,
   resolveResumeTemplatePreviewProfile,
   RESUME_TEMPLATE_SAMPLE_PROFILE,
+  TEMPLATE_PREVIEW_IN_BUILDER,
+  TEMPLATE_PREVIEW_ON_CREATE,
 } from '@/lib/resume/templates';
 import type { PublicProfile } from '@/types';
 import { describe, expect, it } from 'vitest';
@@ -11,6 +14,9 @@ import { describe, expect, it } from 'vitest';
 function sparseProfile(overrides: Partial<PublicProfile> = {}): PublicProfile {
   return {
     ...RESUME_TEMPLATE_SAMPLE_PROFILE,
+    firstName: null,
+    lastName: null,
+    contactInfo: { email: null, phone: null, website: null },
     workExperiences: [],
     educations: [],
     skills: [],
@@ -19,38 +25,54 @@ function sparseProfile(overrides: Partial<PublicProfile> = {}): PublicProfile {
   } as PublicProfile;
 }
 
+const fullEnough = {
+  firstName: 'Sam',
+  lastName: 'Lee',
+  contactInfo: { email: 'sam@example.com', phone: null, website: null },
+  workExperiences: [{ id: 'w1' }],
+  educations: [{ id: 'e1' }],
+  skills: [{ id: 's1' }],
+};
+
 describe('hasSufficientResumePreviewData', () => {
-  it('requires experience, education, and at least one skill', () => {
-    expect(
-      hasSufficientResumePreviewData({
-        workExperiences: [{ id: 'w1' }],
-        educations: [{ id: 'e1' }],
-        skills: [{ id: 's1' }],
-      })
-    ).toBe(true);
+  it('requires name, email, experience, education, and at least one skill', () => {
+    expect(hasSufficientResumePreviewData(fullEnough)).toBe(true);
 
     expect(
       hasSufficientResumePreviewData({
-        workExperiences: [{ id: 'w1' }],
-        educations: [{ id: 'e1' }],
+        ...fullEnough,
+        firstName: null,
+        lastName: null,
+      })
+    ).toBe(false);
+
+    expect(
+      hasSufficientResumePreviewData({
+        ...fullEnough,
+        contactInfo: { email: null },
+      })
+    ).toBe(false);
+
+    expect(
+      hasSufficientResumePreviewData({
+        ...fullEnough,
+        workExperiences: [],
+        experiences: [],
+      })
+    ).toBe(false);
+
+    expect(
+      hasSufficientResumePreviewData({
+        ...fullEnough,
+        educations: [],
+      })
+    ).toBe(false);
+
+    expect(
+      hasSufficientResumePreviewData({
+        ...fullEnough,
         skills: [],
         skillGroups: [],
-      })
-    ).toBe(false);
-
-    expect(
-      hasSufficientResumePreviewData({
-        workExperiences: [],
-        educations: [{ id: 'e1' }],
-        skills: [{ id: 's1' }],
-      })
-    ).toBe(false);
-
-    expect(
-      hasSufficientResumePreviewData({
-        workExperiences: [{ id: 'w1' }],
-        educations: [],
-        skills: [{ id: 's1' }],
       })
     ).toBe(false);
   });
@@ -58,6 +80,8 @@ describe('hasSufficientResumePreviewData', () => {
   it('accepts onboarding skillGroups.skillsText and experiences alias', () => {
     expect(
       hasSufficientResumePreviewData({
+        firstName: 'Sam',
+        email: 'sam@example.com',
         experiences: [{ id: 'w1' }],
         educations: [{ id: 'e1' }],
         skillGroups: [{ skillsText: 'TypeScript, React' }],
@@ -66,6 +90,8 @@ describe('hasSufficientResumePreviewData', () => {
 
     expect(
       hasSufficientResumePreviewData({
+        firstName: 'Sam',
+        email: 'sam@example.com',
         experiences: [{ id: 'w1' }],
         educations: [{ id: 'e1' }],
         skillGroups: [{ skillsText: '  ,  ' }],
@@ -77,20 +103,28 @@ describe('hasSufficientResumePreviewData', () => {
 describe('resolveResumeTemplatePreviewProfile', () => {
   it('always returns user profile for builder policy', () => {
     const sparse = sparseProfile({ firstName: 'Sparse' });
-    expect(resolveResumeTemplatePreviewProfile(sparse, 'always-user')).toBe(sparse);
+    expect(resolveResumeTemplatePreviewProfile(sparse, TEMPLATE_PREVIEW_IN_BUILDER)).toBe(sparse);
     expect(resolveResumeTemplatePreviewProfile(sparse)).toBe(sparse);
   });
 
-  it('uses sample only for onboarding when sections are incomplete', () => {
+  it('uses sample on create when identity or sections are incomplete', () => {
     const sparse = sparseProfile({ firstName: 'Sparse' });
-    expect(resolveResumeTemplatePreviewProfile(sparse, 'sample-when-sparse')).toBe(
+    expect(resolveResumeTemplatePreviewProfile(sparse, TEMPLATE_PREVIEW_ON_CREATE)).toBe(
       RESUME_TEMPLATE_SAMPLE_PROFILE
     );
-    expect(isUsingSampleResumePreview(sparse, 'sample-when-sparse')).toBe(true);
+    expect(isUsingSampleResumePreview(sparse, TEMPLATE_PREVIEW_ON_CREATE)).toBe(true);
 
     const full = RESUME_TEMPLATE_SAMPLE_PROFILE;
-    expect(resolveResumeTemplatePreviewProfile(full, 'sample-when-sparse')).toBe(full);
-    expect(isUsingSampleResumePreview(full, 'sample-when-sparse')).toBe(false);
+    expect(resolveResumeTemplatePreviewProfile(full, TEMPLATE_PREVIEW_ON_CREATE)).toBe(full);
+    expect(isUsingSampleResumePreview(full, TEMPLATE_PREVIEW_ON_CREATE)).toBe(false);
+  });
+
+  it('blank sparse stub resolves to sample under creation policy', () => {
+    const blank = buildSparseResumePreviewProfile();
+    expect(hasSufficientResumePreviewData(blank)).toBe(false);
+    expect(resolveResumeTemplatePreviewProfile(blank, TEMPLATE_PREVIEW_ON_CREATE)).toBe(
+      RESUME_TEMPLATE_SAMPLE_PROFILE
+    );
   });
 });
 
@@ -102,6 +136,7 @@ describe('buildOnboardingResumePreviewProfile', () => {
         lastName: 'Lee',
         headline: 'Designer',
       },
+      contactInfo: { email: 'sam@example.com' },
       experiences: [
         {
           id: 'e1',
@@ -132,6 +167,7 @@ describe('buildOnboardingResumePreviewProfile', () => {
     });
 
     expect(profile.firstName).toBe('Sam');
+    expect(profile.contactInfo?.email).toBe('sam@example.com');
     expect(profile.workExperiences).toHaveLength(1);
     expect(profile.workExperiences[0]?.company).toBe('Acme');
     expect(profile.educations[0]?.institution).toBe('RISD');
@@ -139,6 +175,7 @@ describe('buildOnboardingResumePreviewProfile', () => {
     expect(profile.skills).toHaveLength(2);
     expect(profile.projects[0]?.title).toBe('Poster system');
     expect(profile.sections.some((s) => s.type === 'EXPERIENCE')).toBe(true);
+    expect(hasSufficientResumePreviewData(profile)).toBe(true);
   });
 
   it('accepts upload-shaped skills (flat names + skillGroups.skills arrays)', () => {
@@ -166,5 +203,6 @@ describe('RESUME_TEMPLATE_SAMPLE_PROFILE', () => {
     expect(
       RESUME_TEMPLATE_SAMPLE_PROFILE.skillGroups.reduce((n, g) => n + g.skills.length, 0)
     ).toBeGreaterThanOrEqual(6);
+    expect(hasSufficientResumePreviewData(RESUME_TEMPLATE_SAMPLE_PROFILE)).toBe(true);
   });
 });

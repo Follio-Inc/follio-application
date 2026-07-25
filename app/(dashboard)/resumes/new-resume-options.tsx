@@ -4,6 +4,8 @@ import { ArrowLeft, ChevronDown, Clock, Copy, FileText, Loader2, Plus, Upload } 
 import { useRouter } from 'next/navigation';
 import { useCallback, useRef, useState } from 'react';
 
+import { NewResumeTemplatePicker } from '@/components/resume/new-resume-template-picker';
+import { ResumeParsingOverlay } from '@/components/resume/resume-parsing-overlay';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -22,7 +24,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import { applyCreationResumeDesign } from '@/lib/resume/apply-creation-design';
+import { RESUME_CONSTRUCTION_SESSION_KEY } from '@/lib/onboarding/resume-construction';
+import { suggestCloneResumeTitle } from '@/lib/resume-title';
 import { cn } from '@/lib/utils';
+import type { PublicProfile, ResumeDesign } from '@/types';
 
 import { ResumeThumbnail } from './resume-thumbnail';
 
@@ -45,11 +51,11 @@ export type UploadCreatedResume = {
   resumeTitle: string;
 };
 
+type TemplatePickerMode = 'blank' | 'upload' | null;
+
 const MAX_UPLOAD_FILE_SIZE_MB = 5;
 const MAX_UPLOAD_FILE_SIZE_BYTES = MAX_UPLOAD_FILE_SIZE_MB * 1024 * 1024;
 const UPLOAD_ACCEPTED_TYPE = 'application/pdf';
-
-// ─── Helpers ──────────────────────────────────────────────────────
 
 function validateUploadFile(file: File): string | null {
   if (file.type !== UPLOAD_ACCEPTED_TYPE) {
@@ -60,6 +66,8 @@ function validateUploadFile(file: File): string | null {
   }
   return null;
 }
+
+// ─── Helpers ──────────────────────────────────────────────────────
 
 function formatRelativeDate(dateString: string): string {
   const date = new Date(dateString);
@@ -108,6 +116,24 @@ export function sortResumesWithPortfolioFirst<T extends { id: string; updatedAt:
   return [portfolio, ...sortByUpdatedAtDesc(rest)];
 }
 
+/**
+ * Public resume first (at most one); remaining resumes by most recently edited.
+ * This is the default list order while portfolio is suppressed.
+ */
+export function sortResumesWithPublicFirst<
+  T extends { id: string; updatedAt: string; resumeVisibility: string },
+>(items: T[]): T[] {
+  if (items.length <= 1) return [...items];
+
+  const publicResume = items.find((item) => item.resumeVisibility === 'PUBLIC');
+  if (!publicResume) {
+    return sortByUpdatedAtDesc(items);
+  }
+
+  const rest = items.filter((item) => item.id !== publicResume.id);
+  return [publicResume, ...sortByUpdatedAtDesc(rest)];
+}
+
 /** Small vertical separator between portfolio and other resumes. */
 export function ResumeListDivider({ className }: { className?: string }) {
   return (
@@ -124,57 +150,79 @@ export function ResumeListDivider({ className }: { className?: string }) {
 export function useNewResumeActions({
   onRefresh,
   onError,
-  onImportStart,
-  onImportFailed,
 }: {
   onRefresh: () => Promise<void>;
   onError: (message: string | null) => void;
-  /** Called after a placeholder profile is created and parsing begins. */
-  onImportStart?: (resume: UploadCreatedResume) => void;
-  /** Called when parsing fails so the UI can remove the placeholder card. */
-  onImportFailed?: (profileId: string) => void;
 }) {
   const router = useRouter();
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const [isMutating, setIsMutating] = useState(false);
-  const [importingProfileId, setImportingProfileId] = useState<string | null>(null);
+  const [isUploadParsing, setIsUploadParsing] = useState(false);
+  const [uploadFileName, setUploadFileName] = useState<string | null>(null);
 
   const [showCloneDialog, setShowCloneDialog] = useState(false);
   const [cloneView, setCloneView] = useState<CloneDialogView>('pick');
   const [cloneSourceId, setCloneSourceId] = useState<string | null>(null);
   const [cloneTitle, setCloneTitle] = useState('');
 
-  const createBlank = useCallback(async () => {
-    setIsMutating(true);
+  const [templatePickerMode, setTemplatePickerMode] = useState<TemplatePickerMode>(null);
+  const [uploadPreviewProfile, setUploadPreviewProfile] = useState<PublicProfile | null>(null);
+
+  const closeTemplatePicker = useCallback(() => {
+    setTemplatePickerMode(null);
+    setUploadPreviewProfile(null);
+  }, []);
+
+  /** Open creation gallery before creating a blank resume. */
+  const createBlank = useCallback(() => {
+    if (isMutating || isUploadParsing) return;
     onError(null);
+    setUploadPreviewProfile(null);
+    setTemplatePickerMode('blank');
+  }, [isMutating, isUploadParsing, onError]);
 
-    try {
-      const response = await fetch('/api/resumes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ strategy: 'BLANK' }),
-      });
+  const confirmBlankWithDesign = useCallback(
+    async (design: ResumeDesign) => {
+      setTemplatePickerMode(null);
+      setIsMutating(true);
+      onError(null);
 
-      if (!response.ok) throw new Error('Failed to create resume');
+      try {
+        const response = await fetch('/api/resumes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ strategy: 'BLANK', resumeDesign: design }),
+        });
 
-      router.push('/builder?new=1');
-    } catch (err) {
-      onError(err instanceof Error ? err.message : 'Failed to create resume');
-      setIsMutating(false);
-    }
-  }, [onError, router]);
+        if (!response.ok) throw new Error('Failed to create resume');
 
+        router.push('/builder?new=1');
+      } catch (err) {
+        onError(err instanceof Error ? err.message : 'Failed to create resume');
+        setIsMutating(false);
+      }
+    },
+    [onError, router]
+  );
+
+  /**
+   * Same entry as onboarding “Upload Resume”: open the native file picker.
+   * Selecting a PDF starts parse immediately (no Continue step).
+   */
   const startUpload = useCallback(() => {
-    if (isMutating || importingProfileId) return;
+    if (isMutating || isUploadParsing) return;
     onError(null);
     uploadInputRef.current?.click();
-  }, [importingProfileId, isMutating, onError]);
+  }, [isMutating, isUploadParsing, onError]);
 
+  /**
+   * Create a shell resume, parse the PDF, stage profile for template picker.
+   * Uses the shared ResumeParsingOverlay while waiting — same as onboarding.
+   */
   const handleUploadFileChange = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
       event.target.value = '';
-
       if (!file) return;
 
       const validationError = validateUploadFile(file);
@@ -183,6 +231,8 @@ export function useNewResumeActions({
         return;
       }
 
+      setUploadFileName(file.name);
+      setIsUploadParsing(true);
       setIsMutating(true);
       onError(null);
 
@@ -202,8 +252,6 @@ export function useNewResumeActions({
         };
 
         profileId = data.resume.id;
-        setImportingProfileId(profileId);
-        onImportStart?.(data.resume);
 
         const formData = new FormData();
         formData.append('file', file);
@@ -218,21 +266,63 @@ export function useNewResumeActions({
           throw new Error(errData.error ?? 'Failed to import resume');
         }
 
-        await onRefresh();
-        router.refresh();
-      } catch (err) {
-        onError(err instanceof Error ? err.message : 'Failed to import resume');
+        const profileResponse = await fetch('/api/profile', { cache: 'no-store' });
+        if (!profileResponse.ok) {
+          throw new Error('Failed to load imported resume for template preview');
+        }
+        const profileData = (await profileResponse.json()) as { profile: PublicProfile };
 
+        setUploadPreviewProfile(profileData.profile);
+        setIsUploadParsing(false);
+        setUploadFileName(null);
+        setTemplatePickerMode('upload');
+        await onRefresh();
+      } catch (err) {
         if (profileId) {
-          onImportFailed?.(profileId);
           await fetch(`/api/resumes/${profileId}`, { method: 'DELETE' }).catch(() => undefined);
         }
+        onError(err instanceof Error ? err.message : 'Failed to import resume');
+        setIsUploadParsing(false);
+        setUploadFileName(null);
       } finally {
-        setImportingProfileId(null);
         setIsMutating(false);
       }
     },
-    [onError, onImportFailed, onImportStart, onRefresh, router]
+    [onError, onRefresh]
+  );
+
+  const confirmUploadWithDesign = useCallback(
+    async (design: ResumeDesign) => {
+      setTemplatePickerMode(null);
+      setIsMutating(true);
+      onError(null);
+
+      try {
+        await applyCreationResumeDesign(design);
+        setUploadPreviewProfile(null);
+        // Same end state as blank/clone: open the new resume in the editor.
+        // Do not use ?new=1 — that triggers the blank-resume import suggestion.
+        sessionStorage.setItem(RESUME_CONSTRUCTION_SESSION_KEY, '1');
+        router.push('/builder');
+      } catch (err) {
+        onError(err instanceof Error ? err.message : 'Failed to save resume template');
+        setIsMutating(false);
+      }
+    },
+    [onError, router]
+  );
+
+  const handleTemplateSelect = useCallback(
+    (design: ResumeDesign) => {
+      if (templatePickerMode === 'blank') {
+        void confirmBlankWithDesign(design);
+        return;
+      }
+      if (templatePickerMode === 'upload') {
+        void confirmUploadWithDesign(design);
+      }
+    },
+    [confirmBlankWithDesign, confirmUploadWithDesign, templatePickerMode]
   );
 
   const openCloneDialog = useCallback(() => {
@@ -270,22 +360,25 @@ export function useNewResumeActions({
 
       if (!response.ok) throw new Error('Failed to clone resume');
 
-      await onRefresh();
-      router.refresh();
+      // Active profile is set server-side; open it in the editor with content pane.
+      router.push('/builder');
     } catch (err) {
       onError(err instanceof Error ? err.message : 'Failed to clone resume');
-    } finally {
       setIsMutating(false);
       setCloneSourceId(null);
       setCloneTitle('');
       setCloneView('pick');
     }
-  }, [cloneSourceId, cloneTitle, onError, onRefresh, router]);
+  }, [cloneSourceId, cloneTitle, onError, router]);
 
-  const selectCloneSource = useCallback((sourceId: string) => {
-    setCloneSourceId(sourceId);
-    setCloneView('title');
-  }, []);
+  const selectCloneSource = useCallback(
+    (sourceId: string, sourceTitle: string, existingTitles: readonly string[]) => {
+      setCloneSourceId(sourceId);
+      setCloneTitle(suggestCloneResumeTitle(sourceTitle, new Date(), existingTitles));
+      setCloneView('title');
+    },
+    []
+  );
 
   const backToClonePick = useCallback(() => {
     setCloneSourceId(null);
@@ -294,12 +387,13 @@ export function useNewResumeActions({
   }, []);
 
   return {
-    isMutating,
-    importingProfileId,
-    uploadInputRef,
-    handleUploadFileChange,
+    isMutating: isMutating || isUploadParsing,
     createBlank,
     startUpload,
+    uploadInputRef,
+    handleUploadFileChange,
+    isUploadParsing,
+    uploadFileName,
     openCloneDialog,
     showCloneDialog,
     setShowCloneDialog: (open: boolean) => {
@@ -314,31 +408,72 @@ export function useNewResumeActions({
     backToClonePick,
     confirmClone,
     closeCloneDialog,
+    templatePickerOpen: templatePickerMode !== null,
+    templatePickerProfile: uploadPreviewProfile ?? undefined,
+    templatePickerApplyLabel: templatePickerMode === 'upload' ? 'Apply template' : 'Create resume',
+    onTemplatePickerOpenChange: (open: boolean) => {
+      if (!open) closeTemplatePicker();
+    },
+    handleTemplateSelect,
   };
 }
 
-// ─── Hidden file input for dashboard upload ───────────────────────
+/** Mount next to NewResumeMenuButton consumers so blank/upload share one gallery. */
+export function NewResumeTemplatePickerHost({
+  open,
+  onOpenChange,
+  onSelect,
+  profile,
+  applyLabel,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSelect: (design: ResumeDesign) => void;
+  profile?: PublicProfile;
+  applyLabel?: string;
+}) {
+  return (
+    <NewResumeTemplatePicker
+      open={open}
+      onOpenChange={onOpenChange}
+      onSelect={onSelect}
+      profile={profile}
+      applyLabel={applyLabel}
+    />
+  );
+}
 
-export function ResumeUploadFileInput({
+/**
+ * Same upload path as onboarding: hidden file input + shared ResumeParsingOverlay.
+ * No intermediate dialog / Continue button — select a PDF and parsing starts.
+ */
+export function NewResumeUploadHost({
   inputRef,
-  onChange,
+  onFileChange,
+  isParsing,
+  fileName,
   disabled,
 }: {
   inputRef: React.Ref<HTMLInputElement>;
-  onChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onFileChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  isParsing: boolean;
+  fileName: string | null;
   disabled?: boolean;
 }) {
   return (
-    <input
-      ref={inputRef}
-      type="file"
-      accept=".pdf,application/pdf"
-      className="sr-only"
-      onChange={onChange}
-      disabled={disabled}
-      aria-hidden
-      tabIndex={-1}
-    />
+    <>
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".pdf,application/pdf"
+        className="sr-only"
+        onChange={onFileChange}
+        disabled={disabled}
+        aria-hidden
+        tabIndex={-1}
+      />
+      <ResumeParsingOverlay active={isParsing} phase="parsing" fileName={fileName} />
+    </>
   );
 }
 
@@ -392,14 +527,14 @@ function CloneResumePickerCard({
   onSelect,
 }: {
   resume: NewResumeListItem;
-  onSelect: (sourceId: string) => void;
+  onSelect: (sourceId: string, sourceTitle: string) => void;
 }) {
   const displayName = getDisplayName(resume);
 
   return (
     <button
       type="button"
-      onClick={() => onSelect(resume.id)}
+      onClick={() => onSelect(resume.id, resume.resumeTitle)}
       className="group flex flex-col overflow-hidden rounded-lg border border-border/60 bg-card text-left transition-all duration-200 hover:border-primary/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <div className="border-b border-border/60">
@@ -439,7 +574,11 @@ export function NewResumeCloneDialog({
   cloneSourceId: string | null;
   cloneTitle: string;
   onCloneTitleChange: (value: string) => void;
-  onSelectSource: (sourceId: string) => void;
+  onSelectSource: (
+    sourceId: string,
+    sourceTitle: string,
+    existingTitles: readonly string[]
+  ) => void;
   onBack: () => void;
   onConfirm: () => void;
   isMutating?: boolean;
@@ -464,7 +603,13 @@ export function NewResumeCloneDialog({
                   <CloneResumePickerCard
                     key={resume.id}
                     resume={resume}
-                    onSelect={onSelectSource}
+                    onSelect={(sourceId, sourceTitle) =>
+                      onSelectSource(
+                        sourceId,
+                        sourceTitle,
+                        resumes.map((item) => item.resumeTitle)
+                      )
+                    }
                   />
                 ))}
               </div>
@@ -510,7 +655,7 @@ export function NewResumeCloneDialog({
                 autoFocus
                 value={cloneTitle}
                 onChange={(e) => onCloneTitleChange(e.target.value)}
-                placeholder="e.g., Software Engineer Resume"
+                placeholder="Resume name"
                 maxLength={120}
               />
 

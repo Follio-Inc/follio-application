@@ -18,7 +18,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { MAX_RESUMES_PER_USER } from '@/lib/validations';
+import { NewResumeTemplatePicker } from '@/components/resume/new-resume-template-picker';
+import { suggestCloneResumeTitle, suggestDefaultResumeTitle } from '@/lib/resume-title';
+import type { ResumeDesign } from '@/types';
 
 import { useBuilderStore } from './builder-store-provider';
 
@@ -89,6 +91,8 @@ export function ResumeSwitcher() {
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [newResumeTitle, setNewResumeTitle] = useState('');
   const [pendingStrategy, setPendingStrategy] = useState<CreateStrategy | null>(null);
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
+  const [pendingBlankTitle, setPendingBlankTitle] = useState<string | undefined>(undefined);
 
   // Inline rename state
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -178,7 +182,14 @@ export function ResumeSwitcher() {
 
   const openNewResumeDialog = (strategy: CreateStrategy) => {
     setPendingStrategy(strategy);
-    setNewResumeTitle('');
+    const existingTitles = resumes.map((resume) => resume.resumeTitle);
+    if (strategy === 'CLONE' && activeResume) {
+      setNewResumeTitle(
+        suggestCloneResumeTitle(activeResume.resumeTitle, new Date(), existingTitles)
+      );
+    } else {
+      setNewResumeTitle(suggestDefaultResumeTitle(new Date(), existingTitles));
+    }
     setShowNewDialog(true);
   };
 
@@ -186,6 +197,16 @@ export function ResumeSwitcher() {
     if (!pendingStrategy) return;
 
     const title = newResumeTitle.trim() || undefined;
+
+    // Blank: name first, then template gallery (sample-when-sparse), then create.
+    if (pendingStrategy === 'BLANK') {
+      setShowNewDialog(false);
+      setPendingBlankTitle(title);
+      setPendingStrategy(null);
+      setTemplatePickerOpen(true);
+      return;
+    }
+
     setShowNewDialog(false);
     setIsMutating(true);
     setError(null);
@@ -230,6 +251,42 @@ export function ResumeSwitcher() {
       }
 
       // Reload builder with new resume
+      await loadResumes();
+      router.refresh();
+    } catch (createError) {
+      setError(createError instanceof Error ? createError.message : 'Failed to create resume');
+    } finally {
+      setIsMutating(false);
+    }
+  };
+
+  const handleBlankTemplateSelect = async (design: ResumeDesign) => {
+    setTemplatePickerOpen(false);
+    setIsMutating(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/resumes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          strategy: 'BLANK',
+          title: pendingBlankTitle,
+          resumeDesign: design,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create resume');
+      }
+
+      const data = (await response.json()) as {
+        resume: { id: string; handle: string; resumeTitle: string };
+      };
+
+      setActiveProfileId(data.resume.id);
+      setPendingBlankTitle(undefined);
+      setIsOpen(false);
       await loadResumes();
       router.refresh();
     } catch (createError) {
@@ -441,43 +498,35 @@ export function ResumeSwitcher() {
 
           {/* Create new resume actions */}
           <div className="space-y-1">
-            {resumes.length >= MAX_RESUMES_PER_USER ? (
-              <p className="px-2 py-1.5 text-xs text-muted-foreground">
-                Resume limit reached ({MAX_RESUMES_PER_USER}/{MAX_RESUMES_PER_USER})
-              </p>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={() => openNewResumeDialog('BLANK')}
-                  disabled={isMutating}
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted disabled:opacity-50"
-                >
-                  <Plus className="h-4 w-4" />
-                  Create blank resume
-                </button>
+            <button
+              type="button"
+              onClick={() => openNewResumeDialog('BLANK')}
+              disabled={isMutating}
+              className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted disabled:opacity-50"
+            >
+              <Plus className="h-4 w-4" />
+              Create blank resume
+            </button>
 
-                <button
-                  type="button"
-                  onClick={() => openNewResumeDialog('CLONE')}
-                  disabled={!activeProfileId || isMutating}
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Copy className="h-4 w-4" />
-                  Clone current resume
-                </button>
+            <button
+              type="button"
+              onClick={() => openNewResumeDialog('CLONE')}
+              disabled={!activeProfileId || isMutating}
+              className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Copy className="h-4 w-4" />
+              Clone current resume
+            </button>
 
-                <button
-                  type="button"
-                  onClick={() => openNewResumeDialog('UPLOAD')}
-                  disabled={isMutating}
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted disabled:opacity-50"
-                >
-                  <Upload className="h-4 w-4" />
-                  New resume from upload
-                </button>
-              </>
-            )}
+            <button
+              type="button"
+              onClick={() => openNewResumeDialog('UPLOAD')}
+              disabled={isMutating}
+              className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted disabled:opacity-50"
+            >
+              <Upload className="h-4 w-4" />
+              New resume from upload
+            </button>
           </div>
 
           {error && <p className="mt-2 px-2 text-xs text-destructive">{error}</p>}
@@ -490,14 +539,16 @@ export function ResumeSwitcher() {
           <div className="mx-4 w-full max-w-sm rounded-lg border bg-background p-6 shadow-xl">
             <h3 className="text-lg font-semibold">
               {pendingStrategy === 'CLONE'
-                ? 'Clone Resume'
+                ? 'Name your clone'
                 : pendingStrategy === 'UPLOAD'
                   ? 'New Resume from Upload'
                   : 'New Resume'}
             </h3>
             <p className="mt-1 text-sm text-muted-foreground">
               {pendingStrategy === 'CLONE'
-                ? 'Create a copy of your current resume with a new name.'
+                ? activeResume
+                  ? `Creating a copy of "${activeResume.resumeTitle}".`
+                  : 'Create a copy of your current resume with a new name.'
                 : pendingStrategy === 'UPLOAD'
                   ? "Upload a resume file to populate a new resume. You'll review the data before saving."
                   : 'Start with a clean slate and build from scratch.'}
@@ -513,11 +564,7 @@ export function ResumeSwitcher() {
                 autoFocus
                 value={newResumeTitle}
                 onChange={(e) => setNewResumeTitle(e.target.value)}
-                placeholder={
-                  pendingStrategy === 'CLONE' && activeResume
-                    ? `${activeResume.resumeTitle} Copy`
-                    : 'e.g., Data Engineer Resume'
-                }
+                placeholder="Resume name"
                 className="mt-4"
                 maxLength={120}
               />
@@ -531,6 +578,8 @@ export function ResumeSwitcher() {
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : pendingStrategy === 'UPLOAD' ? (
                     'Continue to Upload'
+                  ) : pendingStrategy === 'BLANK' ? (
+                    'Choose template'
                   ) : (
                     'Create'
                   )}
@@ -540,6 +589,16 @@ export function ResumeSwitcher() {
           </div>
         </div>
       )}
+
+      <NewResumeTemplatePicker
+        open={templatePickerOpen}
+        onOpenChange={(open) => {
+          setTemplatePickerOpen(open);
+          if (!open) setPendingBlankTitle(undefined);
+        }}
+        onSelect={(design) => void handleBlankTemplateSelect(design)}
+        applyLabel="Create resume"
+      />
     </div>
   );
 }

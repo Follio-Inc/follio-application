@@ -1,6 +1,6 @@
 'use client';
 
-import { PenLine, WandSparkles, type LucideIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, PenLine, WandSparkles, type LucideIcon } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 
@@ -12,6 +12,18 @@ import { BuilderContentHeader } from './components/builder-content-header';
 import { BuilderMobileBar } from './components/builder-mobile-bar';
 import { BuilderStoreProvider, useBuilderStore } from './components/builder-store-provider';
 import { ResumePreviewPanel } from './components/resume-preview-panel';
+import {
+  DEFAULT_BUILDER_VIEW_MODE,
+  builderSideCollapseLabel,
+  closeBuilderSide,
+  escapeBuilderViewMode,
+  isBuilderDesignerActive,
+  isBuilderPreviewOnly,
+  isContentEdgeTabVisible,
+  isDesignEdgeTabVisible,
+  openBuilderSide,
+  type BuilderViewMode,
+} from './lib/pane-layout';
 
 import type { FullProfile, ProfileSection } from '@/types';
 
@@ -123,6 +135,49 @@ function BuilderEdgeTab({
 }
 
 // ──────────────────────────────────────────────
+// Subtle seam chevron — close the active side → preview-only
+// ──────────────────────────────────────────────
+
+interface BuilderSideCollapseProps {
+  mode: Exclude<BuilderViewMode, 'preview'>;
+  onCollapse: () => void;
+}
+
+function BuilderSideCollapse({ mode, onCollapse }: BuilderSideCollapseProps) {
+  const label = builderSideCollapseLabel(mode);
+  if (!label) return null;
+
+  const isContent = mode === 'content';
+  const Icon = isContent ? ChevronLeft : ChevronRight;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={onCollapse}
+          aria-label={label}
+          className={cn(
+            'absolute top-1/2 z-30 hidden h-10 w-4 -translate-y-1/2 items-center justify-center xl:flex',
+            'border border-border/70 bg-background/90 text-muted-foreground dark:border-border dark:bg-muted',
+            'shadow-sm backdrop-blur-sm',
+            'transition-[color,background-color,box-shadow,opacity] duration-200',
+            'hover:bg-muted hover:text-foreground dark:hover:bg-muted/80',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background',
+            isContent ? 'left-0 -translate-x-1/2 rounded-md' : 'right-0 translate-x-1/2 rounded-md'
+          )}
+        >
+          <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side={isContent ? 'right' : 'left'} className="text-xs">
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+// ──────────────────────────────────────────────
 // Inner layout (inside the store provider)
 // ──────────────────────────────────────────────
 
@@ -133,10 +188,14 @@ interface BuilderLayoutInnerProps {
 function BuilderLayoutInner({ sections }: BuilderLayoutInnerProps) {
   const commitInlineChange = useBuilderStore((s) => s.commitInlineChange);
   const storeSections = useBuilderStore((s) => s.draftProfile.sections);
-  const [designerActive, setDesignerActive] = useState(false);
+  const [mode, setMode] = useState<BuilderViewMode>(DEFAULT_BUILDER_VIEW_MODE);
 
-  const openDesign = useCallback(() => setDesignerActive(true), []);
-  const openContent = useCallback(() => setDesignerActive(false), []);
+  const designerActive = isBuilderDesignerActive(mode);
+  const previewOnly = isBuilderPreviewOnly(mode);
+
+  const openDesign = useCallback(() => setMode((m) => openBuilderSide(m, 'designer')), []);
+  const openContent = useCallback(() => setMode((m) => openBuilderSide(m, 'content')), []);
+  const closeSide = useCallback(() => setMode((m) => closeBuilderSide(m)), []);
 
   // Escape returns to content when the design panel is open (desktop).
   useEffect(() => {
@@ -144,7 +203,7 @@ function BuilderLayoutInner({ sections }: BuilderLayoutInnerProps) {
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        setDesignerActive(false);
+        setMode((m) => escapeBuilderViewMode(m));
       }
     };
 
@@ -187,9 +246,15 @@ function BuilderLayoutInner({ sections }: BuilderLayoutInnerProps) {
           <div
             className="builder-slide flex h-full"
             data-designer-active={designerActive || undefined}
+            data-preview-only={previewOnly || undefined}
           >
             {/* ── Panel 1: Editor ── */}
-            <main className="flex w-full min-w-0 flex-col bg-muted/40 xl:w-auto xl:flex-[4_0_0%] xl:overflow-y-auto">
+            <main
+              className={cn(
+                'flex w-full min-w-0 flex-col bg-muted/40 xl:w-auto xl:flex-[4_0_0%] xl:overflow-y-auto',
+                previewOnly && 'xl:hidden'
+              )}
+            >
               <BuilderContentHeader />
               <div className="min-h-[60vh] flex-1 pb-20 xl:pb-8">
                 <div className="flat-cards mx-auto max-w-3xl px-6 py-8">
@@ -199,14 +264,27 @@ function BuilderLayoutInner({ sections }: BuilderLayoutInnerProps) {
             </main>
 
             {/* ── Panel 2: Resume Preview ── */}
-            <div className="hidden min-w-0 border-l border-border/60 bg-muted/20 xl:flex xl:flex-[5_0_0%]">
+            <div
+              className={cn(
+                'relative hidden min-w-0 border-l border-border/60 bg-muted/20 xl:flex',
+                previewOnly ? 'xl:flex-1 xl:border-l-0' : 'xl:flex-[5_0_0%]'
+              )}
+            >
+              {mode !== 'preview' ? (
+                <BuilderSideCollapse mode={mode} onCollapse={closeSide} />
+              ) : null}
               <div className="h-full w-full overflow-hidden">
                 <ResumePreviewPanel />
               </div>
             </div>
 
             {/* ── Panel 3: Designer ── */}
-            <aside className="hidden min-w-0 border-l border-border/60 bg-background xl:flex xl:flex-[4_0_0%] xl:flex-col">
+            <aside
+              className={cn(
+                'hidden min-w-0 border-l border-border/60 bg-background xl:flex xl:flex-[4_0_0%] xl:flex-col',
+                previewOnly && 'xl:hidden'
+              )}
+            >
               <DesignerPanel />
             </aside>
           </div>
@@ -216,7 +294,7 @@ function BuilderLayoutInner({ sections }: BuilderLayoutInnerProps) {
             side="right"
             label="Design"
             icon={WandSparkles}
-            visible={!designerActive}
+            visible={isDesignEdgeTabVisible(mode)}
             onClick={openDesign}
             tooltip="Open design panel"
           />
@@ -224,7 +302,7 @@ function BuilderLayoutInner({ sections }: BuilderLayoutInnerProps) {
             side="left"
             label="Content"
             icon={PenLine}
-            visible={designerActive}
+            visible={isContentEdgeTabVisible(mode)}
             onClick={openContent}
             tooltip="Return to content editor"
           />

@@ -4,15 +4,21 @@
  * Two types of URLs:
  *
  * 1. CANONICAL / DISPLAY URLs (for sharing, OG tags, copy-to-clipboard):
- *    Environment-aware — uses subdomain format only when enabled:
+ *    Portfolio / links are environment-aware (subdomain when enabled):
  *      Subdomains ON  (production):   https://username.follio.me
  *      Subdomains OFF (dev / preview): http://localhost:3000/u/username
  *
+ *    Resume URLs are always apex-path (never embed the username in unlisted links):
+ *      Public:   https://follio.me/username
+ *      Unlisted: https://follio.me/r/{unlistedKey}
+ *
  * 2. INTERNAL NAV PATHS (for <Link>, redirect(), Next.js routing):
  *    Always use the path-based format so Next.js routing works:
- *      Portfolio:  /u/username
- *      Resume:     /u/username/resume
- *      Links:      /u/username/links
+ *      Portfolio:       /u/username
+ *      Resume (legacy): /u/username/resume
+ *      Public resume:   /username
+ *      Unlisted resume: /r/{key}
+ *      Links:           /u/username/links
  */
 
 /** The root domain (e.g., "follio.me") */
@@ -50,15 +56,43 @@ export function getPortfolioUrl(handle: string, unlistedKey?: string | null): st
 }
 
 /**
- * Canonical resume URL for display, sharing, OG tags.
- * Subdomain ON:  https://username.follio.me/r
- * Subdomain OFF: http://localhost:3000/u/username/resume
+ * Apex origin for vanity / opaque resume URLs (always path-based on the app host).
+ * Production: https://follio.me
+ * Dev:        http://localhost:3000 (or NEXT_PUBLIC_APP_URL)
  */
-export function getResumeUrl(handle: string, unlistedKey?: string | null): string {
-  const base = SUBDOMAIN_ENABLED
-    ? `${PROTOCOL}://${handle}.${ROOT_DOMAIN}/r`
-    : `${getAppBaseUrl()}/u/${handle}/resume`;
-  return unlistedKey ? `${base}?key=${unlistedKey}` : base;
+function getApexBaseUrl(): string {
+  if (SUBDOMAIN_ENABLED) {
+    return `${PROTOCOL}://${ROOT_DOMAIN}`;
+  }
+  return getAppBaseUrl();
+}
+
+/**
+ * Canonical public resume URL: follio.me/{username}
+ */
+export function getPublicResumeUrl(username: string): string {
+  return `${getApexBaseUrl()}/${username}`;
+}
+
+/**
+ * Canonical unlisted resume URL: follio.me/r/{unlistedKey}
+ * Intentionally omits the username so the link cannot be used to discover
+ * a public vanity URL.
+ */
+export function getUnlistedResumeUrl(unlistedKey: string): string {
+  return `${getApexBaseUrl()}/r/${unlistedKey}`;
+}
+
+/**
+ * Canonical resume URL for display, sharing, OG tags.
+ * - With unlistedKey → opaque /r/{key} (no username)
+ * - Without key → public vanity /{username}
+ */
+export function getResumeUrl(username: string, unlistedKey?: string | null): string {
+  if (unlistedKey) {
+    return getUnlistedResumeUrl(unlistedKey);
+  }
+  return getPublicResumeUrl(username);
 }
 
 /**
@@ -97,9 +131,35 @@ export function getPortfolioPath(handle: string): string {
 
 /**
  * Internal path for resume — use in <Link href>, redirect(), etc.
+ * Legacy handle-based path (still valid for owners / backwards compat).
  */
 export function getResumePath(handle: string): string {
   return `/u/${handle}/resume`;
+}
+
+/** Internal path for the public vanity resume URL. */
+export function getPublicResumePath(username: string): string {
+  return `/${username}`;
+}
+
+/** Internal path for an opaque unlisted resume URL. */
+export function getUnlistedResumePath(unlistedKey: string): string {
+  return `/r/${unlistedKey}`;
+}
+
+/**
+ * Short display string for public resume URLs (no protocol).
+ * Always apex-path: follio.me/username or localhost:3000/username
+ */
+export function getPublicResumeDisplayHost(username: string): string {
+  return getPublicResumeUrl(username).replace(/^https?:\/\//, '');
+}
+
+/**
+ * Short display string for unlisted resume URLs (no protocol).
+ */
+export function getUnlistedResumeDisplayHost(unlistedKey: string): string {
+  return getUnlistedResumeUrl(unlistedKey).replace(/^https?:\/\//, '');
 }
 
 /**

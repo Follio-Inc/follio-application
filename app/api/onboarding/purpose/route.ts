@@ -1,5 +1,7 @@
+import { EmailConflictError, getOrCreateUserForClerk } from '@/lib/account/resolve-user';
 import { db } from '@/lib/db';
 import { auth, currentUser } from '@clerk/nextjs/server';
+import type { MainPurpose } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
 
 /**
@@ -31,7 +33,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid purpose value' }, { status: 400 });
     }
 
-    // Get or create user
+    const mainPurpose = (purpose || null) as MainPurpose | null;
+
     let user = await db.user.findUnique({
       where: { clerkId: userId },
     });
@@ -44,20 +47,21 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Unable to get user details' }, { status: 400 });
       }
 
-      user = await db.user.create({
-        data: {
-          clerkId: userId,
-          email: primaryEmailAddr,
-          mainPurpose: purpose || null,
-        },
+      const resolved = await getOrCreateUserForClerk({
+        clerkId: userId,
+        email: primaryEmailAddr,
+        createData: { mainPurpose },
+      });
+
+      // Ensure purpose is set for both create and orphan-reclaim paths
+      user = await db.user.update({
+        where: { id: resolved.id },
+        data: { mainPurpose },
       });
     } else {
-      // Update existing user
       user = await db.user.update({
         where: { id: user.id },
-        data: {
-          mainPurpose: purpose || null,
-        },
+        data: { mainPurpose },
       });
     }
 
@@ -66,6 +70,16 @@ export async function POST(request: NextRequest) {
       purpose: user.mainPurpose,
     });
   } catch (error) {
+    if (error instanceof EmailConflictError) {
+      return NextResponse.json(
+        {
+          error: 'Email already in use',
+          message: error.message,
+          code: 'EMAIL_CONFLICT',
+        },
+        { status: 409 }
+      );
+    }
     console.error('Error saving purpose:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

@@ -4,12 +4,12 @@
  *
  * This module centralises the resume download access check so it stays in
  * lockstep with the canonical viewer logic in `app/u/[handle]/resume/page.tsx`.
- * A resume is a PII document, so there is no openly-public mode:
  *
  *   - Owner: always allowed.
  *   - `resumeVisibility === 'PRIVATE'`: owner only.
- *   - `resumeVisibility === 'UNLISTED'` (and any legacy `PUBLIC`): only with a
- *     valid share token or unlisted key, so resumes can never be enumerated.
+ *   - `resumeVisibility === 'PUBLIC'`: anyone.
+ *   - `resumeVisibility === 'UNLISTED'`: only with a valid share token or
+ *     unlisted key.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -67,7 +67,6 @@ export async function assertResumeExportAccess(
 
   const resumeVisibility = profile.resumeVisibility ?? 'PRIVATE';
 
-  // PRIVATE resumes are never downloadable by non-owners.
   if (resumeVisibility === 'PRIVATE') {
     return {
       allowed: false,
@@ -75,8 +74,11 @@ export async function assertResumeExportAccess(
     };
   }
 
-  // UNLISTED (and any legacy PUBLIC) resumes require a valid share token or
-  // unlisted key — there is no openly-public resume mode.
+  if (resumeVisibility === 'PUBLIC') {
+    return { allowed: true, isOwner };
+  }
+
+  // UNLISTED requires a valid share token or unlisted key.
   const token = request.nextUrl.searchParams.get('token');
   const key = request.nextUrl.searchParams.get('key');
 

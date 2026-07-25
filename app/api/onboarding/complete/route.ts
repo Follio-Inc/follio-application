@@ -1,9 +1,10 @@
+import { EmailConflictError, getOrCreateUserForClerk } from '@/lib/account/resolve-user';
 import { syncAvatarToClerk } from '@/lib/clerk-avatar-sync';
 import { upsertGitHubProfileForProfile } from '@/services/import/github-enhanced.service';
 import { db } from '@/lib/db';
 import { isPortfolioEnabled } from '@/lib/features';
 import { generateUniqueResumeTitle } from '@/lib/resume-title';
-import { isValidResumeTemplateId } from '@/lib/resume/templates';
+import { sanitizeResumeDesign } from '@/lib/resume/templates';
 import { skillsToHtml } from '@/lib/skills/groups';
 import { parseDateFlexible } from '@/lib/utils';
 import type { NormalizedImportResult } from '@/services/import/types';
@@ -19,10 +20,7 @@ import type { DataSource, Profile, SectionType, User } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
 
 function sanitizeOnboardingResumeDesign(raw: unknown): ResumeDesign | undefined {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
-  const design = raw as ResumeDesign;
-  if (!isValidResumeTemplateId(design.templateId)) return undefined;
-  return design;
+  return sanitizeResumeDesign(raw);
 }
 
 // Helper to safely cast string to DataSource enum
@@ -361,63 +359,41 @@ export async function POST(request: NextRequest) {
     console.log('[Onboarding Complete] providedHandle:', providedHandle);
     console.log('[Onboarding Complete] targetProfileId:', targetProfileId || '(none)');
 
-    // Get or create user
-    let user = await db.user.findUnique({
-      where: { clerkId: userId },
-      include: { profile: true },
-    });
-
-    if (!user) {
+    // Get or create user (reclaims orphaned rows if a prior Clerk account was deleted)
+    // Use primaryEmailAddress so LinkedIn/Google signup email stays the account email
+    // even if the user later connects GitHub with the same address.
+    let user;
+    try {
       const clerkUser = await currentUser();
-      // Use primaryEmailAddress to get the user's primary email (first signup email)
-      // This ensures Google signup email stays primary even if user later connects GitHub
       const primaryEmailAddr = clerkUser?.primaryEmailAddress?.emailAddress;
       if (!primaryEmailAddr) {
-        return NextResponse.json({ error: 'Unable to get user details' }, { status: 400 });
+        // Still allow an already-provisioned DB user (e.g. purpose step) to continue
+        user = await db.user.findUnique({
+          where: { clerkId: userId },
+          include: { profile: true },
+        });
+        if (!user) {
+          return NextResponse.json({ error: 'Unable to get user details' }, { status: 400 });
+        }
+      } else {
+        user = await getOrCreateUserForClerk({
+          clerkId: userId,
+          email: primaryEmailAddr,
+        });
+        console.log('[Onboarding Complete] Resolved user:', user.id);
       }
-
-      const email = primaryEmailAddr;
-
-      // Check if a user with this email already exists
-      const existingUserByEmail = await db.user.findUnique({
-        where: { email },
-        include: { profile: true },
-      });
-
-      if (existingUserByEmail) {
-        // SECURITY: Do NOT allow a new Clerk user to take over an existing account
-        // This prevents account hijacking when someone connects an OAuth provider
-        // that has the same email as an existing user's account.
-        // Users must link accounts through Clerk's account linking, not database overwrites.
-        console.error(
-          '[Onboarding Complete] Email conflict detected:',
-          email,
-          'already belongs to user:',
-          existingUserByEmail.id,
-          'but Clerk user:',
-          userId,
-          'is trying to use it'
-        );
+    } catch (error) {
+      if (error instanceof EmailConflictError) {
         return NextResponse.json(
           {
             error: 'Email already in use',
-            message:
-              'This email is already associated with another account. Please sign in with your original account or use a different email.',
+            message: error.message,
             code: 'EMAIL_CONFLICT',
           },
           { status: 409 }
         );
       }
-
-      // Create new user - email is unique and not used by anyone else
-      user = await db.user.create({
-        data: {
-          clerkId: userId,
-          email,
-        },
-        include: { profile: true },
-      });
-      console.log('[Onboarding Complete] Created new user:', user.id);
+      throw error;
     }
 
     // When targetProfileId is specified (e.g. "New resume from upload" in builder),

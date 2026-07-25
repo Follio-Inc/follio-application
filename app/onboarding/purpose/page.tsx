@@ -154,11 +154,11 @@ export default function OnboardingPurposePage() {
               {isLoading ? (
                 <>
                   <Spinner size="sm" />
-                  Continuing…
+                  Saving…
                 </>
               ) : (
                 <>
-                  {purpose ? 'Continue' : 'Skip to Next Step'}
+                  {purpose ? 'Next' : 'Skip'}
                   <ArrowRight className="h-4 w-4" />
                 </>
               )}

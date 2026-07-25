@@ -16,7 +16,6 @@ import {
   Lock,
   MoreHorizontal,
   Pencil,
-  Plus,
   Share2,
   Star,
   Trash2,
@@ -48,18 +47,18 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { MAX_RESUMES_PER_USER } from '@/lib/validations';
 import { isPortfolioEnabled } from '@/lib/features';
+import { cn } from '@/lib/utils';
 import type { ResumePageLayout } from '@/types';
 
 import {
   NewResumeCloneDialog,
   NewResumeMenuButton,
+  NewResumeTemplatePickerHost,
+  NewResumeUploadHost,
   ResumeListDivider,
-  ResumeUploadFileInput,
-  sortResumesWithPortfolioFirst,
+  sortResumesWithPublicFirst,
   useNewResumeActions,
-  type UploadCreatedResume,
 } from '../resumes/new-resume-options';
 import { ResumeThumbnail } from '../resumes/resume-thumbnail';
 
@@ -85,9 +84,17 @@ interface DashboardResumesSectionProps {
   initialResumes: DashboardResumeItem[];
   initialActiveProfileId: string | null;
   initialPrimaryProfileId: string | null;
+  /**
+   * When true, the section title/count are omitted — the parent owns that chrome
+   * (e.g. dashboard documents tabs). Actions toolbar is still shown.
+   */
+  embedded?: boolean;
 }
 
 // ─── Constants ────────────────────────────────────────────────────
+
+/** How many resume cards to show on the dashboard before "View all". */
+const DASHBOARD_RESUME_PREVIEW_LIMIT = 4;
 
 const VISIBILITY_CONFIG: Record<
   string,
@@ -100,13 +107,13 @@ const VISIBILITY_CONFIG: Record<
 > = {
   PUBLIC: {
     label: 'Public',
-    description: 'Visible to everyone and listed on your profile',
+    description: 'Anyone can view at your Follio URL',
     variant: 'default',
     icon: Globe,
   },
   UNLISTED: {
     label: 'Visible with Link',
-    description: 'Only people with the direct link can view this resume',
+    description: 'Only people with the secure link can view this resume',
     variant: 'secondary',
     icon: Link2,
   },
@@ -145,24 +152,6 @@ function formatRelativeDate(dateString: string): string {
 function getDisplayName(resume: DashboardResumeItem): string | null {
   const parts = [resume.firstName, resume.middleName, resume.lastName].filter(Boolean);
   return parts.length > 0 ? parts.join(' ') : null;
-}
-
-function createPlaceholderResume(resume: UploadCreatedResume): DashboardResumeItem {
-  const now = new Date().toISOString();
-  return {
-    id: resume.id,
-    handle: resume.handle,
-    resumeTitle: resume.resumeTitle,
-    status: 'DRAFT',
-    resumeVisibility: 'PRIVATE',
-    firstName: null,
-    middleName: null,
-    lastName: null,
-    headline: null,
-    updatedAt: now,
-    createdAt: now,
-    pageLayout: 'continuous',
-  };
 }
 
 // ─── Sub-components ───────────────────────────────────────────────
@@ -249,6 +238,7 @@ export function DashboardResumesSection({
   initialResumes,
   initialActiveProfileId,
   initialPrimaryProfileId,
+  embedded = false,
 }: DashboardResumesSectionProps) {
   const router = useRouter();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -280,15 +270,16 @@ export function DashboardResumesSection({
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
 
-  const sortedResumes = useMemo(
-    () => sortResumesWithPortfolioFirst(resumes, primaryProfileId),
-    [resumes, primaryProfileId]
+  const sortedResumes = useMemo(() => sortResumesWithPublicFirst(resumes), [resumes]);
+  const previewResumes = useMemo(
+    () => sortedResumes.slice(0, DASHBOARD_RESUME_PREVIEW_LIMIT),
+    [sortedResumes]
   );
+  const hasMoreResumes = sortedResumes.length > DASHBOARD_RESUME_PREVIEW_LIMIT;
+  const remainingResumeCount = sortedResumes.length - previewResumes.length;
 
-  const showPortfolioDivider =
-    primaryProfileId != null &&
-    sortedResumes.length > 1 &&
-    sortedResumes[0]?.id === primaryProfileId;
+  const showPublicDivider =
+    previewResumes.length > 1 && previewResumes[0]?.resumeVisibility === 'PUBLIC';
 
   // ─── Scroll management ─────────────────────────────────────────
 
@@ -314,7 +305,7 @@ export function DashboardResumesSection({
       el.removeEventListener('scroll', updateScrollArrows);
       observer.disconnect();
     };
-  }, [updateScrollArrows, sortedResumes.length]);
+  }, [updateScrollArrows, previewResumes.length, hasMoreResumes]);
 
   const scrollBy = (direction: 'left' | 'right') => {
     const el = scrollRef.current;
@@ -345,12 +336,6 @@ export function DashboardResumesSection({
   const newResume = useNewResumeActions({
     onRefresh: refreshResumes,
     onError: setError,
-    onImportStart: (resume) => {
-      setResumes((prev) => [createPlaceholderResume(resume), ...prev]);
-    },
-    onImportFailed: (profileId) => {
-      setResumes((prev) => prev.filter((resume) => resume.id !== profileId));
-    },
   });
 
   const isBusy = isMutating || newResume.isMutating;
@@ -505,61 +490,34 @@ export function DashboardResumesSection({
 
   // ─── Render ───────────────────────────────────────────────────
 
-  const canCreateNew = resumes.length < MAX_RESUMES_PER_USER;
-  const atResumeLimit = !canCreateNew;
-
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <h2 className="text-section-title">Resumes</h2>
-          <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular-nums leading-none text-muted-foreground">
-            {resumes.length}
-          </span>
-          <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" asChild>
-            <Link href="/resumes">
-              Manage all
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
-          </Button>
+      <div className={cn('flex items-center gap-3', embedded ? 'justify-end' : 'justify-between')}>
+        {!embedded && (
+          <div className="flex min-w-0 items-center gap-2.5">
+            <h2 className="text-section-title">Resumes</h2>
+            <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular-nums leading-none text-muted-foreground">
+              {resumes.length}
+            </span>
+          </div>
+        )}
+        <div className="flex shrink-0 items-center gap-1.5">
+          {hasMoreResumes && (
+            <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" asChild>
+              <Link href="/resumes">
+                View all
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          )}
+          <NewResumeMenuButton
+            isMutating={isBusy}
+            onBlank={() => void newResume.createBlank()}
+            onUpload={() => void newResume.startUpload()}
+            onClone={() => newResume.openCloneDialog()}
+          />
         </div>
-        <TooltipProvider delayDuration={0}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="shrink-0">
-                {atResumeLimit ? (
-                  <Button className="gap-1.5" disabled>
-                    <Plus className="h-4 w-4" />
-                    New resume
-                  </Button>
-                ) : (
-                  <NewResumeMenuButton
-                    disabled={atResumeLimit}
-                    isMutating={isBusy}
-                    onBlank={() => void newResume.createBlank()}
-                    onUpload={() => void newResume.startUpload()}
-                    onClone={() => newResume.openCloneDialog()}
-                  />
-                )}
-              </span>
-            </TooltipTrigger>
-            {atResumeLimit && (
-              <TooltipContent side="bottom">
-                <p>
-                  Maximum {MAX_RESUMES_PER_USER} resumes per user. Delete one to create a new
-                  resume.
-                </p>
-              </TooltipContent>
-            )}
-          </Tooltip>
-        </TooltipProvider>
       </div>
-
-      <ResumeUploadFileInput
-        inputRef={newResume.uploadInputRef}
-        onChange={(event) => void newResume.handleUploadFileChange(event)}
-        disabled={isBusy}
-      />
 
       {/* Error banner */}
       {error && (
@@ -620,14 +578,22 @@ export function DashboardResumesSection({
           )}
 
           <div ref={scrollRef} className="scrollbar-none flex gap-5 overflow-x-auto pb-2">
-            {sortedResumes.map((resume, index) => {
+            {previewResumes.map((resume, index) => {
               const displayName = getDisplayName(resume);
-              const isImporting = resume.id === newResume.importingProfileId;
+              const isPublic = resume.resumeVisibility === 'PUBLIC';
+              const portfolioEnabled = isPortfolioEnabled();
 
               return (
                 <Fragment key={resume.id}>
-                  {index === 1 && showPortfolioDivider && <ResumeListDivider />}
-                  <Card className="group relative flex w-[260px] shrink-0 flex-col overflow-hidden transition-all duration-200 hover:border-border hover:shadow-md">
+                  {index === 1 && showPublicDivider && <ResumeListDivider />}
+                  <Card
+                    className={cn(
+                      'group relative flex w-[260px] shrink-0 flex-col overflow-hidden transition-all duration-200 hover:shadow-md',
+                      isPublic
+                        ? 'border-emerald-500/25 hover:border-emerald-500/35'
+                        : 'hover:border-border'
+                    )}
+                  >
                     {/*
                      * Resume thumbnail preview.
                      *
@@ -640,16 +606,16 @@ export function DashboardResumesSection({
                      */}
                     <div
                       role="button"
-                      tabIndex={isMutating || isImporting ? -1 : 0}
-                      aria-disabled={isMutating || isImporting}
+                      tabIndex={isMutating ? -1 : 0}
+                      aria-disabled={isMutating}
                       aria-label={`Open ${resume.resumeTitle} in builder`}
                       className="relative block w-full cursor-pointer border-b border-border/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-disabled:cursor-not-allowed"
                       onClick={() => {
-                        if (isMutating || isImporting) return;
+                        if (isMutating) return;
                         void handleOpenInBuilder(resume.id);
                       }}
                       onKeyDown={(event) => {
-                        if (isMutating || isImporting) return;
+                        if (isMutating) return;
                         if (event.key === 'Enter' || event.key === ' ') {
                           event.preventDefault();
                           void handleOpenInBuilder(resume.id);
@@ -658,8 +624,10 @@ export function DashboardResumesSection({
                     >
                       <ResumeThumbnail
                         profileId={resume.id}
-                        isImporting={isImporting}
-                        showPortfolioBadge={resume.id === primaryProfileId}
+                        showPublicBadge={isPublic}
+                        showPortfolioBadge={
+                          portfolioEnabled && resume.id === primaryProfileId && !isPublic
+                        }
                       />
                     </div>
 
@@ -726,26 +694,21 @@ export function DashboardResumesSection({
                               <Pencil className="mr-2 h-4 w-4" />
                               Rename
                             </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => newResume.openCloneDialog()}
-                              disabled={!canCreateNew}
-                            >
+                            <DropdownMenuItem onClick={() => newResume.openCloneDialog()}>
                               <Copy className="mr-2 h-4 w-4" />
                               Clone
                             </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => void handleSetAsPortfolio(resume.id)}
-                              disabled={resume.id === primaryProfileId || isMutating}
-                            >
-                              <Star className="mr-2 h-4 w-4" />
-                              {resume.id === primaryProfileId
-                                ? isPortfolioEnabled()
+                            {portfolioEnabled && (
+                              <DropdownMenuItem
+                                onClick={() => void handleSetAsPortfolio(resume.id)}
+                                disabled={resume.id === primaryProfileId || isMutating}
+                              >
+                                <Star className="mr-2 h-4 w-4" />
+                                {resume.id === primaryProfileId
                                   ? 'Current Portfolio'
-                                  : 'Primary resume'
-                                : isPortfolioEnabled()
-                                  ? 'Set as Portfolio'
-                                  : 'Set as primary'}
-                            </DropdownMenuItem>
+                                  : 'Set as Portfolio'}
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
                               onClick={() => openDeleteDialog(resume)}
@@ -796,7 +759,7 @@ export function DashboardResumesSection({
                           size="sm"
                           className="flex-1 gap-1.5"
                           onClick={() => handleOpenInBuilder(resume.id)}
-                          disabled={isMutating || isImporting}
+                          disabled={isMutating}
                         >
                           <Pencil className="h-3.5 w-3.5" />
                           Edit
@@ -813,6 +776,23 @@ export function DashboardResumesSection({
                 </Fragment>
               );
             })}
+
+            {hasMoreResumes && (
+              <Link
+                href="/resumes"
+                className="group flex w-[180px] shrink-0 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border/70 bg-muted/20 px-4 py-8 text-center transition-colors hover:border-border hover:bg-muted/40"
+              >
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-background text-muted-foreground shadow-sm ring-1 ring-border/60 transition-colors group-hover:text-foreground">
+                  <ArrowRight className="h-4 w-4" />
+                </span>
+                <span className="space-y-1">
+                  <span className="block text-sm font-medium text-foreground">View all</span>
+                  <span className="block text-xs text-muted-foreground">
+                    {remainingResumeCount} more resume{remainingResumeCount === 1 ? '' : 's'}
+                  </span>
+                </span>
+              </Link>
+            )}
           </div>
         </div>
       )}
@@ -829,6 +809,22 @@ export function DashboardResumesSection({
         onBack={newResume.backToClonePick}
         onConfirm={() => void newResume.confirmClone()}
         isMutating={isBusy}
+      />
+
+      <NewResumeUploadHost
+        inputRef={newResume.uploadInputRef}
+        onFileChange={(event) => void newResume.handleUploadFileChange(event)}
+        isParsing={newResume.isUploadParsing}
+        fileName={newResume.uploadFileName}
+        disabled={isBusy}
+      />
+
+      <NewResumeTemplatePickerHost
+        open={newResume.templatePickerOpen}
+        onOpenChange={newResume.onTemplatePickerOpenChange}
+        onSelect={newResume.handleTemplateSelect}
+        profile={newResume.templatePickerProfile}
+        applyLabel={newResume.templatePickerApplyLabel}
       />
 
       {/* ─── Delete Confirmation Dialog ─────────────────────────── */}
@@ -894,8 +890,10 @@ export function DashboardResumesSection({
       {sharingResume && (
         <ShareDialog
           profile={{
+            id: sharingResume.id,
             handle: sharingResume.handle,
             firstName: sharingResume.firstName,
+            resumeTitle: sharingResume.resumeTitle,
             resumeVisibility: sharingResume.resumeVisibility as 'PUBLIC' | 'UNLISTED' | 'PRIVATE',
           }}
           open={shareDialogOpen}
@@ -906,9 +904,13 @@ export function DashboardResumesSection({
           onBeforeOpen={handleShareBeforeOpen}
           onVisibilityChange={(visibility) => {
             setResumes((prev) =>
-              prev.map((r) =>
-                r.id === sharingResume.id ? { ...r, resumeVisibility: visibility } : r
-              )
+              prev.map((r) => {
+                if (r.id === sharingResume.id) return { ...r, resumeVisibility: visibility };
+                if (visibility === 'PUBLIC' && r.resumeVisibility === 'PUBLIC') {
+                  return { ...r, resumeVisibility: 'UNLISTED' };
+                }
+                return r;
+              })
             );
             setSharingResume((prev) => (prev ? { ...prev, resumeVisibility: visibility } : prev));
           }}

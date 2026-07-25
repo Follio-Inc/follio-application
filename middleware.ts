@@ -33,6 +33,7 @@ const isProtectedRoute = createRouteMatcher([
 const isPublicRoute = createRouteMatcher([
   '/',
   '/u/(.*)',
+  '/r/(.*)',
   '/share/(.*)',
   '/api/export/(.*)',
   '/sign-in(.*)',

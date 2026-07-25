@@ -153,6 +153,72 @@ export function removeEmailFromList<T extends { email: string; clerkEmailId?: st
   };
 }
 
+function resolvePhoneDisplay(entry: PhoneEntry | undefined): string | undefined {
+  if (!entry) return undefined;
+  if (entry.phone?.trim()) return entry.phone;
+  if (entry.number?.trim() || entry.countryCode) {
+    return formatPhoneValue({
+      countryCode: entry.countryCode || null,
+      number: entry.number || '',
+    });
+  }
+  return undefined;
+}
+
+function clampPrimaryPhoneIndex(phoneCount: number, primaryPhoneIndex: number): number {
+  if (phoneCount === 0) return 0;
+  if (primaryPhoneIndex < 0 || primaryPhoneIndex >= phoneCount) return 0;
+  return primaryPhoneIndex;
+}
+
+/**
+ * Remove a phone by list index and keep primary consistent.
+ * - Deleting the primary when others remain promotes the first remaining number.
+ * - Deleting the last/only phone leaves an empty list with no primary phone.
+ * - Deleting a non-primary adjusts the primary index when needed.
+ */
+export function removePhoneFromList<T extends PhoneEntry>(
+  phones: T[],
+  primaryPhoneIndex: number,
+  indexToRemove: number
+): { phones: T[]; primaryPhoneIndex: number; phone: string | undefined } {
+  if (indexToRemove < 0 || indexToRemove >= phones.length) {
+    const clamped = clampPrimaryPhoneIndex(phones.length, primaryPhoneIndex);
+    return {
+      phones,
+      primaryPhoneIndex: clamped,
+      phone: resolvePhoneDisplay(phones[clamped]),
+    };
+  }
+
+  const currentPrimaryIndex = clampPrimaryPhoneIndex(phones.length, primaryPhoneIndex);
+  const nextPhones = phones.filter((_, i) => i !== indexToRemove);
+
+  if (nextPhones.length === 0) {
+    return {
+      phones: [],
+      primaryPhoneIndex: 0,
+      phone: undefined,
+    };
+  }
+
+  let nextPrimaryIndex = currentPrimaryIndex;
+  if (indexToRemove === currentPrimaryIndex) {
+    // Deleted primary → promote first remaining number
+    nextPrimaryIndex = 0;
+  } else if (indexToRemove < currentPrimaryIndex) {
+    nextPrimaryIndex = currentPrimaryIndex - 1;
+  }
+
+  nextPrimaryIndex = clampPrimaryPhoneIndex(nextPhones.length, nextPrimaryIndex);
+
+  return {
+    phones: nextPhones,
+    primaryPhoneIndex: nextPrimaryIndex,
+    phone: resolvePhoneDisplay(nextPhones[nextPrimaryIndex]),
+  };
+}
+
 // ============================================================================
 // Hook Implementation
 // ============================================================================
@@ -537,34 +603,17 @@ export function useContactManager(options: UseContactManagerOptions = {}): UseCo
   }, []);
 
   /**
-   * Delete phone from list
+   * Delete phone from list (primary included; promotes another when present)
    */
   const deletePhone = useCallback((index: number) => {
     setContactData((prev) => {
-      const allPhones = prev.allPhones || [];
-      if (index < 0 || index >= allPhones.length) return prev;
-
-      const currentPrimaryIndex = prev.primaryPhoneIndex ?? 0;
-      // Don't allow deleting primary phone if there are other phones
-      if (index === currentPrimaryIndex && allPhones.length > 1) {
-        return prev;
-      }
-
-      const newPhones = allPhones.filter((_, i) => i !== index);
-
-      // Adjust primary index if needed
-      let newPrimaryIndex = currentPrimaryIndex;
-      if (index < currentPrimaryIndex) {
-        newPrimaryIndex = currentPrimaryIndex - 1;
-      } else if (index === currentPrimaryIndex) {
-        newPrimaryIndex = 0;
-      }
+      const removed = removePhoneFromList(prev.allPhones || [], prev.primaryPhoneIndex ?? 0, index);
 
       return {
         ...prev,
-        allPhones: newPhones,
-        primaryPhoneIndex: newPrimaryIndex,
-        phone: newPhones[newPrimaryIndex]?.phone,
+        allPhones: removed.phones,
+        primaryPhoneIndex: removed.primaryPhoneIndex,
+        phone: removed.phone,
       };
     });
   }, []);

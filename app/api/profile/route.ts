@@ -1,6 +1,7 @@
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { EmailConflictError, getOrCreateUserForClerk } from '@/lib/account/resolve-user';
 import {
   resolveActiveProfileContext,
   resolveActiveProfileContextOrNull,
@@ -8,6 +9,7 @@ import {
 import { syncAvatarToClerk } from '@/lib/clerk-avatar-sync';
 import { db } from '@/lib/db';
 import { handleApiError } from '@/lib/errors';
+import { getVanityUsernameForUser, setExclusiveResumeVisibility } from '@/lib/public-resume';
 import { generateUniqueResumeTitle } from '@/lib/resume-title';
 import { CreateProfileSchema } from '@/lib/validations';
 
@@ -79,59 +81,41 @@ export async function POST(request: NextRequest) {
     const { handle, firstName, middleName, lastName, headline, summary, location } =
       validatedData.data;
 
-    // Check if user exists, create if not (handles first-time profile creation)
-    let user = await db.user.findUnique({
-      where: { clerkId: userId },
-    });
-
-    if (!user) {
-      // Get user details from Clerk and create user in database
-      const clerkUser = await currentUser();
-      // Use primaryEmailAddress to get the user's primary email (first signup email)
-      const primaryEmailAddr = clerkUser?.primaryEmailAddress?.emailAddress;
-      if (!primaryEmailAddr) {
-        return NextResponse.json({ error: 'Unable to get user details' }, { status: 400 });
-      }
-
-      const email = primaryEmailAddr;
-
-      // Check if a user with this email already exists
-      const existingUserByEmail = await db.user.findUnique({
-        where: { email },
+    // Check if user exists, create if not (handles first-time profile creation).
+    // Reclaims orphaned rows when a prior Clerk account for this email was deleted.
+    let user;
+    try {
+      const existing = await db.user.findUnique({
+        where: { clerkId: userId },
       });
 
-      if (existingUserByEmail) {
-        // SECURITY: Do NOT allow a new Clerk user to take over an existing account
-        // This prevents account hijacking when someone connects an OAuth provider
-        // that has the same email as an existing user's account.
-        console.error(
-          '[POST /api/profile] Email conflict detected:',
-          email,
-          'already belongs to user:',
-          existingUserByEmail.id,
-          'but Clerk user:',
-          userId,
-          'is trying to use it'
-        );
+      if (existing) {
+        user = existing;
+      } else {
+        const clerkUser = await currentUser();
+        const primaryEmailAddr = clerkUser?.primaryEmailAddress?.emailAddress;
+        if (!primaryEmailAddr) {
+          return NextResponse.json({ error: 'Unable to get user details' }, { status: 400 });
+        }
+
+        user = await getOrCreateUserForClerk({
+          clerkId: userId,
+          email: primaryEmailAddr,
+        });
+        console.log('[POST /api/profile] Resolved user:', user.email);
+      }
+    } catch (error) {
+      if (error instanceof EmailConflictError) {
         return NextResponse.json(
           {
             error: 'Email already in use',
-            message:
-              'This email is already associated with another account. Please sign in with your original account or use a different email.',
+            message: error.message,
             code: 'EMAIL_CONFLICT',
           },
           { status: 409 }
         );
       }
-
-      // Create new user - email is unique and not used by anyone else
-      user = await db.user.create({
-        data: {
-          clerkId: userId,
-          email,
-        },
-      });
-      console.log('[POST /api/profile] Created new user:', email);
+      throw error;
     }
 
     // Check if user already has a profile
@@ -300,11 +284,20 @@ export async function PATCH(request: NextRequest) {
 
     const shouldSyncAvatarToClerk = body.syncAvatarToClerk !== false;
 
-    // A resume is a PII document and has no openly-public mode. Coerce any
-    // attempt to set the resume to PUBLIC down to UNLISTED so it always stays
-    // behind an unguessable share link (portfolio visibility is unaffected).
-    const safeResumeVisibility =
-      body.resumeVisibility === 'PUBLIC' ? 'UNLISTED' : body.resumeVisibility;
+    // Only one resume may be PUBLIC per user. Setting PUBLIC demotes any
+    // other public resume to UNLISTED.
+    let replacedPublicResume: Awaited<
+      ReturnType<typeof setExclusiveResumeVisibility>
+    >['replacedPublicResume'] = null;
+
+    if (
+      body.resumeVisibility === 'PUBLIC' ||
+      body.resumeVisibility === 'UNLISTED' ||
+      body.resumeVisibility === 'PRIVATE'
+    ) {
+      const result = await setExclusiveResumeVisibility(existingProfile.id, body.resumeVisibility);
+      replacedPublicResume = result.replacedPublicResume;
+    }
 
     // Update profile
     const profile = await db.profile.update({
@@ -319,7 +312,6 @@ export async function PATCH(request: NextRequest) {
         location: body.location,
         avatarUrl: body.avatarUrl,
         status: body.status,
-        ...(safeResumeVisibility && { resumeVisibility: safeResumeVisibility }),
         ...(body.portfolioVisibility && { portfolioVisibility: body.portfolioVisibility }),
         ...(body.linksVisibility && { linksVisibility: body.linksVisibility }),
         ...(typeof body.resumeShowPhoto === 'boolean' && { resumeShowPhoto: body.resumeShowPhoto }),
@@ -345,7 +337,14 @@ export async function PATCH(request: NextRequest) {
       });
     }
 
-    return NextResponse.json({ success: true, profile });
+    const vanityUsername = await getVanityUsernameForUser(context.userId);
+
+    return NextResponse.json({
+      success: true,
+      profile,
+      vanityUsername,
+      replacedPublicResume,
+    });
   } catch (error) {
     console.error('Error updating profile:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

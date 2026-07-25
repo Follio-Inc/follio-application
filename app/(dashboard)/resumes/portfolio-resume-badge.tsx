@@ -1,9 +1,13 @@
 import { isPortfolioEnabled } from '@/lib/features';
 import { cn } from '@/lib/utils';
 
-/** Compact marker for the primary resume (portfolio when that product is enabled). */
+/**
+ * Compact marker for the portfolio-backing resume.
+ * Only shown when portfolio is enabled — never surfaces a "Primary" label
+ * in resume-only mode (use {@link PublicResumeBadge} for public resumes).
+ */
 export function PortfolioResumeBadge({ className }: { className?: string }) {
-  const label = isPortfolioEnabled() ? 'Portfolio' : 'Primary';
+  if (!isPortfolioEnabled()) return null;
 
   return (
     <span
@@ -15,7 +19,7 @@ export function PortfolioResumeBadge({ className }: { className?: string }) {
       )}
     >
       <span className="size-1 shrink-0 rounded-full bg-primary-foreground/80" aria-hidden />
-      {label}
+      Portfolio
     </span>
   );
 }
