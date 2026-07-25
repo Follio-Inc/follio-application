@@ -19,7 +19,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowLeft, ChevronDown, Eye, EyeOff, GripVertical, Plus } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Eye, EyeOff, GripVertical, Plus, Trash2 } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 import {
@@ -35,6 +35,7 @@ import {
 import { notifyProfileUpdated } from '@/lib/events';
 import { useReorderPersist } from '@/lib/hooks/use-reorder-persist';
 import { useSectionReorderPersist } from '@/lib/hooks/use-section-reorder-persist';
+import { type EntryEditGuard, type RegisterEntryEditGuard } from '../lib/entry-edit-guard';
 import {
   hasContactDraftChanges,
   hasProfileChanges,
@@ -53,6 +54,7 @@ import { CustomSection } from '../[section]/custom-section';
 import { InterestsSection } from '../[section]/interests-section';
 import { LanguagesSection } from '../[section]/languages-section';
 import { PublicationsSection } from '../[section]/publications-section';
+import { ReferencesSection } from '../[section]/references-section';
 import { VolunteeringSection } from '../[section]/volunteering-section';
 import { BasicInfoForm } from '../sections/basic-info-form';
 import { ContactDetailsSection } from '../sections/contact-details-section';
@@ -98,6 +100,7 @@ const SECTION_TITLES: Record<string, string> = {
   VOLUNTEERING: 'Volunteering',
   LANGUAGES: 'Languages',
   INTERESTS: 'Interests',
+  REFERENCES: 'References',
   CUSTOM: 'Custom Section',
 };
 
@@ -299,11 +302,19 @@ function SortableEntryCard({
 // Component
 // ──────────────────────────────────────────────
 
+type PendingEntryDelete = {
+  sectionType: string;
+  entryId: string;
+  title: string;
+};
+
 export function AllSectionsEditor() {
   // ── Local state ──
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const [editingEntry, setEditingEntry] = useState<EditingEntry | null>(null);
   const [showDiscardWarning, setShowDiscardWarning] = useState(false);
+  const [pendingEntryDelete, setPendingEntryDelete] = useState<PendingEntryDelete | null>(null);
+  const [isDeletingEntry, setIsDeletingEntry] = useState(false);
 
   // ── Store state ──
   const draftProfile = useBuilderStore((s) => s.draftProfile);
@@ -529,6 +540,22 @@ export function AllSectionsEditor() {
     setEditingEntry(null);
   }, []);
 
+  /** Focused entry editor registers dirty-state here so Back can gate navigation. */
+  const entryEditGuardRef = useRef<EntryEditGuard | null>(null);
+
+  const registerEntryEditGuard = useCallback<RegisterEntryEditGuard>((guard) => {
+    entryEditGuardRef.current = guard;
+  }, []);
+
+  const handleBackFromEntry = useCallback(() => {
+    const guard = entryEditGuardRef.current;
+    if (guard?.hasUnsavedChanges()) {
+      guard.requestAttention();
+      return;
+    }
+    handleEditComplete();
+  }, [handleEditComplete]);
+
   // ── Entry visibility toggle ──
   const entryVisibilityAbortRef = useRef<AbortController | null>(null);
 
@@ -579,6 +606,57 @@ export function AllSectionsEditor() {
     },
     [draftProfile, commitInlineChange]
   );
+
+  const requestEntryDelete = useCallback(
+    (e: React.MouseEvent, sectionType: string, entry: EntryInfo) => {
+      e.stopPropagation();
+      setPendingEntryDelete({
+        sectionType,
+        entryId: entry.id,
+        title: entry.title,
+      });
+    },
+    []
+  );
+
+  const handleConfirmEntryDelete = useCallback(async () => {
+    if (!pendingEntryDelete) return;
+
+    const { sectionType, entryId } = pendingEntryDelete;
+    const storeKey = ENTRY_STORE_KEY[sectionType];
+    const apiPath = ENTRY_API_PATH[sectionType];
+    if (!storeKey || !apiPath) {
+      setPendingEntryDelete(null);
+      return;
+    }
+
+    const items = (draftProfile[storeKey] as Array<{ id: string }>) || [];
+    const previousItems = items;
+    const updatedItems = items.filter((item) => item.id !== entryId);
+
+    setIsDeletingEntry(true);
+    commitInlineChange({ [storeKey]: updatedItems });
+
+    try {
+      const response = await fetch(`${apiPath}/${entryId}`, { method: 'DELETE' });
+      if (!response.ok) {
+        console.error('Failed to delete entry:', await response.text());
+        commitInlineChange({ [storeKey]: previousItems });
+        return;
+      }
+
+      if (editingEntry?.sectionType === sectionType && editingEntry.entryId === entryId) {
+        setEditingEntry(null);
+      }
+      notifyProfileUpdated();
+      setPendingEntryDelete(null);
+    } catch (err) {
+      console.error('Failed to delete entry:', err);
+      commitInlineChange({ [storeKey]: previousItems });
+    } finally {
+      setIsDeletingEntry(false);
+    }
+  }, [pendingEntryDelete, draftProfile, commitInlineChange, editingEntry]);
 
   // ── Entry drag-end handler (generic for any entry section) ──
   const handleEntryDragEnd = useCallback(
@@ -725,6 +803,19 @@ export function AllSectionsEditor() {
                         </span>
                         <button
                           type="button"
+                          onClick={(e) => requestEntryDelete(e, section.type, entry)}
+                          className={cn(
+                            'flex h-6 w-6 shrink-0 items-center justify-center rounded transition-colors',
+                            'opacity-0 focus-visible:opacity-100 group-hover/entry:opacity-100',
+                            'text-muted-foreground/40 hover:text-destructive'
+                          )}
+                          title={`Delete ${singularName.toLowerCase()}`}
+                          aria-label={`Delete ${entry.title}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
                           onClick={() =>
                             setEditingEntry({
                               sectionType: section.type,
@@ -761,7 +852,7 @@ export function AllSectionsEditor() {
         </div>
       );
     },
-    [getEntries, sectionSensors, handleEntryDragEnd, toggleEntryVisibility]
+    [getEntries, sectionSensors, handleEntryDragEnd, toggleEntryVisibility, requestEntryDelete]
   );
 
   /** Render a section editor with autoEditId for focused entry editing */
@@ -777,6 +868,7 @@ export function AllSectionsEditor() {
               onEditingStateChange={handleInlineEditingChange}
               autoEditId={entryId}
               onEditComplete={handleEditComplete}
+              onRegisterEditGuard={registerEntryEditGuard}
             />
           );
         case 'EDUCATION':
@@ -787,6 +879,7 @@ export function AllSectionsEditor() {
               onUpdate={(educations) => handleInlineUpdate({ educations })}
               autoEditId={entryId}
               onEditComplete={handleEditComplete}
+              onRegisterEditGuard={registerEntryEditGuard}
             />
           );
         case 'PROJECTS':
@@ -797,6 +890,7 @@ export function AllSectionsEditor() {
               onUpdate={(projects) => handleInlineUpdate({ projects })}
               autoEditId={entryId}
               onEditComplete={handleEditComplete}
+              onRegisterEditGuard={registerEntryEditGuard}
             />
           );
         case 'AWARDS':
@@ -807,6 +901,7 @@ export function AllSectionsEditor() {
               onUpdate={(awards: AwardType[]) => handleInlineUpdate({ awards })}
               autoEditId={entryId}
               onEditComplete={handleEditComplete}
+              onRegisterEditGuard={registerEntryEditGuard}
             />
           );
         case 'CERTIFICATIONS':
@@ -817,13 +912,20 @@ export function AllSectionsEditor() {
               onUpdate={(certifications: Certification[]) => handleInlineUpdate({ certifications })}
               autoEditId={entryId}
               onEditComplete={handleEditComplete}
+              onRegisterEditGuard={registerEntryEditGuard}
             />
           );
         default:
           return null;
       }
     },
-    [draftProfile, handleInlineUpdate, handleInlineEditingChange, handleEditComplete]
+    [
+      draftProfile,
+      handleInlineUpdate,
+      handleInlineEditingChange,
+      handleEditComplete,
+      registerEntryEditGuard,
+    ]
   );
 
   // ── Render a single section editor by type (for non-entry sections) ──
@@ -930,6 +1032,9 @@ export function AllSectionsEditor() {
 
       case 'INTERESTS':
         return <InterestsSection section={section} profileId={draftProfile.id} embedded />;
+
+      case 'REFERENCES':
+        return <ReferencesSection section={section} profileId={draftProfile.id} embedded />;
 
       case 'CUSTOM':
         return <CustomSection section={section} profileId={draftProfile.id} embedded />;
@@ -1067,7 +1172,7 @@ export function AllSectionsEditor() {
       <div>
         <button
           type="button"
-          onClick={handleEditComplete}
+          onClick={handleBackFromEntry}
           className="-ml-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium text-muted-foreground transition-colors duration-150 hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4 shrink-0" />
@@ -1216,37 +1321,39 @@ export function AllSectionsEditor() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      {/* Section jump nav — quick scroll to any section on long resumes */}
-      {orderedSections.length > 3 && (
-        <nav
-          aria-label="Jump to section"
-          className="scrollbar-thin -mx-1 mb-4 flex gap-1.5 overflow-x-auto pb-1"
-        >
-          {orderedSections.map((section) => {
-            const navTitle =
-              section.type === 'CUSTOM'
-                ? section.title || section.customName || 'Custom'
-                : SECTION_TITLES[section.type] || section.title;
-            const isActive = expandedSection === section.id;
-
-            return (
-              <button
-                key={section.id}
-                type="button"
-                onClick={() => jumpToSection(section.id)}
-                className={cn(
-                  'shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-                  isActive
-                    ? 'border-primary/40 bg-primary/10 text-primary'
-                    : 'border-border/60 bg-background text-muted-foreground hover:border-border hover:text-foreground'
-                )}
-              >
-                {navTitle}
-              </button>
-            );
-          })}
-        </nav>
-      )}
+      <AlertDialog
+        open={!!pendingEntryDelete}
+        onOpenChange={(open) => {
+          if (!open && !isDeletingEntry) setPendingEntryDelete(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Delete{' '}
+              {(pendingEntryDelete && ENTRY_SINGULAR[pendingEntryDelete.sectionType]) || 'item'}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingEntryDelete
+                ? `"${pendingEntryDelete.title}" will be removed from your resume. This can't be undone.`
+                : "This item will be removed from your resume. This can't be undone."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingEntry}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                void handleConfirmEntryDelete();
+              }}
+              disabled={isDeletingEntry}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeletingEntry ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <div className="space-y-3 pl-5">
         {/* Pinned sections (BASIC_INFO) — always at top, not draggable */}
         {pinnedSections.map((section) => renderSectionCard(section))}

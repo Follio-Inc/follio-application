@@ -18,13 +18,17 @@ import {
 import { logger } from '@/lib/logger';
 import { cleanPhoneDisplay } from '@/lib/phone';
 import { formatAtelierYearRange } from '@/lib/resume/atelier';
+import { isPhotoBeforeText, resolveHeaderComposition } from '@/lib/resume/header-layout';
 import { resolveResumeColorTheme } from '@/lib/resume-color-theme';
 import {
   buildResumeDesignStyleAttr,
+  mergeResumeDesign,
   parseResumeDesign,
   resolveResumeFonts,
 } from '@/lib/resume-design';
 import { getResumeTemplateId, isResumeAtelierRailSectionType } from '@/lib/resume/templates';
+import { getResumePageSize } from '@/lib/resume/page-layout';
+import { resolveSkillCategoryLabel, skillGroupsHaveCategoryLabels } from '@/lib/skills/groups';
 import { formatDate } from '@/lib/utils';
 import type {
   CustomSectionContent,
@@ -33,12 +37,23 @@ import type {
   InterestItem,
   JSONResume,
   LanguageItem,
+  PdfLayout,
   ProfileSection,
   PublicationItem,
+  ReferenceItem,
   ResumeFontFamily,
   VolunteeringItem,
 } from '@/types';
 import { HEADER_SECTION_TYPES } from '@/types';
+
+export type { PdfLayout };
+
+/** Normalize legacy `paged` query values to Letter. */
+function normalizePdfLayout(layout: string | undefined): PdfLayout {
+  if (layout === 'continuous' || layout === 'a4' || layout === 'letter') return layout;
+  if (layout === 'paged') return 'letter';
+  return 'letter';
+}
 
 const serviceLogger = logger.child({ source: 'export-service' });
 
@@ -379,15 +394,38 @@ export function toPlainText(profile: FullProfile): string {
           }
           break;
 
-        case 'SKILLS':
-          if (visibleSkills.length > 0) {
+        case 'SKILLS': {
+          const visibleSkillGroups = profile.skillGroups
+            .map((g) => ({
+              ...g,
+              skills: g.skills.filter((s) => s.isVisible !== false),
+            }))
+            .filter((g) => g.skills.length > 0 || !isHtmlEmpty(g.skillsHtml));
+          const groupNames = visibleSkillGroups.map((g) => g.name);
+          const hasLabels = skillGroupsHaveCategoryLabels(visibleSkillGroups);
+
+          if (visibleSkillGroups.length > 0) {
             lines.push('SKILLS');
             lines.push('-'.repeat(50));
-            const skillNames = visibleSkills.map((s) => s.name);
-            lines.push(skillNames.join(', '));
+            for (const group of visibleSkillGroups) {
+              const label = resolveSkillCategoryLabel(group.name, groupNames);
+              const fromHtml =
+                group.skillsHtml && !isHtmlEmpty(group.skillsHtml)
+                  ? stripHtmlTags(group.skillsHtml).replace(/\n+/g, ', ')
+                  : '';
+              const items = fromHtml || group.skills.map((s) => s.name).join(', ');
+              if (!items.trim()) continue;
+              lines.push(label ? `${label}: ${items}` : items);
+            }
+            lines.push('');
+          } else if (visibleSkills.length > 0) {
+            lines.push('SKILLS');
+            lines.push('-'.repeat(50));
+            lines.push(visibleSkills.map((s) => s.name).join(', '));
             lines.push('');
           }
           break;
+        }
 
         case 'PROJECTS':
           if (visibleProjects.length > 0) {
@@ -695,29 +733,25 @@ function skillsSectionHtml(profile: FullProfile, options: { stacked?: boolean } 
   const { stacked = false } = options;
   const visibleSkillGroups = profile.skillGroups
     .map((g) => ({ ...g, skills: g.skills.filter((s) => s.isVisible !== false) }))
-    .filter((g) => g.skills.length > 0);
+    .filter((g) => g.skills.length > 0 || !isHtmlEmpty(g.skillsHtml));
   const visibleSkills = profile.skills.filter((s) => s.isVisible !== false);
-  const flatSkills =
-    visibleSkillGroups.length > 0 ? visibleSkillGroups.flatMap((g) => g.skills) : visibleSkills;
+  const groupNames = visibleSkillGroups.map((g) => g.name);
+  const hasCategoryLabels = skillGroupsHaveCategoryLabels(visibleSkillGroups);
+  const hasRichHtml = visibleSkillGroups.some((g) => g.skillsHtml && !isHtmlEmpty(g.skillsHtml));
 
-  if (stacked) {
-    const names = flatSkills.map((s) => s.name);
-    if (names.length === 0) return '';
-    return `
-  <section class="resume-section">
-    ${sectionDividerHtml('SKILLS')}
-    <ul class="resume-skills-stack">${names
-      .map((name) => `<li class="resume-skills-stack-item">${escapeHtml(name)}</li>`)
-      .join('')}</ul>
-  </section>`;
-  }
-
-  if (visibleSkillGroups.length > 0) {
+  if (visibleSkillGroups.length > 0 && (hasCategoryLabels || hasRichHtml)) {
     const groups = visibleSkillGroups
-      .map(
-        (g) =>
-          `<div class="resume-skill-group"><span class="resume-skill-group-name">${escapeHtml(g.name)}:</span> <span class="resume-skill-group-items">${g.skills.map((s) => escapeHtml(s.name)).join(', ')}</span></div>`
-      )
+      .map((g) => {
+        const label = resolveSkillCategoryLabel(g.name, groupNames);
+        const labelHtml = label
+          ? `<span class="resume-skill-group-name">${escapeHtml(label)}: </span>`
+          : '';
+        if (g.skillsHtml && !isHtmlEmpty(g.skillsHtml)) {
+          return `<div class="resume-skill-group">${labelHtml}<div class="resume-skill-group-items resume-rich-html resume-skill-group-rich">${sanitizeRichHtml(g.skillsHtml)}</div></div>`;
+        }
+        const items = g.skills.map((s) => escapeHtml(s.name)).join(', ');
+        return `<div class="resume-skill-group">${labelHtml}<span class="resume-skill-group-items">${items}</span></div>`;
+      })
       .join('');
     return `
   <section class="resume-section">
@@ -726,11 +760,27 @@ function skillsSectionHtml(profile: FullProfile, options: { stacked?: boolean } 
   </section>`;
   }
 
-  if (visibleSkills.length === 0) return '';
+  const flatNames =
+    visibleSkillGroups.length > 0
+      ? visibleSkillGroups.flatMap((g) => g.skills.map((s) => s.name))
+      : visibleSkills.map((s) => s.name);
+
+  if (flatNames.length === 0) return '';
+
+  if (stacked) {
+    return `
+  <section class="resume-section">
+    ${sectionDividerHtml('SKILLS')}
+    <ul class="resume-skills-stack">${flatNames
+      .map((name) => `<li class="resume-skills-stack-item">${escapeHtml(name)}</li>`)
+      .join('')}</ul>
+  </section>`;
+  }
+
   return `
   <section class="resume-section">
     ${sectionDividerHtml('SKILLS')}
-    <p class="resume-skills-flat">${visibleSkills.map((s) => escapeHtml(s.name)).join(', ')}</p>
+    <p class="resume-skills-flat">${flatNames.map((name) => escapeHtml(name)).join(', ')}</p>
   </section>`;
 }
 
@@ -918,6 +968,37 @@ function interestsSectionHtml(items: InterestItem[]): string {
   </section>`;
 }
 
+function referencesSectionHtml(items: ReferenceItem[]): string {
+  if (!items || items.length === 0) return '';
+
+  const entries = items
+    .filter((r) => r.isVisible !== false)
+    .map((ref) => {
+      const roleLine = [ref.title, ref.company].filter(Boolean).join(', ');
+      const contactLine = [ref.email, ref.phone].filter(Boolean).join(' · ');
+      return `
+      <div class="resume-reference">
+        <p class="resume-reference-name">${escapeHtml(ref.name)}</p>
+        ${roleLine ? `<p class="resume-reference-role">${escapeHtml(roleLine)}</p>` : ''}
+        ${
+          ref.relationship
+            ? `<p class="resume-reference-relationship">${escapeHtml(ref.relationship)}</p>`
+            : ''
+        }
+        ${contactLine ? `<p class="resume-reference-contact">${escapeHtml(contactLine)}</p>` : ''}
+      </div>`;
+    })
+    .join('');
+
+  if (!entries) return '';
+
+  return `
+  <section class="resume-section">
+    ${sectionDividerHtml('REFERENCES')}
+    <div class="resume-entries resume-entries-compact">${entries}</div>
+  </section>`;
+}
+
 function customSectionHtml(section: ProfileSection): string {
   const content = section.customContent as CustomSectionContent | null;
   const items = content?.items || [];
@@ -999,6 +1080,8 @@ function renderSectionHtml(
       return languagesSectionHtml(getCustomContentItems<LanguageItem>(section));
     case 'INTERESTS':
       return interestsSectionHtml(getCustomContentItems<InterestItem>(section));
+    case 'REFERENCES':
+      return referencesSectionHtml(getCustomContentItems<ReferenceItem>(section));
     case 'CUSTOM':
       return customSectionHtml(section);
     default:
@@ -1033,6 +1116,53 @@ const RESUME_CSS = `
     text-align: var(--rd-header-alignment, center);
     margin-bottom: var(--rd-header-margin-bottom, 24px);
   }
+  .resume-header-identity {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    min-width: 0;
+    width: 100%;
+  }
+  .resume-header[data-header-composition='photo-left'] {
+    text-align: left;
+  }
+  .resume-header[data-header-composition='photo-left'] .resume-header-identity {
+    flex-direction: row;
+  }
+  .resume-header[data-header-composition='photo-left'] .resume-header-text {
+    flex: 1;
+    min-width: 0;
+    text-align: left;
+  }
+  .resume-header[data-header-composition='photo-right'] {
+    text-align: left;
+  }
+  .resume-header[data-header-composition='photo-right'] .resume-header-identity {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+  .resume-header[data-header-composition='photo-right'] .resume-header-text {
+    flex: 1;
+    min-width: 0;
+    text-align: left;
+  }
+  .resume-header[data-header-composition='photo-above'] {
+    text-align: center;
+  }
+  .resume-header[data-header-composition='photo-above'] .resume-header-identity {
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  .resume-header[data-header-composition='photo-above-left'] {
+    text-align: left;
+  }
+  .resume-header[data-header-composition='photo-above-left'] .resume-header-identity {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
   .resume-name {
     font-family: var(--rd-font-name, inherit);
     font-size: var(--rd-name-font-size, 28px);
@@ -1063,8 +1193,8 @@ const RESUME_CSS = `
   }
   .resume-contact-separator { color: #999; }
   .resume-header-photo {
-    width: 80px;
-    height: 80px;
+    width: var(--rd-photo-size, 80px);
+    height: var(--rd-photo-size, 80px);
     border-radius: 50%;
     object-fit: cover;
     flex-shrink: 0;
@@ -1180,12 +1310,19 @@ const RESUME_CSS = `
   .resume-rich-html em { font-style: italic; }
   .resume-rich-html u { text-decoration: underline; }
 
-  /* Skills */
+  /* Skills — justified by default; category lines wrap flush left */
   .resume-skills-grouped { display: flex; flex-direction: column; gap: 4px; }
-  .resume-skill-group { font-size: 13px; }
+  .resume-skill-group { font-size: 13px; margin: 0; text-align: justify; line-height: 1.45; }
   .resume-skill-group-name { font-weight: 600; }
-  .resume-skill-group-items { color: #555; }
-  .resume-skills-flat { font-size: 13px; margin: 0; }
+  .resume-skill-group-items { color: inherit; }
+  .resume-skill-group-rich { display: inline; }
+  .resume-skill-group-rich > p { display: inline; margin: 0; }
+  .resume-skill-group-rich > p + p { display: block; margin-top: 0.15em; }
+  .resume-skill-group-rich > ul,
+  .resume-skill-group-rich > ol { display: block; margin: 4px 0 0 0; padding-left: 18px; }
+  .resume-skill-group-rich > ul li,
+  .resume-skill-group-rich > ol li { margin-bottom: 2px; }
+  .resume-skills-flat { font-size: 13px; margin: 0; text-align: justify; line-height: 1.45; }
 
   /* Inline entries (certs, awards) */
   .resume-entry-inline { font-size: 13px; margin-bottom: 4px; }
@@ -1203,6 +1340,13 @@ const RESUME_CSS = `
 
   /* Languages & Interests */
   .resume-languages, .resume-interests { font-size: 13px; margin: 0; }
+
+  /* References */
+  .resume-reference { margin-bottom: 10px; }
+  .resume-reference-name { font-weight: 600; margin: 0; }
+  .resume-reference-role, .resume-reference-relationship, .resume-reference-contact {
+    font-size: 12px; margin: 2px 0 0; color: #555;
+  }
 
   /* Freeform */
   .resume-freeform { font-size: 13px; white-space: pre-wrap; margin: 0; }
@@ -1240,7 +1384,7 @@ const RESUME_CSS = `
     color: var(--rd-accent-color-dark, #888);
     opacity: 0.6;
   }
-  [data-resume-theme='dark'] .resume-skill-group-items { color: #a0a0a0; }
+  [data-resume-theme='dark'] .resume-skill-group-items { color: inherit; }
   [data-resume-theme='dark'] .resume-entry-inline-issuer { color: #a0a0a0; }
   [data-resume-theme='dark'] .resume-entry-inline-date { color: #888; }
   [data-resume-theme='dark'] .resume-entry-inline-description { color: #888; }
@@ -1315,7 +1459,7 @@ const RESUME_CSS = `
   }
   .resume-sleek-identity { display: flex; align-items: center; gap: 16px; min-width: 0; }
   .resume-sleek-photo {
-    width: 64px; height: 64px; border-radius: 50%;
+    width: var(--rd-photo-size, 64px); height: var(--rd-photo-size, 64px); border-radius: 50%;
     object-fit: cover; flex-shrink: 0;
   }
   .resume-paper--sleek .resume-name {
@@ -1391,7 +1535,7 @@ const RESUME_CSS = `
     width: 14px; background: var(--rd-accent-color, #7a9aa5);
   }
   .resume-studio-photo {
-    width: 64px; height: 64px; border-radius: 4px;
+    width: var(--rd-photo-size, 64px); height: var(--rd-photo-size, 64px); border-radius: 4px;
     object-fit: cover; flex-shrink: 0;
   }
   .resume-studio-identity-text { min-width: 0; }
@@ -1638,7 +1782,9 @@ export function toPDFHtml(profile: FullProfile): string {
     })();
 
     // ── Header HTML ────────────────────────────────────────
-    const showPhoto = profile.resumeShowPhoto && profile.avatarUrl;
+    const showPhoto = Boolean(profile.resumeShowPhoto && profile.avatarUrl);
+    const mergedDesign = mergeResumeDesign(parsedDesign);
+    const headerComposition = resolveHeaderComposition(showPhoto, mergedDesign.headerPhotoLayout);
     const contactLineHtml =
       contactItems.length > 0
         ? `<p class="resume-contact-line">${contactItems
@@ -1649,23 +1795,33 @@ export function toPDFHtml(profile: FullProfile): string {
             .join('')}</p>`
         : '';
 
+    const identityTextHtml = `
+          <div class="resume-header-text min-w-0">
+            <h1 class="resume-name">${escapeHtml(fullName)}</h1>
+            ${profile.headline ? `<p class="resume-headline">${escapeHtml(profile.headline)}</p>` : ''}
+            ${contactLineHtml}
+          </div>`;
+    const photoHtml = showPhoto
+      ? `<img src="${safeUrl(profile.avatarUrl)}" alt="${escapeHtml(fullName)}" class="resume-header-photo" />`
+      : '';
+
     let headerHtml: string;
-    if (showPhoto) {
+    if (headerComposition === 'text') {
       headerHtml = `
-      <header class="resume-header" style="display:flex;align-items:flex-start;gap:16px;">
-        <img src="${safeUrl(profile.avatarUrl)}" alt="${escapeHtml(fullName)}" class="resume-header-photo" />
-        <div style="min-width:0;flex:1;">
-          <h1 class="resume-name">${escapeHtml(fullName)}</h1>
-          ${profile.headline ? `<p class="resume-headline">${escapeHtml(profile.headline)}</p>` : ''}
-          ${contactLineHtml}
-        </div>
-      </header>`;
-    } else {
-      headerHtml = `
-      <header class="resume-header">
+      <header class="resume-header" data-header-composition="text">
         <h1 class="resume-name">${escapeHtml(fullName)}</h1>
         ${profile.headline ? `<p class="resume-headline">${escapeHtml(profile.headline)}</p>` : ''}
         ${contactLineHtml}
+      </header>`;
+    } else {
+      const identityInner = isPhotoBeforeText(headerComposition)
+        ? `${photoHtml}${identityTextHtml}`
+        : `${identityTextHtml}${photoHtml}`;
+      headerHtml = `
+      <header class="resume-header" data-header-composition="${headerComposition}">
+        <div class="resume-header-identity">
+          ${identityInner}
+        </div>
       </header>`;
     }
 
@@ -1781,7 +1937,7 @@ export function toPDFHtml(profile: FullProfile): string {
         if (!seenFields.has(id)) orderedValues.push(value);
       }
 
-      const photoHtml = showPhoto
+      const studioPhotoHtml = showPhoto
         ? `<img src="${safeUrl(profile.avatarUrl)}" alt="${escapeHtml(fullName)}" class="resume-studio-photo" />`
         : '';
       const contactListHtml =
@@ -1790,15 +1946,22 @@ export function toPDFHtml(profile: FullProfile): string {
               .map((value) => `<li class="resume-studio-contact-item">${escapeHtml(value)}</li>`)
               .join('')}</ul>`
           : '';
-
-      articleInnerHtml = `
-      <header class="resume-header resume-studio-header">
-        <div class="resume-studio-identity">
-          ${photoHtml}
-          <div class="resume-studio-identity-text">
+      const studioTextHtml = `
+          <div class="resume-studio-identity-text resume-header-text">
             <h1 class="resume-name">${escapeHtml(fullName)}</h1>
             ${profile.headline ? `<p class="resume-headline">${escapeHtml(profile.headline)}</p>` : ''}
-          </div>
+          </div>`;
+      const studioIdentityInner =
+        !showPhoto || headerComposition === 'text'
+          ? studioTextHtml
+          : isPhotoBeforeText(headerComposition)
+            ? `${studioPhotoHtml}${studioTextHtml}`
+            : `${studioTextHtml}${studioPhotoHtml}`;
+
+      articleInnerHtml = `
+      <header class="resume-header resume-studio-header" data-header-composition="${headerComposition}">
+        <div class="resume-studio-identity resume-header-identity">
+          ${studioIdentityInner}
         </div>
         ${contactListHtml}
       </header>
@@ -1809,7 +1972,7 @@ export function toPDFHtml(profile: FullProfile): string {
         .join('\n');
 
       if (isSleek) {
-        const photoHtml = showPhoto
+        const sleekPhotoHtml = showPhoto
           ? `<img src="${safeUrl(profile.avatarUrl)}" alt="${escapeHtml(fullName)}" class="resume-sleek-photo" />`
           : '';
         const contactListHtml =
@@ -1818,14 +1981,21 @@ export function toPDFHtml(profile: FullProfile): string {
                 .map((item) => `<li class="resume-sleek-contact-item">${escapeHtml(item)}</li>`)
                 .join('')}</ul>`
             : '';
-        const sleekHeaderHtml = `
-      <header class="resume-header resume-sleek-header">
-        <div class="resume-sleek-identity">
-          ${photoHtml}
-          <div style="min-width:0;">
+        const sleekTextHtml = `
+          <div class="resume-header-text" style="min-width:0;">
             <h1 class="resume-name">${escapeHtml(fullName)}</h1>
             ${profile.headline ? `<p class="resume-headline">${escapeHtml(profile.headline)}</p>` : ''}
-          </div>
+          </div>`;
+        const sleekIdentityInner =
+          !showPhoto || headerComposition === 'text'
+            ? sleekTextHtml
+            : isPhotoBeforeText(headerComposition)
+              ? `${sleekPhotoHtml}${sleekTextHtml}`
+              : `${sleekTextHtml}${sleekPhotoHtml}`;
+        const sleekHeaderHtml = `
+      <header class="resume-header resume-sleek-header" data-header-composition="${headerComposition}">
+        <div class="resume-sleek-identity resume-header-identity">
+          ${sleekIdentityInner}
         </div>
         ${contactListHtml}
       </header>`;
@@ -1871,14 +2041,13 @@ export function toPDFHtml(profile: FullProfile): string {
 // ═══════════════════════════════════════════════════════════════════
 
 /**
- * PDF layout mode.
- * - `'paged'`      – Standard Letter pages with automatic page breaks.
- * - `'continuous'`  – Single long page trimmed to content height.
+ * PDF options.
+ * - `'continuous'` — single long page trimmed to content height
+ * - `'a4'`         — ISO A4 pages with page breaks
+ * - `'letter'`     — US Letter pages with page breaks
  */
-export type PdfLayout = 'paged' | 'continuous';
-
 interface PdfOptions {
-  /** @default 'paged' */
+  /** @default 'letter' */
   layout?: PdfLayout;
 }
 
@@ -1970,14 +2139,21 @@ async function launchBrowser(): Promise<Browser> {
  * The HTML (from `toPDFHtml`) is rendered in headless Chrome via
  * Puppeteer and converted to PDF with the chosen layout mode:
  *
- *  - `'paged'` (default) — standard Letter-size pages with page breaks.
- *  - `'continuous'`       — single page trimmed to the actual content height.
+ *  - `'letter'` (default) — US Letter pages with page breaks
+ *  - `'a4'`               — ISO A4 pages with page breaks
+ *  - `'continuous'`       — single page trimmed to content height
  */
 export async function generateResumePDF(
   profile: FullProfile,
-  { layout = 'paged' }: PdfOptions = {}
+  { layout: rawLayout = 'letter' }: PdfOptions = {}
 ): Promise<Buffer> {
-  const html = toPDFHtml(profile);
+  const layout = normalizePdfLayout(rawLayout);
+  const pageSize = getResumePageSize(layout);
+  const paperWidthOverride =
+    layout === 'a4'
+      ? `<style>.resume-paper{max-width:${pageSize.widthPx}px;width:${pageSize.widthPx}px;}</style>`
+      : '';
+  const html = toPDFHtml(profile).replace('</head>', `${paperWidthOverride}</head>`);
 
   const browser = await launchBrowser();
 
@@ -1998,18 +2174,18 @@ export async function generateResumePDF(
         return paper ? paper.scrollHeight : document.body.scrollHeight;
       });
 
-      // Width = 816px (8.5″ at 96 dpi). Height = content + breathing room.
+      // Width = Letter (8.5″ at 96 dpi). Height = content + breathing room.
       pdfBuffer = await page.pdf({
-        width: '816px',
+        width: `${pageSize.widthPx}px`,
         height: `${contentHeight + 20}px`,
         printBackground: true,
         margin: { top: '0px', right: '0px', bottom: '0px', left: '0px' },
       });
     } else {
-      // Standard Letter pages. Margins are applied by the PDF renderer;
+      // A4 or Letter pages. Margins are applied by the PDF renderer;
       // the .resume-paper element's own padding handles the inner spacing.
       pdfBuffer = await page.pdf({
-        format: 'Letter',
+        format: pageSize.pdfFormat,
         printBackground: true,
         margin: { top: '0px', right: '0px', bottom: '0px', left: '0px' },
       });

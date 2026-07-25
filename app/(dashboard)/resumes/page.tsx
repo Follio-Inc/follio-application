@@ -1,7 +1,10 @@
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 
+import { resolveActiveProfileContextOrNull } from '@/lib/active-profile';
 import { db } from '@/lib/db';
+import { resolveResumePageLayout } from '@/lib/resume/page-layout';
+import type { ResumeDesign } from '@/types';
 
 import { ResumeDashboardClient, type ResumeItem } from './resumes-client';
 
@@ -17,8 +20,14 @@ export default async function ResumesPage() {
     redirect('/sign-in');
   }
 
+  // Match /dashboard: a User row without a Profile is still incomplete.
+  const context = await resolveActiveProfileContextOrNull(clerkId);
+  if (!context) {
+    redirect('/onboarding');
+  }
+
   const user = await db.user.findUnique({
-    where: { clerkId },
+    where: { id: context.userId },
     select: {
       id: true,
       profile: { select: { id: true } },
@@ -48,6 +57,7 @@ export default async function ResumesPage() {
       headline: true,
       updatedAt: true,
       createdAt: true,
+      resumeDesign: true,
     },
   });
 
@@ -64,6 +74,7 @@ export default async function ResumesPage() {
     headline: r.headline,
     updatedAt: r.updatedAt.toISOString(),
     createdAt: r.createdAt.toISOString(),
+    pageLayout: resolveResumePageLayout((r.resumeDesign as ResumeDesign | null) ?? null),
   }));
 
   const activeProfileId = user.profile?.id ?? null;

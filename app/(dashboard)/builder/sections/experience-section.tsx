@@ -1,10 +1,9 @@
 'use client';
 
 import { AnimatePresence, motion } from 'framer-motion';
-import { Briefcase, ChevronDown, Eye, EyeOff, Loader2, Plus, Trash2, X } from 'lucide-react';
+import { Briefcase, ChevronDown, Eye, EyeOff, Plus, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -23,7 +22,9 @@ import { useReorderPersist } from '@/lib/hooks/use-reorder-persist';
 import { bulletsToHtml, htmlToBullets } from '@/lib/html-utils';
 import { cn, parseMonthInput, toMonthInputValue } from '@/lib/utils';
 
+import { EntryInlineForm } from '../components/entry-inline-form';
 import { SortableCardList } from '../components/sortable-card-list';
+import { useEntryFormDirty, type RegisterEntryEditGuard } from '../lib/entry-edit-guard';
 
 import type { WorkExperience } from '@/types';
 import type { DateExtractor } from '../components/sortable-card-list';
@@ -43,6 +44,8 @@ interface ExperienceSectionProps {
   autoEditId?: string | 'new';
   /** Called after save/cancel/delete in auto-edit mode to return to the entry list. */
   onEditComplete?: () => void;
+  /** Registers dirty-state with the parent Back control in focused edit mode. */
+  onRegisterEditGuard?: RegisterEntryEditGuard;
   /** When true, renders without Card wrapper for use inside accordion sections */
   embedded?: boolean;
 }
@@ -57,7 +60,6 @@ const emptyExperience: Partial<WorkExperience> = {
   endDate: null,
   isCurrent: false,
   bullets: [],
-  tags: [],
 };
 
 export function ExperienceSection({
@@ -66,6 +68,7 @@ export function ExperienceSection({
   onEditingStateChange,
   autoEditId,
   onEditComplete,
+  onRegisterEditGuard,
 }: ExperienceSectionProps) {
   /** The id of the item being edited, or 'new' for a new item, or null when idle. */
   const [editingId, setEditingId] = useState<string | null>(autoEditId ?? null);
@@ -76,16 +79,26 @@ export function ExperienceSection({
     }
     return { ...emptyExperience };
   });
-  const [tagInput, setTagInput] = useState('');
   /** Local HTML state for the rich text editor — initialized from bullets, stays as HTML while editing. */
-  const [highlightsHtml, setHighlightsHtml] = useState(() => bulletsToHtml(formData.bullets));
+  const [highlightsHtml, setHighlightsHtml] = useState(() => {
+    if (autoEditId && autoEditId !== 'new') {
+      const exp = experiences.find((e) => e.id === autoEditId);
+      if (exp) return exp.bulletsHtml || bulletsToHtml(exp.bullets);
+    }
+    return '';
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  /** Ref for the editing form — used for scroll-into-view. */
-  const editingFormRef = useRef<HTMLDivElement>(null);
-
   const isEditing = editingId !== null;
+
+  const { resetBaseline, actionsRef, attentionKey } = useEntryFormDirty(
+    { formData, highlightsHtml },
+    {
+      enabled: Boolean(autoEditId),
+      onRegister: onRegisterEditGuard,
+    }
+  );
 
   // Notify parent whenever editing state changes
   useEffect(() => {
@@ -109,19 +122,23 @@ export function ExperienceSection({
   const startEditing = (experience?: WorkExperience) => {
     snapshotRef.current = [...experiences];
     setError(null);
-    setTagInput('');
 
     if (experience) {
       setEditingId(experience.id);
-      setFormData({ ...experience });
+      const nextForm = { ...experience };
+      setFormData(nextForm);
       // Prefer the stored bulletsHtml (preserves alignment, bullet style, etc.)
       // Fall back to reconstructing from bullets[] for backward compat
       const storedHtml = experience.bulletsHtml;
-      setHighlightsHtml(storedHtml || bulletsToHtml(experience.bullets));
+      const nextHtml = storedHtml || bulletsToHtml(experience.bullets);
+      setHighlightsHtml(nextHtml);
+      resetBaseline({ formData: nextForm, highlightsHtml: nextHtml });
     } else {
       setEditingId('new');
-      setFormData({ ...emptyExperience });
+      const nextForm = { ...emptyExperience };
+      setFormData(nextForm);
       setHighlightsHtml('');
+      resetBaseline({ formData: nextForm, highlightsHtml: '' });
     }
   };
 
@@ -134,7 +151,6 @@ export function ExperienceSection({
     setFormData(emptyExperience);
     setHighlightsHtml('');
     setError(null);
-    setTagInput('');
     if (autoEditId) onEditComplete?.();
   };
 
@@ -186,7 +202,6 @@ export function ExperienceSection({
         isCurrent: formData.isCurrent || false,
         bullets: formData.bullets || [],
         bulletsHtml: formData.bulletsHtml || highlightsHtml || undefined,
-        tags: formData.tags || [],
       };
 
       if (editingId && editingId !== 'new') {
@@ -221,7 +236,6 @@ export function ExperienceSection({
 
       setEditingId(null);
       setFormData(emptyExperience);
-      setTagInput('');
       notifyProfileUpdated();
       if (autoEditId) onEditComplete?.();
     } catch (err) {
@@ -277,37 +291,25 @@ export function ExperienceSection({
     }
   };
 
-  // ── Tag helpers ──────────────────────────────
-
-  const addTag = () => {
-    if (tagInput.trim() && !(formData.tags || []).includes(tagInput.trim())) {
-      updateField('tags', [...(formData.tags || []), tagInput.trim()] as WorkExperience['tags']);
-      setTagInput('');
-    }
-  };
-
-  const removeTag = (tag: string) => {
-    updateField('tags', (formData.tags || []).filter((t) => t !== tag) as WorkExperience['tags']);
-  };
-
   // ── Inline form ──────────────────────────────
 
   const renderInlineForm = () => (
-    <div
-      ref={editingFormRef}
-      className="space-y-4 rounded-lg border border-primary/20 bg-card p-4 ring-1 ring-primary/10"
+    <EntryInlineForm
+      banner={
+        editingId === 'new'
+          ? 'Adding new experience — save or discard to continue'
+          : 'Editing experience — save or discard to continue'
+      }
+      error={error}
+      onSave={handleSave}
+      onDiscard={cancelEditing}
+      canSave={Boolean(formData.company && formData.role)}
+      isSaving={isLoading}
+      actionsRef={actionsRef}
+      attentionKey={attentionKey}
+      size="default"
+      onDelete={editingId && editingId !== 'new' ? () => void handleDelete(editingId) : undefined}
     >
-      {/* Editing mode banner */}
-      <div className="flex items-center gap-2 rounded-md bg-primary/5 px-3 py-2 text-xs font-medium text-primary">
-        <div className="h-1.5 w-1.5 rounded-full bg-primary" />
-        {editingId === 'new' ? 'Adding new experience' : 'Editing experience'} — save or discard to
-        continue
-      </div>
-
-      {error && (
-        <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
-      )}
-
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label>Company *</Label>
@@ -429,52 +431,7 @@ export function ExperienceSection({
           bulletMode
         />
       </div>
-
-      <div className="space-y-2">
-        <Label>Skills / Technologies</Label>
-        <div className="flex gap-2">
-          <Input
-            value={tagInput}
-            onChange={(e) => setTagInput(e.target.value)}
-            placeholder="Add a skill..."
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                addTag();
-              }
-            }}
-          />
-          <Button type="button" onClick={addTag} variant="secondary">
-            Add
-          </Button>
-        </div>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {(formData.tags || []).map((tag) => (
-            <Badge key={tag} variant="secondary" className="gap-1">
-              {tag}
-              <button onClick={() => removeTag(tag)} className="ml-1 hover:text-destructive">
-                ×
-              </button>
-            </Badge>
-          ))}
-        </div>
-      </div>
-
-      <div className="flex items-center gap-2 border-t pt-4">
-        <Button
-          onClick={handleSave}
-          disabled={!formData.company || !formData.role || isLoading}
-          className="gap-2"
-        >
-          {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {isLoading ? 'Saving...' : 'Save'}
-        </Button>
-        <Button variant="outline" onClick={cancelEditing} disabled={isLoading} className="gap-2">
-          <X className="mr-1 h-4 w-4" />
-          Discard
-        </Button>
-      </div>
-    </div>
+    </EntryInlineForm>
   );
 
   // ── Render ──────────────────────────────────

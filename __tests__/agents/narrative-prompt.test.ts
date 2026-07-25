@@ -35,7 +35,6 @@ function baseData(overrides: Partial<CollectedProfileData> = {}): CollectedProfi
         endDate: null,
         isCurrent: true,
         bullets: ['Built compilers'],
-        tags: [],
         source: 'RESUME',
       },
     ],

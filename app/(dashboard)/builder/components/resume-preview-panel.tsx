@@ -6,13 +6,21 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { CleanResumeView } from '@/app/u/[handle]/views/clean-resume-view';
 import { ResumeColorThemeSwitch } from '@/components/resume-color-theme-switch';
+import { ResumePageLayoutSwitch } from '@/components/resume-page-layout-switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { RESUME_DESIGN_DEFAULTS, type PublicProfile, type ResumeColorTheme } from '@/types';
+import { getResumeSheetWidthPx, resolveResumePageLayout } from '@/lib/resume/page-layout';
+import {
+  RESUME_DESIGN_DEFAULTS,
+  type PublicProfile,
+  type ResumeColorTheme,
+  type ResumePageLayout,
+} from '@/types';
 
 import { useJustifyAll } from '../lib/use-justify-all';
 import { useBuilderStore } from './builder-store-provider';
 import { PreviewFloatingActions } from './preview-floating-actions';
+import { ResumeConstructionOverlay, useResumeConstruction } from './resume-construction-overlay';
 
 // Zoom modal is only mounted when the user clicks the resume — defer its
 // chunk so it doesn't bloat the initial preview bundle.
@@ -21,7 +29,6 @@ const ResumeZoomModal = dynamic(
   { ssr: false }
 );
 
-const RESUME_NATIVE_WIDTH_PX = 816;
 const HORIZONTAL_PADDING_PX = 48;
 
 /**
@@ -39,6 +46,8 @@ export function ResumePreviewPanel() {
   const profile = useBuilderStore((s) => s.draftProfile);
   const commitInlineChange = useBuilderStore((s) => s.commitInlineChange);
   const colorTheme = profile.resumeDesign?.colorTheme ?? RESUME_DESIGN_DEFAULTS.colorTheme;
+  const pageLayout = resolveResumePageLayout(profile.resumeDesign);
+  const nativeWidthPx = getResumeSheetWidthPx(pageLayout);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const containerRef = useRef<HTMLDivElement>(null);
   const resumeContentRef = useRef<HTMLDivElement>(null);
@@ -48,15 +57,16 @@ export function ResumePreviewPanel() {
   // top-right. Stored in state (not a ref) so the action component
   // re-renders once the DOM node is available and can portal into it.
   const [kebabAnchor, setKebabAnchor] = useState<HTMLDivElement | null>(null);
+  const construction = useResumeConstruction();
 
   const { allJustified, justifyAll: handleJustifyAll } = useJustifyAll();
 
-  const handleColorThemeChange = useCallback(
-    (nextTheme: ResumeColorTheme) => {
+  const persistDesign = useCallback(
+    (patch: { colorTheme?: ResumeColorTheme; pageLayout?: ResumePageLayout }) => {
       const nextDesign = {
         ...RESUME_DESIGN_DEFAULTS,
         ...(profile.resumeDesign ?? {}),
-        colorTheme: nextTheme,
+        ...patch,
       };
 
       commitInlineChange({ resumeDesign: nextDesign } as Partial<typeof profile>);
@@ -77,6 +87,20 @@ export function ResumePreviewPanel() {
     [commitInlineChange, profile]
   );
 
+  const handleColorThemeChange = useCallback(
+    (nextTheme: ResumeColorTheme) => {
+      persistDesign({ colorTheme: nextTheme });
+    },
+    [persistDesign]
+  );
+
+  const handlePageLayoutChange = useCallback(
+    (nextLayout: ResumePageLayout) => {
+      persistDesign({ pageLayout: nextLayout });
+    },
+    [persistDesign]
+  );
+
   useEffect(() => {
     return () => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -87,7 +111,7 @@ export function ResumePreviewPanel() {
     const updateScale = () => {
       if (!containerRef.current) return;
       const containerWidth = containerRef.current.clientWidth - HORIZONTAL_PADDING_PX;
-      const next = Math.min(containerWidth / RESUME_NATIVE_WIDTH_PX, 1);
+      const next = Math.min(containerWidth / nativeWidthPx, 1);
       setScale(next);
     };
 
@@ -96,22 +120,36 @@ export function ResumePreviewPanel() {
     const observer = new ResizeObserver(updateScale);
     if (containerRef.current) observer.observe(containerRef.current);
     return () => observer.disconnect();
-  }, []);
+  }, [nativeWidthPx]);
 
   // Visible width of the scaled resume sheet (px)
-  const sheetWidth = RESUME_NATIVE_WIDTH_PX * scale;
+  const sheetWidth = nativeWidthPx * scale;
 
   return (
     <div className="relative flex h-full flex-col">
       {/* ── Slim panel header — labels the column, keeps the surface calm ── */}
       <div className="flex h-12 shrink-0 items-center justify-between border-b border-border/60 px-6">
-        <span className="text-eyebrow">Preview</span>
-        <ResumeColorThemeSwitch
-          variant="compact"
-          value={colorTheme}
-          onChange={handleColorThemeChange}
-        />
+        <span className="text-eyebrow">{construction.active ? 'Building resume' : 'Preview'}</span>
+        <div className="flex items-center gap-2">
+          <ResumePageLayoutSwitch
+            variant="compact"
+            value={pageLayout}
+            onChange={handlePageLayoutChange}
+          />
+          <ResumeColorThemeSwitch
+            variant="compact"
+            value={colorTheme}
+            onChange={handleColorThemeChange}
+          />
+        </div>
       </div>
+
+      <ResumeConstructionOverlay
+        active={construction.active}
+        progress={construction.progress}
+        status={construction.status}
+        showRefreshHint={construction.showRefreshHint}
+      />
 
       {/* ── Scrollable preview area ─────────────────────────────────── */}
       <div
@@ -125,7 +163,9 @@ export function ResumePreviewPanel() {
               (e.g. ResumeActions copy/print buttons), and nesting buttons
               is invalid HTML and causes a React hydration error. The
               click-to-zoom affordance is provided by the absolutely
-              positioned overlay button below. */}
+              positioned overlay button below.
+              Construction overlay is a status chip only — resume stays fully
+              visible so the handoff feels instant. */}
           <div
             className={cn(
               'group block w-full overflow-hidden rounded-md',

@@ -6,6 +6,7 @@ import {
   DEFAULT_RESUME_TEMPLATE_ID,
   getAllResumeTemplates,
   getResumeTemplateId,
+  getTemplateDefaultShowPhoto,
   isResumeAtelierRailSectionType,
   isResumeSidebarSectionType,
   isValidResumeTemplateId,
@@ -41,6 +42,34 @@ describe('resume templates registry', () => {
     expect(isResumeAtelierRailSectionType('EXPERIENCE')).toBe(false);
   });
 
+  it('declares a clear photo default per template', () => {
+    expect(getTemplateDefaultShowPhoto('classic')).toBe(false);
+    expect(getTemplateDefaultShowPhoto('lumen')).toBe(false);
+    expect(getTemplateDefaultShowPhoto('sleek')).toBe(true);
+    expect(getTemplateDefaultShowPhoto('studio')).toBe(true);
+    expect(getTemplateDefaultShowPhoto('atelier')).toBe(false);
+    expect(getTemplateDefaultShowPhoto('unknown')).toBe(false);
+  });
+
+  it('restores classic defaults including centered header and italic title', () => {
+    const restored = buildDefaultDesignForTemplate('classic');
+    expect(restored.templateId).toBe('classic');
+    expect(restored.fontFamily).toBe('georgia');
+    expect(restored.nameFontFamily).toBe('georgia');
+    expect(restored.titleFontFamily).toBe('georgia');
+    expect(restored.headingFontFamily).toBe('system');
+    expect(restored.contactFontFamily).toBe('system');
+    expect(restored.headerAlignment).toBe('center');
+    expect(restored.headerPhotoLayout).toBe('photo-left');
+    expect(restored.photoSize).toBe(80);
+    expect(restored.nameStyle.bold).toBe(true);
+    expect(restored.titleStyle.italic).toBe(true);
+    expect(restored.headingStyle.bold).toBe(true);
+    expect(restored.bodyStyle.bold).toBe(false);
+    expect(restored.nameFontSize).toBe(28);
+    expect(restored.titleFontSize).toBe(15);
+  });
+
   it('restores atelier defaults without switching template to classic', () => {
     const restored = buildDefaultDesignForTemplate('atelier');
     expect(restored.templateId).toBe('atelier');
@@ -53,6 +82,8 @@ describe('resume templates registry', () => {
     expect(restored.headingColor).toBe('#C25B42');
     expect(restored.accentColor).toBe('#C25B42');
     expect(restored.headerAlignment).toBe('left');
+    expect(restored.nameStyle.bold).toBe(false);
+    expect(restored.titleStyle.italic).toBe(false);
     expect(restored.colorTheme).toBe('light');
     expect(restored.justifyAll).toBe(false);
   });
@@ -63,6 +94,25 @@ describe('resume templates registry', () => {
     expect(restored.fontFamily).toBe('lato');
     expect(restored.headingColor).toBe('#1f2d3d');
     expect(restored.accentColor).toBe('#8f9aa8');
+    expect(restored.headerAlignment).toBe('left');
+    expect(restored.headerPhotoLayout).toBe('photo-left');
+    expect(restored.photoSize).toBe(64);
+    expect(restored.nameStyle.bold).toBe(true);
+    expect(restored.titleStyle.italic).toBe(false);
+  });
+
+  it('restores studio defaults with open-sans and left header', () => {
+    const restored = buildDefaultDesignForTemplate('studio');
+    expect(restored.templateId).toBe('studio');
+    expect(restored.fontFamily).toBe('open-sans');
+    expect(restored.nameFontFamily).toBe('open-sans');
+    expect(restored.contactFontFamily).toBe('open-sans');
+    expect(restored.headerAlignment).toBe('left');
+    expect(restored.photoSize).toBe(64);
+    expect(restored.headingColor).toBe('#1a1a1a');
+    expect(restored.accentColor).toBe('#7a9aa5');
+    expect(restored.titleFontSize).toBe(13);
+    expect(restored.headingFontSize).toBe(13);
   });
 
   it('restores lumen defaults without switching template to classic', () => {
@@ -74,6 +124,7 @@ describe('resume templates registry', () => {
     expect(restored.headingFontFamily).toBe('instrument-sans');
     expect(restored.contactFontFamily).toBe('instrument-sans');
     expect(restored.headerAlignment).toBe('left');
+    expect(restored.photoSize).toBe(80);
     expect(restored.headingColor).toBe('#171717');
     expect(restored.accentColor).toBe('#b0aaa3');
     expect(restored.nameFontSize).toBe(30);
@@ -88,6 +139,7 @@ describe('resume templates registry', () => {
         templateId: 'classic',
         colorTheme: 'dark',
         justifyAll: true,
+        pageLayout: 'letter',
         fontSize: 14,
         nameFontSize: 32,
         headingColor: '#ff0000',
@@ -99,6 +151,7 @@ describe('resume templates registry', () => {
     expect(next.templateId).toBe('sleek');
     expect(next.colorTheme).toBe('dark');
     expect(next.justifyAll).toBe(true);
+    expect(next.pageLayout).toBe('letter');
     expect(next.fontSize).toBe(14);
     expect(next.nameFontSize).toBe(32);
     // Custom colors preserved
@@ -107,6 +160,7 @@ describe('resume templates registry', () => {
     // Typography/layout defaults from sleek applied
     expect(next.fontFamily).toBe('lato');
     expect(next.headerAlignment).toBe('left');
+    expect(next.headerPhotoLayout).toBe('photo-left');
   });
 
   it('applies recommended colors when previous colors matched prior template defaults', () => {
@@ -158,5 +212,22 @@ describe('resume templates registry', () => {
     expect(next.headingFontFamily).toBe('lato');
     expect(next.headingColor).toBe('#C25B42');
     expect(next.accentColor).toBe('#C25B42');
+  });
+
+  it('applies studio typography defaults on switch from classic', () => {
+    const next = buildDesignForTemplateSwitch(
+      {
+        templateId: 'classic',
+        headingColor: '#000000',
+        accentColor: '#000000',
+      },
+      'studio'
+    );
+
+    expect(next.templateId).toBe('studio');
+    expect(next.fontFamily).toBe('open-sans');
+    expect(next.headerAlignment).toBe('left');
+    expect(next.headingColor).toBe('#1a1a1a');
+    expect(next.accentColor).toBe('#7a9aa5');
   });
 });

@@ -159,7 +159,6 @@ export const WorkExperienceSchema = z.object({
   isCurrent: z.boolean().optional(),
   bullets: z.array(z.string().max(500)).max(20).optional(),
   bulletsHtml: z.string().max(15000).optional().nullable(),
-  tags: z.array(z.string().max(50)).max(20).optional(),
   isVisible: z.boolean().optional(),
 });
 

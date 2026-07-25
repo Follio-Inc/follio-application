@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from 'react';
 
-import type { PdfLayout } from '@/app/(dashboard)/builder/components/download-dialog';
+import type { PdfLayout } from '@/types';
 import { formatResumeDownloadFilename } from '@/lib/resume-title';
 
 const DEFAULT_LAYOUT: PdfLayout = 'continuous';

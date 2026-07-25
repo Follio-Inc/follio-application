@@ -176,7 +176,6 @@ model WorkExperience {
   bullets        String[]
   bulletsHtml    String? /// Complete rich-text editor HTML for bullets (preserves alignment, bullet style, etc.)
   metrics        Json?
-  tags           String[]
   isVisible      Boolean         @default(true)
   source         DataSource      @default(MANUAL)
   sortOrder      Int             @default(0)
@@ -235,14 +234,16 @@ model Skill {
 }
 
 model SkillGroup {
-  id        String   @id @default(cuid())
-  profileId String
-  name      String
-  sortOrder Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  skills    Skill[]
-  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  id         String   @id @default(cuid())
+  profileId  String
+  name       String
+  sortOrder  Int      @default(0)
+  /// Rich-text editor HTML for the skills column (preserves bold, bullets, alignment)
+  skillsHtml String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  skills     Skill[]
+  profile    Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
   @@unique([profileId, name])
   @@index([profileId])
@@ -720,6 +721,7 @@ enum SectionType {
   VOLUNTEERING
   LANGUAGES
   INTERESTS
+  REFERENCES
   CUSTOM
 }
 

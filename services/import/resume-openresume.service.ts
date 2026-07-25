@@ -55,6 +55,7 @@ export interface NormalizedResumeData {
     endDate?: string;
   }>;
   skills: string[];
+  skillGroups?: Array<{ name: string; skills: string[] }>;
   links: Array<{
     type: string;
     url: string;
@@ -243,6 +244,19 @@ export function normalizeResumeData(parsed: ParsedResume): NormalizedResumeData 
   normalized.skills = (parsed.skills || [])
     .map((s) => sanitize(s))
     .filter((s): s is string => !!s && s.length > 0);
+
+  if (parsed.skillGroups?.length) {
+    normalized.skillGroups = parsed.skillGroups
+      .map((group) => ({
+        name: sanitize(group.name) || 'Skills',
+        skills: (group.skills || [])
+          .map((s) => sanitize(s))
+          .filter((s): s is string => !!s && s.length > 0),
+      }))
+      .filter((group) => group.skills.length > 0);
+  } else if (normalized.skills.length > 0) {
+    normalized.skillGroups = [{ name: 'Skills', skills: normalized.skills }];
+  }
 
   // Links
   for (const link of parsed.links || []) {

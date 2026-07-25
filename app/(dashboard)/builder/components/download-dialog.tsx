@@ -1,7 +1,7 @@
 'use client';
 
 import { Download, Loader2, Share2 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -15,25 +15,30 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 import { useResumeDownload } from '@/lib/hooks';
+import { getAllowedPdfLayouts, isPagedPageLayout } from '@/lib/resume-design';
 import { cn } from '@/lib/utils';
+import type { PdfLayout, ResumePageLayout } from '@/types';
 
 // ─── Types ──────────────────────────────────────────────────────────
 
-/** Supported PDF layout modes. Extend this union as new options are added. */
-export type PdfLayout = 'paged' | 'continuous';
+/** Re-export for callers that imported PdfLayout from this module. */
+export type { PdfLayout };
 
 interface LayoutOption {
   value: PdfLayout;
   label: string;
   description: string;
-  /** Inline SVG illustration rendered inside the card. */
-  illustration: React.ReactNode;
 }
 
 interface DownloadDialogProps {
   handle: string;
   /** Resume's current title — used as the download filename. */
   resumeTitle: string;
+  /**
+   * Live resume page layout. Continuous → all three download options;
+   * A4/Letter → A4 and Letter only.
+   */
+  resumePageLayout?: ResumePageLayout;
   /** Called when the user clicks the share button in the banner. */
   onShareClick?: () => void;
   /**
@@ -425,13 +430,16 @@ const LAYOUT_OPTIONS: LayoutOption[] = [
     value: 'continuous',
     label: 'Continuous',
     description: 'Single scrollable page with no breaks — best for digital viewing.',
-    illustration: <ContinuousIllustration selected={false} />,
   },
   {
-    value: 'paged',
-    label: 'Paged (A4)',
-    description: 'Standard A4 pages with page breaks — best for printing.',
-    illustration: <PagedIllustration selected={false} />,
+    value: 'a4',
+    label: 'A4',
+    description: 'Standard A4 pages with page breaks — common outside the US.',
+  },
+  {
+    value: 'letter',
+    label: 'Letter',
+    description: 'US Letter pages with page breaks — common in North America.',
   },
 ];
 
@@ -442,6 +450,7 @@ const DEFAULT_LAYOUT: PdfLayout = 'continuous';
 export function DownloadDialog({
   handle,
   resumeTitle,
+  resumePageLayout = DEFAULT_LAYOUT,
   onShareClick,
   open: controlledOpen,
   onOpenChange: controlledOnOpenChange,
@@ -452,7 +461,33 @@ export function DownloadDialog({
   const open = isControlled ? controlledOpen : internalOpen;
   const setOpen = isControlled ? (controlledOnOpenChange ?? (() => {})) : setInternalOpen;
 
-  const [layout, setLayout] = useState<PdfLayout>(DEFAULT_LAYOUT);
+  const allowedLayouts = useMemo(() => getAllowedPdfLayouts(resumePageLayout), [resumePageLayout]);
+  const visibleOptions = useMemo(
+    () => LAYOUT_OPTIONS.filter((option) => allowedLayouts.includes(option.value)),
+    [allowedLayouts]
+  );
+  const optionCount = visibleOptions.length;
+  const pagedOnly = isPagedPageLayout(resumePageLayout);
+
+  const [layout, setLayout] = useState<PdfLayout>(() =>
+    allowedLayouts.includes(resumePageLayout)
+      ? resumePageLayout
+      : (allowedLayouts[0] ?? DEFAULT_LAYOUT)
+  );
+
+  // Keep selection valid when the resume's live layout (or allowed set) changes.
+  useEffect(() => {
+    if (!allowedLayouts.includes(layout)) {
+      setLayout(allowedLayouts[0] ?? DEFAULT_LAYOUT);
+    }
+  }, [allowedLayouts, layout]);
+
+  // Prefer the resume's live layout when opening options that include it.
+  useEffect(() => {
+    if (allowedLayouts.includes(resumePageLayout)) {
+      setLayout(resumePageLayout);
+    }
+  }, [resumePageLayout, allowedLayouts]);
 
   const { download, isDownloading } = useResumeDownload({
     handle,
@@ -484,10 +519,14 @@ export function DownloadDialog({
         </Tooltip>
       )}
 
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className={cn('sm:max-w-2xl', optionCount >= 3 && 'sm:max-w-3xl')}>
         <DialogHeader>
           <DialogTitle>Download PDF</DialogTitle>
-          <DialogDescription>Choose a layout for your resume.</DialogDescription>
+          <DialogDescription>
+            {pagedOnly
+              ? 'Your resume uses print pages — choose A4 or Letter.'
+              : 'Choose a layout for your resume.'}
+          </DialogDescription>
         </DialogHeader>
 
         {/* ── Share banner (only shown when a share callback is provided) ── */}
@@ -512,9 +551,14 @@ export function DownloadDialog({
           </div>
         )}
 
-        {/* ── Side-by-side layout cards ── */}
-        <div className="mt-4 grid grid-cols-2 gap-4">
-          {LAYOUT_OPTIONS.map((option) => {
+        {/* ── Layout cards (gated by resume page layout) ── */}
+        <div
+          className={cn(
+            'mt-4 grid gap-4',
+            optionCount >= 3 ? 'grid-cols-3' : optionCount === 2 ? 'grid-cols-2' : 'grid-cols-1'
+          )}
+        >
+          {visibleOptions.map((option) => {
             const selected = layout === option.value;
 
             return (
@@ -526,7 +570,8 @@ export function DownloadDialog({
                   'group flex flex-col items-center rounded-xl border-2 p-4 text-center transition-all',
                   selected
                     ? 'border-primary bg-primary/5 shadow-sm'
-                    : 'border-border hover:border-muted-foreground/40 hover:bg-muted/40'
+                    : 'border-border hover:border-muted-foreground/40 hover:bg-muted/40',
+                  optionCount === 1 && 'mx-auto w-full max-w-xs'
                 )}
               >
                 {/* Illustration */}

@@ -3,7 +3,6 @@
 import { useSignUp } from '@clerk/nextjs';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { Logo } from '@/components/Logo';
@@ -15,7 +14,6 @@ import { Separator } from '@/components/ui/separator';
 
 export function SignUpForm() {
   const { isLoaded, signUp, setActive } = useSignUp();
-  const router = useRouter();
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -72,7 +70,8 @@ export function SignUpForm() {
 
       if (result.status === 'complete') {
         await setActive({ session: result.createdSessionId });
-        router.push('/onboarding/import');
+        // Full document navigation avoids soft-nav blank pages after auth.
+        window.location.assign('/onboarding/import');
       } else {
         setError('Verification incomplete. Please try again.');
       }

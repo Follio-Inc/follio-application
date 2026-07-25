@@ -84,6 +84,20 @@ export async function POST() {
         }
       }
 
+      // ── Skill groups ──
+      const skillGroups = await tx.skillGroup.findMany({
+        where: { profileId },
+        select: { id: true, skillsHtml: true },
+      });
+      for (const group of skillGroups) {
+        if (group.skillsHtml && !isHtmlFullyJustified(group.skillsHtml)) {
+          await tx.skillGroup.update({
+            where: { id: group.id },
+            data: { skillsHtml: justifyHtmlContent(group.skillsHtml) },
+          });
+        }
+      }
+
       // ── Custom Sections (publications, volunteering, custom, etc.) ──
       const sections = await tx.profileSection.findMany({
         where: { profileId },

@@ -16,6 +16,7 @@ import { getResumeUrl } from '@/lib/url';
 import { cn } from '@/lib/utils';
 
 import type { ContentVisibility } from '@prisma/client';
+import type { ResumePageLayout } from '@/types';
 
 /**
  * PublicResumeActions
@@ -58,6 +59,11 @@ interface PublicResumeActionsProps {
   resumeTitle: string;
   /** Owner's current resume visibility — drives the full share dialog. */
   resumeVisibility: ContentVisibility;
+  /**
+   * Live resume page layout — gates download options
+   * (continuous → all three; a4/letter → A4 + Letter only).
+   */
+  resumePageLayout?: ResumePageLayout;
   /** Auth context of the visitor, as resolved server-side. */
   authState: 'owner' | 'authenticated' | 'anonymous';
   /**
@@ -78,43 +84,12 @@ export function PublicResumeActions({
   firstName,
   resumeTitle,
   resumeVisibility,
+  resumePageLayout = 'continuous',
   authState,
   kebabContainer,
 }: PublicResumeActionsProps) {
   const router = useRouter();
   const isOwner = authState === 'owner';
-
-  // #region agent log
-  useEffect(() => {
-    const isIframe = (() => {
-      try {
-        return window.self !== window.top;
-      } catch {
-        return true;
-      }
-    })();
-    fetch('http://127.0.0.1:7254/ingest/fcf2bd3d-74c8-4090-ab73-f47f4b1cfce0', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'a3be95' },
-      body: JSON.stringify({
-        sessionId: 'a3be95',
-        runId: 'pre-fix',
-        hypothesisId: 'D',
-        location: 'public-resume-actions.tsx:mount',
-        message: 'PublicResumeActions mounted',
-        data: {
-          authState,
-          isOwner,
-          handle,
-          pathname: window.location.pathname,
-          isIframe,
-          willMountShareDialog: isOwner,
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-  }, [authState, isOwner, handle]);
-  // #endregion
 
   const { copied, copy: handleCopyText } = useCopyElementText(resumeRef);
   const [idle, setIdle] = useState(false);
@@ -266,6 +241,7 @@ export function PublicResumeActions({
       <DownloadDialog
         handle={handle}
         resumeTitle={resumeTitle}
+        resumePageLayout={resumePageLayout}
         open={downloadOpen}
         onOpenChange={setDownloadOpen}
         onShareClick={() => {

@@ -11,8 +11,8 @@ coverage
 .next/
 out/
 
-# Production
-build
+# Production (root-only — do not ignore app/**/build routes)
+/build
 dist
 
 # Misc

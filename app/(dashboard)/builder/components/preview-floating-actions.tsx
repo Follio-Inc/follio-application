@@ -11,6 +11,7 @@ import { useCopyElementText } from '@/lib/hooks';
 import { useBuilderStore } from './builder-store-provider';
 import { DownloadDialog } from './download-dialog';
 import { ShareDialog } from './share-dialog';
+import { resolveResumePageLayout } from '@/lib/resume/page-layout';
 
 interface PreviewFloatingActionsProps {
   /** Called when the user clicks the maximize/zoom icon. */
@@ -137,6 +138,7 @@ export function PreviewFloatingActions({
       <DownloadDialog
         handle={handle}
         resumeTitle={resumeTitle}
+        resumePageLayout={resolveResumePageLayout(profile.resumeDesign)}
         open={downloadOpen}
         onOpenChange={setDownloadOpen}
         onShareClick={() => setShareOpen(true)}

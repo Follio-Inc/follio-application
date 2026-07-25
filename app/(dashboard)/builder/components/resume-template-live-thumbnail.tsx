@@ -3,7 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { CleanResumeView } from '@/app/u/[handle]/views/clean-resume-view';
-import { buildDesignForTemplateSwitch, type ResumeTemplateId } from '@/lib/resume/templates';
+import {
+  buildDesignForTemplateSwitch,
+  getTemplateDefaultShowPhoto,
+  type ResumeTemplateId,
+} from '@/lib/resume/templates';
 import { cn } from '@/lib/utils';
 import type { PublicProfile, ResumeDesign } from '@/types';
 
@@ -26,8 +30,9 @@ interface ResumeTemplateLiveThumbnailProps {
 }
 
 /**
- * Miniature, non-interactive resume preview for a specific template,
- * rendered from the user's live draft (not sample data).
+ * Miniature, non-interactive resume preview for a specific template.
+ * Renders whatever profile the parent passes (builder: live draft;
+ * onboarding gallery may pass a sample when the draft is sparse).
  */
 export function ResumeTemplateLiveThumbnail({
   profile,
@@ -44,6 +49,8 @@ export function ResumeTemplateLiveThumbnail({
     return {
       ...profile,
       resumeDesign: nextDesign,
+      // Preview the template’s default photo policy so cards match Restore Defaults.
+      resumeShowPhoto: getTemplateDefaultShowPhoto(templateId),
     } as PublicProfile;
   }, [profile, currentDesign, templateId]);
 

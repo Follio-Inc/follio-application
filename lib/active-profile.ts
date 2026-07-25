@@ -68,6 +68,14 @@ export async function resolveActiveProfileContextOrNull(
 }
 
 /**
+ * Onboarding is complete when the Clerk user owns at least one Profile.
+ * A Clerk account alone (or a User row without a Profile) is incomplete.
+ */
+export async function hasOnboardedProfile(clerkId: string): Promise<boolean> {
+  return (await resolveActiveProfileContextOrNull(clerkId)) !== null;
+}
+
+/**
  * Ensure the user has a stable "primary" (portfolio) profile.
  *
  * The primary profile backs the user-facing Portfolio surface and must remain

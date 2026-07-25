@@ -120,6 +120,39 @@ export function buildEmailsList(
   return result;
 }
 
+/**
+ * Remove an email by identity (Clerk id and/or address), not by list index.
+ * Index-based removal is unsafe after async Clerk destroy/reload, because a sync
+ * effect may rebuild `allEmails` before local state is updated — filtering by the
+ * stale index can delete a different email (e.g. the verified primary).
+ */
+export function removeEmailFromList<T extends { email: string; clerkEmailId?: string }>(
+  emails: T[],
+  primaryEmailIndex: number,
+  target: { email: string; clerkEmailId?: string }
+): { emails: T[]; primaryEmailIndex: number; email: string | undefined } {
+  const targetId = target.clerkEmailId;
+  const targetEmail = target.email.toLowerCase();
+  const primaryEmail = emails[primaryEmailIndex]?.email?.toLowerCase();
+
+  const nextEmails = emails.filter((entry) => {
+    if (targetId && entry.clerkEmailId === targetId) return false;
+    if (entry.email.toLowerCase() === targetEmail) return false;
+    return true;
+  });
+
+  let nextPrimaryIndex = primaryEmail
+    ? nextEmails.findIndex((entry) => entry.email.toLowerCase() === primaryEmail)
+    : 0;
+  if (nextPrimaryIndex < 0) nextPrimaryIndex = 0;
+
+  return {
+    emails: nextEmails,
+    primaryEmailIndex: nextPrimaryIndex,
+    email: nextEmails[nextPrimaryIndex]?.email,
+  };
+}
+
 // ============================================================================
 // Hook Implementation
 // ============================================================================
@@ -327,20 +360,19 @@ export function useContactManager(options: UseContactManagerOptions = {}): UseCo
           await user.reload();
         }
 
-        // Update local state
+        // Update local state by identity — index can be stale after reload/sync
         setContactData((prev) => {
-          const newEmails = (prev.allEmails || []).filter((_, i) => i !== index);
-          const currentIdx = prev.primaryEmailIndex ?? 0;
-          let newPrimaryIndex = currentIdx;
-          if (index < currentIdx) {
-            newPrimaryIndex = currentIdx - 1;
-          }
+          const removed = removeEmailFromList(
+            prev.allEmails || [],
+            prev.primaryEmailIndex ?? 0,
+            emailEntry
+          );
 
           return {
             ...prev,
-            allEmails: newEmails,
-            primaryEmailIndex: newPrimaryIndex,
-            email: newEmails[newPrimaryIndex]?.email,
+            allEmails: removed.emails,
+            primaryEmailIndex: removed.primaryEmailIndex,
+            email: removed.email,
           };
         });
       } catch (err) {

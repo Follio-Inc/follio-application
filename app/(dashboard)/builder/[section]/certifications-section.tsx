@@ -1,16 +1,6 @@
 'use client';
 
-import {
-  BadgeCheck,
-  ExternalLink,
-  Eye,
-  EyeOff,
-  Loader2,
-  Pencil,
-  Plus,
-  Trash2,
-  X,
-} from 'lucide-react';
+import { BadgeCheck, ExternalLink, Eye, EyeOff, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useCallback, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -28,7 +18,9 @@ import { notifyProfileUpdated } from '@/lib/events';
 import { useReorderPersist } from '@/lib/hooks/use-reorder-persist';
 import { cn } from '@/lib/utils';
 
+import { EntryInlineForm } from '../components/entry-inline-form';
 import { SortableCardList } from '../components/sortable-card-list';
+import { useEntryFormDirty, type RegisterEntryEditGuard } from '../lib/entry-edit-guard';
 
 import type { Certification } from '@/types';
 import type { DateExtractor } from '../components/sortable-card-list';
@@ -44,6 +36,8 @@ interface CertificationsSectionProps {
   onUpdate: (certifications: Certification[]) => void;
   autoEditId?: string | 'new';
   onEditComplete?: () => void;
+  /** Registers dirty-state with the parent Back control in focused edit mode. */
+  onRegisterEditGuard?: RegisterEntryEditGuard;
   /** When true, renders without Card wrapper for use inside accordion sections */
   embedded?: boolean;
 }
@@ -62,6 +56,7 @@ export function CertificationsSection({
   onUpdate,
   autoEditId,
   onEditComplete,
+  onRegisterEditGuard,
   embedded,
 }: CertificationsSectionProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(!!autoEditId);
@@ -86,6 +81,11 @@ export function CertificationsSection({
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const { resetBaseline, actionsRef, attentionKey } = useEntryFormDirty(formData, {
+    enabled: Boolean(autoEditId),
+    onRegister: onRegisterEditGuard,
+  });
 
   const persistOrder = useReorderPersist<Certification>('certification', onUpdate);
 
@@ -126,16 +126,20 @@ export function CertificationsSection({
   const handleOpenDialog = (certification?: Certification) => {
     if (certification) {
       setEditingCertification(certification);
-      setFormData({
+      const next = {
         ...certification,
         issueDate: certification.issueDate ? new Date(certification.issueDate) : undefined,
         expirationDate: certification.expirationDate
           ? new Date(certification.expirationDate)
           : undefined,
-      });
+      };
+      setFormData(next);
+      resetBaseline(next);
     } else {
       setEditingCertification(null);
-      setFormData(emptyCertification);
+      const next = { ...emptyCertification };
+      setFormData(next);
+      resetBaseline(next);
     }
     setError(null);
     setIsDialogOpen(true);
@@ -216,6 +220,7 @@ export function CertificationsSection({
       }
 
       onUpdate(certifications.filter((c) => c.id !== certificationId));
+      if (autoEditId) onEditComplete?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -239,17 +244,21 @@ export function CertificationsSection({
   // ── Inline form (auto-edit mode) ──
 
   const renderInlineForm = () => (
-    <div className="space-y-4 rounded-lg border border-primary/20 bg-card p-4 ring-1 ring-primary/10">
-      <div className="flex items-center gap-2 rounded-md bg-primary/5 px-3 py-2 text-xs font-medium text-primary">
-        <div className="h-1.5 w-1.5 rounded-full bg-primary" />
-        {editingCertification ? 'Editing certification' : 'Adding new certification'} — save or
-        discard to continue
-      </div>
-
-      {error && (
-        <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
-      )}
-
+    <EntryInlineForm
+      banner={
+        editingCertification
+          ? 'Editing certification — save or discard to continue'
+          : 'Adding new certification — save or discard to continue'
+      }
+      error={error}
+      onSave={handleSave}
+      onDiscard={() => onEditComplete?.()}
+      canSave={Boolean(formData.name && formData.issuer)}
+      isSaving={isLoading}
+      actionsRef={actionsRef}
+      attentionKey={attentionKey}
+      onDelete={editingCertification ? () => void handleDelete(editingCertification.id) : undefined}
+    >
       <div className="space-y-2">
         <Label>Certification Name *</Label>
         <Input
@@ -322,29 +331,7 @@ export function CertificationsSection({
           placeholder="https://verify.example.com/..."
         />
       </div>
-
-      <div className="flex items-center gap-2 border-t pt-4">
-        <Button
-          onClick={handleSave}
-          disabled={isLoading || !formData.name || !formData.issuer}
-          size="sm"
-          className="gap-2"
-        >
-          {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {isLoading ? 'Saving...' : 'Save'}
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onEditComplete?.()}
-          disabled={isLoading}
-          className="gap-2"
-        >
-          <X className="mr-1 h-4 w-4" />
-          Discard
-        </Button>
-      </div>
-    </div>
+    </EntryInlineForm>
   );
 
   // Auto-edit mode: render only the inline form

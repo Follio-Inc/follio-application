@@ -17,7 +17,12 @@ import {
   buildDesignForTemplateSwitch,
   getAllResumeTemplates,
   getResumeTemplate,
+  getResumeTemplateId,
+  getTemplateDefaultShowPhoto,
+  isUsingSampleResumePreview,
+  resolveResumeTemplatePreviewProfile,
   type ResumeTemplateId,
+  type ResumeTemplatePreviewDataPolicy,
 } from '@/lib/resume/templates';
 import { cn } from '@/lib/utils';
 import type { PublicProfile, ResumeDesign } from '@/types';
@@ -35,6 +40,24 @@ interface ResumeTemplateGalleryProps {
   onSelect: (design: ResumeDesign) => void;
   /** Optional custom trigger. Defaults to "Browse all templates". */
   children?: React.ReactNode;
+  /**
+   * How previews choose content.
+   * - `always-user` (default): always the provided profile — /builder
+   * - `sample-when-sparse`: archetype sample when Experience+Education+Skills incomplete — onboarding
+   */
+  previewDataPolicy?: ResumeTemplatePreviewDataPolicy;
+  /** Controlled open state (e.g. onboarding "Create my Follio"). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  title?: string;
+  description?: string;
+  applyLabel?: string;
+  cancelLabel?: string;
+  /**
+   * When true, no DialogTrigger is rendered. Use with controlled `open`
+   * (onboarding opens the gallery from an external button).
+   */
+  hideTrigger?: boolean;
 }
 
 /**
@@ -53,7 +76,12 @@ function GalleryResumePreview({
   const [scale, setScale] = useState(0);
 
   const previewProfile = useMemo(
-    () => ({ ...profile, resumeDesign: design }) as PublicProfile,
+    () =>
+      ({
+        ...profile,
+        resumeDesign: design,
+        resumeShowPhoto: getTemplateDefaultShowPhoto(getResumeTemplateId(design.templateId)),
+      }) as PublicProfile,
     [profile, design]
   );
 
@@ -107,10 +135,37 @@ export function ResumeTemplateGallery({
   currentTemplateId,
   onSelect,
   children,
+  previewDataPolicy = 'always-user',
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
+  title = 'Choose a template',
+  description,
+  applyLabel = 'Apply template',
+  cancelLabel = 'Cancel',
+  hideTrigger = false,
 }: ResumeTemplateGalleryProps) {
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const isControlled = controlledOpen !== undefined;
+  const open = isControlled ? controlledOpen : uncontrolledOpen;
+  const setOpen = (next: boolean) => {
+    if (!isControlled) setUncontrolledOpen(next);
+    controlledOnOpenChange?.(next);
+  };
+
   const [previewId, setPreviewId] = useState<ResumeTemplateId>(currentTemplateId);
   const templates = getAllResumeTemplates();
+
+  const galleryProfile = useMemo(
+    () => resolveResumeTemplatePreviewProfile(profile, previewDataPolicy),
+    [profile, previewDataPolicy]
+  );
+  const usingSample = isUsingSampleResumePreview(profile, previewDataPolicy);
+
+  const resolvedDescription =
+    description ??
+    (usingSample
+      ? 'Layouts are previewed with example content so you can compare designs. Your resume will use your details — you can switch templates anytime later.'
+      : 'Preview every layout with your content. Switching only changes the design — your experience, education, and skills stay put.');
 
   const previewDesign = useMemo(
     () => buildDesignForTemplateSwitch(currentDesign, previewId),
@@ -125,32 +180,33 @@ export function ResumeTemplateGallery({
   };
 
   const handleApply = () => {
-    if (!dirty) {
-      setOpen(false);
-      return;
-    }
+    // Onboarding may open with no prior template — still apply the previewed design.
     onSelect(previewDesign);
     setOpen(false);
   };
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        {children ?? (
-          <Button type="button" variant="outline" size="sm" className="h-8 w-full gap-1.5 text-xs">
-            <LayoutTemplate className="h-3.5 w-3.5" />
-            Browse all templates
-          </Button>
-        )}
-      </DialogTrigger>
+      {!hideTrigger && (
+        <DialogTrigger asChild>
+          {children ?? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 w-full gap-1.5 text-xs"
+            >
+              <LayoutTemplate className="h-3.5 w-3.5" />
+              Browse all templates
+            </Button>
+          )}
+        </DialogTrigger>
+      )}
 
       <DialogContent className="flex h-[80vh] w-[80vw] max-w-[80vw] flex-col gap-0 overflow-hidden p-0">
         <DialogHeader className="shrink-0 border-b px-6 py-4 pr-12">
-          <DialogTitle>Choose a template</DialogTitle>
-          <DialogDescription>
-            Preview every layout with your content. Switching only changes the design — your
-            experience, education, and skills stay put.
-          </DialogDescription>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{resolvedDescription}</DialogDescription>
         </DialogHeader>
 
         <div className="flex min-h-0 flex-1">
@@ -188,7 +244,7 @@ export function ResumeTemplateGallery({
                     )}
 
                     <ResumeTemplateLiveThumbnail
-                      profile={profile}
+                      profile={galleryProfile}
                       templateId={template.id}
                       currentDesign={currentDesign}
                       className="rounded-none border-0 shadow-none"
@@ -221,17 +277,17 @@ export function ResumeTemplateGallery({
               )}
             </div>
             <div className="min-h-0 flex-1">
-              <GalleryResumePreview profile={profile} design={previewDesign} />
+              <GalleryResumePreview profile={galleryProfile} design={previewDesign} />
             </div>
           </div>
         </div>
 
         <div className="flex shrink-0 items-center justify-end gap-2 border-t px-6 py-3">
           <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
-            Cancel
+            {cancelLabel}
           </Button>
-          <Button type="button" onClick={handleApply} disabled={!dirty}>
-            Apply template
+          <Button type="button" onClick={handleApply} disabled={!dirty && !hideTrigger}>
+            {applyLabel}
           </Button>
         </div>
       </DialogContent>

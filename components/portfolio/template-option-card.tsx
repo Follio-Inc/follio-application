@@ -2,6 +2,13 @@
 
 import { Check } from 'lucide-react';
 
+import {
+  ONBOARDING_CARD_DESCRIPTION,
+  ONBOARDING_CARD_TITLE,
+  ONBOARDING_QUIET_PILL,
+  ONBOARDING_SURFACE_INTERACTIVE,
+  ONBOARDING_SURFACE_SELECTED,
+} from '@/lib/onboarding-ui';
 import { cn } from '@/lib/utils';
 
 import { TemplatePreviewFrame } from './template-preview-frame';
@@ -42,35 +49,32 @@ export function TemplateOptionCard({
       onClick={() => onSelect(template.id)}
       aria-pressed={selected}
       className={cn(
-        'group relative flex flex-col overflow-hidden rounded-xl border bg-card text-left transition-all',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-        selected
-          ? 'border-foreground ring-1 ring-foreground'
-          : 'border-border hover:border-foreground/30 hover:shadow-sm',
+        'group relative flex flex-col overflow-hidden text-left',
+        ONBOARDING_SURFACE_INTERACTIVE,
+        selected && ONBOARDING_SURFACE_SELECTED,
         disabled && 'pointer-events-none opacity-60'
       )}
     >
-      {/* Selected check */}
       {selected && (
-        <span className="absolute right-3 top-3 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-foreground text-background shadow">
+        <span className="absolute right-3 top-3 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-foreground text-background shadow-sm">
           <Check className="h-3.5 w-3.5" />
         </span>
       )}
 
-      {/* Live preview */}
-      <div className="relative border-b">
+      <div className="relative border-b border-border/50">
         <TemplatePreviewFrame templateId={template.id} aspectRatio={16 / 10} />
         {current && (
-          <span className="absolute left-3 top-3 z-10 rounded-full bg-background/90 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground shadow-sm backdrop-blur">
+          <span
+            className={`absolute left-3 top-3 z-10 bg-background/90 backdrop-blur ${ONBOARDING_QUIET_PILL}`}
+          >
             Current
           </span>
         )}
       </div>
 
-      {/* Meta */}
-      <div className="flex flex-1 flex-col gap-2 p-4">
+      <div className="flex flex-1 flex-col gap-2 p-5">
         <div className="flex items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold">{template.name}</h3>
+          <h3 className={ONBOARDING_CARD_TITLE}>{template.name}</h3>
           <div className="flex items-center gap-1">
             {template.accentColors.slice(0, 5).map((c) => (
               <span
@@ -82,16 +86,11 @@ export function TemplateOptionCard({
             ))}
           </div>
         </div>
-        <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-          {template.description}
-        </p>
+        <p className={`line-clamp-2 ${ONBOARDING_CARD_DESCRIPTION}`}>{template.description}</p>
         {template.tags.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-1">
             {template.tags.slice(0, 4).map((tag) => (
-              <span
-                key={tag}
-                className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
-              >
+              <span key={tag} className={ONBOARDING_QUIET_PILL}>
                 {tag}
               </span>
             ))}

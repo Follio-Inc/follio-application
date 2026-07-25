@@ -106,7 +106,6 @@ export interface CollectedWorkExperience {
   endDate: string | null;
   isCurrent: boolean;
   bullets: string[];
-  tags: string[];
   source: string;
 }
 

@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "SectionType" ADD VALUE IF NOT EXISTS 'REFERENCES';

@@ -18,6 +18,15 @@ import {
 } from '@/types';
 import { getResumeTemplate, getResumeTemplateId } from '@/lib/resume/templates';
 
+// Re-export page-layout helpers so existing `@/lib/resume-design` imports keep working.
+export {
+  getAllowedPdfLayouts,
+  getResumePageSize,
+  getResumeSheetWidthPx,
+  isPagedPageLayout,
+  resolveResumePageLayout,
+} from '@/lib/resume/page-layout';
+
 /** Resolved font roles used by CSS vars and the font loader. */
 export interface ResolvedResumeFonts {
   body: ResumeFontFamily;
@@ -81,16 +90,18 @@ function mergeTextStyle(
  * - contact ← contactFontFamily ?? template default (system / lato / body)
  */
 export function resolveResumeFonts(raw: ResumeDesign | null | undefined): ResolvedResumeFonts {
-  const body = raw?.fontFamily ?? RESUME_DESIGN_DEFAULTS.fontFamily;
-  const isAtelier = raw?.templateId === 'atelier';
-  const heading = raw?.headingFontFamily ?? getTemplateDefaultFont(raw?.templateId, 'heading');
-  const name = raw?.nameFontFamily ?? (isAtelier ? 'great-vibes' : body);
+  const templateId = getResumeTemplateId(raw?.templateId);
+  const body = raw?.fontFamily ?? getTemplateDefaultFont(templateId, 'body');
+  const isAtelier = templateId === 'atelier';
+  const heading = raw?.headingFontFamily ?? getTemplateDefaultFont(templateId, 'heading');
+  const name =
+    raw?.nameFontFamily ?? (isAtelier ? getTemplateDefaultFont(templateId, 'name') : body);
   return {
     body,
     name,
     heading,
-    title: raw?.titleFontFamily ?? (isAtelier ? heading : body),
-    contact: raw?.contactFontFamily ?? getTemplateDefaultFont(raw?.templateId, 'contact'),
+    title: raw?.titleFontFamily ?? (isAtelier ? getTemplateDefaultFont(templateId, 'title') : body),
+    contact: raw?.contactFontFamily ?? getTemplateDefaultFont(templateId, 'contact'),
   };
 }
 
@@ -157,6 +168,11 @@ export function mergeResumeDesign(raw: ResumeDesign | null | undefined): Require
       raw?.headerAlignment ??
       templateDefaults.headerAlignment ??
       RESUME_DESIGN_DEFAULTS.headerAlignment,
+    headerPhotoLayout:
+      raw?.headerPhotoLayout ??
+      templateDefaults.headerPhotoLayout ??
+      RESUME_DESIGN_DEFAULTS.headerPhotoLayout,
+    photoSize: raw?.photoSize ?? templateDefaults.photoSize ?? RESUME_DESIGN_DEFAULTS.photoSize,
     // Prefer explicit sizes; otherwise use the active template’s recommended sizes
     // so Studio/Sleek/Atelier/Lumen don’t jump when sizes were never stored.
     nameFontSize:
@@ -313,6 +329,7 @@ export function buildResumeDesignStyles(raw: ResumeDesign | null | undefined): R
     '--rd-title-font-size': `${d.titleFontSize}px`,
     '--rd-heading-font-size': `${d.headingFontSize}px`,
     '--rd-contact-font-size': `${d.contactFontSize}px`,
+    '--rd-photo-size': `${d.photoSize}px`,
     ...textStyleToCssVars('name', textStyles.name),
     ...textStyleToCssVars('title', textStyles.title),
     ...textStyleToCssVars('heading', textStyles.heading),

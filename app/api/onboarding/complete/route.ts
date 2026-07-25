@@ -3,6 +3,8 @@ import { upsertGitHubProfileForProfile } from '@/services/import/github-enhanced
 import { db } from '@/lib/db';
 import { isPortfolioEnabled } from '@/lib/features';
 import { generateUniqueResumeTitle } from '@/lib/resume-title';
+import { isValidResumeTemplateId } from '@/lib/resume/templates';
+import { skillsToHtml } from '@/lib/skills/groups';
 import { parseDateFlexible } from '@/lib/utils';
 import type { NormalizedImportResult } from '@/services/import/types';
 import {
@@ -11,9 +13,17 @@ import {
   resolveName,
   type NameEntry,
 } from '@/services/multi-source-merger.service';
+import type { ResumeDesign } from '@/types';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import type { DataSource, Profile, SectionType, User } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
+
+function sanitizeOnboardingResumeDesign(raw: unknown): ResumeDesign | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const design = raw as ResumeDesign;
+  if (!isValidResumeTemplateId(design.templateId)) return undefined;
+  return design;
+}
 
 // Helper to safely cast string to DataSource enum
 const VALID_DATA_SOURCES: DataSource[] = ['MANUAL', 'GITHUB', 'RESUME', 'LINKEDIN', 'GENERATED'];
@@ -53,7 +63,7 @@ interface ProjectVisibilityDefaults {
 }
 
 interface ProjectForDefaults {
-  title: string;
+  title?: string | null;
   description?: string | null;
   ghPinned?: boolean;
   ghStars?: number | null;
@@ -62,7 +72,7 @@ interface ProjectForDefaults {
 }
 
 function getProjectVisibilityDefaults(project: ProjectForDefaults): ProjectVisibilityDefaults {
-  const title = project.title.toLowerCase();
+  const title = (project.title || '').toLowerCase();
   const description = project.description?.toLowerCase() || '';
   const stars = project.ghStars || 0;
   const isPinned = project.ghPinned || false;
@@ -143,25 +153,39 @@ interface ReviewedData {
     endDate?: string;
     isCurrent?: boolean;
     bullets?: string[];
+    bulletsHtml?: string;
+    isVisible?: boolean;
   }>;
   educations: Array<{
     institution: string;
     degree?: string;
     fieldOfStudy?: string;
+    location?: string;
     startDate?: string;
     endDate?: string;
     gpa?: string;
+    description?: string;
+    isVisible?: boolean;
   }>;
   skills: string[];
+  /** Preferred: category + skills lists for resume-style grouping */
+  skillGroups?: Array<{
+    name: string;
+    skills: string[];
+  }>;
   links: Array<{
     type: string;
     url: string;
     label?: string;
+    isVisible?: boolean;
   }>;
   // Projects from GitHub and resume
   projects?: Array<{
-    title: string;
+    title?: string;
+    /** Resume import often sends `name` instead of `title` */
+    name?: string;
     description?: string;
+    highlights?: string[];
     technologies?: string[];
     techStack?: string[];
     repoUrl?: string;
@@ -214,6 +238,22 @@ interface ReviewedData {
     platform?: string;
     platformIcon?: string;
     source?: string;
+  }>;
+  /** YouTube videos from channel import */
+  youtubeVideos?: Array<{
+    videoId: string;
+    title: string;
+    description?: string;
+    url: string;
+    thumbnail?: string;
+    channelId?: string;
+    channelTitle?: string;
+    publishedAt?: string;
+    duration?: string;
+    viewCount?: number;
+    likeCount?: number;
+    commentCount?: number;
+    tags?: string[];
   }>;
   /** Aggregate GitHub profile (stars, languages, orgs) from onboarding import */
   githubProfile?: {
@@ -291,6 +331,8 @@ export async function POST(request: NextRequest) {
       originalAvatarDataUrl,
       targetProfileId,
       templateId,
+      resumeDesign,
+      resumeShowPhoto,
     } = body as {
       importedData?: Record<string, NormalizedImportResult | undefined>;
       reviewedData?: ReviewedData;
@@ -307,6 +349,10 @@ export async function POST(request: NextRequest) {
       targetProfileId?: string;
       /** Starting portfolio template chosen during onboarding */
       templateId?: string;
+      /** Resume layout chosen in the shared template gallery during blank onboarding */
+      resumeDesign?: ResumeDesign;
+      /** Photo visibility synced from the chosen resume template defaults */
+      resumeShowPhoto?: boolean;
     };
 
     console.log('[Onboarding Complete] Has reviewedData:', !!reviewedData);
@@ -407,7 +453,9 @@ export async function POST(request: NextRequest) {
         clerkUserForReview?.imageUrl,
         galleryPhotos,
         originalAvatarDataUrl,
-        typeof templateId === 'string' ? templateId : undefined
+        typeof templateId === 'string' ? templateId : undefined,
+        sanitizeOnboardingResumeDesign(resumeDesign),
+        typeof resumeShowPhoto === 'boolean' ? resumeShowPhoto : undefined
       );
 
       // Create ImportLog so this import appears in the builder's Import History timeline
@@ -668,7 +716,7 @@ export async function POST(request: NextRequest) {
             endDate: exp.endDate ? new Date(exp.endDate) : null,
             isCurrent: exp.isCurrent || false,
             bullets: exp.bullets || [],
-            tags: exp.tags || [],
+            bulletsHtml: exp.bulletsHtml || undefined,
             source: toDataSource(exp.source),
             sortOrder: index,
           })),
@@ -683,10 +731,12 @@ export async function POST(request: NextRequest) {
             institution: edu.institution,
             degree: edu.degree,
             fieldOfStudy: edu.fieldOfStudy,
+            location: edu.location,
             startDate: edu.startDate ? new Date(edu.startDate) : null,
             endDate: edu.endDate ? new Date(edu.endDate) : null,
             isCurrent: edu.isCurrent || false,
             gpa: edu.gpa,
+            description: edu.description,
             source: toDataSource(edu.source),
             sortOrder: index,
           })),
@@ -881,7 +931,9 @@ async function handleReviewedData(
   clerkAvatarUrl?: string | null,
   galleryPhotos?: string[],
   originalAvatarDataUrl?: string,
-  templateId?: string
+  templateId?: string,
+  resumeDesign?: ResumeDesign,
+  resumeShowPhoto?: boolean
 ) {
   console.log('[handleReviewedData] Starting with reviewed data');
   console.log('[handleReviewedData] Experiences count:', reviewedData.experiences?.length || 0);
@@ -944,6 +996,8 @@ async function handleReviewedData(
         status: 'PUBLIC',
         resumeVisibility: 'PRIVATE',
         portfolioVisibility: 'PUBLIC',
+        ...(resumeDesign ? { resumeDesign: resumeDesign as object } : {}),
+        ...(typeof resumeShowPhoto === 'boolean' ? { resumeShowPhoto } : {}),
       },
     });
 
@@ -973,6 +1027,8 @@ async function handleReviewedData(
         summary: reviewedData.profile.summary || user.profile.summary,
         location: reviewedData.profile.location || user.profile.location,
         avatarUrl: avatarUrlForDb || user.profile.avatarUrl,
+        ...(resumeDesign ? { resumeDesign: resumeDesign as object } : {}),
+        ...(typeof resumeShowPhoto === 'boolean' ? { resumeShowPhoto } : {}),
       },
     });
     profileId = user.profile.id;
@@ -989,6 +1045,11 @@ async function handleReviewedData(
       // Also clean up GitHub and resume projects when re-importing
       db.project.deleteMany({ where: { profileId, source: { in: ['RESUME', 'GITHUB'] } } }),
     ]);
+
+    // Drop skill categories left empty after resume skill cleanup
+    await db.skillGroup.deleteMany({
+      where: { profileId, skills: { none: {} } },
+    });
   }
 
   // Create contact info
@@ -1086,8 +1147,57 @@ async function handleReviewedData(
     },
   });
 
-  // Create skills
-  if (reviewedData.skills?.length) {
+  // Create skills (prefer category groups when provided)
+  if (reviewedData.skillGroups?.length) {
+    console.log('[handleReviewedData] Creating skill groups:', reviewedData.skillGroups.length);
+    let skillSortOrder = 0;
+    const seenSkills = new Set<string>();
+
+    for (const [groupIndex, group] of reviewedData.skillGroups.entries()) {
+      const groupName = (group.name || 'Skills').trim() || 'Skills';
+      const skillNames = (group.skills || [])
+        .map((skill) => skill.trim())
+        .filter((skill) => {
+          if (!skill || skill.length > 50) return false;
+          const key = skill.toLowerCase();
+          if (seenSkills.has(key)) return false;
+          seenSkills.add(key);
+          return true;
+        });
+
+      const skillGroup = await db.skillGroup.upsert({
+        where: {
+          profileId_name: {
+            profileId,
+            name: groupName,
+          },
+        },
+        create: {
+          profileId,
+          name: groupName,
+          sortOrder: groupIndex,
+          skillsHtml: skillsToHtml(skillNames),
+        },
+        update: {
+          sortOrder: groupIndex,
+          skillsHtml: skillsToHtml(skillNames),
+        },
+      });
+
+      if (skillNames.length > 0) {
+        await db.skill.createMany({
+          data: skillNames.map((name) => ({
+            profileId,
+            name,
+            groupId: skillGroup.id,
+            source: 'RESUME' as const,
+            sortOrder: skillSortOrder++,
+          })),
+          skipDuplicates: true,
+        });
+      }
+    }
+  } else if (reviewedData.skills?.length) {
     console.log('[handleReviewedData] Creating skills:', reviewedData.skills);
     await db.skill.createMany({
       data: reviewedData.skills.map((skill, index) => ({
@@ -1117,9 +1227,10 @@ async function handleReviewedData(
           endDate: endDate,
           isCurrent: exp.isCurrent || !endDate,
           bullets: exp.bullets || [],
-          tags: [],
+          bulletsHtml: exp.bulletsHtml || undefined,
           source: 'RESUME' as const,
           sortOrder: index,
+          isVisible: exp.isVisible !== false,
         },
       });
     }
@@ -1139,12 +1250,15 @@ async function handleReviewedData(
           institution: edu.institution || 'Unknown Institution',
           degree: edu.degree,
           fieldOfStudy: edu.fieldOfStudy,
+          location: edu.location,
           startDate: startDate,
           endDate: endDate,
           isCurrent: false,
           gpa: edu.gpa,
+          description: edu.description,
           source: 'RESUME' as const,
           sortOrder: index,
+          isVisible: edu.isVisible !== false,
         },
       });
     }
@@ -1175,6 +1289,7 @@ async function handleReviewedData(
         label: link.label,
         source: 'RESUME' as const,
         sortOrder: index,
+        isVisible: link.isVisible !== false,
       })),
     });
   }
@@ -1184,6 +1299,8 @@ async function handleReviewedData(
     console.log('[handleReviewedData] Creating projects:', reviewedData.projects.length);
 
     for (const [index, project] of reviewedData.projects.entries()) {
+      const projectTitle = project.title || project.name || 'Untitled Project';
+
       // Use user-provided visibility settings if available, otherwise compute smart defaults
       const hasUserVisibilitySettings =
         project.isVisible !== undefined ||
@@ -1199,7 +1316,7 @@ async function handleReviewedData(
             showReadme: project.showReadme ?? false,
           }
         : getProjectVisibilityDefaults({
-            title: project.title,
+            title: projectTitle,
             description: project.description,
             ghPinned: project.ghPinned ?? project.githubPinned,
             ghStars: project.ghStars ?? project.githubStars,
@@ -1210,8 +1327,9 @@ async function handleReviewedData(
       await db.project.create({
         data: {
           profileId,
-          title: project.title || 'Untitled Project',
+          title: projectTitle,
           description: project.customDescription || project.description,
+          highlights: project.highlights || [],
           techStack: project.technologies || project.techStack || [],
           repoUrl: project.repoUrl,
           url: project.liveUrl || project.url,
@@ -1287,6 +1405,82 @@ async function handleReviewedData(
       } catch (err) {
         console.error('[handleReviewedData] Failed to save blog post:', post.url, err);
       }
+    }
+  }
+
+  // Persist YouTube videos from onboarding constellation import
+  if (reviewedData.youtubeVideos?.length) {
+    console.log('[handleReviewedData] Creating YouTube videos:', reviewedData.youtubeVideos.length);
+    for (const video of reviewedData.youtubeVideos) {
+      if (!video.videoId || !video.title || !video.url) continue;
+      try {
+        await db.youTubeVideo.upsert({
+          where: {
+            profileId_videoId: { profileId, videoId: video.videoId },
+          },
+          create: {
+            profileId,
+            videoId: video.videoId,
+            title: video.title,
+            description: video.description,
+            url: video.url,
+            thumbnail: video.thumbnail,
+            channelId: video.channelId,
+            channelTitle: video.channelTitle,
+            publishedAt: video.publishedAt ? new Date(video.publishedAt) : null,
+            duration: video.duration,
+            viewCount: video.viewCount ?? 0,
+            likeCount: video.likeCount ?? 0,
+            commentCount: video.commentCount ?? 0,
+            tags: video.tags || [],
+            source: 'YOUTUBE',
+            isVisible: true,
+            showOnPortfolio: true,
+          },
+          update: {
+            title: video.title,
+            description: video.description,
+            thumbnail: video.thumbnail,
+            viewCount: video.viewCount ?? 0,
+            likeCount: video.likeCount ?? 0,
+            commentCount: video.commentCount ?? 0,
+            duration: video.duration,
+          },
+        });
+      } catch (err) {
+        console.error('[handleReviewedData] Failed to save YouTube video:', video.videoId, err);
+      }
+    }
+
+    try {
+      await db.dataSourceConnection.upsert({
+        where: {
+          profileId_source: { profileId, source: 'YOUTUBE' },
+        },
+        create: {
+          profileId,
+          source: 'YOUTUBE',
+          status: 'CONNECTED',
+          lastImportedAt: new Date(),
+          itemsImported: reviewedData.youtubeVideos.length,
+          metadata: {
+            channelId: reviewedData.youtubeVideos[0]?.channelId,
+            channelTitle: reviewedData.youtubeVideos[0]?.channelTitle,
+          },
+        },
+        update: {
+          status: 'CONNECTED',
+          lastImportedAt: new Date(),
+          itemsImported: reviewedData.youtubeVideos.length,
+          importError: null,
+          metadata: {
+            channelId: reviewedData.youtubeVideos[0]?.channelId,
+            channelTitle: reviewedData.youtubeVideos[0]?.channelTitle,
+          },
+        },
+      });
+    } catch (err) {
+      console.error('[handleReviewedData] Failed to upsert YouTube data source:', err);
     }
   }
 
@@ -1576,17 +1770,19 @@ function mergeImportedData(importedData: Record<string, unknown>) {
       endDate?: string;
       isCurrent?: boolean;
       bullets?: string[];
-      tags?: string[];
+      bulletsHtml?: string;
       source: string;
     }>;
     educations: Array<{
       institution: string;
       degree?: string;
       fieldOfStudy?: string;
+      location?: string;
       startDate?: string;
       endDate?: string;
       isCurrent?: boolean;
       gpa?: string;
+      description?: string;
       source: string;
     }>;
     links: Array<{
@@ -1938,6 +2134,10 @@ function mapLinkType(
   | 'DRIBBBLE'
   | 'BEHANCE'
   | 'YOUTUBE'
+  | 'MEDIUM'
+  | 'SUBSTACK'
+  | 'HASHNODE'
+  | 'DEVTO'
   | 'OTHER' {
   const typeMap: Record<
     string,
@@ -1949,6 +2149,10 @@ function mapLinkType(
     | 'DRIBBBLE'
     | 'BEHANCE'
     | 'YOUTUBE'
+    | 'MEDIUM'
+    | 'SUBSTACK'
+    | 'HASHNODE'
+    | 'DEVTO'
     | 'OTHER'
   > = {
     GITHUB: 'GITHUB',
@@ -1960,8 +2164,10 @@ function mapLinkType(
     BEHANCE: 'BEHANCE',
     YOUTUBE: 'YOUTUBE',
     WEBSITE: 'PORTFOLIO',
-    MEDIUM: 'BLOG',
-    DEVTO: 'BLOG',
+    MEDIUM: 'MEDIUM',
+    SUBSTACK: 'SUBSTACK',
+    HASHNODE: 'HASHNODE',
+    DEVTO: 'DEVTO',
   };
 
   return typeMap[type.toUpperCase()] || 'OTHER';

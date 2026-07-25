@@ -47,7 +47,6 @@ export interface NormalizedExperience {
   endDate?: string;
   isCurrent?: boolean;
   bullets?: string[];
-  tags?: string[];
   source: DataSource;
 }
 

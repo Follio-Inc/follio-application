@@ -613,15 +613,6 @@ export function PortfolioView({
                           ))}
                         </ul>
                       )}
-                      {currentRole.tags && currentRole.tags.length > 0 && (
-                        <div className="mt-3 flex flex-wrap gap-1">
-                          {currentRole.tags.slice(0, 5).map((tag) => (
-                            <Badge key={tag} variant="outline" className="text-xs">
-                              {tag}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
                     </div>
                   </div>
                 </CardContent>

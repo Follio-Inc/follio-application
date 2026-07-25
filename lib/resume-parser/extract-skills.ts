@@ -91,24 +91,70 @@ export function parseSkillsFromText(text: string): string[] {
   return skills;
 }
 
+export interface ExtractedSkillGroup {
+  name: string;
+  skills: string[];
+}
+
+/**
+ * Extract category + skill groups from skill descriptions.
+ * Lines like "Languages: Python, Java" become named groups.
+ * Uncategorized lines are collected under "Skills".
+ */
+export function extractSkillGroups(descriptions: string[]): ExtractedSkillGroup[] {
+  const groups: ExtractedSkillGroup[] = [];
+  const uncategorized: string[] = [];
+  const seen = new Set<string>();
+
+  const takeUnique = (target: string[], skill: string) => {
+    const key = skill.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    target.push(skill);
+  };
+
+  for (const desc of descriptions) {
+    if (desc.includes(':')) {
+      const colonIdx = desc.indexOf(':');
+      const category = desc.slice(0, colonIdx).trim();
+      const skillsPart = desc.slice(colonIdx + 1);
+      const skills: string[] = [];
+      for (const skill of parseSkillsFromText(skillsPart)) {
+        takeUnique(skills, skill);
+      }
+
+      if (!category) {
+        for (const skill of skills) takeUnique(uncategorized, skill);
+        continue;
+      }
+
+      const existing = groups.find((g) => g.name.toLowerCase() === category.toLowerCase());
+      if (existing) {
+        for (const skill of skills) {
+          if (!existing.skills.some((s) => s.toLowerCase() === skill.toLowerCase())) {
+            existing.skills.push(skill);
+          }
+        }
+      } else if (skills.length > 0) {
+        groups.push({ name: category, skills });
+      }
+    } else {
+      for (const skill of parseSkillsFromText(desc)) {
+        takeUnique(uncategorized, skill);
+      }
+    }
+  }
+
+  if (uncategorized.length > 0) {
+    groups.push({ name: 'Skills', skills: uncategorized });
+  }
+
+  return groups;
+}
+
 /**
  * Extract individual skills from skill descriptions
  */
 export function extractIndividualSkills(descriptions: string[]): string[] {
-  const allSkills: string[] = [];
-
-  for (const desc of descriptions) {
-    // Check if it looks like a category (e.g., "Languages: Python, Java")
-    if (desc.includes(':')) {
-      const [, skills] = desc.split(':');
-      if (skills) {
-        allSkills.push(...parseSkillsFromText(skills));
-      }
-    } else {
-      // Just parse the whole line as skills
-      allSkills.push(...parseSkillsFromText(desc));
-    }
-  }
-
-  return [...new Set(allSkills)]; // Deduplicate
+  return extractSkillGroups(descriptions).flatMap((group) => group.skills);
 }

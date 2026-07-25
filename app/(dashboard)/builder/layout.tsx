@@ -55,10 +55,81 @@ export default async function BuilderLayout({ children }: { children: React.Reac
     redirect('/onboarding');
   }
 
-  const profile = await db.profile.findUnique({
-    where: { id: context.profileId },
-    include: PROFILE_INCLUDE,
-  });
+  // #region agent log
+  {
+    const { Prisma } = await import('@prisma/client');
+    const we = Prisma.dmmf.datamodel.models.find((m) => m.name === 'WorkExperience');
+    let dbColumns: string[] | null = null;
+    let dbColumnsError: string | null = null;
+    try {
+      const rows = await db.$queryRaw<{ column_name: string }[]>`
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'WorkExperience'
+        ORDER BY ordinal_position
+      `;
+      dbColumns = rows.map((r) => r.column_name);
+    } catch (e) {
+      dbColumnsError = e instanceof Error ? e.message : String(e);
+    }
+    fetch('http://127.0.0.1:7254/ingest/fcf2bd3d-74c8-4090-ab73-f47f4b1cfce0', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '55c426' },
+      body: JSON.stringify({
+        sessionId: '55c426',
+        runId: 'post-fix',
+        hypothesisId: 'B',
+        location: 'builder/layout.tsx:before-findUnique',
+        message: 'Schema vs DB WorkExperience columns',
+        data: {
+          dmmfHasTags: we?.fields.some((f) => f.name === 'tags') ?? null,
+          dmmfFields: we?.fields.map((f) => f.name) ?? [],
+          dbHasTags: dbColumns ? dbColumns.includes('tags') : null,
+          dbColumns,
+          dbColumnsError,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+  }
+  // #endregion
+
+  let profile;
+  try {
+    profile = await db.profile.findUnique({
+      where: { id: context.profileId },
+      include: PROFILE_INCLUDE,
+    });
+  } catch (err) {
+    // #region agent log
+    const meta =
+      err && typeof err === 'object' && 'meta' in err
+        ? (err as { meta?: unknown }).meta
+        : undefined;
+    const code =
+      err && typeof err === 'object' && 'code' in err
+        ? (err as { code?: unknown }).code
+        : undefined;
+    fetch('http://127.0.0.1:7254/ingest/fcf2bd3d-74c8-4090-ab73-f47f4b1cfce0', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '55c426' },
+      body: JSON.stringify({
+        sessionId: '55c426',
+        runId: 'post-fix',
+        hypothesisId: 'C',
+        location: 'builder/layout.tsx:findUnique-catch',
+        message: 'profile.findUnique failed',
+        data: {
+          code,
+          meta,
+          errMessage: err instanceof Error ? err.message.slice(0, 500) : String(err).slice(0, 500),
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+    throw err;
+  }
 
   if (!profile) {
     redirect('/onboarding');

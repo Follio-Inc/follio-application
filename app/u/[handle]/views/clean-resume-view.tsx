@@ -15,12 +15,17 @@ import {
   getResumeFullName,
   shouldShowResumePhoto,
 } from '@/lib/resume/contact';
+import { resolveHeaderComposition, isPhotoBeforeText } from '@/lib/resume/header-layout';
 import { getResumeTemplateId, isResumeAtelierRailSectionType } from '@/lib/resume/templates';
 import {
   buildResumeDesignStyles,
+  mergeResumeDesign,
   parseResumeDesign,
   resolveResumeFonts,
+  resolveResumePageLayout,
 } from '@/lib/resume-design';
+import { isPagedPageLayout } from '@/lib/resume/page-layout';
+import { resolveSkillCategoryLabel, skillGroupsHaveCategoryLabels } from '@/lib/skills/groups';
 import { formatDate } from '@/lib/utils';
 import { applyVisibilityFilter, type FilteredProfile } from '@/lib/visibility';
 import type {
@@ -31,9 +36,12 @@ import type {
   ProfileSection,
   PublicationItem,
   PublicProfile,
+  ReferenceItem,
   VolunteeringItem,
 } from '@/types';
 import { HEADER_SECTION_TYPES, type ResumeDesign } from '@/types';
+
+import { ResumePagedStack } from '@/components/resume-paged-stack';
 
 import { PublicResumeActions } from './public-resume-actions';
 import { ResumeFontLoader } from './resume-font-loader';
@@ -132,6 +140,33 @@ function formatDateRange(
 // HEADER SECTION
 // ============================================================================
 
+function ResumeHeaderIdentityText({
+  fullName,
+  headline,
+  contactItems,
+}: {
+  fullName: string;
+  headline?: string | null;
+  contactItems: string[];
+}) {
+  return (
+    <div className="resume-header-text min-w-0">
+      <h1 className="resume-name">{fullName}</h1>
+      {headline ? <p className="resume-headline">{headline}</p> : null}
+      {contactItems.length > 0 ? (
+        <p className="resume-contact-line">
+          {contactItems.map((item, index) => (
+            <span key={index}>
+              {index > 0 && <span className="resume-contact-separator"> | </span>}
+              <span className="resume-contact-item">{item}</span>
+            </span>
+          ))}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function ResumeHeader({
   profile,
   showContact = true,
@@ -143,48 +178,44 @@ function ResumeHeader({
   const fullName = getResumeFullName(profile);
   const showPhoto = shouldShowResumePhoto(profile);
   const contactItems = showContact ? buildResumeContactItems(profile) : [];
+  const design = mergeResumeDesign(parseResumeDesign(profile.resumeDesign));
+  const composition = resolveHeaderComposition(showPhoto, design.headerPhotoLayout);
+
+  const photo = showPhoto ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={profile.avatarUrl!}
+      alt={fullName}
+      className="resume-header-photo rounded-full object-cover"
+    />
+  ) : null;
+
+  const text = (
+    <ResumeHeaderIdentityText
+      fullName={fullName}
+      headline={profile.headline}
+      contactItems={contactItems}
+    />
+  );
 
   return (
-    <header className="resume-header relative">
-      {showPhoto ? (
-        <div className="flex items-start gap-4">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={profile.avatarUrl!}
-            alt={fullName}
-            className="h-20 w-20 rounded-full object-cover print:h-16 print:w-16"
-            style={{ flexShrink: 0 }}
-          />
-          <div className="min-w-0 flex-1">
-            <h1 className="resume-name">{fullName}</h1>
-            {profile.headline && <p className="resume-headline">{profile.headline}</p>}
-            {contactItems.length > 0 && (
-              <p className="resume-contact-line">
-                {contactItems.map((item, index) => (
-                  <span key={index}>
-                    {index > 0 && <span className="resume-contact-separator"> | </span>}
-                    <span className="resume-contact-item">{item}</span>
-                  </span>
-                ))}
-              </p>
-            )}
-          </div>
-        </div>
+    <header className="resume-header relative" data-header-composition={composition}>
+      {composition === 'text' ? (
+        text
       ) : (
-        <>
-          <h1 className="resume-name">{fullName}</h1>
-          {profile.headline && <p className="resume-headline">{profile.headline}</p>}
-          {contactItems.length > 0 && (
-            <p className="resume-contact-line">
-              {contactItems.map((item, index) => (
-                <span key={index}>
-                  {index > 0 && <span className="resume-contact-separator"> | </span>}
-                  <span className="resume-contact-item">{item}</span>
-                </span>
-              ))}
-            </p>
+        <div className="resume-header-identity">
+          {isPhotoBeforeText(composition) ? (
+            <>
+              {photo}
+              {text}
+            </>
+          ) : (
+            <>
+              {text}
+              {photo}
+            </>
           )}
-        </>
+        </div>
       )}
     </header>
   );
@@ -194,18 +225,37 @@ function SleekHeader({ profile }: { profile: FilteredProfile }) {
   const fullName = getResumeFullName(profile);
   const showPhoto = shouldShowResumePhoto(profile);
   const contactItems = buildResumeContactItems(profile);
+  const design = mergeResumeDesign(parseResumeDesign(profile.resumeDesign));
+  const composition = resolveHeaderComposition(showPhoto, design.headerPhotoLayout);
+
+  const photo = showPhoto ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={profile.avatarUrl!} alt={fullName} className="resume-sleek-photo" />
+  ) : null;
+
+  const text = (
+    <div className="resume-header-text min-w-0">
+      <h1 className="resume-name">{fullName}</h1>
+      {profile.headline ? <p className="resume-headline">{profile.headline}</p> : null}
+    </div>
+  );
 
   return (
-    <header className="resume-header resume-sleek-header">
-      <div className="resume-sleek-identity">
-        {showPhoto ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={profile.avatarUrl!} alt={fullName} className="resume-sleek-photo" />
-        ) : null}
-        <div className="min-w-0">
-          <h1 className="resume-name">{fullName}</h1>
-          {profile.headline ? <p className="resume-headline">{profile.headline}</p> : null}
-        </div>
+    <header className="resume-header resume-sleek-header" data-header-composition={composition}>
+      <div className="resume-sleek-identity resume-header-identity">
+        {composition === 'text' || !showPhoto ? (
+          text
+        ) : isPhotoBeforeText(composition) ? (
+          <>
+            {photo}
+            {text}
+          </>
+        ) : (
+          <>
+            {text}
+            {photo}
+          </>
+        )}
       </div>
       {contactItems.length > 0 ? (
         <ul className="resume-sleek-contact">
@@ -224,18 +274,37 @@ function StudioHeader({ profile }: { profile: FilteredProfile }) {
   const fullName = getResumeFullName(profile);
   const showPhoto = shouldShowResumePhoto(profile);
   const contactFields = buildResumeStudioContactFields(profile);
+  const design = mergeResumeDesign(parseResumeDesign(profile.resumeDesign));
+  const composition = resolveHeaderComposition(showPhoto, design.headerPhotoLayout);
+
+  const photo = showPhoto ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={profile.avatarUrl!} alt={fullName} className="resume-studio-photo" />
+  ) : null;
+
+  const text = (
+    <div className="resume-studio-identity-text resume-header-text">
+      <h1 className="resume-name">{fullName}</h1>
+      {profile.headline ? <p className="resume-headline">{profile.headline}</p> : null}
+    </div>
+  );
 
   return (
-    <header className="resume-header resume-studio-header">
-      <div className="resume-studio-identity">
-        {showPhoto ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={profile.avatarUrl!} alt={fullName} className="resume-studio-photo" />
-        ) : null}
-        <div className="resume-studio-identity-text">
-          <h1 className="resume-name">{fullName}</h1>
-          {profile.headline ? <p className="resume-headline">{profile.headline}</p> : null}
-        </div>
+    <header className="resume-header resume-studio-header" data-header-composition={composition}>
+      <div className="resume-studio-identity resume-header-identity">
+        {composition === 'text' || !showPhoto ? (
+          text
+        ) : isPhotoBeforeText(composition) ? (
+          <>
+            {photo}
+            {text}
+          </>
+        ) : (
+          <>
+            {text}
+            {photo}
+          </>
+        )}
       </div>
       {contactFields.length > 0 ? (
         <ul className="resume-studio-contact">
@@ -328,7 +397,6 @@ interface ExperienceEntryProps {
   bullets: string[];
   /** Complete editor HTML — when present, rendered directly for perfect fidelity. */
   bulletsHtml?: string | null;
-  tags?: string[];
 }
 
 function ExperienceEntry({
@@ -418,7 +486,6 @@ function ExperienceSection({
             isCurrent={exp.isCurrent}
             bullets={exp.bullets}
             bulletsHtml={exp.bulletsHtml}
-            tags={exp.tags}
             variant={variant}
           />
         ))}
@@ -503,58 +570,65 @@ function SkillsSection({
   stacked = false,
 }: {
   profile: PublicProfile;
-  /** Atelier: one skill per line, no proficiency bars. */
+  /** Atelier: one skill per line when categories are absent and content is plain. */
   stacked?: boolean;
 }) {
   const { skills, skillGroups } = profile;
+  const visibleGroups = (skillGroups ?? []).filter(
+    (group) => group.skills.length > 0 || !isHtmlEmpty(group.skillsHtml)
+  );
+  const groupNames = visibleGroups.map((group) => group.name);
+  const hasCategoryLabels = skillGroupsHaveCategoryLabels(visibleGroups);
+  const hasRichHtml = visibleGroups.some(
+    (group) => group.skillsHtml && !isHtmlEmpty(group.skillsHtml)
+  );
 
-  // If we have skill groups, display grouped (already filtered by applyVisibilityFilter)
-  if (skillGroups && skillGroups.length > 0) {
-    if (stacked) {
-      const names = skillGroups.flatMap((group) => group.skills.map((s) => s.name));
-      if (names.length === 0) return null;
-      return (
-        <section className="resume-section">
-          <SectionDivider title="SKILLS" />
-          <ul className="resume-skills-stack">
-            {names.map((name) => (
-              <li key={name} className="resume-skills-stack-item">
-                {name}
-              </li>
-            ))}
-          </ul>
-        </section>
-      );
-    }
-
+  // Rich HTML (and/or category labels): render each group with optional bold label.
+  if (visibleGroups.length > 0 && (hasCategoryLabels || hasRichHtml)) {
     return (
       <section className="resume-section">
         <SectionDivider title="SKILLS" />
         <div className="resume-skills-grouped">
-          {skillGroups.map((group) => (
-            <div key={group.id} className="resume-skill-group">
-              <span className="resume-skill-group-name">{group.name}:</span>{' '}
-              <span className="resume-skill-group-items">
-                {group.skills.map((s) => s.name).join(', ')}
-              </span>
-            </div>
-          ))}
+          {visibleGroups.map((group) => {
+            const label = resolveSkillCategoryLabel(group.name, groupNames);
+            const html =
+              group.skillsHtml && !isHtmlEmpty(group.skillsHtml) ? group.skillsHtml : null;
+            const items = group.skills.map((s) => s.name).join(', ');
+
+            return (
+              <div key={group.id} className="resume-skill-group">
+                {label ? <span className="resume-skill-group-name">{label}: </span> : null}
+                {html ? (
+                  <div
+                    className="resume-skill-group-items resume-rich-html resume-skill-group-rich"
+                    dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(html) }}
+                  />
+                ) : (
+                  <span className="resume-skill-group-items">{items}</span>
+                )}
+              </div>
+            );
+          })}
         </div>
       </section>
     );
   }
 
-  // Otherwise, display flat list (already filtered by applyVisibilityFilter)
-  if (!skills || skills.length === 0) return null;
+  const flatNames =
+    visibleGroups.length > 0
+      ? visibleGroups.flatMap((group) => group.skills.map((s) => s.name))
+      : (skills ?? []).map((s) => s.name);
+
+  if (flatNames.length === 0) return null;
 
   if (stacked) {
     return (
       <section className="resume-section">
         <SectionDivider title="SKILLS" />
         <ul className="resume-skills-stack">
-          {skills.map((s) => (
-            <li key={s.id} className="resume-skills-stack-item">
-              {s.name}
+          {flatNames.map((name) => (
+            <li key={name} className="resume-skills-stack-item">
+              {name}
             </li>
           ))}
         </ul>
@@ -565,7 +639,7 @@ function SkillsSection({
   return (
     <section className="resume-section">
       <SectionDivider title="SKILLS" />
-      <p className="resume-skills-flat">{skills.map((s) => s.name).join(', ')}</p>
+      <p className="resume-skills-flat">{flatNames.join(', ')}</p>
     </section>
   );
 }
@@ -831,6 +905,37 @@ function InterestsSection({ items }: { items: InterestItem[] }) {
 }
 
 // ============================================================================
+// REFERENCES SECTION
+// ============================================================================
+
+function ReferencesSection({ items }: { items: ReferenceItem[] }) {
+  if (!items || items.length === 0) return null;
+
+  return (
+    <section className="resume-section">
+      <SectionDivider title="REFERENCES" />
+      <div className="resume-entries resume-entries-compact">
+        {items.map((ref) => {
+          const roleLine = [ref.title, ref.company].filter(Boolean).join(', ');
+          const contactLine = [ref.email, ref.phone].filter(Boolean).join(' · ');
+
+          return (
+            <div key={ref.id} className="resume-reference">
+              <p className="resume-reference-name">{ref.name}</p>
+              {roleLine && <p className="resume-reference-role">{roleLine}</p>}
+              {ref.relationship && (
+                <p className="resume-reference-relationship">{ref.relationship}</p>
+              )}
+              {contactLine && <p className="resume-reference-contact">{contactLine}</p>}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+// ============================================================================
 // CUSTOM SECTIONS
 // ============================================================================
 
@@ -909,6 +1014,7 @@ export function CleanResumeView({ profile: rawProfile, authState }: CleanResumeV
   );
 
   const resolvedColorTheme = useResolvedResumeColorTheme(parsedDesign?.colorTheme);
+  const pageLayout = resolveResumePageLayout(parsedDesign);
 
   // ── Sections ordered by user-configured sortOrder ─────────────────────
   // Header sections (BASIC_INFO, LINKS) are always rendered as
@@ -998,6 +1104,13 @@ export function CleanResumeView({ profile: rawProfile, authState }: CleanResumeV
         return (
           <InterestsSection key={section.id} items={getCustomContentItems<InterestItem>(section)} />
         );
+      case 'REFERENCES':
+        return (
+          <ReferencesSection
+            key={section.id}
+            items={getCustomContentItems<ReferenceItem>(section)}
+          />
+        );
       case 'CUSTOM':
         return <CustomSection key={section.id} section={section} />;
       default:
@@ -1028,6 +1141,7 @@ export function CleanResumeView({ profile: rawProfile, authState }: CleanResumeV
           firstName={rawProfile.firstName ?? null}
           resumeTitle={rawProfile.resumeTitle || 'Untitled Resume'}
           resumeVisibility={rawProfile.resumeVisibility ?? 'PRIVATE'}
+          resumePageLayout={pageLayout}
           authState={authState}
           kebabContainer={kebabAnchor}
         />
@@ -1036,6 +1150,7 @@ export function CleanResumeView({ profile: rawProfile, authState }: CleanResumeV
       <div
         className="resume-paper-wrapper group/resume relative"
         data-resume-theme={resolvedColorTheme}
+        data-page-layout={pageLayout}
       >
         {/* Kebab anchor — sits *outside* the resume's right margin,
             vertically aligned with the top of the paper. The actual
@@ -1051,41 +1166,48 @@ export function CleanResumeView({ profile: rawProfile, authState }: CleanResumeV
           />
         ) : null}
 
-        <article
-          ref={resumeRef}
-          className={[
-            'resume-paper',
-            isSleek && 'resume-paper--sleek',
-            isStudio && 'resume-paper--studio',
-            isAtelier && 'resume-paper--atelier',
-            isLumen && 'resume-paper--lumen',
-            justifyAll && 'resume-justify-all',
-          ]
-            .filter(Boolean)
-            .join(' ')}
-          data-resume-template={templateId}
-          style={designStyles}
+        <ResumePagedStack
+          enabled={isPagedPageLayout(pageLayout)}
+          pageLayout={pageLayout === 'a4' ? 'a4' : 'letter'}
+          contentRef={resumeRef}
         >
-          {isAtelier ? (
-            <>
-              <AtelierHeader profile={profile} />
-              <div className="resume-atelier-layout">
-                <div className="resume-atelier-main">{mainSections.map(renderSection)}</div>
-                <aside className="resume-atelier-rail">{sidebarSections.map(renderSection)}</aside>
-              </div>
-            </>
-          ) : isStudio ? (
-            <>
-              <StudioHeader profile={profile} />
-              <div className="resume-studio-body">{mainSections.map(renderSection)}</div>
-            </>
-          ) : (
-            <>
-              {isSleek ? <SleekHeader profile={profile} /> : <ResumeHeader profile={profile} />}
-              {mainSections.map(renderSection)}
-            </>
-          )}
-        </article>
+          <article
+            className={[
+              'resume-paper',
+              isSleek && 'resume-paper--sleek',
+              isStudio && 'resume-paper--studio',
+              isAtelier && 'resume-paper--atelier',
+              isLumen && 'resume-paper--lumen',
+              justifyAll && 'resume-justify-all',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+            data-resume-template={templateId}
+            style={designStyles}
+          >
+            {isAtelier ? (
+              <>
+                <AtelierHeader profile={profile} />
+                <div className="resume-atelier-layout">
+                  <div className="resume-atelier-main">{mainSections.map(renderSection)}</div>
+                  <aside className="resume-atelier-rail">
+                    {sidebarSections.map(renderSection)}
+                  </aside>
+                </div>
+              </>
+            ) : isStudio ? (
+              <>
+                <StudioHeader profile={profile} />
+                <div className="resume-studio-body">{mainSections.map(renderSection)}</div>
+              </>
+            ) : (
+              <>
+                {isSleek ? <SleekHeader profile={profile} /> : <ResumeHeader profile={profile} />}
+                {mainSections.map(renderSection)}
+              </>
+            )}
+          </article>
+        </ResumePagedStack>
       </div>
     </>
   );

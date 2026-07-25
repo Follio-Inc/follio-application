@@ -1,6 +1,6 @@
 /**
  * Key under which the chosen onboarding template is stored in sessionStorage.
- * The import step writes it; the review page reads it when submitting so the
- * generated portfolio uses the user's pick.
+ * Written when a template is picked (or defaulted) and read when completing
+ * onboarding so the generated portfolio uses that pick.
  */
 export const ONBOARDING_TEMPLATE_KEY = 'onboarding_template';

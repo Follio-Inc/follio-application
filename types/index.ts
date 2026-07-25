@@ -51,8 +51,21 @@ export type ResumeFontFamily =
   | 'system'
   | 'great-vibes';
 
-/** Header alignment options */
+/**
+ * Header text alignment when the resume photo is hidden: left | center | right.
+ */
 export type ResumeHeaderAlignment = 'left' | 'center' | 'right';
+
+/**
+ * Header composition when the resume photo is shown.
+ * Distinct from text alignment — e.g. `photo-right` keeps name/title left-aligned
+ * with the photo pinned to the right of the header row.
+ */
+export type ResumeHeaderPhotoLayout =
+  | 'photo-left'
+  | 'photo-right'
+  | 'photo-above'
+  | 'photo-above-left';
 
 /** Section divider style */
 export type ResumeDividerStyle = 'line' | 'double' | 'dotted' | 'dashed' | 'thick' | 'none';
@@ -65,6 +78,17 @@ export type ResumeColorTheme = 'light' | 'dark' | 'system';
 
 /** Resume layout kit — presentation only; content is shared across templates */
 export type ResumeTemplateId = 'classic' | 'lumen' | 'sleek' | 'studio' | 'atelier';
+
+/**
+ * On-screen and PDF page layout.
+ * - `continuous` — single scrollable sheet (digital-first)
+ * - `a4` — ISO A4 pages with visible breaks
+ * - `letter` — US Letter pages with visible breaks
+ */
+export type ResumePageLayout = 'continuous' | 'a4' | 'letter';
+
+/** Alias used by PDF export — same values as `ResumePageLayout`. */
+export type PdfLayout = ResumePageLayout;
 
 /** Text emphasis for a typography role (name, title, headings, body) */
 export interface ResumeTextStyle {
@@ -106,8 +130,17 @@ export interface ResumeDesign {
   headingFontFamily?: ResumeFontFamily;
   /** Font for email / phone / contact block; falls back to system UI (or template default) when unset */
   contactFontFamily?: ResumeFontFamily;
-  /** Header block alignment: left / center / right */
+  /**
+   * Header text alignment when the photo is off: left / center / right.
+   */
   headerAlignment?: ResumeHeaderAlignment;
+  /**
+   * Header composition when the photo is on.
+   * Independent of `headerAlignment` — photo layouts are not text-align aliases.
+   */
+  headerPhotoLayout?: ResumeHeaderPhotoLayout;
+  /** Profile photo size in px (default 80; classic/lumen). Sleek/studio default to 64. */
+  photoSize?: number;
   /** Style of the divider line below section headings */
   dividerStyle?: ResumeDividerStyle;
   /** Base body font size in px (default 13) */
@@ -134,6 +167,12 @@ export interface ResumeDesign {
   contactStyle?: ResumeTextStyle;
   /** Apply justified text alignment to all resume content */
   justifyAll?: boolean;
+  /**
+   * Page layout for the live resume view (and download gating).
+   * Continuous resumes may download as continuous, A4, or Letter;
+   * A4/Letter resumes download as A4 or Letter only.
+   */
+  pageLayout?: ResumePageLayout;
 }
 
 /** Default design settings applied when no custom design is configured */
@@ -149,6 +188,8 @@ export const RESUME_DESIGN_DEFAULTS: Required<ResumeDesign> = {
   headingFontFamily: 'system',
   contactFontFamily: 'system',
   headerAlignment: 'center',
+  headerPhotoLayout: 'photo-left',
+  photoSize: 80,
   dividerStyle: 'line',
   fontSize: 13,
   density: 'normal',
@@ -162,6 +203,7 @@ export const RESUME_DESIGN_DEFAULTS: Required<ResumeDesign> = {
   bodyStyle: { bold: false, italic: false, underline: false },
   contactStyle: { bold: false, italic: false, underline: false },
   justifyAll: false,
+  pageLayout: 'continuous',
 };
 
 /** Ordered allowlist for resume font pickers */
@@ -708,6 +750,15 @@ export const SECTION_CONFIGS: SectionConfig[] = [
     category: 'body',
   },
   {
+    type: 'REFERENCES',
+    defaultTitle: 'References',
+    icon: 'Users',
+    description: 'Professional references',
+    isRemovable: true,
+    hasItems: true,
+    category: 'body',
+  },
+  {
     type: 'CUSTOM',
     defaultTitle: 'Custom Section',
     icon: 'LayoutGrid',
@@ -825,4 +876,25 @@ export interface InterestItem {
  */
 export interface InterestsSectionContent {
   items: InterestItem[];
+}
+
+/**
+ * Professional reference item
+ */
+export interface ReferenceItem {
+  id: string;
+  name: string;
+  title?: string;
+  company?: string;
+  email?: string;
+  phone?: string;
+  relationship?: string;
+  isVisible?: boolean;
+}
+
+/**
+ * References section content
+ */
+export interface ReferencesSectionContent {
+  items: ReferenceItem[];
 }

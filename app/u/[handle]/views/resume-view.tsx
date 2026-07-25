@@ -18,6 +18,7 @@ import {
   Sparkles,
   Star,
   Twitter,
+  Users,
 } from 'lucide-react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -39,6 +40,8 @@ import type {
   PublicationItem,
   PublicationsSectionContent,
   PublicProfile,
+  ReferenceItem,
+  ReferencesSectionContent,
   VolunteeringItem,
   VolunteeringSectionContent,
 } from '@/types';
@@ -84,6 +87,7 @@ export function ResumeView({ profile: rawProfile }: ResumeViewProps) {
   const languagesSection = getSectionByType('LANGUAGES');
   const publicationsSection = getSectionByType('PUBLICATIONS');
   const interestsSection = getSectionByType('INTERESTS');
+  const referencesSection = getSectionByType('REFERENCES');
 
   // Extract items from sections
   const volunteeringItems = volunteeringSection
@@ -97,6 +101,9 @@ export function ResumeView({ profile: rawProfile }: ResumeViewProps) {
     : [];
   const interestItems = interestsSection
     ? (interestsSection.customContent as unknown as InterestsSectionContent)?.items || []
+    : [];
+  const referenceItems = referencesSection
+    ? (referencesSection.customContent as unknown as ReferencesSectionContent)?.items || []
     : [];
 
   const getProficiencyLabel = (proficiency: string) => {
@@ -330,15 +337,6 @@ export function ResumeView({ profile: rawProfile }: ResumeViewProps) {
                           </li>
                         ))}
                       </ul>
-                    )}
-                    {exp.tags && exp.tags.length > 0 && (
-                      <div className="mt-3 flex flex-wrap gap-1">
-                        {exp.tags.map((tag) => (
-                          <Badge key={tag} variant="outline" className="text-xs">
-                            {tag}
-                          </Badge>
-                        ))}
-                      </div>
                     )}
                   </div>
                 </div>
@@ -620,6 +618,47 @@ export function ResumeView({ profile: rawProfile }: ResumeViewProps) {
                 </Badge>
               ))}
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* References */}
+      {referenceItems.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Users className="h-5 w-5" />
+              References
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {referenceItems.map((ref: ReferenceItem, index: number) => {
+              const roleLine = [ref.title, ref.company].filter(Boolean).join(' · ');
+              const contactLine = [ref.email, ref.phone].filter(Boolean).join(' · ');
+
+              return (
+                <div key={ref.id}>
+                  {index > 0 && <Separator className="mb-6" />}
+                  <div className="flex gap-4">
+                    <div className="hidden sm:block">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                        <Users className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold">{ref.name}</h3>
+                      {roleLine && <p className="text-sm text-muted-foreground">{roleLine}</p>}
+                      {ref.relationship && (
+                        <p className="text-sm text-muted-foreground">{ref.relationship}</p>
+                      )}
+                      {contactLine && (
+                        <p className="mt-1 text-xs text-muted-foreground">{contactLine}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </CardContent>
         </Card>
       )}

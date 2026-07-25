@@ -1,8 +1,8 @@
 import { auth } from '@clerk/nextjs/server';
-import { redirect } from 'next/navigation';
 
+import { ClientRedirect } from '@/components/client-redirect';
 import { LandingPage } from '@/components/landing-page';
-import { resolveActiveProfileContextOrNull } from '@/lib/active-profile';
+import { hasOnboardedProfile } from '@/lib/active-profile';
 
 // Prevent caching during auth state changes
 export const dynamic = 'force-dynamic';
@@ -12,10 +12,9 @@ export const dynamic = 'force-dynamic';
  *
  * Anonymous visitors see the landing page.
  *
- * Authenticated users are sent to the Dashboard — their workspace home.
- * Earlier versions redirected logged-in users straight to their public
- * profile (`/u/[handle]`), which made the product feel like it had no
- * "inside" and stranded users away from their editing surface.
+ * Authenticated users are routed with a full-document client redirect so soft
+ * navigations after sign-in do not land on a blank page (a known App Router
+ * issue when server `redirect()` runs during client transitions).
  */
 export default async function HomePage() {
   let userId: string | null = null;
@@ -29,11 +28,18 @@ export default async function HomePage() {
   }
 
   if (userId) {
-    const context = await resolveActiveProfileContextOrNull(userId);
-    if (!context) {
-      redirect('/onboarding');
+    let onboarded = false;
+    try {
+      onboarded = await hasOnboardedProfile(userId);
+    } catch {
+      return <ClientRedirect href="/onboarding" message="Continuing your setup…" />;
     }
-    redirect('/dashboard');
+
+    if (!onboarded) {
+      return <ClientRedirect href="/onboarding" message="Continuing your setup…" />;
+    }
+
+    return <ClientRedirect href="/dashboard" message="Opening your workspace…" />;
   }
 
   return <LandingPage />;

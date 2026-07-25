@@ -13,6 +13,11 @@ export interface ResumeTemplateMeta {
   description: string;
   /** Visual cue for the picker (plain | accent) */
   tone: 'plain' | 'accent';
+  /**
+   * Whether this template’s default look includes a resume photo.
+   * Restore Defaults / applying the template syncs `resumeShowPhoto` to this value.
+   */
+  defaultShowPhoto: boolean;
   /** Recommended design defaults applied when the user selects this template */
   designDefaults: Partial<ResumeDesign>;
 }

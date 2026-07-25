@@ -1,19 +1,20 @@
-import { buildResumePdfUrl } from '@/lib/hooks/use-resume-download';
 import { describe, expect, it } from 'vitest';
 
+import { buildResumePdfUrl } from '@/lib/hooks/use-resume-download';
+
 describe('buildResumePdfUrl', () => {
-  it('builds URL with layout and preserves share token', () => {
-    const url = buildResumePdfUrl('jdoe', 'continuous', '?token=abc123&layout=paged');
+  it('sets layout and preserves other search params', () => {
+    const url = buildResumePdfUrl('jdoe', 'continuous', '?token=abc123&layout=letter');
     expect(url).toBe('/api/export/jdoe/pdf?layout=continuous&token=abc123');
   });
 
-  it('preserves key and drops duplicate layout param', () => {
-    const url = buildResumePdfUrl('jdoe', 'paged', '?layout=continuous&key=secret');
-    expect(url).toBe('/api/export/jdoe/pdf?layout=paged&key=secret');
+  it('overrides an existing layout param', () => {
+    const url = buildResumePdfUrl('jdoe', 'a4', '?layout=continuous&key=secret');
+    expect(url).toBe('/api/export/jdoe/pdf?layout=a4&key=secret');
   });
 
-  it('builds URL without existing search params', () => {
-    const url = buildResumePdfUrl('jdoe', 'paged', '');
-    expect(url).toBe('/api/export/jdoe/pdf?layout=paged');
+  it('works with an empty search string', () => {
+    const url = buildResumePdfUrl('jdoe', 'letter', '');
+    expect(url).toBe('/api/export/jdoe/pdf?layout=letter');
   });
 });

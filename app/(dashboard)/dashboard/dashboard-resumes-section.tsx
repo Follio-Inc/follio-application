@@ -50,6 +50,7 @@ import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { MAX_RESUMES_PER_USER } from '@/lib/validations';
 import { isPortfolioEnabled } from '@/lib/features';
+import type { ResumePageLayout } from '@/types';
 
 import {
   NewResumeCloneDialog,
@@ -76,6 +77,8 @@ export interface DashboardResumeItem {
   headline: string | null;
   updatedAt: string;
   createdAt: string;
+  /** Live resume page layout — gates download options. */
+  pageLayout: ResumePageLayout;
 }
 
 interface DashboardResumesSectionProps {
@@ -158,6 +161,7 @@ function createPlaceholderResume(resume: UploadCreatedResume): DashboardResumeIt
     headline: null,
     updatedAt: now,
     createdAt: now,
+    pageLayout: 'continuous',
   };
 }
 
@@ -873,6 +877,7 @@ export function DashboardResumesSection({
         <DownloadDialog
           handle={downloadingResume.handle}
           resumeTitle={downloadingResume.resumeTitle}
+          resumePageLayout={downloadingResume.pageLayout}
           open={downloadDialogOpen}
           onOpenChange={(open) => {
             setDownloadDialogOpen(open);

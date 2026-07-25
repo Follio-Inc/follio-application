@@ -58,8 +58,7 @@ ${
         .map(
           (w) =>
             `**${w.role}** at ${w.company} (${w.startDate}–${w.isCurrent ? 'Present' : w.endDate || '?'})
-  Bullets: ${w.bullets.length > 0 ? w.bullets.join(' | ') : 'None'}
-  Tags: ${w.tags.join(', ') || 'None'}`
+  Bullets: ${w.bullets.length > 0 ? w.bullets.join(' | ') : 'None'}`
         )
         .join('\n\n')
     : 'No work experience.'
