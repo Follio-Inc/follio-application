@@ -76,6 +76,21 @@ export function getAllowedPdfLayouts(pageLayout: DocumentPageLayout): DocumentPa
   return ['continuous', 'a4', 'letter'];
 }
 
+const PDF_LAYOUT_QUERY_VALUES = new Set(['continuous', 'a4', 'letter', 'paged']);
+
+/**
+ * Normalize `?layout=` query params for PDF routes.
+ * Accepts legacy `paged` → `letter`. Unknown values fall back to `fallback`.
+ */
+export function parsePdfLayoutQueryParam(
+  raw: string | null | undefined,
+  fallback: DocumentPageLayout = 'letter'
+): DocumentPageLayout {
+  if (!raw || !PDF_LAYOUT_QUERY_VALUES.has(raw)) return fallback;
+  if (raw === 'continuous' || raw === 'a4' || raw === 'letter') return raw;
+  return 'letter';
+}
+
 /** Paper size for A4/Letter layouts. Continuous uses Letter width digitally. */
 export function getDocumentPageSize(layout: DocumentPageLayout): DocumentPageSize {
   if (layout === 'a4') return PAGE_SIZES.a4;

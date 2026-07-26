@@ -30,6 +30,15 @@ import {
 import { ShareDialog } from '@/components/share-dialog';
 import { Button } from '@/components/ui/button';
 import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -72,8 +81,11 @@ export function DashboardCoverLettersSection({
   const [activeId, setActiveId] = useState(initialActiveCoverLetterId);
   const [creating, setCreating] = useState(false);
   const [openingId, setOpeningId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [downloadTarget, setDownloadTarget] = useState<DashboardCoverLetterItem | null>(null);
   const [shareTarget, setShareTarget] = useState<DashboardCoverLetterItem | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DashboardCoverLetterItem | null>(null);
 
   const refresh = useCallback(async () => {
     const res = await fetch('/api/cover-letters');
@@ -85,13 +97,17 @@ export function DashboardCoverLettersSection({
 
   const createLetter = useCallback(async () => {
     setCreating(true);
+    setError(null);
     try {
       const res = await fetch('/api/cover-letters', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        setError("Couldn't create a cover letter. Try again.");
+        return;
+      }
       const data = await res.json();
       const id = data.coverLetter?.id as string | undefined;
       if (id) {
@@ -99,6 +115,8 @@ export function DashboardCoverLettersSection({
         return;
       }
       await refresh();
+    } catch {
+      setError("Couldn't create a cover letter. Check your connection and try again.");
     } finally {
       setCreating(false);
     }
@@ -107,9 +125,16 @@ export function DashboardCoverLettersSection({
   const openLetter = useCallback(
     async (id: string) => {
       setOpeningId(id);
+      setError(null);
       try {
-        await fetch(`/api/cover-letters/${id}/activate`, { method: 'POST' });
+        const res = await fetch(`/api/cover-letters/${id}/activate`, { method: 'POST' });
+        if (!res.ok) {
+          setError("Couldn't open this cover letter. Try again.");
+          return;
+        }
         router.push(`/cover-letter-builder?id=${id}`);
+      } catch {
+        setError("Couldn't open this cover letter. Check your connection and try again.");
       } finally {
         setOpeningId(null);
       }
@@ -117,15 +142,25 @@ export function DashboardCoverLettersSection({
     [router]
   );
 
-  const deleteLetter = useCallback(
-    async (id: string) => {
-      const res = await fetch(`/api/cover-letters/${id}`, { method: 'DELETE' });
-      if (!res.ok) return;
-      setLetters((prev) => prev.filter((l) => l.id !== id));
-      if (activeId === id) setActiveId(null);
-    },
-    [activeId]
-  );
+  const deleteLetter = useCallback(async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/cover-letters/${deleteTarget.id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        setError("Couldn't delete this cover letter. Try again.");
+        return;
+      }
+      setLetters((prev) => prev.filter((l) => l.id !== deleteTarget.id));
+      if (activeId === deleteTarget.id) setActiveId(null);
+      setDeleteTarget(null);
+    } catch {
+      setError("Couldn't delete this cover letter. Check your connection and try again.");
+    } finally {
+      setDeleting(false);
+    }
+  }, [activeId, deleteTarget]);
 
   const viewHref = (letter: DashboardCoverLetterItem) => {
     if (letter.visibility === 'UNLISTED' && letter.unlistedKey) {
@@ -135,7 +170,7 @@ export function DashboardCoverLettersSection({
     return `/cover-letter-preview/${letter.id}`;
   };
 
-  const isBusy = creating || openingId !== null;
+  const isBusy = creating || openingId !== null || deleting;
 
   return (
     <div className="space-y-4">
@@ -150,6 +185,22 @@ export function DashboardCoverLettersSection({
           </Button>
         }
       />
+
+      {error ? (
+        <div
+          role="alert"
+          className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
+        >
+          {error}
+          <button
+            type="button"
+            className="ml-2 underline hover:no-underline"
+            onClick={() => setError(null)}
+          >
+            Dismiss
+          </button>
+        </div>
+      ) : null}
 
       {letters.length === 0 ? (
         <DashboardDocumentsEmptyState
@@ -222,7 +273,7 @@ export function DashboardCoverLettersSection({
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
                         className="text-destructive focus:text-destructive"
-                        onClick={() => void deleteLetter(letter.id)}
+                        onClick={() => setDeleteTarget(letter)}
                       >
                         <Trash2 className="mr-2 h-4 w-4" />
                         Delete
@@ -268,6 +319,45 @@ export function DashboardCoverLettersSection({
           })}
         </DashboardDocumentsScroller>
       )}
+
+      <Dialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open && !deleting) setDeleteTarget(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-destructive">Delete cover letter</DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-3">
+                <p>
+                  You are about to delete &ldquo;
+                  <span className="font-semibold text-foreground">{deleteTarget?.title}</span>
+                  &rdquo;.
+                </p>
+                <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                  <p className="font-medium">This cannot be undone.</p>
+                  <p className="mt-1 text-destructive/80">
+                    Any unlisted share link for this letter will stop working.
+                  </p>
+                </div>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="ghost" disabled={deleting}>
+                Cancel
+              </Button>
+            </DialogClose>
+            <Button variant="destructive" onClick={() => void deleteLetter()} disabled={deleting}>
+              {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {downloadTarget ? (
         <CoverLetterDownloadDialog

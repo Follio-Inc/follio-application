@@ -7,8 +7,10 @@
  * Puppeteer (headless Chrome) is used for the HTML → PDF conversion.
  */
 
+import { documentGoogleFontLinkTags } from '@/lib/document-design';
 import {
   containsHtmlFormatting,
+  escapeHtml,
   isHtmlEmpty,
   sanitizeRichHtml,
   stripHtmlTags,
@@ -39,7 +41,6 @@ import type {
   ProfileSection,
   PublicationItem,
   ReferenceItem,
-  ResumeFontFamily,
   VolunteeringItem,
 } from '@/types';
 import { HEADER_SECTION_TYPES } from '@/types';
@@ -47,20 +48,6 @@ import { HEADER_SECTION_TYPES } from '@/types';
 export type { PdfLayout };
 
 const serviceLogger = logger.child({ source: 'export-service' });
-
-/**
- * Escape HTML special characters to prevent XSS.
- * Must be applied to all user-provided data interpolated into HTML.
- */
-function escapeHtml(str: string | null | undefined): string {
-  if (!str) return '';
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
 
 /**
  * Return an HTML-attribute-safe URL, or an empty string when the URL uses a
@@ -478,29 +465,6 @@ export function toPlainText(profile: FullProfile): string {
 // Renders the same HTML structure and CSS classes as CleanResumeView
 // so the exported PDF is visually identical to the on-screen preview.
 // ═══════════════════════════════════════════════════════════════════
-
-/** Google Fonts URLs — mirrors resume-font-loader.tsx (system fonts return null). */
-const GOOGLE_FONT_URLS: Partial<Record<ResumeFontFamily, string>> = {
-  garamond:
-    'https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap',
-  inter: 'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap',
-  roboto:
-    'https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,300;0,400;0,500;0,700;1,400&display=swap',
-  lato: 'https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,300;0,400;0,700;1,400&display=swap',
-  merriweather:
-    'https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;1,400&display=swap',
-  'source-sans':
-    'https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,300;0,400;0,600;0,700;1,400&display=swap',
-  'open-sans':
-    'https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300;0,400;0,600;0,700;1,400&display=swap',
-  raleway:
-    'https://fonts.googleapis.com/css2?family=Raleway:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap',
-  'instrument-sans':
-    'https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap',
-  'dm-sans':
-    'https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap',
-  'great-vibes': 'https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap',
-};
 
 /** Strip URL protocol and trailing slash for cleaner contact display. */
 function displayUrl(url: string): string {
@@ -1720,14 +1684,7 @@ export function toPDFHtml(profile: FullProfile): string {
 
     // ── Google Font <link> tags for body / name / heading ──
     const fonts = resolveResumeFonts(parsedDesign);
-    const fontUrls = new Set(
-      [fonts.body, fonts.name, fonts.heading]
-        .map((face) => GOOGLE_FONT_URLS[face])
-        .filter((url): url is string => Boolean(url))
-    );
-    const fontLink = [...fontUrls]
-      .map((url) => `<link rel="stylesheet" href="${url}" crossorigin="anonymous" />`)
-      .join('\n  ');
+    const fontLink = documentGoogleFontLinkTags([fonts.body, fonts.name, fonts.heading]);
 
     // ── Contact items (mirrors CleanResumeView logic) ──────
     const contactItems: string[] = (() => {

@@ -4,21 +4,22 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import {
+  coverLetterContentPatchSchema,
   isCoverLetterVisibility,
   mergeCoverLetterContent,
   mergeCoverLetterDesign,
   normalizeCoverLetterVisibility,
   parseCoverLetterContent,
   parseCoverLetterDesign,
-  type CoverLetterContent,
 } from '@/lib/cover-letter';
 import { db } from '@/lib/db';
 import { resolveDocumentPageLayout } from '@/lib/document-design';
 import { handleApiError } from '@/lib/errors';
+import { resolveOwnedCoverLetter } from '@/services/cover-letter.service';
 
 const patchSchema = z.object({
   title: z.string().trim().min(1).max(120).optional(),
-  content: z.record(z.unknown()).optional(),
+  content: coverLetterContentPatchSchema.optional(),
   linkedProfileId: z.string().trim().nullable().optional(),
   isArchived: z.boolean().optional(),
   /** PRIVATE | UNLISTED only — PUBLIC is rejected. */
@@ -26,19 +27,6 @@ const patchSchema = z.object({
 });
 
 type RouteContext = { params: Promise<{ id: string }> };
-
-async function getOwnedCoverLetter(clerkId: string, id: string) {
-  const user = await db.user.findUnique({
-    where: { clerkId },
-    select: { id: true },
-  });
-  if (!user) return { user: null, letter: null };
-
-  const letter = await db.coverLetter.findFirst({
-    where: { id, userId: user.id },
-  });
-  return { user, letter };
-}
 
 /**
  * GET /api/cover-letters/[id]
@@ -51,8 +39,8 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     }
 
     const { id } = await context.params;
-    const { letter } = await getOwnedCoverLetter(clerkId, id);
-    if (!letter || letter.isArchived) {
+    const { letter } = await resolveOwnedCoverLetter(clerkId, id);
+    if (!letter) {
       return NextResponse.json({ error: 'Cover letter not found' }, { status: 404 });
     }
 
@@ -88,8 +76,8 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     }
 
     const { id } = await context.params;
-    const { user, letter } = await getOwnedCoverLetter(clerkId, id);
-    if (!user || !letter || letter.isArchived) {
+    const { userId, letter } = await resolveOwnedCoverLetter(clerkId, id);
+    if (!userId || !letter) {
       return NextResponse.json({ error: 'Cover letter not found' }, { status: 404 });
     }
 
@@ -116,7 +104,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         data.linkedProfile = { disconnect: true };
       } else {
         const profile = await db.profile.findFirst({
-          where: { id: body.linkedProfileId, userId: user.id, isArchived: false },
+          where: { id: body.linkedProfileId, userId, isArchived: false },
           select: { id: true },
         });
         if (!profile) {
@@ -129,7 +117,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       const existing = parseCoverLetterContent(letter.content) ?? {};
       const merged = mergeCoverLetterContent({
         ...existing,
-        ...(body.content as CoverLetterContent),
+        ...body.content,
       });
       data.content = merged as unknown as Prisma.InputJsonValue;
     }
@@ -166,8 +154,8 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
     }
 
     const { id } = await context.params;
-    const { letter } = await getOwnedCoverLetter(clerkId, id);
-    if (!letter || letter.isArchived) {
+    const { letter } = await resolveOwnedCoverLetter(clerkId, id);
+    if (!letter) {
       return NextResponse.json({ error: 'Cover letter not found' }, { status: 404 });
     }
 

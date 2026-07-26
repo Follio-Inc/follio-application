@@ -10,8 +10,9 @@ import {
   type CoverLetterDesign,
 } from '@/lib/cover-letter';
 import { DOCUMENT_DESIGN_DEFAULTS, type DocumentDesign } from '@/lib/document-design';
+import { cn } from '@/lib/utils';
 
-import { useCoverLetterStore } from '../cover-letter-store';
+import { readCoverLetterSaveError, useCoverLetterStore } from '../cover-letter-store';
 
 const DESIGN_SAVE_DEBOUNCE_MS = 600;
 
@@ -44,7 +45,9 @@ export function CoverLetterDesignerPanel() {
   const draft = useCoverLetterStore((s) => s.draft);
   const updateDesign = useCoverLetterStore((s) => s.updateDesign);
   const setSavingDesign = useCoverLetterStore((s) => s.setSavingDesign);
+  const setSaveError = useCoverLetterStore((s) => s.setSaveError);
   const isSavingDesign = useCoverLetterStore((s) => s.isSavingDesign);
+  const saveError = useCoverLetterStore((s) => s.saveError);
 
   const [design, setDesign] = useState(() => mergeCoverLetterDesign(draft.design));
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -63,19 +66,25 @@ export function CoverLetterDesignerPanel() {
     (next: CoverLetterDesign) => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
       setSavingDesign(true);
+      setSaveError(null);
       saveTimer.current = setTimeout(async () => {
         try {
-          await fetch(`/api/cover-letters/${draft.id}/design`, {
+          const res = await fetch(`/api/cover-letters/${draft.id}/design`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(next),
           });
+          if (!res.ok) {
+            setSaveError(await readCoverLetterSaveError(res, "Couldn't save design. Try again."));
+          }
+        } catch {
+          setSaveError("Couldn't save design. Check your connection and try again.");
         } finally {
           setSavingDesign(false);
         }
       }, DESIGN_SAVE_DEBOUNCE_MS);
     },
-    [draft.id, setSavingDesign]
+    [draft.id, setSaveError, setSavingDesign]
   );
 
   const onChange = useCallback(
@@ -100,8 +109,11 @@ export function CoverLetterDesignerPanel() {
       <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
         <div>
           <h2 className="text-sm font-semibold tracking-tight">Design</h2>
-          <p className="text-[11px] text-muted-foreground">
-            {isSavingDesign ? 'Saving…' : 'Matches resume paper theme'}
+          <p
+            className={cn('text-[11px]', saveError ? 'text-destructive' : 'text-muted-foreground')}
+            role={saveError ? 'alert' : undefined}
+          >
+            {saveError ? saveError : isSavingDesign ? 'Saving…' : 'Matches resume paper theme'}
           </p>
         </div>
         <button

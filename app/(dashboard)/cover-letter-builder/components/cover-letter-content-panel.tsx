@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import type { CoverLetterContent } from '@/lib/cover-letter';
 import { cn } from '@/lib/utils';
 
-import { useCoverLetterStore } from '../cover-letter-store';
+import { readCoverLetterSaveError, useCoverLetterStore } from '../cover-letter-store';
 
 const CONTENT_SAVE_DEBOUNCE_MS = 700;
 
@@ -29,6 +29,10 @@ export function CoverLetterContentPanel() {
   const draft = useCoverLetterStore((s) => s.draft);
   const updateContent = useCoverLetterStore((s) => s.updateContent);
   const updateTitle = useCoverLetterStore((s) => s.updateTitle);
+  const isSavingContent = useCoverLetterStore((s) => s.isSavingContent);
+  const saveError = useCoverLetterStore((s) => s.saveError);
+  const setSavingContent = useCoverLetterStore((s) => s.setSavingContent);
+  const setSaveError = useCoverLetterStore((s) => s.setSaveError);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [expanded, setExpanded] = useState<ContentCategory | null>('header');
 
@@ -42,14 +46,25 @@ export function CoverLetterContentPanel() {
     (patch: { title?: string; content?: Partial<CoverLetterContent> }) => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(async () => {
-        await fetch(`/api/cover-letters/${draft.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(patch),
-        });
+        setSavingContent(true);
+        setSaveError(null);
+        try {
+          const res = await fetch(`/api/cover-letters/${draft.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(patch),
+          });
+          if (!res.ok) {
+            setSaveError(await readCoverLetterSaveError(res, "Couldn't save changes. Try again."));
+          }
+        } catch {
+          setSaveError("Couldn't save changes. Check your connection and try again.");
+        } finally {
+          setSavingContent(false);
+        }
       }, CONTENT_SAVE_DEBOUNCE_MS);
     },
-    [draft.id]
+    [draft.id, setSaveError, setSavingContent]
   );
 
   const onTitleChange = (title: string) => {
@@ -68,7 +83,12 @@ export function CoverLetterContentPanel() {
     <div className="flex h-full min-h-0 flex-col">
       <div className="border-b border-border/60 px-4 py-3">
         <h2 className="text-sm font-semibold tracking-tight">Content</h2>
-        <p className="text-[11px] text-muted-foreground">Write your cover letter</p>
+        <p
+          className={cn('text-[11px]', saveError ? 'text-destructive' : 'text-muted-foreground')}
+          role={saveError ? 'alert' : undefined}
+        >
+          {saveError ? saveError : isSavingContent ? 'Saving…' : 'Write your cover letter'}
+        </p>
       </div>
       <div className="flex-1 space-y-3 overflow-y-auto p-4">
         {CATEGORIES.map((cat) => (

@@ -7,15 +7,19 @@ import {
   designFromResumePaper,
   mergeCoverLetterContent,
   mergeCoverLetterDesign,
+  parseCoverLetterContent,
+  pickCoverLetterContent,
   validateCoverLetterDesignPatch,
 } from '@/lib/cover-letter';
 import {
   DOCUMENT_DESIGN_DEFAULTS,
   buildDocumentDesignStyles,
+  parsePdfLayoutQueryParam,
   pickDocumentDesign,
   resolveDocumentPageLayout,
 } from '@/lib/document-design';
 import { buildResumeDesignStyles, mergeResumeDesign } from '@/lib/resume-design';
+import { toCoverLetterPDFHtml } from '@/services/cover-letter-export.service';
 
 describe('document-design shared core', () => {
   it('exposes the locked resume paper defaults', () => {
@@ -120,8 +124,58 @@ describe('cover letter content', () => {
     expect(merged.greeting).toBe(COVER_LETTER_CONTENT_DEFAULTS.greeting);
   });
 
+  it('drops unknown keys when parsing and merging', () => {
+    const parsed = parseCoverLetterContent({
+      body: 'Hello',
+      junk: 'nope',
+      recipientName: 'Ada',
+    });
+    expect(parsed).toEqual({ body: 'Hello', recipientName: 'Ada' });
+    expect(parsed).not.toHaveProperty('junk');
+
+    const merged = mergeCoverLetterContent(parsed);
+    expect(merged).not.toHaveProperty('junk');
+    expect(merged.recipientName).toBe('Ada');
+  });
+
+  it('rejects non-string field values in pick', () => {
+    expect(pickCoverLetterContent({ body: 12 as never, greeting: 'Hi' })).toEqual({
+      greeting: 'Hi',
+    });
+  });
+
   it('splits body into paragraphs', () => {
     expect(coverLetterBodyParagraphs('One\n\nTwo\n\nThree')).toEqual(['One', 'Two', 'Three']);
     expect(coverLetterBodyParagraphs('')).toEqual([]);
+  });
+});
+
+describe('cover letter PDF HTML', () => {
+  it('matches preview structure — signature only in footer, not as header', () => {
+    const html = toCoverLetterPDFHtml(
+      {
+        date: 'July 25, 2026',
+        greeting: 'Dear Hiring Manager,',
+        body: 'Hello\n\nWorld',
+        closing: 'Sincerely,',
+        signatureName: 'Ada Lovelace',
+      },
+      COVER_LETTER_DESIGN_DEFAULTS
+    );
+    expect(html).toContain('Ada Lovelace');
+    expect(html).not.toContain('cover-letter-header');
+    expect(html).not.toContain('class="resume-name"');
+    expect(html).toContain('Dear Hiring Manager,');
+  });
+});
+
+describe('parsePdfLayoutQueryParam', () => {
+  it('normalizes layout query values', () => {
+    expect(parsePdfLayoutQueryParam('continuous')).toBe('continuous');
+    expect(parsePdfLayoutQueryParam('a4')).toBe('a4');
+    expect(parsePdfLayoutQueryParam('letter')).toBe('letter');
+    expect(parsePdfLayoutQueryParam('paged')).toBe('letter');
+    expect(parsePdfLayoutQueryParam('nope', 'continuous')).toBe('continuous');
+    expect(parsePdfLayoutQueryParam(null)).toBe('letter');
   });
 });

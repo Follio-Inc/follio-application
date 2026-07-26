@@ -3,9 +3,12 @@
  *
  * Unlisted URL: follio.me/cl/{unlistedKey} (opaque — no username).
  * Cover letters are never PUBLIC.
+ *
+ * Uses React `cache()` (request-scoped) — not `unstable_cache` — so revoke /
+ * PRIVATE immediately stop serving the prior key within the same process.
  */
 
-import { unstable_cache } from 'next/cache';
+import { cache } from 'react';
 
 import {
   mergeCoverLetterContent,
@@ -33,7 +36,7 @@ export interface PublicCoverLetter {
  * Resolve an unlisted cover letter by opaque key.
  * Only returns letters with visibility === UNLISTED (never PRIVATE / PUBLIC).
  */
-export const resolveCoverLetterByUnlistedKey = unstable_cache(
+export const resolveCoverLetterByUnlistedKey = cache(
   async (key: string): Promise<PublicCoverLetter | null> => {
     const trimmed = key?.trim();
     if (!trimmed) return null;
@@ -62,7 +65,5 @@ export const resolveCoverLetterByUnlistedKey = unstable_cache(
       content: mergeCoverLetterContent(parseCoverLetterContent(letter.content)),
       design: mergeCoverLetterDesign(parseCoverLetterDesign(letter.design)),
     };
-  },
-  ['cover-letter-by-unlisted-key'],
-  { revalidate: 30 }
+  }
 );

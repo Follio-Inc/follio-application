@@ -40,6 +40,7 @@ export {
   getResumePageSize,
   getResumeSheetWidthPx,
   isPagedPageLayout,
+  parsePdfLayoutQueryParam,
   resolveDocumentPageLayout,
   resolveResumePageLayout,
   type DocumentPageSize,
@@ -73,3 +74,5 @@ export {
 } from './validate';
 
 export { resolveDocumentColorTheme, resolveResumeColorTheme } from './color-theme';
+
+export { DOCUMENT_GOOGLE_FONT_URLS, documentGoogleFontLinkTags } from './fonts';

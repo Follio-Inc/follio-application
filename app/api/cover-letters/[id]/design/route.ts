@@ -2,15 +2,16 @@ import { auth } from '@clerk/nextjs/server';
 import { Prisma } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
 
-import { validateCoverLetterDesignPatch } from '@/lib/cover-letter';
 import {
   COVER_LETTER_DESIGN_DEFAULTS,
   mergeCoverLetterDesign,
   parseCoverLetterDesign,
+  validateCoverLetterDesignPatch,
   type CoverLetterDesign,
 } from '@/lib/cover-letter';
 import { db } from '@/lib/db';
 import { handleApiError } from '@/lib/errors';
+import { resolveOwnedCoverLetterSelect } from '@/services/cover-letter.service';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -25,22 +26,17 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     }
 
     const { id } = await context.params;
-    const user = await db.user.findUnique({ where: { clerkId }, select: { id: true } });
-    if (!user) {
+    const owned = await resolveOwnedCoverLetterSelect(clerkId, id, { design: true });
+    if (!owned) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
-
-    const letter = await db.coverLetter.findFirst({
-      where: { id, userId: user.id, isArchived: false },
-      select: { design: true },
-    });
-    if (!letter) {
+    if (!owned.letter) {
       return NextResponse.json({ error: 'Cover letter not found' }, { status: 404 });
     }
 
     const design: CoverLetterDesign = {
       ...COVER_LETTER_DESIGN_DEFAULTS,
-      ...(parseCoverLetterDesign(letter.design) ?? {}),
+      ...(parseCoverLetterDesign(owned.letter.design) ?? {}),
     };
 
     return NextResponse.json({ design });
@@ -66,21 +62,16 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     }
 
     const { id } = await context.params;
-    const user = await db.user.findUnique({ where: { clerkId }, select: { id: true } });
-    if (!user) {
+    const owned = await resolveOwnedCoverLetterSelect(clerkId, id, { id: true, design: true });
+    if (!owned) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
-
-    const letter = await db.coverLetter.findFirst({
-      where: { id, userId: user.id, isArchived: false },
-      select: { id: true, design: true },
-    });
-    if (!letter) {
+    if (!owned.letter) {
       return NextResponse.json({ error: 'Cover letter not found' }, { status: 404 });
     }
 
     const merged = mergeCoverLetterDesign({
-      ...(parseCoverLetterDesign(letter.design) ?? {}),
+      ...(parseCoverLetterDesign(owned.letter.design) ?? {}),
       ...data,
     });
 

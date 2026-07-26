@@ -10,42 +10,13 @@ import {
   type CoverLetterContent,
   type CoverLetterDesign,
 } from '@/lib/cover-letter';
-import { defaultResolvedFonts, resolveDocumentColorTheme } from '@/lib/document-design';
+import {
+  defaultResolvedFonts,
+  documentGoogleFontLinkTags,
+  resolveDocumentColorTheme,
+} from '@/lib/document-design';
+import { escapeHtml } from '@/lib/html-utils';
 import { generateDocumentPDF, type DocumentPdfOptions } from '@/services/document-pdf.service';
-import type { DocumentFontFamily } from '@/lib/document-design';
-
-/** Google Font URLs — same allowlist as resume PDF export. */
-const GOOGLE_FONT_URLS: Partial<Record<DocumentFontFamily, string>> = {
-  garamond:
-    'https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap',
-  inter: 'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap',
-  roboto:
-    'https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,300;0,400;0,500;0,700;1,400&display=swap',
-  lato: 'https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,300;0,400;0,700;1,400&display=swap',
-  merriweather:
-    'https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;1,400&display=swap',
-  'source-sans':
-    'https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,300;0,400;0,600;0,700;1,400&display=swap',
-  'open-sans':
-    'https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300;0,400;0,600;0,700;1,400&display=swap',
-  raleway:
-    'https://fonts.googleapis.com/css2?family=Raleway:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap',
-  'instrument-sans':
-    'https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap',
-  'dm-sans':
-    'https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap',
-  'great-vibes': 'https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap',
-};
-
-function escapeHtml(str: string | null | undefined): string {
-  if (!str) return '';
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
 
 const COVER_LETTER_PDF_CSS = `
   * { box-sizing: border-box; }
@@ -84,14 +55,7 @@ export function toCoverLetterPDFHtml(
   const designStyleAttr = buildCoverLetterDesignStyleAttr(d);
   const theme = resolveDocumentColorTheme(d.colorTheme);
   const fonts = defaultResolvedFonts(d);
-  const fontUrls = new Set(
-    [fonts.body, fonts.name, fonts.heading]
-      .map((face) => GOOGLE_FONT_URLS[face])
-      .filter((url): url is string => Boolean(url))
-  );
-  const fontLink = [...fontUrls]
-    .map((url) => `<link rel="stylesheet" href="${url}" crossorigin="anonymous" />`)
-    .join('\n  ');
+  const fontLink = documentGoogleFontLinkTags([fonts.body, fonts.name, fonts.heading]);
 
   const recipientLines = [c.recipientName, c.recipientTitle, c.company, c.companyAddress]
     .filter((line) => line?.trim())
@@ -102,8 +66,8 @@ export function toCoverLetterPDFHtml(
     .map((p) => `<p>${escapeHtml(p).replace(/\n/g, '<br />')}</p>`)
     .join('');
 
-  const nameStyle = `font-family:var(--rd-font-name);font-size:var(--rd-name-font-size);font-weight:var(--rd-name-font-weight);font-style:var(--rd-name-font-style);text-decoration:var(--rd-name-text-decoration);color:var(--rd-heading-color)`;
-
+  // Markup matches CleanCoverLetterView: date → recipient → greeting → body → closing → signature.
+  // Signature appears only in the footer (never as a top header).
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -115,13 +79,6 @@ export function toCoverLetterPDFHtml(
   <article class="resume-paper cover-letter-paper${d.justifyAll ? ' resume-justify-all' : ''}"
     data-resume-theme="${theme}"
     style="${designStyleAttr}">
-    ${
-      c.signatureName
-        ? `<header class="cover-letter-header" style="margin-bottom:var(--rd-header-margin-bottom)">
-      <h1 class="resume-name" style="margin:0;${nameStyle}">${escapeHtml(c.signatureName)}</h1>
-    </header>`
-        : ''
-    }
     <div class="cover-letter-meta" style="font-family:var(--rd-font-body);font-size:var(--rd-font-size);font-weight:var(--rd-body-font-weight);font-style:var(--rd-body-font-style);color:var(--rd-heading-color)">
       ${c.date ? `<p style="margin-bottom:1rem;opacity:0.85">${escapeHtml(c.date)}</p>` : ''}
       ${recipientLines ? `<div style="margin-bottom:1rem">${recipientLines}</div>` : ''}
@@ -131,11 +88,7 @@ export function toCoverLetterPDFHtml(
       </div>
       <div style="margin-top:1.5rem">
         ${c.closing ? `<p style="margin-bottom:1.5rem">${escapeHtml(c.closing)}</p>` : ''}
-        ${
-          c.signatureName
-            ? `<p style="font-family:var(--rd-font-name);font-weight:var(--rd-name-font-weight)">${escapeHtml(c.signatureName)}</p>`
-            : ''
-        }
+        ${c.signatureName ? `<p>${escapeHtml(c.signatureName)}</p>` : ''}
       </div>
     </div>
   </article>

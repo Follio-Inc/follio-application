@@ -9,7 +9,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 
 import { useBuilderStore } from './builder-store-provider';
 import { DownloadDialog } from './download-dialog';
-import { ShareDialog } from './share-dialog';
+import { ShareDialog } from '@/components/share-dialog';
 import { resolveResumePageLayout } from '@/lib/resume/page-layout';
 
 // ─── Types ────────────────────────────────────────────────────────

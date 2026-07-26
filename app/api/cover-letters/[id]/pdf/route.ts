@@ -4,21 +4,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { contentDispositionAttachment } from '@/app/api/export/[handle]/access';
 import { parseCoverLetterContent, parseCoverLetterDesign } from '@/lib/cover-letter';
 import { formatDocumentDownloadFilename } from '@/lib/document-download/filename';
+import { parsePdfLayoutQueryParam } from '@/lib/document-design';
 import { db } from '@/lib/db';
 import { handleApiError } from '@/lib/errors';
 import { generateCoverLetterPDF } from '@/services/cover-letter-export.service';
-import type { PdfLayout } from '@/types';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
-
-const VALID_LAYOUTS = new Set<string>(['continuous', 'a4', 'letter', 'paged']);
-
-function normalizeLayoutParam(raw: string): PdfLayout {
-  if (raw === 'continuous' || raw === 'a4' || raw === 'letter') return raw;
-  return 'letter';
-}
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -29,6 +22,8 @@ type RouteContext = { params: Promise<{ id: string }> };
  * - Owner (authenticated) always
  * - Unlisted visitors with matching `key` when visibility === UNLISTED
  * Cover letters are never PUBLIC.
+ *
+ * Non-owner / wrong-key returns 404 (no existence leak via 401).
  */
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
@@ -69,13 +64,10 @@ export async function GET(request: NextRequest, context: RouteContext) {
       key === letter.unlistedKey;
 
     if (!isOwner && !isUnlistedVisitor) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Cover letter not found' }, { status: 404 });
     }
 
-    const layoutParam = request.nextUrl.searchParams.get('layout') ?? 'letter';
-    const layout = VALID_LAYOUTS.has(layoutParam)
-      ? normalizeLayoutParam(layoutParam)
-      : ('letter' as PdfLayout);
+    const layout = parsePdfLayoutQueryParam(request.nextUrl.searchParams.get('layout'), 'letter');
 
     const pdfBuffer = await generateCoverLetterPDF(
       parseCoverLetterContent(letter.content),

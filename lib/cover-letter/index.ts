@@ -13,8 +13,10 @@ export {
 export {
   COVER_LETTER_CONTENT_DEFAULTS,
   coverLetterBodyParagraphs,
+  coverLetterContentPatchSchema,
   mergeCoverLetterContent,
   parseCoverLetterContent,
+  pickCoverLetterContent,
   type CoverLetterContent,
 } from './content';
 

@@ -12,6 +12,7 @@ export const RESERVED_USERNAMES = new Set([
   'cover-letter-builder',
   'dashboard',
   'data-sources',
+  'devtools',
   'favicon.ico',
   'lab',
   'me',

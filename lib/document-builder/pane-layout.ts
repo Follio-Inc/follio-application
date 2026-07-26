@@ -2,7 +2,8 @@
  * Desktop document builder view mode.
  *
  * Mutual exclusion: Content+Preview XOR Preview+Design.
- * `preview` — both side panes closed, document centered.
+ * `preview` — both side panes closed; strip stays 13/9 wide and translates
+ * so the preview column is centered (invisible side panes act as gutters).
  *
  * Shared by resume builder and cover letter builder.
  */

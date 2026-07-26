@@ -1,37 +1,37 @@
 'use client';
 
-import { ArrowLeft, BarChart3, Menu, Shield, Users, X } from 'lucide-react';
+import { ArrowLeft, BarChart3, Menu, Shield, Users, Wrench, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
+import { ADMIN_PANEL_NAV, type AdminPanelModuleId } from '@/_admin-panel/nav';
 import { AppHeader, AppHeaderDivider } from '@/components/app-header';
 import { Logo } from '@/components/Logo';
 import { cn } from '@/lib/utils';
 
-interface NavItem {
-  href: string;
-  label: string;
-  icon: React.ElementType;
-  match: (path: string) => boolean;
+const ICONS: Record<AdminPanelModuleId, React.ElementType> = {
+  overview: BarChart3,
+  developer: Wrench,
+  users: Users,
+};
+
+function matchPath(id: AdminPanelModuleId, path: string, href: string): boolean {
+  if (id === 'overview') return path === '/admin';
+  return path === href || path.startsWith(`${href}/`);
 }
 
-const NAV_ITEMS: NavItem[] = [
-  {
-    href: '/admin',
-    label: 'Overview',
-    icon: BarChart3,
-    match: (path) => path === '/admin',
-  },
-  {
-    href: '/admin/users',
-    label: 'Users',
-    icon: Users,
-    match: (path) => path.startsWith('/admin/users'),
-  },
-];
-
-function SideNavItem({ href, icon: Icon, label, isActive }: NavItem & { isActive: boolean }) {
+function SideNavItem({
+  href,
+  icon: Icon,
+  label,
+  isActive,
+}: {
+  href: string;
+  icon: React.ElementType;
+  label: string;
+  isActive: boolean;
+}) {
   return (
     <Link
       href={href}
@@ -71,18 +71,20 @@ export function AdminShell({
 
   const sidebar = (
     <nav className="space-y-1 px-3 py-4">
-      {NAV_ITEMS.map((item) => (
-        <SideNavItem key={item.href} {...item} isActive={item.match(pathname)} />
+      {ADMIN_PANEL_NAV.map((item) => (
+        <SideNavItem
+          key={item.id}
+          href={item.href}
+          icon={ICONS[item.id]}
+          label={item.label}
+          isActive={matchPath(item.id, pathname, item.href)}
+        />
       ))}
     </nav>
   );
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-muted/30">
-      {/* Top bar — composes the canonical AppHeader so it's visually
-          identical to the dashboard, public profile, and marketing
-          chrome. Admin-specific bits (badge, "Back to app" link,
-          mobile hamburger) live in the slots. */}
       <AppHeader
         left={
           <>
@@ -125,10 +127,8 @@ export function AdminShell({
       />
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Desktop sidebar */}
         <aside className="hidden w-56 shrink-0 border-r bg-background md:block">{sidebar}</aside>
 
-        {/* Mobile backdrop */}
         <div
           className={cn(
             'fixed inset-0 z-40 bg-background/80 backdrop-blur-sm transition-opacity duration-300 md:hidden',
@@ -138,7 +138,6 @@ export function AdminShell({
           aria-hidden
         />
 
-        {/* Mobile drawer */}
         <aside
           className={cn(
             'fixed inset-y-0 left-0 z-50 w-64 border-r bg-background shadow-xl transition-transform duration-300 ease-in-out md:hidden',
@@ -163,7 +162,6 @@ export function AdminShell({
           {sidebar}
         </aside>
 
-        {/* Main content */}
         <main className="flex-1 overflow-auto">{children}</main>
       </div>
     </div>

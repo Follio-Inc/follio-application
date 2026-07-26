@@ -2284,24 +2284,25 @@
 
 /* ── Builder 3-panel slide canvas ── */
 /* On xl+ screens, the strip is wider than the visible area so it can slide
-   between Editor+Preview (default) and Preview+Designer views.
-   Ratio: Editor=4  Preview=5  Designer=4  →  total 13, visible 9.
-   Preview-only collapses both sides so the resume fills the viewport.       */
+   between Content+Preview, centered Preview, and Preview+Designer.
+   Ratio: Content=4  Preview=5  Designer=4  →  total 13, visible 9.
+   Width stays constant; only transform animates so preview size (and resume
+   fit-zoom) never changes across modes — avoids a zoomed/panned feel when
+   opening a side pane from preview-only. */
 @media (min-width: 1280px) {
   .builder-slide {
     width: calc(100% * 13 / 9);
-    transition:
-      transform 500ms cubic-bezier(0.16, 1, 0.3, 1),
-      width 500ms cubic-bezier(0.16, 1, 0.3, 1);
-    will-change: transform, width;
+    transition: transform 500ms cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: transform;
   }
 
+  /* Preview+Designer: shift left by one content column */
   .builder-slide[data-designer-active] {
     transform: translateX(calc(-100% * 4 / 13));
   }
 
+  /* Preview centered: shift by half a side column (gutters = invisible panes) */
   .builder-slide[data-preview-only] {
-    width: 100%;
-    transform: none;
+    transform: translateX(calc(-100% * 2 / 13));
   }
 }

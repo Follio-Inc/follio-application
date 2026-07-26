@@ -8,28 +8,14 @@
 import { auth } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 
-import { db } from '@/lib/db';
 import { handleApiError } from '@/lib/errors';
 import {
   getOrCreateCoverLetterUnlistedKey,
   regenerateCoverLetterUnlistedKey,
+  resolveOwnedCoverLetterSelect,
 } from '@/services/cover-letter.service';
 
 type RouteContext = { params: Promise<{ id: string }> };
-
-async function resolveOwnerLetter(clerkId: string, id: string) {
-  const user = await db.user.findUnique({
-    where: { clerkId },
-    select: { id: true },
-  });
-  if (!user) return { user: null, letter: null };
-
-  const letter = await db.coverLetter.findFirst({
-    where: { id, userId: user.id, isArchived: false },
-    select: { id: true, visibility: true },
-  });
-  return { user, letter };
-}
 
 /**
  * GET /api/cover-letters/[id]/unlisted-key
@@ -42,12 +28,15 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     }
 
     const { id } = await context.params;
-    const { user, letter } = await resolveOwnerLetter(clerkId, id);
-    if (!user || !letter) {
+    const owned = await resolveOwnedCoverLetterSelect(clerkId, id, {
+      id: true,
+      visibility: true,
+    });
+    if (!owned?.letter) {
       return NextResponse.json({ error: 'Cover letter not found' }, { status: 404 });
     }
 
-    const unlistedKey = await getOrCreateCoverLetterUnlistedKey(id, user.id);
+    const unlistedKey = await getOrCreateCoverLetterUnlistedKey(id, owned.userId);
     if (!unlistedKey) {
       return NextResponse.json({ error: 'Cover letter not found' }, { status: 404 });
     }
@@ -55,7 +44,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     return NextResponse.json({
       success: true,
       unlistedKey,
-      visibility: letter.visibility === 'UNLISTED' ? 'UNLISTED' : 'PRIVATE',
+      visibility: owned.letter.visibility === 'UNLISTED' ? 'UNLISTED' : 'PRIVATE',
     });
   } catch (error) {
     return handleApiError(error, { path: '/api/cover-letters/[id]/unlisted-key', method: 'GET' });
@@ -73,12 +62,15 @@ export async function POST(_request: NextRequest, context: RouteContext) {
     }
 
     const { id } = await context.params;
-    const { user, letter } = await resolveOwnerLetter(clerkId, id);
-    if (!user || !letter) {
+    const owned = await resolveOwnedCoverLetterSelect(clerkId, id, {
+      id: true,
+      visibility: true,
+    });
+    if (!owned?.letter) {
       return NextResponse.json({ error: 'Cover letter not found' }, { status: 404 });
     }
 
-    const unlistedKey = await regenerateCoverLetterUnlistedKey(id, user.id);
+    const unlistedKey = await regenerateCoverLetterUnlistedKey(id, owned.userId);
     if (!unlistedKey) {
       return NextResponse.json({ error: 'Cover letter not found' }, { status: 404 });
     }
@@ -86,7 +78,7 @@ export async function POST(_request: NextRequest, context: RouteContext) {
     return NextResponse.json({
       success: true,
       unlistedKey,
-      visibility: letter.visibility === 'UNLISTED' ? 'UNLISTED' : 'PRIVATE',
+      visibility: owned.letter.visibility === 'UNLISTED' ? 'UNLISTED' : 'PRIVATE',
     });
   } catch (error) {
     return handleApiError(error, { path: '/api/cover-letters/[id]/unlisted-key', method: 'POST' });

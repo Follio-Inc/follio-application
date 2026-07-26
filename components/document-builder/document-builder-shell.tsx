@@ -35,9 +35,10 @@ interface DocumentBuilderShellProps {
 /**
  * Shared 3-pane document builder shell (content | preview | designer).
  *
- * Desktop (xl+): Content+Preview XOR Preview+Design via slide canvas.
- * Mutual exclusion is enforced by BuilderViewMode — never both side panes.
- * Resume and cover letter compose this with their own panel content.
+ * Desktop (xl+): Content+Preview XOR centered Preview XOR Preview+Design via
+ * a constant-width slide canvas (transform only). Mutual exclusion is
+ * enforced by BuilderViewMode — never both side panes. Resume and cover
+ * letter compose this with their own panel content.
  */
 export function DocumentBuilderShell({
   content,
@@ -81,22 +82,26 @@ export function DocumentBuilderShell({
             data-designer-active={designerActive || undefined}
             data-preview-only={previewOnly || undefined}
           >
-            {/* Content — full width on mobile; flex 4 on xl; hidden in preview-only */}
+            {/* Content — full width on mobile; flex 4 on xl.
+                Stay in the flex strip when preview-only (invisible gutters) so
+                canvas width/preview size never change during mode transitions. */}
             <div
               className={cn(
                 'relative flex w-full min-w-0 flex-col bg-background xl:w-auto xl:flex-[4_0_0%] xl:overflow-y-auto',
-                previewOnly && 'xl:hidden',
+                previewOnly && 'xl:pointer-events-none xl:invisible',
                 contentClassName
               )}
+              aria-hidden={previewOnly || undefined}
+              inert={previewOnly || undefined}
             >
               {content}
             </div>
 
-            {/* Preview — xl only; flex 5 (or full width when preview-only) */}
+            {/* Preview — xl only; always flex 5 so fit-zoom stays stable */}
             <div
               className={cn(
-                'relative hidden min-w-0 border-l border-border/60 bg-muted/20 xl:flex',
-                previewOnly ? 'xl:flex-1 xl:border-l-0' : 'xl:flex-[5_0_0%]',
+                'relative hidden min-w-0 border-l border-border/60 bg-muted/20 xl:flex xl:flex-[5_0_0%]',
+                previewOnly && 'xl:border-l-0',
                 previewClassName
               )}
             >
@@ -106,13 +111,15 @@ export function DocumentBuilderShell({
               <div className="h-full min-h-0 w-full min-w-0 flex-1 overflow-hidden">{preview}</div>
             </div>
 
-            {/* Designer — xl only; flex 4; hidden in preview-only */}
+            {/* Designer — xl only; flex 4; invisible gutter in preview-only */}
             <div
               className={cn(
                 'relative hidden min-w-0 border-l border-border/60 bg-background xl:flex xl:flex-[4_0_0%] xl:flex-col',
-                previewOnly && 'xl:hidden',
+                previewOnly && 'xl:pointer-events-none xl:invisible',
                 designerClassName
               )}
+              aria-hidden={previewOnly || undefined}
+              inert={previewOnly || undefined}
             >
               {designer}
             </div>

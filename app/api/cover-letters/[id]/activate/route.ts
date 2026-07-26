@@ -1,8 +1,11 @@
 import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 
-import { db } from '@/lib/db';
 import { handleApiError } from '@/lib/errors';
+import {
+  resolveOwnedCoverLetterSelect,
+  setActiveCoverLetter,
+} from '@/services/cover-letter.service';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -17,29 +20,15 @@ export async function POST(_request: Request, context: RouteContext) {
     }
 
     const { id } = await context.params;
-    const user = await db.user.findUnique({ where: { clerkId }, select: { id: true } });
-    if (!user) {
+    const owned = await resolveOwnedCoverLetterSelect(clerkId, id, { id: true });
+    if (!owned) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
-
-    const letter = await db.coverLetter.findFirst({
-      where: { id, userId: user.id, isArchived: false },
-      select: { id: true },
-    });
-    if (!letter) {
+    if (!owned.letter) {
       return NextResponse.json({ error: 'Cover letter not found' }, { status: 404 });
     }
 
-    await db.$transaction(async (tx) => {
-      await tx.coverLetter.updateMany({
-        where: { userId: user.id, activeForUserId: user.id },
-        data: { activeForUserId: null },
-      });
-      await tx.coverLetter.update({
-        where: { id },
-        data: { activeForUserId: user.id },
-      });
-    });
+    await setActiveCoverLetter(owned.userId, id);
 
     return NextResponse.json({ success: true, activeCoverLetterId: id });
   } catch (error) {

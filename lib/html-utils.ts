@@ -77,12 +77,14 @@ export function isHtmlEmpty(html: string | null | undefined): boolean {
 // ─── HTML Escaping / Stripping ──────────────────────────────────────────────
 
 /** Escape special characters for safe HTML injection of plain text. */
-export function escapeHtml(str: string): string {
+export function escapeHtml(str: string | null | undefined): string {
+  if (!str) return '';
   return str
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 /**
