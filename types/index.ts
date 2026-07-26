@@ -28,28 +28,66 @@ import type {
   YouTubeVideo,
 } from '@prisma/client';
 
+import {
+  DOCUMENT_DESIGN_DEFAULTS,
+  DOCUMENT_FONT_LABELS,
+  DOCUMENT_FONT_MAP,
+  DOCUMENT_FONT_OPTIONS,
+  DOCUMENT_TEXT_STYLE_DEFAULTS,
+  type DocumentColorTheme,
+  type DocumentDensity,
+  type DocumentDesign,
+  type DocumentDividerStyle,
+  type DocumentFontFamily,
+  type DocumentPageLayout,
+  type DocumentTextStyle,
+  type PdfLayout,
+} from '@/lib/document-design';
+
 export type { ContentVisibility } from '@prisma/client';
 
 // ===========================================
-// RESUME DESIGN TYPES
+// DOCUMENT / RESUME DESIGN TYPES
+// Shared paper design lives in `@/lib/document-design`.
+// Resume extends it with layout-kit particulars.
 // ===========================================
 
-/** Font families available for resume rendering */
-export type ResumeFontFamily =
-  | 'georgia'
-  | 'times'
-  | 'garamond'
-  | 'inter'
-  | 'roboto'
-  | 'lato'
-  | 'merriweather'
-  | 'source-sans'
-  | 'open-sans'
-  | 'raleway'
-  | 'instrument-sans'
-  | 'dm-sans'
-  | 'system'
-  | 'great-vibes';
+export type {
+  DocumentColorTheme,
+  DocumentDensity,
+  DocumentDesign,
+  DocumentDividerStyle,
+  DocumentFontFamily,
+  DocumentPageLayout,
+  DocumentTextStyle,
+  PdfLayout,
+};
+
+export {
+  DOCUMENT_DESIGN_DEFAULTS,
+  DOCUMENT_FONT_LABELS,
+  DOCUMENT_FONT_MAP,
+  DOCUMENT_FONT_OPTIONS,
+  DOCUMENT_TEXT_STYLE_DEFAULTS,
+};
+
+/** @deprecated Prefer DocumentFontFamily — alias kept for resume call sites */
+export type ResumeFontFamily = DocumentFontFamily;
+/** @deprecated Prefer DocumentDividerStyle */
+export type ResumeDividerStyle = DocumentDividerStyle;
+/** @deprecated Prefer DocumentDensity */
+export type ResumeDensity = DocumentDensity;
+/** @deprecated Prefer DocumentColorTheme */
+export type ResumeColorTheme = DocumentColorTheme;
+/** @deprecated Prefer DocumentPageLayout */
+export type ResumePageLayout = DocumentPageLayout;
+/** @deprecated Prefer DocumentTextStyle */
+export type ResumeTextStyle = DocumentTextStyle;
+
+export const RESUME_TEXT_STYLE_DEFAULTS = DOCUMENT_TEXT_STYLE_DEFAULTS;
+export const RESUME_FONT_OPTIONS = DOCUMENT_FONT_OPTIONS;
+export const RESUME_FONT_MAP = DOCUMENT_FONT_MAP;
+export const RESUME_FONT_LABELS = DOCUMENT_FONT_LABELS;
 
 /**
  * Header text alignment when the resume photo is hidden: left | center | right.
@@ -67,197 +105,52 @@ export type ResumeHeaderPhotoLayout =
   | 'photo-above'
   | 'photo-above-left';
 
-/** Section divider style */
-export type ResumeDividerStyle = 'line' | 'double' | 'dotted' | 'dashed' | 'thick' | 'none';
-
-/** Paper density / spacing */
-export type ResumeDensity = 'compact' | 'normal' | 'relaxed';
-
-/** Resume color theme — independent of the Follio app theme */
-export type ResumeColorTheme = 'light' | 'dark' | 'system';
-
 /** Resume layout kit — presentation only; content is shared across templates */
 export type ResumeTemplateId = 'classic' | 'lumen' | 'sleek' | 'studio' | 'atelier';
 
 /**
- * On-screen and PDF page layout.
- * - `continuous` — single scrollable sheet (digital-first)
- * - `a4` — ISO A4 pages with visible breaks
- * - `letter` — US Letter pages with visible breaks
+ * Resume design = shared paper design + resume layout particulars.
+ * Stored as JSON on the Profile model. Switching `templateId` never rewrites content.
  */
-export type ResumePageLayout = 'continuous' | 'a4' | 'letter';
-
-/** Alias used by PDF export — same values as `ResumePageLayout`. */
-export type PdfLayout = ResumePageLayout;
-
-/** Text emphasis for a typography role (name, title, headings, body) */
-export interface ResumeTextStyle {
-  bold: boolean;
-  italic: boolean;
-  underline: boolean;
-}
-
-export const RESUME_TEXT_STYLE_DEFAULTS: ResumeTextStyle = {
-  bold: false,
-  italic: false,
-  underline: false,
-};
-
-/**
- * Resume design settings — stored as JSON on the Profile model.
- * All fields are optional; missing values fall back to defaults.
- * Switching `templateId` never rewrites profile content.
- */
-export interface ResumeDesign {
+export interface ResumeDesign extends DocumentDesign {
   /** Layout kit id (classic single-column, sidebar two-column, …) */
   templateId?: ResumeTemplateId;
-  /** Light / dark / system color theme for the resume document */
-  colorTheme?: ResumeColorTheme;
-  /** Color for section headings (CSS color, e.g. '#1a1a1a' or '#2563eb') */
-  headingColor?: string;
-  /** Accent color for divider lines, bullets, etc. */
-  accentColor?: string;
-  /** Body / content font family (legacy single-font field) */
-  fontFamily?: ResumeFontFamily;
-  /** Font for the display name; falls back to `fontFamily` when unset */
-  nameFontFamily?: ResumeFontFamily;
   /**
    * Font for the professional title under the name (`.resume-headline`).
    * Independent from section headings — falls back to body (or Atelier heading) when unset.
    */
   titleFontFamily?: ResumeFontFamily;
-  /** Font for section headings (EXPERIENCE, EDUCATION, …); falls back to system UI when unset */
-  headingFontFamily?: ResumeFontFamily;
   /** Font for email / phone / contact block; falls back to system UI (or template default) when unset */
   contactFontFamily?: ResumeFontFamily;
-  /**
-   * Header text alignment when the photo is off: left / center / right.
-   */
+  /** Header text alignment when the photo is off */
   headerAlignment?: ResumeHeaderAlignment;
-  /**
-   * Header composition when the photo is on.
-   * Independent of `headerAlignment` — photo layouts are not text-align aliases.
-   */
+  /** Header composition when the photo is on */
   headerPhotoLayout?: ResumeHeaderPhotoLayout;
   /** Profile photo size in px (default 80; classic/lumen). Sleek/studio default to 64. */
   photoSize?: number;
-  /** Style of the divider line below section headings */
-  dividerStyle?: ResumeDividerStyle;
-  /** Base body font size in px (default 13) */
-  fontSize?: number;
-  /** Content density / spacing */
-  density?: ResumeDensity;
-  /** Name font size in px (default 28) */
-  nameFontSize?: number;
   /** Professional title (headline) font size in px (default 15) */
   titleFontSize?: number;
-  /** Section heading font size in px (default 12) */
-  headingFontSize?: number;
   /** Contact (email / phone) font size in px (default 12) */
   contactFontSize?: number;
-  /** Bold / italic / underline for the display name */
-  nameStyle?: ResumeTextStyle;
   /** Bold / italic / underline for the professional title under the name */
   titleStyle?: ResumeTextStyle;
-  /** Bold / italic / underline for section headings */
-  headingStyle?: ResumeTextStyle;
-  /** Bold / italic / underline for body text */
-  bodyStyle?: ResumeTextStyle;
   /** Bold / italic / underline for contact (email / phone) */
   contactStyle?: ResumeTextStyle;
-  /** Apply justified text alignment to all resume content */
-  justifyAll?: boolean;
-  /**
-   * Page layout for the live resume view (and download gating).
-   * Continuous resumes may download as continuous, A4, or Letter;
-   * A4/Letter resumes download as A4 or Letter only.
-   */
-  pageLayout?: ResumePageLayout;
 }
 
 /** Default design settings applied when no custom design is configured */
 export const RESUME_DESIGN_DEFAULTS: Required<ResumeDesign> = {
-  /** Resume defaults to light paper — independent of the Follio app theme */
+  ...DOCUMENT_DESIGN_DEFAULTS,
   templateId: 'classic',
-  colorTheme: 'light',
-  headingColor: '#000000',
-  accentColor: '#000000',
-  fontFamily: 'georgia',
-  nameFontFamily: 'georgia',
   titleFontFamily: 'georgia',
-  headingFontFamily: 'system',
   contactFontFamily: 'system',
   headerAlignment: 'center',
   headerPhotoLayout: 'photo-left',
   photoSize: 80,
-  dividerStyle: 'line',
-  fontSize: 13,
-  density: 'normal',
-  nameFontSize: 28,
   titleFontSize: 15,
-  headingFontSize: 12,
   contactFontSize: 12,
-  nameStyle: { bold: true, italic: false, underline: false },
   titleStyle: { bold: false, italic: true, underline: false },
-  headingStyle: { bold: true, italic: false, underline: false },
-  bodyStyle: { bold: false, italic: false, underline: false },
   contactStyle: { bold: false, italic: false, underline: false },
-  justifyAll: false,
-  pageLayout: 'continuous',
-};
-
-/** Ordered allowlist for resume font pickers */
-export const RESUME_FONT_OPTIONS: ResumeFontFamily[] = [
-  'georgia',
-  'times',
-  'garamond',
-  'merriweather',
-  'inter',
-  'roboto',
-  'lato',
-  'source-sans',
-  'open-sans',
-  'raleway',
-  'instrument-sans',
-  'dm-sans',
-  'system',
-  'great-vibes',
-];
-
-/** Maps font family identifiers to CSS font-family values */
-export const RESUME_FONT_MAP: Record<ResumeFontFamily, string> = {
-  georgia: "'Georgia', 'Times New Roman', Times, serif",
-  times: "'Times New Roman', Times, serif",
-  garamond: "'EB Garamond', 'Garamond', 'Georgia', serif",
-  inter: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-  roboto: "'Roboto', -apple-system, 'Segoe UI', sans-serif",
-  lato: "'Lato', -apple-system, 'Segoe UI', sans-serif",
-  merriweather: "'Merriweather', 'Georgia', serif",
-  'source-sans': "'Source Sans 3', -apple-system, 'Segoe UI', sans-serif",
-  'open-sans': "'Open Sans', -apple-system, 'Segoe UI', sans-serif",
-  raleway: "'Raleway', -apple-system, 'Segoe UI', sans-serif",
-  'instrument-sans': "'Instrument Sans', -apple-system, 'Segoe UI', sans-serif",
-  'dm-sans': "'DM Sans', -apple-system, 'Segoe UI', sans-serif",
-  system: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-  'great-vibes': "'Great Vibes', 'Segoe Script', cursive",
-};
-
-/** Human-readable labels for font families */
-export const RESUME_FONT_LABELS: Record<ResumeFontFamily, string> = {
-  georgia: 'Georgia',
-  times: 'Times New Roman',
-  garamond: 'EB Garamond',
-  inter: 'Inter',
-  roboto: 'Roboto',
-  lato: 'Lato',
-  merriweather: 'Merriweather',
-  'source-sans': 'Source Sans',
-  'open-sans': 'Open Sans',
-  raleway: 'Raleway',
-  'instrument-sans': 'Instrument Sans',
-  'dm-sans': 'DM Sans',
-  system: 'System UI',
-  'great-vibes': 'Great Vibes',
 };
 
 // ===========================================

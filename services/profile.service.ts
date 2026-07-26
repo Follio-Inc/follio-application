@@ -149,16 +149,15 @@ export async function updateProfileStatus(
 }
 
 /**
- * Update resume visibility (PUBLIC, UNLISTED, or PRIVATE)
+ * Update resume visibility (PUBLIC, UNLISTED, or PRIVATE).
+ * Enforces at most one PUBLIC resume per user.
  */
 export async function updateResumeVisibility(
   profileId: string,
   visibility: ContentVisibility
 ): Promise<void> {
-  await db.profile.update({
-    where: { id: profileId },
-    data: { resumeVisibility: visibility },
-  });
+  const { setExclusiveResumeVisibility } = await import('@/lib/public-resume');
+  await setExclusiveResumeVisibility(profileId, visibility);
 }
 
 /**

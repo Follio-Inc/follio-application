@@ -7,10 +7,10 @@
  * Puppeteer (headless Chrome) is used for the HTML → PDF conversion.
  */
 
-import type { Browser } from 'puppeteer-core';
-
+import { documentGoogleFontLinkTags } from '@/lib/document-design';
 import {
   containsHtmlFormatting,
+  escapeHtml,
   isHtmlEmpty,
   sanitizeRichHtml,
   stripHtmlTags,
@@ -27,9 +27,9 @@ import {
   resolveResumeFonts,
 } from '@/lib/resume-design';
 import { getResumeTemplateId, isResumeAtelierRailSectionType } from '@/lib/resume/templates';
-import { getResumePageSize } from '@/lib/resume/page-layout';
 import { resolveSkillCategoryLabel, skillGroupsHaveCategoryLabels } from '@/lib/skills/groups';
 import { formatDate } from '@/lib/utils';
+import { generateDocumentPDF } from '@/services/document-pdf.service';
 import type {
   CustomSectionContent,
   CustomSectionItem,
@@ -41,35 +41,13 @@ import type {
   ProfileSection,
   PublicationItem,
   ReferenceItem,
-  ResumeFontFamily,
   VolunteeringItem,
 } from '@/types';
 import { HEADER_SECTION_TYPES } from '@/types';
 
 export type { PdfLayout };
 
-/** Normalize legacy `paged` query values to Letter. */
-function normalizePdfLayout(layout: string | undefined): PdfLayout {
-  if (layout === 'continuous' || layout === 'a4' || layout === 'letter') return layout;
-  if (layout === 'paged') return 'letter';
-  return 'letter';
-}
-
 const serviceLogger = logger.child({ source: 'export-service' });
-
-/**
- * Escape HTML special characters to prevent XSS.
- * Must be applied to all user-provided data interpolated into HTML.
- */
-function escapeHtml(str: string | null | undefined): string {
-  if (!str) return '';
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
 
 /**
  * Return an HTML-attribute-safe URL, or an empty string when the URL uses a
@@ -487,29 +465,6 @@ export function toPlainText(profile: FullProfile): string {
 // Renders the same HTML structure and CSS classes as CleanResumeView
 // so the exported PDF is visually identical to the on-screen preview.
 // ═══════════════════════════════════════════════════════════════════
-
-/** Google Fonts URLs — mirrors resume-font-loader.tsx (system fonts return null). */
-const GOOGLE_FONT_URLS: Partial<Record<ResumeFontFamily, string>> = {
-  garamond:
-    'https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap',
-  inter: 'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap',
-  roboto:
-    'https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,300;0,400;0,500;0,700;1,400&display=swap',
-  lato: 'https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,300;0,400;0,700;1,400&display=swap',
-  merriweather:
-    'https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;1,400&display=swap',
-  'source-sans':
-    'https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,300;0,400;0,600;0,700;1,400&display=swap',
-  'open-sans':
-    'https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300;0,400;0,600;0,700;1,400&display=swap',
-  raleway:
-    'https://fonts.googleapis.com/css2?family=Raleway:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap',
-  'instrument-sans':
-    'https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap',
-  'dm-sans':
-    'https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap',
-  'great-vibes': 'https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap',
-};
 
 /** Strip URL protocol and trailing slash for cleaner contact display. */
 function displayUrl(url: string): string {
@@ -1729,14 +1684,7 @@ export function toPDFHtml(profile: FullProfile): string {
 
     // ── Google Font <link> tags for body / name / heading ──
     const fonts = resolveResumeFonts(parsedDesign);
-    const fontUrls = new Set(
-      [fonts.body, fonts.name, fonts.heading]
-        .map((face) => GOOGLE_FONT_URLS[face])
-        .filter((url): url is string => Boolean(url))
-    );
-    const fontLink = [...fontUrls]
-      .map((url) => `<link rel="stylesheet" href="${url}" crossorigin="anonymous" />`)
-      .join('\n  ');
+    const fontLink = documentGoogleFontLinkTags([fonts.body, fonts.name, fonts.heading]);
 
     // ── Contact items (mirrors CleanResumeView logic) ──────
     const contactItems: string[] = (() => {
@@ -2052,147 +2000,12 @@ interface PdfOptions {
 }
 
 /**
- * Sparticuz ships Linux-only Chromium binaries for Lambda/Vercel.
- * Only use them on Linux in an actual serverless runtime — not when
- * VERCEL/AWS_* env vars are set locally on macOS/Windows for simulation.
- */
-function isServerlessChromiumRuntime(): boolean {
-  if (process.platform !== 'linux') return false;
-  return Boolean(process.env.VERCEL === '1' || process.env.AWS_LAMBDA_FUNCTION_NAME);
-}
-
-/**
- * Launch a headless Chromium browser suitable for the current runtime.
- *
- * In serverless production environments (e.g. Vercel) the system Chrome
- * binary is unavailable and the full `puppeteer` Chromium download exceeds
- * the function size limit. There we use `@sparticuz/chromium`, a Chromium
- * build packaged specifically for AWS Lambda / Vercel, driven by the
- * lightweight `puppeteer-core`.
- *
- * In local development we fall back to the full `puppeteer` package, which
- * bundles its own Chromium and requires no extra system setup.
- */
-async function launchBrowser(): Promise<Browser> {
-  const isServerless = isServerlessChromiumRuntime();
-
-  if (isServerless) {
-    const [{ default: chromium }, puppeteerCore, fs, path, { execSync }] = await Promise.all([
-      import('@sparticuz/chromium-min'),
-      import('puppeteer-core'),
-      import('fs'),
-      import('path'),
-      import('child_process'),
-    ]);
-
-    const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
-    const destDir = '/tmp/chromium-pack';
-    const tarName = `chromium-v147.0.0-pack.${arch}.tar`;
-    const tarPath = path.join(process.cwd(), 'public', tarName);
-    const packUrl = `https://github.com/Sparticuz/chromium/releases/download/v147.0.0/chromium-v147.0.0-pack.${arch}.tar`;
-
-    let chromiumPath: string;
-
-    try {
-      if (!fs.existsSync(destDir)) {
-        fs.mkdirSync(destDir, { recursive: true });
-      }
-
-      const markerFile = path.join(destDir, 'chromium.br');
-      if (!fs.existsSync(markerFile)) {
-        serviceLogger.info(`Extracting ${tarPath} to ${destDir}...`);
-        if (!fs.existsSync(tarPath)) {
-          throw new Error(`Chromium tarball not found at ${tarPath}`);
-        }
-        execSync(`tar -xf ${tarPath} -C ${destDir}`);
-        serviceLogger.info('Chromium extraction completed successfully.');
-      } else {
-        serviceLogger.info('Chromium pack already extracted in /tmp');
-      }
-
-      chromiumPath = await chromium.executablePath(destDir);
-    } catch (err: unknown) {
-      serviceLogger.error('Failed to extract local Chromium pack', err);
-      chromiumPath = await chromium.executablePath(packUrl);
-    }
-
-    return puppeteerCore.launch({
-      args: [...chromium.args, '--disable-dev-shm-usage'],
-      executablePath: chromiumPath,
-      headless: (chromium as any).headless,
-      defaultViewport: (chromium as any).defaultViewport,
-    });
-  }
-
-  // Local / non-Linux: use the full puppeteer package (bundled Chromium).
-  const { default: puppeteer } = await import('puppeteer');
-  return puppeteer.launch({
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-  }) as unknown as Promise<Browser>;
-}
-
-/**
  * Generate a PDF resume that is visually identical to the on-screen
- * `CleanResumeView` preview.
- *
- * The HTML (from `toPDFHtml`) is rendered in headless Chrome via
- * Puppeteer and converted to PDF with the chosen layout mode:
- *
- *  - `'letter'` (default) — US Letter pages with page breaks
- *  - `'a4'`               — ISO A4 pages with page breaks
- *  - `'continuous'`       — single page trimmed to content height
+ * `CleanResumeView` preview. Uses the shared document PDF pipeline.
  */
 export async function generateResumePDF(
   profile: FullProfile,
-  { layout: rawLayout = 'letter' }: PdfOptions = {}
+  { layout = 'letter' }: PdfOptions = {}
 ): Promise<Buffer> {
-  const layout = normalizePdfLayout(rawLayout);
-  const pageSize = getResumePageSize(layout);
-  const paperWidthOverride =
-    layout === 'a4'
-      ? `<style>.resume-paper{max-width:${pageSize.widthPx}px;width:${pageSize.widthPx}px;}</style>`
-      : '';
-  const html = toPDFHtml(profile).replace('</head>', `${paperWidthOverride}</head>`);
-
-  const browser = await launchBrowser();
-
-  try {
-    const page = await browser.newPage();
-
-    // Render the HTML and wait for all web fonts to finish loading so the
-    // PDF metrics match the on-screen preview exactly.
-    await page.setContent(html, { waitUntil: 'load' });
-    await page.evaluate(() => document.fonts.ready);
-
-    let pdfBuffer: Uint8Array;
-
-    if (layout === 'continuous') {
-      // Measure the actual content height so we can create a single page
-      const contentHeight = await page.evaluate(() => {
-        const paper = document.querySelector('.resume-paper');
-        return paper ? paper.scrollHeight : document.body.scrollHeight;
-      });
-
-      // Width = Letter (8.5″ at 96 dpi). Height = content + breathing room.
-      pdfBuffer = await page.pdf({
-        width: `${pageSize.widthPx}px`,
-        height: `${contentHeight + 20}px`,
-        printBackground: true,
-        margin: { top: '0px', right: '0px', bottom: '0px', left: '0px' },
-      });
-    } else {
-      // A4 or Letter pages. Margins are applied by the PDF renderer;
-      // the .resume-paper element's own padding handles the inner spacing.
-      pdfBuffer = await page.pdf({
-        format: pageSize.pdfFormat,
-        printBackground: true,
-        margin: { top: '0px', right: '0px', bottom: '0px', left: '0px' },
-      });
-    }
-
-    return Buffer.from(pdfBuffer);
-  } finally {
-    await browser.close();
-  }
+  return generateDocumentPDF(toPDFHtml(profile), { layout });
 }

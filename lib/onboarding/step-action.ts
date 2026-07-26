@@ -1,6 +1,6 @@
 /**
  * Whether the user has taken a meaningful action on the current import step.
- * Used to switch the footer CTA from "Skip to Next Step" → "Next".
+ * Used to switch the footer CTA from "Skip" → "Next" / "Choose template".
  */
 
 export type ImportOnboardingStep = 'resume' | 'photo' | 'connect';
@@ -71,7 +71,7 @@ export function hasImportStepAction(
 /** Primary footer label for optional import steps. */
 export function importStepNextLabel(hasAction: boolean, isLastDataStep: boolean): string {
   if (isLastDataStep) {
-    return hasAction ? 'Open resume' : 'Skip & open resume';
+    return hasAction ? 'Choose template' : 'Skip';
   }
-  return hasAction ? 'Next' : 'Skip to Next Step';
+  return hasAction ? 'Next' : 'Skip';
 }

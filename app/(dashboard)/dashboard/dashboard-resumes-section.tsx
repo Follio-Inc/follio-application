@@ -3,20 +3,13 @@
 import {
   ArrowRight,
   Check,
-  ChevronLeft,
-  ChevronRight,
-  Clock,
   Copy,
   Download,
   ExternalLink,
   FileText,
-  Globe,
-  Link2,
   Loader2,
-  Lock,
   MoreHorizontal,
   Pencil,
-  Plus,
   Share2,
   Star,
   Trash2,
@@ -27,9 +20,17 @@ import { useRouter } from 'next/navigation';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { DownloadDialog } from '@/app/(dashboard)/builder/components/download-dialog';
+import {
+  DashboardDocumentCard,
+  DashboardDocumentCardTitle,
+  DashboardDocumentsEmptyState,
+  DashboardDocumentsScroller,
+  DashboardDocumentsToolbar,
+  DashboardDocumentThumbnailButton,
+  DocumentVisibilityMeta,
+} from '@/components/document-dashboard';
 import { ShareDialog } from '@/components/share-dialog';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import {
   Dialog,
   DialogClose,
@@ -47,19 +48,17 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { MAX_RESUMES_PER_USER } from '@/lib/validations';
 import { isPortfolioEnabled } from '@/lib/features';
 import type { ResumePageLayout } from '@/types';
 
 import {
   NewResumeCloneDialog,
   NewResumeMenuButton,
+  NewResumeTemplatePickerHost,
+  NewResumeUploadHost,
   ResumeListDivider,
-  ResumeUploadFileInput,
-  sortResumesWithPortfolioFirst,
+  sortResumesWithPublicFirst,
   useNewResumeActions,
-  type UploadCreatedResume,
 } from '../resumes/new-resume-options';
 import { ResumeThumbnail } from '../resumes/resume-thumbnail';
 
@@ -85,84 +84,23 @@ interface DashboardResumesSectionProps {
   initialResumes: DashboardResumeItem[];
   initialActiveProfileId: string | null;
   initialPrimaryProfileId: string | null;
+  /**
+   * When true, the section title/count are omitted — the parent owns that chrome
+   * (e.g. dashboard documents tabs). Actions toolbar is still shown.
+   */
+  embedded?: boolean;
 }
 
 // ─── Constants ────────────────────────────────────────────────────
 
-const VISIBILITY_CONFIG: Record<
-  string,
-  {
-    label: string;
-    description: string;
-    variant: 'default' | 'secondary' | 'outline';
-    icon: typeof Globe;
-  }
-> = {
-  PUBLIC: {
-    label: 'Public',
-    description: 'Visible to everyone and listed on your profile',
-    variant: 'default',
-    icon: Globe,
-  },
-  UNLISTED: {
-    label: 'Visible with Link',
-    description: 'Only people with the direct link can view this resume',
-    variant: 'secondary',
-    icon: Link2,
-  },
-  PRIVATE: {
-    label: 'Private',
-    description: 'Only you can see this resume',
-    variant: 'outline',
-    icon: Lock,
-  },
-};
+/** How many resume cards to show on the dashboard before "View all". */
+const DASHBOARD_RESUME_PREVIEW_LIMIT = 4;
 
 // ─── Helpers ──────────────────────────────────────────────────────
-
-function formatRelativeDate(dateString: string): string {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffSeconds = Math.floor(diffMs / 1000);
-  const diffMinutes = Math.floor(diffSeconds / 60);
-  const diffHours = Math.floor(diffMinutes / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffSeconds < 60) return 'Just now';
-  if (diffMinutes < 60) return `${diffMinutes}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
-
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
-  });
-}
 
 function getDisplayName(resume: DashboardResumeItem): string | null {
   const parts = [resume.firstName, resume.middleName, resume.lastName].filter(Boolean);
   return parts.length > 0 ? parts.join(' ') : null;
-}
-
-function createPlaceholderResume(resume: UploadCreatedResume): DashboardResumeItem {
-  const now = new Date().toISOString();
-  return {
-    id: resume.id,
-    handle: resume.handle,
-    resumeTitle: resume.resumeTitle,
-    status: 'DRAFT',
-    resumeVisibility: 'PRIVATE',
-    firstName: null,
-    middleName: null,
-    lastName: null,
-    headline: null,
-    updatedAt: now,
-    createdAt: now,
-    pageLayout: 'continuous',
-  };
 }
 
 // ─── Sub-components ───────────────────────────────────────────────
@@ -249,9 +187,9 @@ export function DashboardResumesSection({
   initialResumes,
   initialActiveProfileId,
   initialPrimaryProfileId,
+  embedded = false,
 }: DashboardResumesSectionProps) {
   const router = useRouter();
-  const scrollRef = useRef<HTMLDivElement>(null);
 
   const [resumes, setResumes] = useState<DashboardResumeItem[]>(initialResumes);
   const [activeProfileId, setActiveProfileId] = useState<string | null>(initialActiveProfileId);
@@ -276,52 +214,16 @@ export function DashboardResumesSection({
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [sharingResume, setSharingResume] = useState<DashboardResumeItem | null>(null);
 
-  // Scroll arrow visibility
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(false);
-
-  const sortedResumes = useMemo(
-    () => sortResumesWithPortfolioFirst(resumes, primaryProfileId),
-    [resumes, primaryProfileId]
+  const sortedResumes = useMemo(() => sortResumesWithPublicFirst(resumes), [resumes]);
+  const previewResumes = useMemo(
+    () => sortedResumes.slice(0, DASHBOARD_RESUME_PREVIEW_LIMIT),
+    [sortedResumes]
   );
+  const hasMoreResumes = sortedResumes.length > DASHBOARD_RESUME_PREVIEW_LIMIT;
+  const remainingResumeCount = sortedResumes.length - previewResumes.length;
 
-  const showPortfolioDivider =
-    primaryProfileId != null &&
-    sortedResumes.length > 1 &&
-    sortedResumes[0]?.id === primaryProfileId;
-
-  // ─── Scroll management ─────────────────────────────────────────
-
-  const updateScrollArrows = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-
-    setCanScrollLeft(el.scrollLeft > 0);
-    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
-  }, []);
-
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-
-    updateScrollArrows();
-
-    el.addEventListener('scroll', updateScrollArrows, { passive: true });
-    const observer = new ResizeObserver(updateScrollArrows);
-    observer.observe(el);
-
-    return () => {
-      el.removeEventListener('scroll', updateScrollArrows);
-      observer.disconnect();
-    };
-  }, [updateScrollArrows, sortedResumes.length]);
-
-  const scrollBy = (direction: 'left' | 'right') => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const amount = el.clientWidth * 0.75;
-    el.scrollBy({ left: direction === 'left' ? -amount : amount, behavior: 'smooth' });
-  };
+  const showPublicDivider =
+    previewResumes.length > 1 && previewResumes[0]?.resumeVisibility === 'PUBLIC';
 
   // ─── Data refresh ─────────────────────────────────────────────
 
@@ -345,12 +247,6 @@ export function DashboardResumesSection({
   const newResume = useNewResumeActions({
     onRefresh: refreshResumes,
     onError: setError,
-    onImportStart: (resume) => {
-      setResumes((prev) => [createPlaceholderResume(resume), ...prev]);
-    },
-    onImportFailed: (profileId) => {
-      setResumes((prev) => prev.filter((resume) => resume.id !== profileId));
-    },
   });
 
   const isBusy = isMutating || newResume.isMutating;
@@ -505,60 +401,30 @@ export function DashboardResumesSection({
 
   // ─── Render ───────────────────────────────────────────────────
 
-  const canCreateNew = resumes.length < MAX_RESUMES_PER_USER;
-  const atResumeLimit = !canCreateNew;
-
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <h2 className="text-section-title">Resumes</h2>
-          <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular-nums leading-none text-muted-foreground">
-            {resumes.length}
-          </span>
-          <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" asChild>
-            <Link href="/resumes">
-              Manage all
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
-          </Button>
-        </div>
-        <TooltipProvider delayDuration={0}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="shrink-0">
-                {atResumeLimit ? (
-                  <Button className="gap-1.5" disabled>
-                    <Plus className="h-4 w-4" />
-                    New resume
-                  </Button>
-                ) : (
-                  <NewResumeMenuButton
-                    disabled={atResumeLimit}
-                    isMutating={isBusy}
-                    onBlank={() => void newResume.createBlank()}
-                    onUpload={() => void newResume.startUpload()}
-                    onClone={() => newResume.openCloneDialog()}
-                  />
-                )}
-              </span>
-            </TooltipTrigger>
-            {atResumeLimit && (
-              <TooltipContent side="bottom">
-                <p>
-                  Maximum {MAX_RESUMES_PER_USER} resumes per user. Delete one to create a new
-                  resume.
-                </p>
-              </TooltipContent>
-            )}
-          </Tooltip>
-        </TooltipProvider>
-      </div>
-
-      <ResumeUploadFileInput
-        inputRef={newResume.uploadInputRef}
-        onChange={(event) => void newResume.handleUploadFileChange(event)}
-        disabled={isBusy}
+      <DashboardDocumentsToolbar
+        embedded={embedded}
+        title="Resumes"
+        count={resumes.length}
+        secondaryActions={
+          hasMoreResumes ? (
+            <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" asChild>
+              <Link href="/resumes">
+                View all
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          ) : null
+        }
+        createAction={
+          <NewResumeMenuButton
+            isMutating={isBusy}
+            onBlank={() => void newResume.createBlank()}
+            onUpload={() => void newResume.startUpload()}
+            onClone={() => newResume.openCloneDialog()}
+          />
+        }
       />
 
       {/* Error banner */}
@@ -576,245 +442,181 @@ export function DashboardResumesSection({
       )}
 
       {resumes.length === 0 ? (
-        /* Empty state */
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/60 bg-muted/10 px-6 py-14 text-center">
-          <FileText className="h-7 w-7 text-muted-foreground" strokeWidth={1.5} />
-          <p className="mt-4 text-sm font-medium text-foreground">No resumes yet</p>
-          <p className="mt-1 max-w-xs text-sm text-muted-foreground">
-            Create your first resume and we&apos;ll open it in the builder.
-          </p>
-          <div className="mt-5">
+        <DashboardDocumentsEmptyState
+          icon={FileText}
+          title="No resumes yet"
+          description="Create your first resume and we'll open it in the builder."
+          action={
             <NewResumeMenuButton
               isMutating={isBusy}
               onBlank={() => void newResume.createBlank()}
               onUpload={() => void newResume.startUpload()}
               onClone={() => newResume.openCloneDialog()}
             />
-          </div>
-        </div>
+          }
+        />
       ) : (
-        /* Horizontal scroll container */
-        <div className="group/scroll relative">
-          {/* Left scroll arrow */}
-          {canScrollLeft && (
-            <button
-              type="button"
-              onClick={() => scrollBy('left')}
-              className="absolute -left-3 top-1/2 z-20 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border bg-background shadow-md transition-opacity hover:bg-muted"
-              aria-label="Scroll left"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-          )}
+        <DashboardDocumentsScroller itemCount={previewResumes.length + (hasMoreResumes ? 1 : 0)}>
+          {previewResumes.map((resume, index) => {
+            const displayName = getDisplayName(resume);
+            const isPublic = resume.resumeVisibility === 'PUBLIC';
+            const portfolioEnabled = isPortfolioEnabled();
 
-          {/* Right scroll arrow */}
-          {canScrollRight && (
-            <button
-              type="button"
-              onClick={() => scrollBy('right')}
-              className="absolute -right-3 top-1/2 z-20 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border bg-background shadow-md transition-opacity hover:bg-muted"
-              aria-label="Scroll right"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          )}
-
-          <div ref={scrollRef} className="scrollbar-none flex gap-5 overflow-x-auto pb-2">
-            {sortedResumes.map((resume, index) => {
-              const displayName = getDisplayName(resume);
-              const isImporting = resume.id === newResume.importingProfileId;
-
-              return (
-                <Fragment key={resume.id}>
-                  {index === 1 && showPortfolioDivider && <ResumeListDivider />}
-                  <Card className="group relative flex w-[260px] shrink-0 flex-col overflow-hidden transition-all duration-200 hover:border-border hover:shadow-md">
-                    {/*
-                     * Resume thumbnail preview.
-                     *
-                     * Rendered as a div with role="button" rather than a real
-                     * <button> because <ResumeThumbnail> contains its own
-                     * "Retry" button in its error state, and a <button> cannot
-                     * be a descendant of another <button> (HTML hydration
-                     * error). The div + role/keydown pattern preserves
-                     * keyboard activation and screen-reader semantics.
-                     */}
-                    <div
-                      role="button"
-                      tabIndex={isMutating || isImporting ? -1 : 0}
-                      aria-disabled={isMutating || isImporting}
-                      aria-label={`Open ${resume.resumeTitle} in builder`}
-                      className="relative block w-full cursor-pointer border-b border-border/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-disabled:cursor-not-allowed"
-                      onClick={() => {
-                        if (isMutating || isImporting) return;
-                        void handleOpenInBuilder(resume.id);
-                      }}
-                      onKeyDown={(event) => {
-                        if (isMutating || isImporting) return;
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault();
-                          void handleOpenInBuilder(resume.id);
-                        }
-                      }}
+            return (
+              <Fragment key={resume.id}>
+                {index === 1 && showPublicDivider && <ResumeListDivider />}
+                <DashboardDocumentCard
+                  accent={isPublic ? 'public' : 'default'}
+                  thumbnail={
+                    <DashboardDocumentThumbnailButton
+                      label={`Open ${resume.resumeTitle} in builder`}
+                      disabled={isMutating}
+                      onOpen={() => void handleOpenInBuilder(resume.id)}
                     >
                       <ResumeThumbnail
                         profileId={resume.id}
-                        isImporting={isImporting}
-                        showPortfolioBadge={resume.id === primaryProfileId}
+                        showPublicBadge={isPublic}
+                        showPortfolioBadge={
+                          portfolioEnabled && resume.id === primaryProfileId && !isPublic
+                        }
                       />
-                    </div>
-
-                    <div className="flex flex-1 flex-col gap-3 p-4">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          {renamingResumeId === resume.id ? (
-                            <InlineRenameInput
-                              value={renameValue}
-                              error={renameError}
-                              isMutating={isMutating}
-                              onChange={(v) => {
-                                setRenameValue(v);
-                                if (renameError) setRenameError(null);
-                              }}
-                              onConfirm={() => void handleInlineRename(resume.id)}
-                              onCancel={cancelInlineRename}
-                            />
-                          ) : (
-                            <h3 className="truncate text-sm font-semibold leading-tight text-foreground">
-                              {resume.resumeTitle}
-                            </h3>
-                          )}
-                          {displayName && (
-                            <p className="mt-1 truncate text-xs text-muted-foreground">
-                              {displayName}
-                            </p>
-                          )}
-                        </div>
-
-                        {/* Card actions menu */}
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="-mr-1.5 -mt-1.5 h-7 w-7 shrink-0 text-muted-foreground opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
-                            >
-                              <MoreHorizontal className="h-4 w-4" />
-                              <span className="sr-only">Resume actions</span>
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-48">
-                            <DropdownMenuItem onClick={() => handleOpenInBuilder(resume.id)}>
-                              <FileText className="mr-2 h-4 w-4" />
-                              Open in Builder
-                            </DropdownMenuItem>
-                            <DropdownMenuItem asChild>
-                              <Link href={`/u/${resume.handle}/resume`} target="_blank">
-                                <ExternalLink className="mr-2 h-4 w-4" />
-                                View Resume
-                              </Link>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleOpenDownloadDialog(resume)}>
-                              <Download className="mr-2 h-4 w-4" />
-                              Download PDF
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleOpenShareDialog(resume)}>
-                              <Share2 className="mr-2 h-4 w-4" />
-                              Share
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => startInlineRename(resume)}>
-                              <Pencil className="mr-2 h-4 w-4" />
-                              Rename
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => newResume.openCloneDialog()}
-                              disabled={!canCreateNew}
-                            >
-                              <Copy className="mr-2 h-4 w-4" />
-                              Clone
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => void handleSetAsPortfolio(resume.id)}
-                              disabled={resume.id === primaryProfileId || isMutating}
-                            >
-                              <Star className="mr-2 h-4 w-4" />
-                              {resume.id === primaryProfileId
-                                ? isPortfolioEnabled()
-                                  ? 'Current Portfolio'
-                                  : 'Primary resume'
-                                : isPortfolioEnabled()
-                                  ? 'Set as Portfolio'
-                                  : 'Set as primary'}
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={() => openDeleteDialog(resume)}
-                              disabled={resumes.length <= 1}
-                              className="text-destructive focus:text-destructive"
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-
-                      {/* Visibility & timestamp row */}
-                      <div className="mt-auto flex items-center gap-2 text-xs text-muted-foreground">
-                        {(() => {
-                          const config =
-                            VISIBILITY_CONFIG[resume.resumeVisibility] ?? VISIBILITY_CONFIG.PRIVATE;
-                          const Icon = config.icon;
-                          return (
-                            <TooltipProvider delayDuration={0}>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <span className="inline-flex cursor-default items-center gap-1">
-                                    <Icon className="h-3 w-3" />
-                                    {config.label}
-                                  </span>
-                                </TooltipTrigger>
-                                <TooltipContent side="bottom">
-                                  <p>{config.description}</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          );
-                        })()}
-                        <span aria-hidden className="text-border">
-                          •
-                        </span>
-                        <span className="inline-flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          {formatRelativeDate(resume.updatedAt)}
-                        </span>
-                      </div>
-
-                      {/* Primary actions */}
-                      <div className="flex items-center gap-2">
+                    </DashboardDocumentThumbnailButton>
+                  }
+                  title={
+                    renamingResumeId === resume.id ? (
+                      <InlineRenameInput
+                        value={renameValue}
+                        error={renameError}
+                        isMutating={isMutating}
+                        onChange={(v) => {
+                          setRenameValue(v);
+                          if (renameError) setRenameError(null);
+                        }}
+                        onConfirm={() => void handleInlineRename(resume.id)}
+                        onCancel={cancelInlineRename}
+                      />
+                    ) : (
+                      <DashboardDocumentCardTitle
+                        title={resume.resumeTitle}
+                        subtitle={displayName ?? undefined}
+                      />
+                    )
+                  }
+                  menu={
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
                         <Button
-                          size="sm"
-                          className="flex-1 gap-1.5"
-                          onClick={() => handleOpenInBuilder(resume.id)}
-                          disabled={isMutating || isImporting}
+                          variant="ghost"
+                          size="icon"
+                          className="-mr-1.5 -mt-1.5 h-7 w-7 shrink-0 text-muted-foreground opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
                         >
-                          <Pencil className="h-3.5 w-3.5" />
-                          Edit
+                          <MoreHorizontal className="h-4 w-4" />
+                          <span className="sr-only">Resume actions</span>
                         </Button>
-                        <Button variant="outline" size="sm" className="flex-1 gap-1.5" asChild>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuItem onClick={() => handleOpenInBuilder(resume.id)}>
+                          <FileText className="mr-2 h-4 w-4" />
+                          Open in Builder
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
                           <Link href={`/u/${resume.handle}/resume`} target="_blank">
-                            <ExternalLink className="h-3.5 w-3.5" />
-                            View
+                            <ExternalLink className="mr-2 h-4 w-4" />
+                            View Resume
                           </Link>
-                        </Button>
-                      </div>
-                    </div>
-                  </Card>
-                </Fragment>
-              );
-            })}
-          </div>
-        </div>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleOpenDownloadDialog(resume)}>
+                          <Download className="mr-2 h-4 w-4" />
+                          Download PDF
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleOpenShareDialog(resume)}>
+                          <Share2 className="mr-2 h-4 w-4" />
+                          Share
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => startInlineRename(resume)}>
+                          <Pencil className="mr-2 h-4 w-4" />
+                          Rename
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => newResume.openCloneDialog()}>
+                          <Copy className="mr-2 h-4 w-4" />
+                          Clone
+                        </DropdownMenuItem>
+                        {portfolioEnabled && (
+                          <DropdownMenuItem
+                            onClick={() => void handleSetAsPortfolio(resume.id)}
+                            disabled={resume.id === primaryProfileId || isMutating}
+                          >
+                            <Star className="mr-2 h-4 w-4" />
+                            {resume.id === primaryProfileId
+                              ? 'Current Portfolio'
+                              : 'Set as Portfolio'}
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => openDeleteDialog(resume)}
+                          disabled={resumes.length <= 1}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  }
+                  meta={
+                    <DocumentVisibilityMeta
+                      visibility={resume.resumeVisibility}
+                      updatedAt={resume.updatedAt}
+                      descriptions={{
+                        PUBLIC: 'Anyone can view at your Follio URL',
+                        UNLISTED: 'Only people with the secure link can view this resume',
+                        PRIVATE: 'Only you can see this resume',
+                      }}
+                    />
+                  }
+                  primaryActions={
+                    <>
+                      <Button
+                        size="sm"
+                        className="flex-1 gap-1.5"
+                        onClick={() => handleOpenInBuilder(resume.id)}
+                        disabled={isMutating}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                        Edit
+                      </Button>
+                      <Button variant="outline" size="sm" className="flex-1 gap-1.5" asChild>
+                        <Link href={`/u/${resume.handle}/resume`} target="_blank">
+                          <ExternalLink className="h-3.5 w-3.5" />
+                          View
+                        </Link>
+                      </Button>
+                    </>
+                  }
+                />
+              </Fragment>
+            );
+          })}
+
+          {hasMoreResumes && (
+            <Link
+              href="/resumes"
+              className="group flex w-[180px] shrink-0 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border/70 bg-muted/20 px-4 py-8 text-center transition-colors hover:border-border hover:bg-muted/40"
+            >
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-background text-muted-foreground shadow-sm ring-1 ring-border/60 transition-colors group-hover:text-foreground">
+                <ArrowRight className="h-4 w-4" />
+              </span>
+              <span className="space-y-1">
+                <span className="block text-sm font-medium text-foreground">View all</span>
+                <span className="block text-xs text-muted-foreground">
+                  {remainingResumeCount} more resume{remainingResumeCount === 1 ? '' : 's'}
+                </span>
+              </span>
+            </Link>
+          )}
+        </DashboardDocumentsScroller>
       )}
 
       <NewResumeCloneDialog
@@ -829,6 +631,22 @@ export function DashboardResumesSection({
         onBack={newResume.backToClonePick}
         onConfirm={() => void newResume.confirmClone()}
         isMutating={isBusy}
+      />
+
+      <NewResumeUploadHost
+        inputRef={newResume.uploadInputRef}
+        onFileChange={(event) => void newResume.handleUploadFileChange(event)}
+        isParsing={newResume.isUploadParsing}
+        fileName={newResume.uploadFileName}
+        disabled={isBusy}
+      />
+
+      <NewResumeTemplatePickerHost
+        open={newResume.templatePickerOpen}
+        onOpenChange={newResume.onTemplatePickerOpenChange}
+        onSelect={newResume.handleTemplateSelect}
+        profile={newResume.templatePickerProfile}
+        applyLabel={newResume.templatePickerApplyLabel}
       />
 
       {/* ─── Delete Confirmation Dialog ─────────────────────────── */}
@@ -894,8 +712,10 @@ export function DashboardResumesSection({
       {sharingResume && (
         <ShareDialog
           profile={{
+            id: sharingResume.id,
             handle: sharingResume.handle,
             firstName: sharingResume.firstName,
+            resumeTitle: sharingResume.resumeTitle,
             resumeVisibility: sharingResume.resumeVisibility as 'PUBLIC' | 'UNLISTED' | 'PRIVATE',
           }}
           open={shareDialogOpen}
@@ -906,9 +726,13 @@ export function DashboardResumesSection({
           onBeforeOpen={handleShareBeforeOpen}
           onVisibilityChange={(visibility) => {
             setResumes((prev) =>
-              prev.map((r) =>
-                r.id === sharingResume.id ? { ...r, resumeVisibility: visibility } : r
-              )
+              prev.map((r) => {
+                if (r.id === sharingResume.id) return { ...r, resumeVisibility: visibility };
+                if (visibility === 'PUBLIC' && r.resumeVisibility === 'PUBLIC') {
+                  return { ...r, resumeVisibility: 'UNLISTED' };
+                }
+                return r;
+              })
             );
             setSharingResume((prev) => (prev ? { ...prev, resumeVisibility: visibility } : prev));
           }}

@@ -17,6 +17,16 @@ import { useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 import { isPortfolioEnabled } from '@/lib/features';
 import { buildResumePdfUrl } from '@/lib/hooks/use-resume-download';
@@ -40,9 +50,8 @@ export function ShareSection({ profile }: ShareSectionProps) {
   const [copiedPortfolio, setCopiedPortfolio] = useState(false);
   const [copiedResume, setCopiedResume] = useState(false);
   const [isExporting, setIsExporting] = useState<string | null>(null);
-  // A resume has no openly-public mode; treat any legacy PUBLIC value as UNLISTED.
   const [resumeVisibility, setResumeVisibility] = useState<'PUBLIC' | 'UNLISTED' | 'PRIVATE'>(
-    profile.resumeVisibility === 'PRIVATE' ? 'PRIVATE' : 'UNLISTED'
+    profile.resumeVisibility || 'PRIVATE'
   );
   const [portfolioVisibility, setPortfolioVisibility] = useState<'PUBLIC' | 'UNLISTED' | 'PRIVATE'>(
     profile.portfolioVisibility || 'PUBLIC'
@@ -51,6 +60,8 @@ export function ShareSection({ profile }: ShareSectionProps) {
   const [shareToken, setShareToken] = useState<ShareTokenData | null>(null);
   const [origin, setOrigin] = useState('');
   const [unlistedKey, setUnlistedKey] = useState<string | null>(null);
+  const [vanityUsername, setVanityUsername] = useState(profile.handle);
+  const [pendingPublicConfirm, setPendingPublicConfirm] = useState<string | null>(null);
   const qrRef = useRef<HTMLDivElement>(null);
 
   // Set origin on client side to avoid hydration mismatch
@@ -61,9 +72,25 @@ export function ShareSection({ profile }: ShareSectionProps) {
   // Fetch unlisted key when any visibility is UNLISTED
   useEffect(() => {
     if (portfolioVisibility === 'UNLISTED' || resumeVisibility === 'UNLISTED') {
-      fetchUnlistedKey();
+      void fetchUnlistedKey();
     }
   }, [portfolioVisibility, resumeVisibility]);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch('/api/resumes');
+        if (res.ok) {
+          const data = await res.json();
+          if (typeof data.vanityUsername === 'string' && data.vanityUsername) {
+            setVanityUsername(data.vanityUsername);
+          }
+        }
+      } catch {
+        // Keep profile.handle fallback
+      }
+    })();
+  }, []);
 
   const fetchUnlistedKey = async () => {
     try {
@@ -83,7 +110,7 @@ export function ShareSection({ profile }: ShareSectionProps) {
     portfolioVisibility === 'UNLISTED' ? unlistedKey : null
   );
   const resumeUrl = getResumeUrl(
-    profile.handle,
+    vanityUsername || profile.handle,
     resumeVisibility === 'UNLISTED' ? unlistedKey : null
   );
   const publicUrl = getPortfolioUrl(profile.handle);
@@ -111,6 +138,34 @@ export function ShareSection({ profile }: ShareSectionProps) {
     type: 'resume' | 'portfolio',
     value: 'PUBLIC' | 'UNLISTED' | 'PRIVATE'
   ) => {
+    if (type === 'resume' && value === 'PUBLIC') {
+      try {
+        const res = await fetch('/api/resumes');
+        if (res.ok) {
+          const data = await res.json();
+          if (typeof data.vanityUsername === 'string' && data.vanityUsername) {
+            setVanityUsername(data.vanityUsername);
+          }
+          const otherPublic = (
+            data.resumes as Array<{ id: string; resumeTitle: string; resumeVisibility: string }>
+          ).find((r) => r.resumeVisibility === 'PUBLIC' && r.id !== profile.id);
+          if (otherPublic) {
+            setPendingPublicConfirm(otherPublic.resumeTitle || 'another resume');
+            return;
+          }
+        }
+      } catch (error) {
+        console.error('Failed to check existing public resume:', error);
+      }
+    }
+
+    await persistVisibility(type, value);
+  };
+
+  const persistVisibility = async (
+    type: 'resume' | 'portfolio',
+    value: 'PUBLIC' | 'UNLISTED' | 'PRIVATE'
+  ) => {
     const prev = type === 'resume' ? resumeVisibility : portfolioVisibility;
     if (type === 'resume') setResumeVisibility(value);
     else setPortfolioVisibility(value);
@@ -119,11 +174,17 @@ export function ShareSection({ profile }: ShareSectionProps) {
     try {
       const payload =
         type === 'resume' ? { resumeVisibility: value } : { portfolioVisibility: value };
-      await fetch('/api/profile', {
+      const res = await fetch('/api/profile', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
+      if (res.ok) {
+        const data = await res.json();
+        if (typeof data.vanityUsername === 'string' && data.vanityUsername) {
+          setVanityUsername(data.vanityUsername);
+        }
+      }
     } catch (error) {
       console.error('Failed to update visibility:', error);
       if (type === 'resume') setResumeVisibility(prev);
@@ -361,10 +422,16 @@ export function ShareSection({ profile }: ShareSectionProps) {
             <Badge variant="secondary" className="gap-1.5 bg-background/80 backdrop-blur-sm">
               {resumeVisibility === 'PRIVATE' ? (
                 <EyeOff className="h-3 w-3 text-muted-foreground" />
+              ) : resumeVisibility === 'PUBLIC' ? (
+                <Globe className="h-3 w-3 text-muted-foreground" />
               ) : (
                 <Lock className="h-3 w-3 text-muted-foreground" />
               )}
-              {resumeVisibility === 'PRIVATE' ? 'Private' : 'Unlisted'}
+              {resumeVisibility === 'PRIVATE'
+                ? 'Private'
+                : resumeVisibility === 'PUBLIC'
+                  ? 'Public'
+                  : 'Unlisted'}
             </Badge>
           </div>
         </div>
@@ -403,6 +470,15 @@ export function ShareSection({ profile }: ShareSectionProps) {
             </Button>
             <div className="flex gap-1.5">
               <Button
+                variant={resumeVisibility === 'PUBLIC' ? 'default' : 'outline'}
+                size="sm"
+                className="h-8 text-xs"
+                onClick={() => handleVisibilityChange('resume', 'PUBLIC')}
+                disabled={savingVisibility}
+              >
+                Public
+              </Button>
+              <Button
                 variant={resumeVisibility === 'UNLISTED' ? 'default' : 'outline'}
                 size="sm"
                 className="h-8 text-xs"
@@ -425,7 +501,9 @@ export function ShareSection({ profile }: ShareSectionProps) {
           <p className="text-xs text-muted-foreground">
             {resumeVisibility === 'PRIVATE'
               ? 'Only you can view your resume. No one else has access.'
-              : 'Only people with the secure link can view your resume. Visitors see a "Request Access" option on your portfolio.'}
+              : resumeVisibility === 'PUBLIC'
+                ? `Anyone can view your resume at follio.me/${vanityUsername || profile.handle}. Only one resume can be public.`
+                : 'Only people with the secure link can view your resume. The link does not include your username.'}
           </p>
         </CardContent>
       </Card>
@@ -531,6 +609,36 @@ export function ShareSection({ profile }: ShareSectionProps) {
           </div>
         </CardContent>
       </Card>
+
+      <AlertDialog
+        open={pendingPublicConfirm !== null}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setPendingPublicConfirm(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Make this your public resume?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Only one resume can be public. Making this public will switch{' '}
+              <strong>{pendingPublicConfirm}</strong> to Unlisted. Your public URL ( follio.me/
+              {vanityUsername || profile.handle}) will then show this resume.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={savingVisibility}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setPendingPublicConfirm(null);
+                void persistVisibility('resume', 'PUBLIC');
+              }}
+              disabled={savingVisibility}
+            >
+              Make this public
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

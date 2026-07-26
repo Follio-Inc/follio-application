@@ -42,11 +42,11 @@ interface ResumeTemplateGalleryProps {
   children?: React.ReactNode;
   /**
    * How previews choose content.
-   * - `always-user` (default): always the provided profile — /builder
-   * - `sample-when-sparse`: archetype sample when Experience+Education+Skills incomplete — onboarding
+   * - TEMPLATE_PREVIEW_IN_BUILDER / `always-user` (default): live draft — Design panel
+   * - TEMPLATE_PREVIEW_ON_CREATE / `sample-when-sparse`: sample when Name+Email+Exp+Edu+Skills incomplete — upload/blank
    */
   previewDataPolicy?: ResumeTemplatePreviewDataPolicy;
-  /** Controlled open state (e.g. onboarding "Create my Follio"). */
+  /** Controlled open state (e.g. onboarding "Choose template"). */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   title?: string;

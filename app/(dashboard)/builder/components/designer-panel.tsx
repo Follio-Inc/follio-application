@@ -90,6 +90,7 @@ import {
   getAllResumeTemplates,
   getResumeTemplateId,
   getTemplateDefaultShowPhoto,
+  TEMPLATE_PREVIEW_IN_BUILDER,
   type ResumeTemplateId,
 } from '@/lib/resume/templates';
 
@@ -1041,6 +1042,7 @@ export function DesignerPanel() {
               profile={draftProfile as unknown as PublicProfile}
               currentDesign={design}
               currentTemplateId={getResumeTemplateId(design.templateId)}
+              previewDataPolicy={TEMPLATE_PREVIEW_IN_BUILDER}
               onSelect={applyTemplateDesign}
             >
               <button

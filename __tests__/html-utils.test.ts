@@ -53,6 +53,15 @@ describe('escapeHtml', () => {
     );
   });
 
+  it('escapes single quotes', () => {
+    expect(escapeHtml("it's")).toBe('it&#39;s');
+  });
+
+  it('returns empty string for nullish input', () => {
+    expect(escapeHtml(null)).toBe('');
+    expect(escapeHtml(undefined)).toBe('');
+  });
+
   it('leaves safe text unchanged', () => {
     expect(escapeHtml('Hello world')).toBe('Hello world');
   });

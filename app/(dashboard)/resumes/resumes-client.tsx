@@ -13,7 +13,6 @@ import {
   Lock,
   MoreHorizontal,
   Pencil,
-  Plus,
   Share2,
   Star,
   Trash2,
@@ -28,10 +27,10 @@ import { isPortfolioEnabled } from '@/lib/features';
 import type { ResumePageLayout } from '@/types';
 
 import { DownloadDialog } from '@/app/(dashboard)/builder/components/download-dialog';
+import { formatRelativeDocumentDate } from '@/components/document-dashboard';
 import { ShareDialog } from '@/components/share-dialog';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { MAX_RESUMES_PER_USER } from '@/lib/validations';
 
 import {
   Dialog,
@@ -54,10 +53,10 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import {
   NewResumeCloneDialog,
   NewResumeMenuButton,
-  ResumeUploadFileInput,
-  sortResumesWithPortfolioFirst,
+  NewResumeTemplatePickerHost,
+  NewResumeUploadHost,
+  sortResumesWithPublicFirst,
   useNewResumeActions,
-  type UploadCreatedResume,
 } from './new-resume-options';
 import { ResumeThumbnail } from './resume-thumbnail';
 
@@ -104,17 +103,15 @@ const VISIBILITY_CONFIG: Record<
     icon: typeof Globe;
   }
 > = {
-  // Resumes have no openly-public mode; any legacy PUBLIC value is shown (and
-  // treated server-side) as "Visible with Link".
   PUBLIC: {
-    label: 'Visible with Link',
-    description: 'Only people with the direct link can view this resume',
-    variant: 'secondary',
-    icon: Link2,
+    label: 'Public',
+    description: 'Anyone can view at your Follio URL',
+    variant: 'default',
+    icon: Globe,
   },
   UNLISTED: {
     label: 'Visible with Link',
-    description: 'Only people with the direct link can view this resume',
+    description: 'Only people with the secure link can view this resume',
     variant: 'secondary',
     icon: Link2,
   },
@@ -128,49 +125,9 @@ const VISIBILITY_CONFIG: Record<
 
 // ─── Helpers ──────────────────────────────────────────────────────
 
-function formatRelativeDate(dateString: string): string {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffSeconds = Math.floor(diffMs / 1000);
-  const diffMinutes = Math.floor(diffSeconds / 60);
-  const diffHours = Math.floor(diffMinutes / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffSeconds < 60) return 'Just now';
-  if (diffMinutes < 60) return `${diffMinutes}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
-
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
-  });
-}
-
 function getDisplayName(resume: ResumeItem): string | null {
   const parts = [resume.firstName, resume.middleName, resume.lastName].filter(Boolean);
   return parts.length > 0 ? parts.join(' ') : null;
-}
-
-function createPlaceholderResume(resume: UploadCreatedResume): ResumeItem {
-  const now = new Date().toISOString();
-  return {
-    id: resume.id,
-    handle: resume.handle,
-    resumeTitle: resume.resumeTitle,
-    status: 'DRAFT',
-    resumeVisibility: 'PRIVATE',
-    firstName: null,
-    middleName: null,
-    lastName: null,
-    headline: null,
-    updatedAt: now,
-    createdAt: now,
-    pageLayout: 'continuous',
-  };
 }
 
 // ─── Sub-components ───────────────────────────────────────────────
@@ -283,15 +240,10 @@ export function ResumeDashboardClient({
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [sharingResume, setSharingResume] = useState<ResumeItem | null>(null);
 
-  const sortedResumes = useMemo(
-    () => sortResumesWithPortfolioFirst(resumes, primaryProfileId),
-    [resumes, primaryProfileId]
-  );
+  const sortedResumes = useMemo(() => sortResumesWithPublicFirst(resumes), [resumes]);
 
-  const showPortfolioDivider =
-    primaryProfileId != null &&
-    sortedResumes.length > 1 &&
-    sortedResumes[0]?.id === primaryProfileId;
+  const showPublicDivider =
+    sortedResumes.length > 1 && sortedResumes[0]?.resumeVisibility === 'PUBLIC';
 
   // ─── Data refresh ─────────────────────────────────────────────
 
@@ -315,12 +267,6 @@ export function ResumeDashboardClient({
   const newResume = useNewResumeActions({
     onRefresh: refreshResumes,
     onError: setError,
-    onImportStart: (resume) => {
-      setResumes((prev) => [createPlaceholderResume(resume), ...prev]);
-    },
-    onImportFailed: (profileId) => {
-      setResumes((prev) => prev.filter((resume) => resume.id !== profileId));
-    },
   });
 
   const isBusy = isMutating || newResume.isMutating;
@@ -499,25 +445,29 @@ export function ResumeDashboardClient({
 
   // ─── Render ───────────────────────────────────────────────────
 
-  const atResumeLimit = resumes.length >= MAX_RESUMES_PER_USER;
-
   const renderResumeCard = (resume: ResumeItem) => {
     const displayName = getDisplayName(resume);
-    const isImporting = resume.id === newResume.importingProfileId;
+    const isPublic = resume.resumeVisibility === 'PUBLIC';
+    const portfolioEnabled = isPortfolioEnabled();
 
     return (
-      <Card className="group relative flex flex-col overflow-hidden transition-all duration-200 hover:border-border hover:shadow-md">
+      <Card
+        className={cn(
+          'group relative flex flex-col overflow-hidden transition-all duration-200 hover:shadow-md',
+          isPublic ? 'border-emerald-500/25 hover:border-emerald-500/35' : 'hover:border-border'
+        )}
+      >
         <button
           type="button"
           className="relative block w-full cursor-pointer border-b border-border/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onClick={() => void handleOpenInBuilder(resume.id)}
-          disabled={isMutating || isImporting}
+          disabled={isMutating}
           aria-label={`Open ${resume.resumeTitle} in builder`}
         >
           <ResumeThumbnail
             profileId={resume.id}
-            isImporting={isImporting}
-            showPortfolioBadge={resume.id === primaryProfileId}
+            showPublicBadge={isPublic}
+            showPortfolioBadge={portfolioEnabled && resume.id === primaryProfileId && !isPublic}
           />
         </button>
 
@@ -581,26 +531,19 @@ export function ResumeDashboardClient({
                   <Pencil className="mr-2 h-4 w-4" />
                   Rename
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => newResume.openCloneDialog()}
-                  disabled={atResumeLimit}
-                >
+                <DropdownMenuItem onClick={() => newResume.openCloneDialog()}>
                   <Copy className="mr-2 h-4 w-4" />
                   Clone
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => void handleSetAsPortfolio(resume.id)}
-                  disabled={resume.id === primaryProfileId || isMutating}
-                >
-                  <Star className="mr-2 h-4 w-4" />
-                  {resume.id === primaryProfileId
-                    ? isPortfolioEnabled()
-                      ? 'Current Portfolio'
-                      : 'Primary resume'
-                    : isPortfolioEnabled()
-                      ? 'Set as Portfolio'
-                      : 'Set as primary'}
-                </DropdownMenuItem>
+                {portfolioEnabled && (
+                  <DropdownMenuItem
+                    onClick={() => void handleSetAsPortfolio(resume.id)}
+                    disabled={resume.id === primaryProfileId || isMutating}
+                  >
+                    <Star className="mr-2 h-4 w-4" />
+                    {resume.id === primaryProfileId ? 'Current Portfolio' : 'Set as Portfolio'}
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={() => openDeleteDialog(resume)}
@@ -640,7 +583,7 @@ export function ResumeDashboardClient({
             </span>
             <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap">
               <Clock className="h-3 w-3 shrink-0" />
-              {formatRelativeDate(resume.updatedAt)}
+              {formatRelativeDocumentDate(resume.updatedAt)}
             </span>
           </div>
 
@@ -649,7 +592,7 @@ export function ResumeDashboardClient({
               size="sm"
               className="flex-1 gap-1.5"
               onClick={() => handleOpenInBuilder(resume.id)}
-              disabled={isMutating || isImporting}
+              disabled={isMutating}
             >
               <Pencil className="h-3.5 w-3.5" />
               Edit
@@ -668,12 +611,6 @@ export function ResumeDashboardClient({
 
   return (
     <div className="space-y-8">
-      <ResumeUploadFileInput
-        inputRef={newResume.uploadInputRef}
-        onChange={(event) => void newResume.handleUploadFileChange(event)}
-        disabled={isBusy}
-      />
-
       {/* Page header */}
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-1.5">
@@ -685,36 +622,14 @@ export function ResumeDashboardClient({
         </div>
 
         {/* Create new */}
-        <TooltipProvider delayDuration={0}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="self-start sm:self-auto">
-                {atResumeLimit ? (
-                  <Button className="gap-1.5" disabled>
-                    <Plus className="h-4 w-4" />
-                    New resume
-                  </Button>
-                ) : (
-                  <NewResumeMenuButton
-                    disabled={atResumeLimit}
-                    isMutating={isBusy}
-                    onBlank={() => void newResume.createBlank()}
-                    onUpload={() => void newResume.startUpload()}
-                    onClone={() => newResume.openCloneDialog()}
-                  />
-                )}
-              </span>
-            </TooltipTrigger>
-            {atResumeLimit && (
-              <TooltipContent side="bottom">
-                <p>
-                  Maximum {MAX_RESUMES_PER_USER} resumes per user. Delete one to create a new
-                  resume.
-                </p>
-              </TooltipContent>
-            )}
-          </Tooltip>
-        </TooltipProvider>
+        <span className="self-start sm:self-auto">
+          <NewResumeMenuButton
+            isMutating={isBusy}
+            onBlank={() => void newResume.createBlank()}
+            onUpload={() => void newResume.startUpload()}
+            onClone={() => newResume.openCloneDialog()}
+          />
+        </span>
       </header>
 
       {/* Error banner */}
@@ -756,7 +671,7 @@ export function ResumeDashboardClient({
               key={resume.id}
               className={cn(
                 index === 1 &&
-                  showPortfolioDivider &&
+                  showPublicDivider &&
                   'relative max-sm:col-span-full max-sm:border-t max-sm:border-border/70 max-sm:pt-5 sm:before:absolute sm:before:-left-2.5 sm:before:top-6 sm:before:h-24 sm:before:w-px sm:before:bg-border/70 sm:before:content-[""]'
               )}
             >
@@ -778,6 +693,22 @@ export function ResumeDashboardClient({
         onBack={newResume.backToClonePick}
         onConfirm={() => void newResume.confirmClone()}
         isMutating={isBusy}
+      />
+
+      <NewResumeUploadHost
+        inputRef={newResume.uploadInputRef}
+        onFileChange={(event) => void newResume.handleUploadFileChange(event)}
+        isParsing={newResume.isUploadParsing}
+        fileName={newResume.uploadFileName}
+        disabled={isBusy}
+      />
+
+      <NewResumeTemplatePickerHost
+        open={newResume.templatePickerOpen}
+        onOpenChange={newResume.onTemplatePickerOpenChange}
+        onSelect={newResume.handleTemplateSelect}
+        profile={newResume.templatePickerProfile}
+        applyLabel={newResume.templatePickerApplyLabel}
       />
 
       {/* ─── Delete Confirmation Dialog ─────────────────────────── */}
@@ -843,8 +774,10 @@ export function ResumeDashboardClient({
       {sharingResume && (
         <ShareDialog
           profile={{
+            id: sharingResume.id,
             handle: sharingResume.handle,
             firstName: sharingResume.firstName,
+            resumeTitle: sharingResume.resumeTitle,
             resumeVisibility: sharingResume.resumeVisibility as 'PUBLIC' | 'UNLISTED' | 'PRIVATE',
           }}
           open={shareDialogOpen}
@@ -854,11 +787,16 @@ export function ResumeDashboardClient({
           }}
           onBeforeOpen={handleShareBeforeOpen}
           onVisibilityChange={(visibility) => {
-            // Sync local state so the card badge and future dialog opens reflect the change
+            // Sync local state so the card badge and future dialog opens reflect the change.
+            // Making one resume PUBLIC demotes any other public resume to UNLISTED.
             setResumes((prev) =>
-              prev.map((r) =>
-                r.id === sharingResume.id ? { ...r, resumeVisibility: visibility } : r
-              )
+              prev.map((r) => {
+                if (r.id === sharingResume.id) return { ...r, resumeVisibility: visibility };
+                if (visibility === 'PUBLIC' && r.resumeVisibility === 'PUBLIC') {
+                  return { ...r, resumeVisibility: 'UNLISTED' };
+                }
+                return r;
+              })
             );
             setSharingResume((prev) => (prev ? { ...prev, resumeVisibility: visibility } : prev));
           }}

@@ -1,0 +1,31 @@
+---
+description: Keep admin-panel developer module registries in sync; keep modules separate
+globs:
+  - _admin-panel/**
+  - __tests__/devtools-overlay.test.ts
+  - app/admin/**
+  - app/api/admin/developer/**
+alwaysApply: false
+---
+
+# Admin panel (outside product)
+
+Operator tooling lives in `_admin-panel/`, not in Follio product features.
+
+## Modules stay separate
+
+- `modules/developer/` — health, suites, smoke
+- `modules/users/` — placeholder for future user monitoring
+
+Do **not** import developer ↔ users. The shell only composes them via `_admin-panel/nav.ts`.
+
+## When shipping features
+
+1. Update `modules/developer/suites-catalog.ts` / `smoke.ts` / `links.ts` as needed
+2. Thin shims only: `app/admin/(dashboard)/developer/page.tsx`, `app/api/admin/developer/*`
+
+## Access
+
+- UI: `/admin/developer` (requires Admin table auth)
+- Suite runs: local only (`DEVTOOLS_ENABLED=true`, never in production)
+- Public must never reach these APIs without admin auth

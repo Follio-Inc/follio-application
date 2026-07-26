@@ -25,13 +25,6 @@ export const httpUrl = (message = 'Must be a valid http(s) URL') =>
     .refine((value) => /^https?:\/\//i.test(value), { message });
 
 // ===========================================
-// LIMITS
-// ===========================================
-
-/** Maximum number of resumes a single user can create. */
-export const MAX_RESUMES_PER_USER = 6;
-
-// ===========================================
 // ENUMS (matching Prisma enums)
 // ===========================================
 

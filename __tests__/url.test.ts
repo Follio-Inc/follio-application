@@ -128,14 +128,20 @@ describe('URL Helpers', () => {
       expect(getPortfolioUrl('alice', null)).toBe('http://localhost:3000/u/alice');
     });
 
-    it('getResumeUrl returns path-based URL', async () => {
+    it('getResumeUrl returns vanity apex path for public resumes', async () => {
       const { getResumeUrl } = await importUrl();
-      expect(getResumeUrl('bob')).toBe('http://localhost:3000/u/bob/resume');
+      expect(getResumeUrl('bob')).toBe('http://localhost:3000/bob');
     });
 
-    it('getResumeUrl appends unlisted key', async () => {
+    it('getResumeUrl returns opaque /r/{key} for unlisted resumes', async () => {
       const { getResumeUrl } = await importUrl();
-      expect(getResumeUrl('bob', 'key-1')).toBe('http://localhost:3000/u/bob/resume?key=key-1');
+      expect(getResumeUrl('bob', 'key-1')).toBe('http://localhost:3000/r/key-1');
+    });
+
+    it('getUnlistedCoverLetterUrl returns opaque /cl/{key}', async () => {
+      const { getUnlistedCoverLetterUrl, getUnlistedCoverLetterPath } = await importUrl();
+      expect(getUnlistedCoverLetterUrl('cl-key')).toBe('http://localhost:3000/cl/cl-key');
+      expect(getUnlistedCoverLetterPath('cl-key')).toBe('/cl/cl-key');
     });
 
     it('getLinksUrl returns path-based URL', async () => {
@@ -168,9 +174,14 @@ describe('URL Helpers', () => {
       expect(getPortfolioUrl('alice', 'secret')).toBe('https://alice.follio.me?key=secret');
     });
 
-    it('getResumeUrl returns subdomain /r URL', async () => {
+    it('getResumeUrl returns apex vanity URL (not subdomain)', async () => {
       const { getResumeUrl } = await importUrl();
-      expect(getResumeUrl('bob')).toBe('https://bob.follio.me/r');
+      expect(getResumeUrl('bob')).toBe('https://follio.me/bob');
+    });
+
+    it('getResumeUrl returns opaque apex /r/{key} for unlisted', async () => {
+      const { getResumeUrl } = await importUrl();
+      expect(getResumeUrl('bob', 'secret')).toBe('https://follio.me/r/secret');
     });
 
     it('getLinksUrl returns subdomain /l URL', async () => {

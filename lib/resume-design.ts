@@ -1,22 +1,24 @@
 /**
  * Resume Design Utilities
  *
- * Converts the ResumeDesign settings into CSS custom properties and inline
- * styles that the resume CSS classes consume. This keeps the design logic
- * centralised and shared between the builder preview and the public view.
+ * Resume-specific merge / font resolution on top of the shared
+ * document-design token pipeline. Preview and public view share this.
  */
 
 import {
+  buildDocumentDesignStyleAttr,
+  buildDocumentDesignStyles,
+  mergeTextStyle,
+  type ResolvedDocumentPaperTokens,
+} from '@/lib/document-design';
+import { getResumeTemplate, getResumeTemplateId } from '@/lib/resume/templates';
+import {
   RESUME_DESIGN_DEFAULTS,
-  RESUME_FONT_MAP,
   RESUME_TEXT_STYLE_DEFAULTS,
-  type ResumeDensity,
   type ResumeDesign,
-  type ResumeDividerStyle,
   type ResumeFontFamily,
   type ResumeTextStyle,
 } from '@/types';
-import { getResumeTemplate, getResumeTemplateId } from '@/lib/resume/templates';
 
 // Re-export page-layout helpers so existing `@/lib/resume-design` imports keep working.
 export {
@@ -68,17 +70,6 @@ export function getTemplateDefaultFont(
     default:
       return td.fontFamily ?? RESUME_DESIGN_DEFAULTS.fontFamily;
   }
-}
-
-function mergeTextStyle(
-  raw: ResumeTextStyle | undefined,
-  fallback: ResumeTextStyle
-): ResumeTextStyle {
-  return {
-    bold: raw?.bold ?? fallback.bold,
-    italic: raw?.italic ?? fallback.italic,
-    underline: raw?.underline ?? fallback.underline,
-  };
 }
 
 /**
@@ -135,14 +126,6 @@ export function resolveResumeTextStyles(
   };
 }
 
-function textStyleToCssVars(prefix: string, style: ResumeTextStyle): Record<string, string> {
-  return {
-    [`--rd-${prefix}-font-weight`]: style.bold ? '700' : '400',
-    [`--rd-${prefix}-font-style`]: style.italic ? 'italic' : 'normal',
-    [`--rd-${prefix}-text-decoration`]: style.underline ? 'underline' : 'none',
-  };
-}
-
 /** Merge stored design with defaults, resolving unset font roles. */
 export function mergeResumeDesign(raw: ResumeDesign | null | undefined): Required<ResumeDesign> {
   const fonts = resolveResumeFonts(raw);
@@ -173,8 +156,6 @@ export function mergeResumeDesign(raw: ResumeDesign | null | undefined): Require
       templateDefaults.headerPhotoLayout ??
       RESUME_DESIGN_DEFAULTS.headerPhotoLayout,
     photoSize: raw?.photoSize ?? templateDefaults.photoSize ?? RESUME_DESIGN_DEFAULTS.photoSize,
-    // Prefer explicit sizes; otherwise use the active template’s recommended sizes
-    // so Studio/Sleek/Atelier/Lumen don’t jump when sizes were never stored.
     nameFontSize:
       raw?.nameFontSize ?? templateDefaults.nameFontSize ?? RESUME_DESIGN_DEFAULTS.nameFontSize,
     titleFontSize:
@@ -190,113 +171,25 @@ export function mergeResumeDesign(raw: ResumeDesign | null | undefined): Require
   };
 }
 
-// ─── Dark Mode Color Helpers ──────────────────────────────────────
-
-/** Parse a hex color (3 or 6 chars, with optional #) to RGB tuple. */
-function hexToRgb(hex: string): [number, number, number] | null {
-  const clean = hex.replace(/^#/, '');
-  if (clean.length === 3) {
-    const r = parseInt(clean[0] + clean[0], 16);
-    const g = parseInt(clean[1] + clean[1], 16);
-    const b = parseInt(clean[2] + clean[2], 16);
-    return [r, g, b];
-  }
-  if (clean.length === 6) {
-    const r = parseInt(clean.substring(0, 2), 16);
-    const g = parseInt(clean.substring(2, 4), 16);
-    const b = parseInt(clean.substring(4, 6), 16);
-    if ([r, g, b].some(Number.isNaN)) return null;
-    return [r, g, b];
-  }
-  return null;
+function toPaperTokens(raw: ResumeDesign | null | undefined): ResolvedDocumentPaperTokens {
+  const d = mergeResumeDesign(raw);
+  return {
+    headingColor: d.headingColor,
+    accentColor: d.accentColor,
+    fonts: resolveResumeFonts(raw),
+    textStyles: resolveResumeTextStyles(raw),
+    fontSize: d.fontSize,
+    nameFontSize: d.nameFontSize,
+    titleFontSize: d.titleFontSize,
+    headingFontSize: d.headingFontSize,
+    contactFontSize: d.contactFontSize,
+    photoSize: d.photoSize,
+    headerAlignment: d.headerAlignment,
+    density: d.density,
+    dividerStyle: d.dividerStyle,
+    justifyAll: d.justifyAll,
+  };
 }
-
-/** Relative luminance per WCAG 2.0 (0 = black, 1 = white). */
-function relativeLuminance(r: number, g: number, b: number): number {
-  const [rs, gs, bs] = [r, g, b].map((c) => {
-    const s = c / 255;
-    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
-  });
-  return 0.2126 * rs + 0.7152 * gs + 0.0722 * bs;
-}
-
-function toHex(n: number): string {
-  return Math.min(255, Math.max(0, Math.round(n)))
-    .toString(16)
-    .padStart(2, '0');
-}
-
-/**
- * Compute a readable dark-mode variant for a color.
- * Dark colors are lightened (preserving hue); already-bright colors pass through.
- */
-function getDarkModeColor(hex: string): string {
-  const rgb = hexToRgb(hex);
-  if (!rgb) return '#e5e5e5'; // safe fallback
-  const [r, g, b] = rgb;
-  const lum = relativeLuminance(r, g, b);
-
-  if (lum >= 0.4) return hex; // already light enough for dark background
-
-  // Lighten towards white — stronger shift for darker colors
-  const factor = lum < 0.1 ? 0.85 : lum < 0.25 ? 0.7 : 0.5;
-  return `#${toHex(r + (255 - r) * factor)}${toHex(g + (255 - g) * factor)}${toHex(b + (255 - b) * factor)}`;
-}
-
-// ─── Density Multipliers ──────────────────────────────────────────
-
-const DENSITY_SCALE: Record<ResumeDensity, number> = {
-  compact: 0.75,
-  normal: 1,
-  relaxed: 1.35,
-};
-
-// ─── Divider CSS ──────────────────────────────────────────────────
-
-interface DividerStyles {
-  height: string;
-  background: string;
-  borderTop: string;
-  opacity: string | number;
-}
-
-function getDividerCSS(style: ResumeDividerStyle, accentColor: string): DividerStyles {
-  const transparent = 'transparent';
-
-  switch (style) {
-    case 'line':
-      return { height: '1px', background: accentColor, borderTop: 'none', opacity: 0.2 };
-    case 'double':
-      return {
-        height: '4px',
-        background: transparent,
-        borderTop: `1px solid ${accentColor}`,
-        opacity: 0.25,
-      };
-    case 'thick':
-      return { height: '2.5px', background: accentColor, borderTop: 'none', opacity: 0.25 };
-    case 'dashed':
-      return {
-        height: '0',
-        background: transparent,
-        borderTop: `1.5px dashed ${accentColor}`,
-        opacity: 0.3,
-      };
-    case 'dotted':
-      return {
-        height: '0',
-        background: transparent,
-        borderTop: `1.5px dotted ${accentColor}`,
-        opacity: 0.3,
-      };
-    case 'none':
-      return { height: '0', background: transparent, borderTop: 'none', opacity: 0 };
-    default:
-      return { height: '1px', background: accentColor, borderTop: 'none', opacity: 0.2 };
-  }
-}
-
-// ─── Public API ───────────────────────────────────────────────────
 
 /**
  * Build a CSS custom-properties object (for React `style` prop) from the
@@ -305,56 +198,7 @@ function getDividerCSS(style: ResumeDividerStyle, accentColor: string): DividerS
  * The resume CSS classes reference these via `var(--rd-*)`.
  */
 export function buildResumeDesignStyles(raw: ResumeDesign | null | undefined): React.CSSProperties {
-  const d = mergeResumeDesign(raw);
-  const fonts = resolveResumeFonts(raw);
-  const textStyles = resolveResumeTextStyles(raw);
-  const densityScale = DENSITY_SCALE[d.density];
-  const divider = getDividerCSS(d.dividerStyle, d.accentColor);
-  const dividerDark = getDividerCSS(d.dividerStyle, getDarkModeColor(d.accentColor));
-
-  return {
-    /* Custom properties consumed by .resume-* classes */
-    '--rd-heading-color': d.headingColor,
-    '--rd-heading-color-dark': getDarkModeColor(d.headingColor),
-    '--rd-accent-color': d.accentColor,
-    '--rd-accent-color-dark': getDarkModeColor(d.accentColor),
-    '--rd-font-family': RESUME_FONT_MAP[fonts.body],
-    '--rd-font-body': RESUME_FONT_MAP[fonts.body],
-    '--rd-font-name': RESUME_FONT_MAP[fonts.name],
-    '--rd-font-title': RESUME_FONT_MAP[fonts.title],
-    '--rd-font-heading': RESUME_FONT_MAP[fonts.heading],
-    '--rd-font-contact': RESUME_FONT_MAP[fonts.contact],
-    '--rd-font-size': `${d.fontSize}px`,
-    '--rd-name-font-size': `${d.nameFontSize}px`,
-    '--rd-title-font-size': `${d.titleFontSize}px`,
-    '--rd-heading-font-size': `${d.headingFontSize}px`,
-    '--rd-contact-font-size': `${d.contactFontSize}px`,
-    '--rd-photo-size': `${d.photoSize}px`,
-    ...textStyleToCssVars('name', textStyles.name),
-    ...textStyleToCssVars('title', textStyles.title),
-    ...textStyleToCssVars('heading', textStyles.heading),
-    ...textStyleToCssVars('body', textStyles.body),
-    ...textStyleToCssVars('contact', textStyles.contact),
-    '--rd-header-alignment': d.headerAlignment,
-    '--rd-justify-all': d.justifyAll ? 'justify' : 'initial',
-    '--rd-section-gap': `${Math.round(20 * densityScale)}px`,
-    '--rd-entry-gap': `${Math.round(16 * densityScale)}px`,
-    '--rd-bullet-margin': `${Math.round(8 * densityScale)}px`,
-    '--rd-header-margin-bottom': `${Math.round(24 * densityScale)}px`,
-    /* Divider (light mode) */
-    '--rd-divider-height': divider.height,
-    '--rd-divider-bg': divider.background,
-    '--rd-divider-border': divider.borderTop,
-    '--rd-divider-opacity': divider.opacity,
-    /* Divider (dark mode variants) */
-    '--rd-divider-bg-dark': dividerDark.background,
-    '--rd-divider-border-dark': dividerDark.borderTop,
-    /* Double-line needs border-bottom too */
-    '--rd-divider-border-bottom':
-      d.dividerStyle === 'double' ? `1px solid ${d.accentColor}` : 'none',
-    '--rd-divider-border-bottom-dark':
-      d.dividerStyle === 'double' ? `1px solid ${getDarkModeColor(d.accentColor)}` : 'none',
-  } as React.CSSProperties;
+  return buildDocumentDesignStyles(toPaperTokens(raw));
 }
 
 /**
@@ -362,10 +206,7 @@ export function buildResumeDesignStyles(raw: ResumeDesign | null | undefined): R
  * Used by PDF export where inline styles are required.
  */
 export function buildResumeDesignStyleAttr(raw: ResumeDesign | null | undefined): string {
-  const styles = buildResumeDesignStyles(raw);
-  return Object.entries(styles)
-    .map(([key, value]) => `${key}: ${String(value)}`)
-    .join('; ');
+  return buildDocumentDesignStyleAttr(toPaperTokens(raw));
 }
 
 /**

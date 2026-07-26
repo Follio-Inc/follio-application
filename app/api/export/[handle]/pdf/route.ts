@@ -1,18 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { parsePdfLayoutQueryParam } from '@/lib/document-design';
+import { handleApiError } from '@/lib/errors';
 import { generateResumePDF } from '@/services/export.service';
 import { getProfileByHandle } from '@/services/profile.service';
-import type { PdfLayout } from '@/types';
 
 import { assertResumeExportAccess, contentDispositionAttachment } from '../access';
-
-const VALID_LAYOUTS = new Set<string>(['continuous', 'a4', 'letter', 'paged']);
-
-function normalizeLayoutParam(raw: string): PdfLayout {
-  if (raw === 'continuous' || raw === 'a4' || raw === 'letter') return raw;
-  // Legacy `paged` and unknown values → Letter
-  return 'letter';
-}
 
 /**
  * PDF generation launches a headless Chromium instance, which requires the
@@ -48,10 +41,7 @@ export async function GET(
   const { handle } = await params;
 
   try {
-    const layoutParam = request.nextUrl.searchParams.get('layout') ?? 'letter';
-    const layout = VALID_LAYOUTS.has(layoutParam)
-      ? normalizeLayoutParam(layoutParam)
-      : ('letter' as PdfLayout);
+    const layout = parsePdfLayoutQueryParam(request.nextUrl.searchParams.get('layout'), 'letter');
 
     const profile = await getProfileByHandle(handle);
 
@@ -75,21 +65,7 @@ export async function GET(
         'Cache-Control': 'private, no-store, no-cache, must-revalidate',
       },
     });
-  } catch (error: unknown) {
-    console.error('Error exporting PDF:', error);
-    const errObj = error instanceof Error ? error : new Error(String(error));
-
-    return NextResponse.json(
-      {
-        error: 'Internal server error',
-        message: errObj.message,
-      },
-      {
-        status: 500,
-        headers: {
-          'Cache-Control': 'private, no-store, no-cache, must-revalidate',
-        },
-      }
-    );
+  } catch (error) {
+    return handleApiError(error, { path: `/api/export/${handle}/pdf`, method: 'GET' });
   }
 }

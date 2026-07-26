@@ -32,7 +32,6 @@ import {
   ProjectImportSources,
   type ProjectImportResult,
 } from '@/components/onboarding/project-import-sources';
-import { SkillGroupsEditor, type SkillGroupRow } from '@/components/skills/skill-groups-editor';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -49,7 +48,7 @@ import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 import { formatContactSourceLabel } from '@/lib/contact/source-label';
-import { removeEmailFromList } from '@/lib/hooks/use-contact-manager';
+import { removeEmailFromList, removePhoneFromList } from '@/lib/hooks/use-contact-manager';
 import {
   bulletsToHtml,
   htmlToBullets,
@@ -70,6 +69,7 @@ import {
   DEFAULT_RESUME_TEMPLATE_ID,
   getResumeTemplateId,
   getTemplateDefaultShowPhoto,
+  TEMPLATE_PREVIEW_ON_CREATE,
 } from '@/lib/resume/templates';
 import {
   extractSkillNamesFromHtml,
@@ -418,8 +418,8 @@ const STEP_INFO: Record<ReviewStep, { title: string; description: string; icon: 
     icon: FileText,
   },
   complete: {
-    title: 'All Done!',
-    description: 'Your resume is ready',
+    title: "You're all set",
+    description: 'Review your summary, then choose a template',
     icon: Check,
   },
 };
@@ -437,7 +437,7 @@ function emptySkillGroupRow(): ParsedSkillGroup {
  * Accepts:
  * - skillGroups: [{ name, skills[] }] or [{ name, skillsText }] or [{ name, skillsHtml }]
  * - flat skills: string[] | { name }[]
- * Always returns at least one editable row.
+ * Returns [] when there is nothing to edit (same empty pattern as experience/education).
  */
 function normalizeReviewSkillGroups(parsed: {
   skillGroups?: unknown;
@@ -446,38 +446,40 @@ function normalizeReviewSkillGroups(parsed: {
   const rawGroups = Array.isArray(parsed.skillGroups) ? parsed.skillGroups : [];
 
   if (rawGroups.length > 0) {
-    return rawGroups.map((group) => {
-      const record = (group ?? {}) as {
-        id?: string;
-        name?: string;
-        skills?: string[] | string;
-        skillsText?: string;
-        skillsHtml?: string;
-      };
-      const fromText =
-        typeof record.skillsText === 'string'
-          ? record.skillsText
-          : typeof record.skills === 'string'
-            ? record.skills
-            : Array.isArray(record.skills)
-              ? record.skills.join(', ')
-              : '';
-      const skillsHtml =
-        typeof record.skillsHtml === 'string' && record.skillsHtml.trim()
-          ? record.skillsHtml
-          : skillsToHtml(
-              fromText
-                .split(',')
-                .map((s) => s.trim())
-                .filter(Boolean)
-            );
+    return rawGroups
+      .map((group) => {
+        const record = (group ?? {}) as {
+          id?: string;
+          name?: string;
+          skills?: string[] | string;
+          skillsText?: string;
+          skillsHtml?: string;
+        };
+        const fromText =
+          typeof record.skillsText === 'string'
+            ? record.skillsText
+            : typeof record.skills === 'string'
+              ? record.skills
+              : Array.isArray(record.skills)
+                ? record.skills.join(', ')
+                : '';
+        const skillsHtml =
+          typeof record.skillsHtml === 'string' && record.skillsHtml.trim()
+            ? record.skillsHtml
+            : skillsToHtml(
+                fromText
+                  .split(',')
+                  .map((s) => s.trim())
+                  .filter(Boolean)
+              );
 
-      return {
-        id: typeof record.id === 'string' && record.id ? record.id : generateId(),
-        name: typeof record.name === 'string' ? record.name : '',
-        skillsHtml,
-      };
-    });
+        return {
+          id: typeof record.id === 'string' && record.id ? record.id : generateId(),
+          name: typeof record.name === 'string' ? record.name : '',
+          skillsHtml,
+        };
+      })
+      .filter((group) => group.name.trim().length > 0 || !isHtmlEmpty(group.skillsHtml));
   }
 
   const flatSkills = Array.isArray(parsed.skills) ? parsed.skills : [];
@@ -494,7 +496,20 @@ function normalizeReviewSkillGroups(parsed: {
     }));
   }
 
-  return [emptySkillGroupRow()];
+  return [];
+}
+
+function skillGroupTitle(name: string, index: number, total: number): string {
+  const trimmed = name.trim();
+  if (trimmed) return trimmed;
+  return total > 1 ? `Category ${index + 1}` : 'Skills';
+}
+
+function skillGroupPreview(html: string): string {
+  if (isHtmlEmpty(html)) return 'No skills listed yet';
+  const text = stripHtmlTags(html).replace(/\s+/g, ' ').trim();
+  if (!text) return 'No skills listed yet';
+  return text.length > 96 ? `${text.slice(0, 96)}…` : text;
 }
 
 function countSkillsInGroups(groups: ParsedSkillGroup[] | undefined | null): number {
@@ -889,7 +904,7 @@ function BuildPageContent() {
     profile: {},
     experiences: [],
     educations: [],
-    skillGroups: [emptySkillGroupRow()],
+    skillGroups: [],
     links: withDefaultLinkSlots([]),
     projects: [],
   });
@@ -897,7 +912,7 @@ function BuildPageContent() {
   // Migrate stale/HMR state that still has flat `skills` and no skillGroups
   useEffect(() => {
     setData((prev) => {
-      if (Array.isArray(prev.skillGroups) && prev.skillGroups.length > 0) return prev;
+      if (Array.isArray(prev.skillGroups)) return prev;
       const legacy = prev as ReviewData & { skills?: unknown };
       return {
         ...prev,
@@ -912,6 +927,7 @@ function BuildPageContent() {
   // Editing states
   const [editingExperienceId, setEditingExperienceId] = useState<string | null>(null);
   const [editingEducationId, setEditingEducationId] = useState<string | null>(null);
+  const [editingSkillGroupId, setEditingSkillGroupId] = useState<string | null>(null);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   /** Keys of optional platforms the user added from the More list */
   const [addedMoreKeys, setAddedMoreKeys] = useState<string[]>([]);
@@ -1602,38 +1618,32 @@ function BuildPageContent() {
     });
   };
 
-  // Delete phone from list
+  // Delete phone from list (primary included; promotes another when present)
   const deletePhone = (index: number) => {
     setData((prev) => {
-      const allPhones = prev.contactInfo?.allPhones || [];
-      if (index < 0 || index >= allPhones.length) return prev;
-
-      const currentPrimaryIndex = prev.contactInfo?.primaryPhoneIndex ?? 0;
-      // Don't allow deleting primary phone
-      if (index === currentPrimaryIndex && allPhones.length > 1) {
-        return prev;
-      }
-
-      const newPhones = allPhones.filter((_, i) => i !== index);
-
-      // Adjust primary index if needed
-      let newPrimaryIndex = currentPrimaryIndex;
-      if (index < currentPrimaryIndex) {
-        newPrimaryIndex = currentPrimaryIndex - 1;
-      } else if (index === currentPrimaryIndex) {
-        newPrimaryIndex = 0;
-      }
+      const removed = removePhoneFromList(
+        prev.contactInfo?.allPhones || [],
+        prev.contactInfo?.primaryPhoneIndex ?? 0,
+        index
+      );
 
       return {
         ...prev,
         contactInfo: {
           ...prev.contactInfo,
-          allPhones: newPhones,
-          primaryPhoneIndex: newPrimaryIndex,
-          phone: newPhones[newPrimaryIndex]?.phone,
+          allPhones: removed.phones,
+          primaryPhoneIndex: removed.primaryPhoneIndex,
+          phone: removed.phone,
         },
       };
     });
+
+    if (editingPhoneIndex === index) {
+      setEditingPhoneIndex(null);
+      setEditingPhoneValue({ countryCode: null, number: '' });
+    } else if (editingPhoneIndex !== null && editingPhoneIndex > index) {
+      setEditingPhoneIndex(editingPhoneIndex - 1);
+    }
   };
 
   // Add phone manually (first number or an additional one)
@@ -1804,14 +1814,33 @@ function BuildPageContent() {
   };
 
   // Skill group handlers
-  const updateSkillGroups = (groups: SkillGroupRow[]) => {
+  const updateSkillGroup = (id: string, updates: Partial<ParsedSkillGroup>) => {
     setData((prev) => ({
       ...prev,
-      skillGroups: groups.length > 0 ? groups : [emptySkillGroupRow()],
+      skillGroups: prev.skillGroups.map((group) =>
+        group.id === id ? { ...group, ...updates } : group
+      ),
     }));
   };
 
-  const skillGroups = Array.isArray(data.skillGroups) ? data.skillGroups : [emptySkillGroupRow()];
+  const deleteSkillGroup = (id: string) => {
+    setEditingSkillGroupId((current) => (current === id ? null : current));
+    setData((prev) => ({
+      ...prev,
+      skillGroups: prev.skillGroups.filter((group) => group.id !== id),
+    }));
+  };
+
+  const addSkillGroup = () => {
+    const newGroup = emptySkillGroupRow();
+    setData((prev) => ({
+      ...prev,
+      skillGroups: [...prev.skillGroups, newGroup],
+    }));
+    setEditingSkillGroupId(newGroup.id);
+  };
+
+  const skillGroups = Array.isArray(data.skillGroups) ? data.skillGroups : [];
   const skillCount = countSkillsInGroups(skillGroups);
 
   const templatePreviewProfile = useMemo(
@@ -2607,18 +2636,16 @@ function BuildPageContent() {
                                         Make primary
                                       </Button>
                                     )}
-                                    {!isPrimary && allPhones.length > 1 && (
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => deletePhone(idx)}
-                                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                                        title="Delete phone"
-                                        aria-label="Delete phone"
-                                      >
-                                        <Trash2 className="h-3.5 w-3.5" />
-                                      </Button>
-                                    )}
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => deletePhone(idx)}
+                                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                      title="Delete phone"
+                                      aria-label="Delete phone"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
                                   </div>
                                 </div>
                               );
@@ -2962,7 +2989,37 @@ function BuildPageContent() {
                 count={skillCount}
               />
 
-              <SkillsEditor skillGroups={skillGroups} onChange={updateSkillGroups} />
+              {skillGroups.length === 0 ? (
+                <EmptyState
+                  message="No skills yet — add a category or list of skills"
+                  onAdd={addSkillGroup}
+                  addLabel="Add Skills"
+                />
+              ) : (
+                <div className="w-full space-y-4">
+                  {skillGroups.map((group, index) => (
+                    <SkillGroupCard
+                      key={group.id}
+                      group={group}
+                      title={skillGroupTitle(group.name, index, skillGroups.length)}
+                      isEditing={editingSkillGroupId === group.id}
+                      onEdit={() => setEditingSkillGroupId(group.id)}
+                      onSave={() => setEditingSkillGroupId(null)}
+                      onUpdate={(updates) => updateSkillGroup(group.id, updates)}
+                      onDelete={() => deleteSkillGroup(group.id)}
+                    />
+                  ))}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={addSkillGroup}
+                    className="w-full gap-2"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Another Category
+                  </Button>
+                </div>
+              )}
 
               <StepNavigation onBack={goToPreviousStep} onNext={goToNextStep} />
             </StepContainer>
@@ -2981,6 +3038,8 @@ function BuildPageContent() {
               <ProjectImportSources
                 existingProjects={data.projects}
                 existingBlogPosts={data.blogPosts}
+                existingLinks={data.links}
+                githubProfileUsername={data.githubProfile?.username}
                 onImported={handleProjectSourceImport}
                 className="mb-5"
               />
@@ -3054,11 +3113,7 @@ function BuildPageContent() {
                 </p>
               </div>
 
-              <StepNavigation
-                onBack={goToPreviousStep}
-                onNext={goToNextStep}
-                nextLabel="Review & Create"
-              />
+              <StepNavigation onBack={goToPreviousStep} onNext={goToNextStep} />
             </StepContainer>
           )}
 
@@ -3120,11 +3175,11 @@ function BuildPageContent() {
                     {isSaving ? (
                       <>
                         <Spinner size="sm" />
-                        Creating…
+                        Creating resume…
                       </>
                     ) : (
                       <>
-                        Create my Follio
+                        Choose template
                         <ArrowRight className="h-4 w-4" />
                       </>
                     )}
@@ -3136,12 +3191,12 @@ function BuildPageContent() {
                 profile={templatePreviewProfile}
                 currentDesign={defaultResumeDesign}
                 currentTemplateId={DEFAULT_RESUME_TEMPLATE_ID}
-                previewDataPolicy="sample-when-sparse"
+                previewDataPolicy={TEMPLATE_PREVIEW_ON_CREATE}
                 open={templateGalleryOpen}
                 onOpenChange={setTemplateGalleryOpen}
                 hideTrigger
                 title="Choose your resume template"
-                applyLabel="Create my Follio"
+                applyLabel="Create resume"
                 onSelect={handleResumeTemplateSelect}
               />
             </StepContainer>
@@ -3700,29 +3755,123 @@ function EducationCard({
   );
 }
 
-function SkillsEditor({
-  skillGroups,
-  onChange,
+function SkillGroupCard({
+  group,
+  title,
+  isEditing,
+  onEdit,
+  onSave,
+  onUpdate,
+  onDelete,
 }: {
-  skillGroups: ParsedSkillGroup[];
-  onChange: (groups: SkillGroupRow[]) => void;
+  group: ParsedSkillGroup;
+  title: string;
+  isEditing: boolean;
+  onEdit: () => void;
+  onSave: () => void;
+  onUpdate: (updates: Partial<ParsedSkillGroup>) => void;
+  onDelete: () => void;
 }) {
-  const [openId, setOpenId] = useState<string | null>(null);
-  const rows: SkillGroupRow[] =
-    Array.isArray(skillGroups) && skillGroups.length > 0
-      ? skillGroups.map((group) => ({
-          id: group.id,
-          name: group.name,
-          skillsHtml: group.skillsHtml ?? '',
-        }))
-      : [emptySkillGroupRow()];
+  const [skillsHtml, setSkillsHtml] = useState(() => group.skillsHtml ?? '');
+
+  useEffect(() => {
+    if (isEditing) {
+      setSkillsHtml(group.skillsHtml ?? '');
+    }
+  }, [isEditing, group.id, group.skillsHtml]);
+
+  if (isEditing) {
+    return (
+      <EntryFormShell onDelete={onDelete} onSave={onSave}>
+        <div>
+          <label className="mb-1.5 block text-sm font-medium">
+            Category <span className="font-normal text-muted-foreground">(optional)</span>
+          </label>
+          <Input
+            placeholder="e.g. Languages"
+            value={group.name}
+            onChange={(e) => onUpdate({ name: e.target.value })}
+          />
+        </div>
+        <div>
+          <label className="mb-1.5 block text-sm font-medium">Skills</label>
+          <RichTextEditor
+            value={skillsHtml}
+            onChange={(html) => {
+              setSkillsHtml(html);
+              onUpdate({ skillsHtml: html });
+            }}
+            placeholder="e.g. Python, Java, TypeScript — or use bullets, bold, etc."
+            minHeight="120px"
+          />
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            Category is optional. Use the toolbar for bullets, bold, and alignment.
+          </p>
+        </div>
+      </EntryFormShell>
+    );
+  }
+
+  const preview = skillGroupPreview(group.skillsHtml);
+  const hasSkills = !isHtmlEmpty(group.skillsHtml);
+
   return (
-    <SkillGroupsEditor
-      groups={rows}
-      onChange={onChange}
-      openId={openId}
-      onOpenChange={setOpenId}
-    />
+    <Card
+      className="group relative w-full cursor-pointer transition-colors hover:bg-muted/30"
+      onClick={onEdit}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onEdit();
+        }
+      }}
+    >
+      <CardContent className="p-4 sm:p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <h4 className="font-medium">{title}</h4>
+            {hasSkills ? (
+              <div
+                className="prose prose-sm dark:prose-invert mt-2 line-clamp-2 max-w-none text-muted-foreground"
+                dangerouslySetInnerHTML={{
+                  __html: sanitizeRichHtml(group.skillsHtml),
+                }}
+              />
+            ) : (
+              <p className="mt-2 text-sm text-muted-foreground">{preview}</p>
+            )}
+          </div>
+          <div className="flex shrink-0 gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit();
+              }}
+              aria-label="Edit skills"
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-destructive"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              aria-label="Delete skills category"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
