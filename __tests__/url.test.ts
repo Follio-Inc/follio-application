@@ -138,6 +138,12 @@ describe('URL Helpers', () => {
       expect(getResumeUrl('bob', 'key-1')).toBe('http://localhost:3000/r/key-1');
     });
 
+    it('getUnlistedCoverLetterUrl returns opaque /cl/{key}', async () => {
+      const { getUnlistedCoverLetterUrl, getUnlistedCoverLetterPath } = await importUrl();
+      expect(getUnlistedCoverLetterUrl('cl-key')).toBe('http://localhost:3000/cl/cl-key');
+      expect(getUnlistedCoverLetterPath('cl-key')).toBe('/cl/cl-key');
+    });
+
     it('getLinksUrl returns path-based URL', async () => {
       const { getLinksUrl } = await importUrl();
       expect(getLinksUrl('charlie')).toBe('http://localhost:3000/u/charlie/links');

@@ -27,6 +27,7 @@ import { isPortfolioEnabled } from '@/lib/features';
 import type { ResumePageLayout } from '@/types';
 
 import { DownloadDialog } from '@/app/(dashboard)/builder/components/download-dialog';
+import { formatRelativeDocumentDate } from '@/components/document-dashboard';
 import { ShareDialog } from '@/components/share-dialog';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -123,28 +124,6 @@ const VISIBILITY_CONFIG: Record<
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────
-
-function formatRelativeDate(dateString: string): string {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffSeconds = Math.floor(diffMs / 1000);
-  const diffMinutes = Math.floor(diffSeconds / 60);
-  const diffHours = Math.floor(diffMinutes / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffSeconds < 60) return 'Just now';
-  if (diffMinutes < 60) return `${diffMinutes}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
-
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
-  });
-}
 
 function getDisplayName(resume: ResumeItem): string | null {
   const parts = [resume.firstName, resume.middleName, resume.lastName].filter(Boolean);
@@ -604,7 +583,7 @@ export function ResumeDashboardClient({
             </span>
             <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap">
               <Clock className="h-3 w-3 shrink-0" />
-              {formatRelativeDate(resume.updatedAt)}
+              {formatRelativeDocumentDate(resume.updatedAt)}
             </span>
           </div>
 

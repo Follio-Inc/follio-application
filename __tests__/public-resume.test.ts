@@ -37,6 +37,7 @@ describe('reserved usernames', () => {
     const { isReservedUsername } = await import('@/lib/reserved-usernames');
     expect(isReservedUsername('dashboard')).toBe(true);
     expect(isReservedUsername('r')).toBe(true);
+    expect(isReservedUsername('cl')).toBe(true);
     expect(isReservedUsername('u')).toBe(true);
     expect(isReservedUsername('alice')).toBe(false);
   });

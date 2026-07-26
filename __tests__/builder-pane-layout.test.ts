@@ -10,7 +10,7 @@ import {
   isContentEdgeTabVisible,
   isDesignEdgeTabVisible,
   openBuilderSide,
-} from '@/app/(dashboard)/builder/lib/pane-layout';
+} from '@/lib/document-builder';
 
 describe('builder view mode', () => {
   it('defaults to content', () => {

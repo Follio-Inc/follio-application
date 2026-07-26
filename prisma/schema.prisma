@@ -22,6 +22,7 @@ model User {
   profile        Profile?        @relation("ActiveProfile")
   primaryProfile Profile?        @relation("PrimaryProfile")
   profiles       Profile[]       @relation("OwnedProfiles")
+  coverLetters   CoverLetter[]
   shareTokens    ShareToken[]
 
   @@index([clerkId])
@@ -100,10 +101,43 @@ model Profile {
   youtubeVideos          YouTubeVideo[]
   generatedPortfolios    GeneratedPortfolio[]
   agentRuns              AgentRun[]
+  linkedCoverLetters     CoverLetter[]
 
   @@index([handle])
   @@index([status])
   @@index([userId])
+}
+
+/// Cover letter document — sibling to Profile resumes.
+/// Design JSON uses DocumentDesign (+ cover letter template particulars).
+/// Visibility is PRIVATE | UNLISTED only (never PUBLIC).
+model CoverLetter {
+  id              String            @id @default(cuid())
+  userId          String
+  /// Optional "active" pointer — at most one per user (unique).
+  activeForUserId String?           @unique
+  title           String            @default("Untitled Cover Letter")
+  isArchived      Boolean           @default(false)
+  /// PRIVATE (owner only) or UNLISTED (opaque /cl/{unlistedKey} link). Never PUBLIC.
+  visibility      ContentVisibility @default(PRIVATE)
+  /// Opaque share key for unlisted links (follio.me/cl/{unlistedKey}).
+  unlistedKey     String?           @unique @default(cuid())
+  /// Structured letter fields (recipient, greeting, body, closing, …)
+  content         Json?
+  /// Shared DocumentDesign + cover-letter template particulars
+  design          Json?
+  /// Optional link to a resume (Profile) for "match design" / context
+  linkedProfileId String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  linkedProfile Profile? @relation(fields: [linkedProfileId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([linkedProfileId])
+  @@index([updatedAt])
+  @@index([visibility])
 }
 
 model ProfileSection {

@@ -1,5 +1,7 @@
 import type { Prisma } from '@prisma/client';
 
+import { formatDocumentDownloadFilename } from '@/lib/document-download/filename';
+
 const MONTH_ABBREVS = [
   'Jan',
   'Feb',
@@ -114,13 +116,7 @@ export function suggestCloneResumeTitle(
  * The OS handles duplicate downloads.
  */
 export function formatResumeDownloadFilename(resumeTitle?: string | null): string {
-  const sanitized = (resumeTitle ?? '')
-    .trim()
-    .replace(/[^\w.-]+/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^_|_$/g, '');
-
-  return sanitized || 'Resume';
+  return formatDocumentDownloadFilename(resumeTitle, 'Resume');
 }
 
 type ResumeTitleDbClient = Pick<Prisma.TransactionClient, 'profile'>;

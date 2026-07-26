@@ -20,12 +20,14 @@ type SubdomainRewriteRequest = {
 const isProtectedRoute = createRouteMatcher([
   '/dashboard(.*)',
   '/builder(.*)',
+  '/cover-letter-builder(.*)',
   '/onboarding(.*)',
   '/settings(.*)',
   '/data-sources(.*)',
   '/share',
   '/me(.*)',
   '/resume-preview(.*)',
+  '/cover-letter-preview(.*)',
   '/resumes(.*)',
 ]);
 
@@ -34,6 +36,7 @@ const isPublicRoute = createRouteMatcher([
   '/',
   '/u/(.*)',
   '/r/(.*)',
+  '/cl/(.*)',
   '/share/(.*)',
   '/api/export/(.*)',
   '/sign-in(.*)',

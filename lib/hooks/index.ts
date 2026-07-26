@@ -9,3 +9,4 @@ export type {
 
 export { useCopyElementText } from './use-copy-element-text';
 export { useResumeDownload } from './use-resume-download';
+export { useDocumentDownload, buildDocumentPdfUrl } from './use-document-download';

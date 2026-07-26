@@ -18,6 +18,7 @@
  *      Resume (legacy): /u/username/resume
  *      Public resume:   /username
  *      Unlisted resume: /r/{key}
+ *      Unlisted cover letter: /cl/{key}
  *      Links:           /u/username/links
  */
 
@@ -160,6 +161,24 @@ export function getPublicResumeDisplayHost(username: string): string {
  */
 export function getUnlistedResumeDisplayHost(unlistedKey: string): string {
   return getUnlistedResumeUrl(unlistedKey).replace(/^https?:\/\//, '');
+}
+
+/**
+ * Canonical unlisted cover letter URL: follio.me/cl/{unlistedKey}
+ * Opaque — does not include a username.
+ */
+export function getUnlistedCoverLetterUrl(unlistedKey: string): string {
+  return `${getApexBaseUrl()}/cl/${unlistedKey}`;
+}
+
+/** Internal path for an opaque unlisted cover letter URL. */
+export function getUnlistedCoverLetterPath(unlistedKey: string): string {
+  return `/cl/${unlistedKey}`;
+}
+
+/** Short display string for unlisted cover letter URLs (no protocol). */
+export function getUnlistedCoverLetterDisplayHost(unlistedKey: string): string {
+  return getUnlistedCoverLetterUrl(unlistedKey).replace(/^https?:\/\//, '');
 }
 
 /**

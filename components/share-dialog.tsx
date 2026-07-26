@@ -4,7 +4,6 @@ import { useUser } from '@clerk/nextjs';
 import {
   AlertTriangle,
   Check,
-  ClipboardCopy,
   Copy,
   ExternalLink,
   Eye,
@@ -18,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { ShareComposeActions } from '@/components/document-share/share-compose-actions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -40,17 +40,29 @@ import {
 } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import type { CoverLetterVisibility } from '@/lib/cover-letter';
 import { isPortfolioEnabled } from '@/lib/features';
-import { getPortfolioUrl, getResumeUrl } from '@/lib/url';
+import {
+  buildLinkShareEmailSubject,
+  buildLinkShareMessage,
+  copyTextToClipboard,
+  detectWebmailProvider,
+  type LinkShareKind,
+} from '@/lib/share';
+import { getPortfolioUrl, getResumeUrl, getUnlistedCoverLetterUrl } from '@/lib/url';
 
 import type { ContentVisibility } from '@prisma/client';
 
 // ── Types ───────────────────────────────────────────────────────────────
 
-export type ShareDialogVariant = 'resume' | 'portfolio';
+/**
+ * One share dialog for all link-capable documents.
+ * Cover letters omit Public — Unlisted | Private only (same order as resume).
+ */
+export type ShareDialogVariant = 'resume' | 'portfolio' | 'cover-letter';
 
 /**
- * Minimal profile shape required by ShareDialog.
+ * Minimal profile shape required by ShareDialog for resume / portfolio.
  * Accepts both FullProfile (from builder) and lightweight objects (from resumes dashboard).
  */
 export interface ShareDialogProfile {
@@ -64,9 +76,19 @@ export interface ShareDialogProfile {
 }
 
 export interface ShareDialogProps {
-  profile: ShareDialogProfile;
+  /**
+   * Profile for resume / portfolio sharing.
+   * Optional when `variant="cover-letter"` (use `coverLetterId` instead).
+   */
+  profile?: ShareDialogProfile;
   /** Which content type to share. Defaults to resume. */
   variant?: ShareDialogVariant;
+  /** Required when `variant="cover-letter"`. */
+  coverLetterId?: string;
+  /** Current cover letter visibility (PRIVATE | UNLISTED). */
+  coverLetterVisibility?: CoverLetterVisibility;
+  /** First name for share message when sharing a cover letter. */
+  firstName?: string | null;
   /** Controlled open state (optional). When provided, the dialog is externally controlled. */
   open?: boolean;
   /** Callback when the open state changes (required when `open` is provided). */
@@ -96,8 +118,25 @@ type VisibilityOption = {
   badgeVariant: 'default' | 'secondary' | 'outline';
 };
 
-// Resumes support Public (one per account at follio.me/username), Unlisted
-// (opaque /r/{key} link), or Private.
+const UNLISTED_OPTION: VisibilityOption = {
+  value: 'UNLISTED',
+  label: 'Unlisted',
+  description: 'Only people with the secure link',
+  icon: Link2,
+  color: 'text-foreground',
+  badgeVariant: 'secondary',
+};
+
+const PRIVATE_OPTION: VisibilityOption = {
+  value: 'PRIVATE',
+  label: 'Private',
+  description: 'Only you can see this',
+  icon: EyeOff,
+  color: 'text-muted-foreground',
+  badgeVariant: 'outline',
+};
+
+// Resumes: Public → Unlisted → Private
 const RESUME_VISIBILITY_OPTIONS: VisibilityOption[] = [
   {
     value: 'PUBLIC',
@@ -107,22 +146,8 @@ const RESUME_VISIBILITY_OPTIONS: VisibilityOption[] = [
     color: 'text-foreground',
     badgeVariant: 'default',
   },
-  {
-    value: 'UNLISTED',
-    label: 'Unlisted',
-    description: 'Only people with the secure link',
-    icon: Link2,
-    color: 'text-foreground',
-    badgeVariant: 'secondary',
-  },
-  {
-    value: 'PRIVATE',
-    label: 'Private',
-    description: 'Only you can see this',
-    icon: EyeOff,
-    color: 'text-muted-foreground',
-    badgeVariant: 'outline',
-  },
+  UNLISTED_OPTION,
+  PRIVATE_OPTION,
 ];
 
 const PORTFOLIO_VISIBILITY_OPTIONS: VisibilityOption[] = [
@@ -134,196 +159,12 @@ const PORTFOLIO_VISIBILITY_OPTIONS: VisibilityOption[] = [
     color: 'text-foreground',
     badgeVariant: 'default',
   },
-  {
-    value: 'UNLISTED',
-    label: 'Unlisted',
-    description: 'Only people with the secure link',
-    icon: Link2,
-    color: 'text-foreground',
-    badgeVariant: 'secondary',
-  },
-  {
-    value: 'PRIVATE',
-    label: 'Private',
-    description: 'Only you can see this',
-    icon: EyeOff,
-    color: 'text-muted-foreground',
-    badgeVariant: 'outline',
-  },
+  UNLISTED_OPTION,
+  PRIVATE_OPTION,
 ];
 
-// ── Webmail Providers ────────────────────────────────────────────────────
-
-interface WebmailProvider {
-  /** Display name shown on the button. */
-  name: string;
-  /** Small inline SVG logo for the button. */
-  logo: React.ReactNode;
-  /** Build a compose URL with pre-filled subject and body. */
-  buildComposeUrl: (subject: string, body: string) => string;
-}
-
-// ── Provider Logos (inline SVGs, 14×14) ─────────────────────────────────
-
-const GMAIL_LOGO = (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="h-3.5 w-3.5 shrink-0">
-    <path fill="#4caf50" d="M45 16.2l-5 2.75-8 4.5V40h11c1.1 0 2-.9 2-2V16.2z" />
-    <path fill="#1e88e5" d="M3 16.2l3.04 1.67L14 22.45V40H3c-1.1 0-2-.9-2-2V16.2z" />
-    <path fill="#e53935" d="M35 11.2L24 19.45 13 11.2 12 17 24 25.45 36 17z" />
-    <path fill="#c62828" d="M3 12.298V16.2l11 6.25V11.2L9.876 8.859z" />
-    <path fill="#fbc02d" d="M45 12.298V16.2l-10 5.65V11.2l3.34-2.155z" />
-  </svg>
-);
-
-const OUTLOOK_LOGO = (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="h-3.5 w-3.5 shrink-0">
-    <path
-      fill="#1976d2"
-      d="M28 13h14.533C43.343 13 44 13.657 44 14.467v19.066c0 .81-.657 1.467-1.467 1.467H28V13z"
-    />
-    <path fill="#1565c0" d="M28 13l8 7.5L44 13z" />
-    <path fill="#2196f3" d="M28 35l8-7.5 8 7.5z" />
-    <rect fill="#0d47a1" x="2" y="11" width="22" height="26" rx="1.5" />
-    <ellipse fill="#fff" cx="13" cy="24" rx="6" ry="7.5" />
-    <ellipse fill="#0d47a1" cx="13" cy="24" rx="3.5" ry="5" />
-  </svg>
-);
-
-const YAHOO_LOGO = (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="h-3.5 w-3.5 shrink-0">
-    <path fill="#6001d2" d="M4 4h40v40H4z" rx="4" />
-    <path fill="#fff" d="M13.5 14l6.5 11v9h4v-9l6.5-11h-4.5L22 22.5 17.5 14z" />
-    <circle fill="#fff" cx="34" cy="16" r="2.5" />
-  </svg>
-);
-
-const AOL_LOGO = (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="h-3.5 w-3.5 shrink-0">
-    <rect fill="#1a1a2e" width="48" height="48" rx="4" />
-    <text
-      x="24"
-      y="30"
-      textAnchor="middle"
-      fill="#fff"
-      fontSize="16"
-      fontWeight="bold"
-      fontFamily="Arial"
-    >
-      Aol
-    </text>
-  </svg>
-);
-
-const ZOHO_LOGO = (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="h-3.5 w-3.5 shrink-0">
-    <rect fill="#f0483e" width="48" height="48" rx="4" />
-    <text
-      x="24"
-      y="31"
-      textAnchor="middle"
-      fill="#fff"
-      fontSize="14"
-      fontWeight="bold"
-      fontFamily="Arial"
-    >
-      Z
-    </text>
-  </svg>
-);
-
-/**
- * Map of email domains to their web compose URLs.
- * Easily extensible — just add a new entry for each provider.
- */
-const WEBMAIL_PROVIDERS: Record<string, WebmailProvider> = {
-  // Google
-  'gmail.com': {
-    name: 'Gmail',
-    logo: GMAIL_LOGO,
-    buildComposeUrl: (subject, body) =>
-      `https://mail.google.com/mail/?view=cm&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,
-  },
-  'googlemail.com': {
-    name: 'Gmail',
-    logo: GMAIL_LOGO,
-    buildComposeUrl: (subject, body) =>
-      `https://mail.google.com/mail/?view=cm&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,
-  },
-
-  // Microsoft
-  'outlook.com': {
-    name: 'Outlook',
-    logo: OUTLOOK_LOGO,
-    buildComposeUrl: (subject, body) =>
-      `https://outlook.live.com/mail/0/deeplink/compose?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,
-  },
-  'hotmail.com': {
-    name: 'Outlook',
-    logo: OUTLOOK_LOGO,
-    buildComposeUrl: (subject, body) =>
-      `https://outlook.live.com/mail/0/deeplink/compose?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,
-  },
-  'live.com': {
-    name: 'Outlook',
-    logo: OUTLOOK_LOGO,
-    buildComposeUrl: (subject, body) =>
-      `https://outlook.live.com/mail/0/deeplink/compose?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,
-  },
-  'msn.com': {
-    name: 'Outlook',
-    logo: OUTLOOK_LOGO,
-    buildComposeUrl: (subject, body) =>
-      `https://outlook.live.com/mail/0/deeplink/compose?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,
-  },
-
-  // Yahoo
-  'yahoo.com': {
-    name: 'Yahoo Mail',
-    logo: YAHOO_LOGO,
-    buildComposeUrl: (subject, body) =>
-      `https://compose.mail.yahoo.com/?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,
-  },
-  'yahoo.co.in': {
-    name: 'Yahoo Mail',
-    logo: YAHOO_LOGO,
-    buildComposeUrl: (subject, body) =>
-      `https://compose.mail.yahoo.com/?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,
-  },
-  'yahoo.co.uk': {
-    name: 'Yahoo Mail',
-    logo: YAHOO_LOGO,
-    buildComposeUrl: (subject, body) =>
-      `https://compose.mail.yahoo.com/?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,
-  },
-  'ymail.com': {
-    name: 'Yahoo Mail',
-    logo: YAHOO_LOGO,
-    buildComposeUrl: (subject, body) =>
-      `https://compose.mail.yahoo.com/?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,
-  },
-
-  // AOL
-  'aol.com': {
-    name: 'AOL Mail',
-    logo: AOL_LOGO,
-    buildComposeUrl: (subject, body) =>
-      `https://mail.aol.com/webmail-std/en-us/suite#/compose?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,
-  },
-
-  // Zoho
-  'zoho.com': {
-    name: 'Zoho Mail',
-    logo: ZOHO_LOGO,
-    buildComposeUrl: (subject, body) =>
-      `https://mail.zoho.com/zm/#compose?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,
-  },
-  'zohomail.com': {
-    name: 'Zoho Mail',
-    logo: ZOHO_LOGO,
-    buildComposeUrl: (subject, body) =>
-      `https://mail.zoho.com/zm/#compose?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,
-  },
-};
+// Cover letters: Unlisted → Private (same order as resume, Public omitted)
+const COVER_LETTER_VISIBILITY_OPTIONS: VisibilityOption[] = [UNLISTED_OPTION, PRIVATE_OPTION];
 
 function normalizeResumeVisibility(v: ContentVisibility | null | undefined): ContentVisibility {
   return v ?? 'PRIVATE';
@@ -333,49 +174,71 @@ function normalizePortfolioVisibility(v: ContentVisibility | null | undefined): 
   return v ?? 'PUBLIC';
 }
 
+function normalizeCoverLetterVisibility(
+  v: CoverLetterVisibility | ContentVisibility | null | undefined
+): ContentVisibility {
+  return v === 'UNLISTED' ? 'UNLISTED' : 'PRIVATE';
+}
+
 function getInitialVisibility(
   variant: ShareDialogVariant,
-  profile: ShareDialogProfile
+  profile: ShareDialogProfile | undefined,
+  coverLetterVisibility: CoverLetterVisibility | undefined
 ): ContentVisibility {
-  return variant === 'portfolio'
-    ? normalizePortfolioVisibility(profile.portfolioVisibility)
-    : normalizeResumeVisibility(profile.resumeVisibility);
+  if (variant === 'cover-letter') {
+    return normalizeCoverLetterVisibility(coverLetterVisibility);
+  }
+  if (variant === 'portfolio') {
+    return normalizePortfolioVisibility(profile?.portfolioVisibility);
+  }
+  return normalizeResumeVisibility(profile?.resumeVisibility);
 }
 
-/** Detect webmail provider from an email address. Returns null for unsupported domains. */
-function detectWebmailProvider(email: string | null | undefined): WebmailProvider | null {
-  if (!email) return null;
-  const domain = email.split('@')[1]?.toLowerCase();
-  if (!domain) return null;
-  return WEBMAIL_PROVIDERS[domain] ?? null;
+function variantMeta(variant: ShareDialogVariant) {
+  if (variant === 'portfolio') {
+    return {
+      contentLabel: 'portfolio',
+      dialogTitle: 'Share Portfolio',
+      dialogDescription: 'Control access and share your portfolio.',
+      triggerTooltip: 'Share your portfolio',
+      privateLinkHint: 'Change access to Public or Unlisted to get a link.',
+      privateMessageHint: 'Make your portfolio Public or Unlisted to get a shareable message.',
+      linkKind: 'portfolio' as LinkShareKind,
+    };
+  }
+  if (variant === 'cover-letter') {
+    return {
+      contentLabel: 'cover letter',
+      dialogTitle: 'Share Cover Letter',
+      dialogDescription:
+        'Control access and share your cover letter. Cover letters cannot be public.',
+      triggerTooltip: 'Share your cover letter',
+      privateLinkHint: 'Change access to Unlisted to get a link.',
+      privateMessageHint: 'Make your cover letter Unlisted to get a shareable message.',
+      linkKind: 'cover-letter' as LinkShareKind,
+    };
+  }
+  return {
+    contentLabel: 'resume',
+    dialogTitle: 'Share Resume',
+    dialogDescription: 'Control access and share your resume. Only one resume can be public.',
+    triggerTooltip: 'Share your resume',
+    privateLinkHint: 'Change access to Public or Unlisted to get a link.',
+    privateMessageHint: 'Make your resume Public or Unlisted to get a shareable message.',
+    linkKind: 'resume' as LinkShareKind,
+  };
 }
 
-// ── Helpers ─────────────────────────────────────────────────────────────
-
-/** Build the default share message pre-filled with the user's name and link. */
-function buildDefaultMessage(
-  firstName: string | null,
-  shareUrl: string,
-  variant: ShareDialogVariant
-): string {
-  const signOff = firstName?.trim() || '';
-  const contentLabel = variant === 'portfolio' ? 'portfolio' : 'resume';
-  return [
-    'Hi,',
-    '',
-    `I'd love to share my ${contentLabel} with you. You can view it here:`,
-    shareUrl,
-    '',
-    'Best,',
-    signOff,
-  ].join('\n');
-}
-
-// ── Component ───────────────────────────────────────────────────────────
-
+/**
+ * Shared share dialog for resume, portfolio, and cover letter.
+ * Same chrome and Unlisted → Private order everywhere; Public only on resume/portfolio.
+ */
 export function ShareDialog({
   profile,
   variant = 'resume',
+  coverLetterId,
+  coverLetterVisibility,
+  firstName: firstNameProp,
   open: controlledOpen,
   onOpenChange,
   onBeforeOpen,
@@ -384,64 +247,69 @@ export function ShareDialog({
   vanityUsername: vanityUsernameProp,
 }: ShareDialogProps) {
   const { user: clerkUser } = useUser();
+  const isCoverLetter = variant === 'cover-letter';
+  const isPortfolio = variant === 'portfolio';
 
   const [internalOpen, setInternalOpen] = useState(false);
-
   const open = controlledOpen ?? internalOpen;
   const setOpen = onOpenChange ?? setInternalOpen;
-  const isPortfolio = variant === 'portfolio';
-  const visibilityOptions = isPortfolio ? PORTFOLIO_VISIBILITY_OPTIONS : RESUME_VISIBILITY_OPTIONS;
-  const contentLabel = isPortfolio ? 'portfolio' : 'resume';
-  const dialogTitle = isPortfolio ? 'Share Portfolio' : 'Share Resume';
-  const dialogDescription = isPortfolio
-    ? 'Control access and share your portfolio.'
-    : 'Control access and share your resume. Only one resume can be public.';
-  const triggerTooltip = isPortfolio ? 'Share your portfolio' : 'Share your resume';
 
-  // Visibility state.
+  const visibilityOptions = isCoverLetter
+    ? COVER_LETTER_VISIBILITY_OPTIONS
+    : isPortfolio
+      ? PORTFOLIO_VISIBILITY_OPTIONS
+      : RESUME_VISIBILITY_OPTIONS;
+
+  const meta = variantMeta(variant);
+  const resolvedFirstName = firstNameProp ?? profile?.firstName ?? null;
+
   const [contentVisibility, setContentVisibility] = useState<ContentVisibility>(() =>
-    getInitialVisibility(variant, profile)
+    getInitialVisibility(variant, profile, coverLetterVisibility)
   );
   const [savingVisibility, setSavingVisibility] = useState(false);
   const [savedVisibility, setSavedVisibility] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
 
-  // Link state
   const [unlistedKey, setUnlistedKey] = useState<string | null>(null);
   const [isLoadingKey, setIsLoadingKey] = useState(false);
   const [isRegeneratingKey, setIsRegeneratingKey] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [showRegenConfirm, setShowRegenConfirm] = useState(false);
   const [vanityUsername, setVanityUsername] = useState<string>(
-    vanityUsernameProp || profile.handle
+    vanityUsernameProp || profile?.handle || ''
   );
   const [pendingPublicConfirm, setPendingPublicConfirm] = useState<{
     title: string;
   } | null>(null);
 
-  // Copyable message state
   const [shareMessage, setShareMessage] = useState('');
-  const [copiedMessage, setCopiedMessage] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Webmail provider detection from Clerk primary email
   const primaryEmail = clerkUser?.primaryEmailAddress?.emailAddress ?? null;
   const webmailProvider = useMemo(() => detectWebmailProvider(primaryEmail), [primaryEmail]);
 
-  // Computed share URL
-  const shareUrl = isPortfolio
-    ? getPortfolioUrl(profile.handle, contentVisibility === 'UNLISTED' ? unlistedKey : null)
-    : getResumeUrl(
-        vanityUsername || profile.handle,
-        contentVisibility === 'UNLISTED' ? unlistedKey : null
-      );
-
-  // ── Fetch unlisted key on open ──────────────────────────────────────
+  const shareUrl = isCoverLetter
+    ? contentVisibility === 'UNLISTED' && unlistedKey
+      ? getUnlistedCoverLetterUrl(unlistedKey)
+      : ''
+    : isPortfolio
+      ? getPortfolioUrl(
+          profile?.handle ?? '',
+          contentVisibility === 'UNLISTED' ? unlistedKey : null
+        )
+      : getResumeUrl(
+          vanityUsername || profile?.handle || '',
+          contentVisibility === 'UNLISTED' ? unlistedKey : null
+        );
 
   const fetchUnlistedKey = useCallback(async () => {
     setIsLoadingKey(true);
     try {
-      const res = await fetch('/api/profile/unlisted-key');
+      const path = isCoverLetter
+        ? `/api/cover-letters/${coverLetterId}/unlisted-key`
+        : '/api/profile/unlisted-key';
+      if (isCoverLetter && !coverLetterId) return;
+      const res = await fetch(path);
       if (res.ok) {
         const data = await res.json();
         setUnlistedKey(data.unlistedKey ?? null);
@@ -451,9 +319,10 @@ export function ShareDialog({
     } finally {
       setIsLoadingKey(false);
     }
-  }, []);
+  }, [isCoverLetter, coverLetterId]);
 
   const refreshVanityUsername = useCallback(async () => {
+    if (isCoverLetter) return;
     if (vanityUsernameProp) {
       setVanityUsername(vanityUsernameProp);
       return;
@@ -469,52 +338,50 @@ export function ShareDialog({
     } catch (err) {
       console.error('Failed to fetch vanity username:', err);
     }
-  }, [vanityUsernameProp]);
+  }, [vanityUsernameProp, isCoverLetter]);
 
   useEffect(() => {
-    if (open) {
-      // Reset visibility state when opening with a (possibly) different profile
-      setContentVisibility(
-        variant === 'portfolio'
-          ? normalizePortfolioVisibility(profile.portfolioVisibility)
-          : normalizeResumeVisibility(profile.resumeVisibility)
-      );
-      setShowRegenConfirm(false);
-      setSavedVisibility(false);
-      setPendingPublicConfirm(null);
-      setVanityUsername(vanityUsernameProp || profile.handle);
+    if (!open) return;
 
-      const init = async () => {
-        setIsInitializing(true);
-        try {
-          if (onBeforeOpen) {
-            await onBeforeOpen();
-          }
-          await Promise.all([fetchUnlistedKey(), refreshVanityUsername()]);
-        } finally {
-          setIsInitializing(false);
-        }
-      };
-      void init();
+    setContentVisibility(getInitialVisibility(variant, profile, coverLetterVisibility));
+    setShowRegenConfirm(false);
+    setSavedVisibility(false);
+    setPendingPublicConfirm(null);
+    if (!isCoverLetter) {
+      setVanityUsername(vanityUsernameProp || profile?.handle || '');
     }
+
+    const init = async () => {
+      setIsInitializing(true);
+      try {
+        if (onBeforeOpen) {
+          await onBeforeOpen();
+        }
+        await Promise.all([fetchUnlistedKey(), refreshVanityUsername()]);
+      } finally {
+        setIsInitializing(false);
+      }
+    };
+    void init();
   }, [
     open,
     fetchUnlistedKey,
     refreshVanityUsername,
     onBeforeOpen,
-    profile.portfolioVisibility,
-    profile.resumeVisibility,
-    profile.handle,
+    profile,
     vanityUsernameProp,
     variant,
+    coverLetterVisibility,
+    isCoverLetter,
   ]);
 
-  // Re-generate the default message whenever the share URL changes
   useEffect(() => {
-    setShareMessage(buildDefaultMessage(profile.firstName ?? null, shareUrl, variant));
-  }, [profile.firstName, shareUrl, variant]);
-
-  // ── Visibility change ────────────────────────────────────────────────
+    if (contentVisibility === 'PRIVATE' || !shareUrl) {
+      setShareMessage('');
+      return;
+    }
+    setShareMessage(buildLinkShareMessage(resolvedFirstName, shareUrl, meta.linkKind));
+  }, [resolvedFirstName, shareUrl, meta.linkKind, contentVisibility]);
 
   const persistVisibility = async (value: ContentVisibility) => {
     const prev = contentVisibility;
@@ -522,29 +389,37 @@ export function ShareDialog({
     setSavingVisibility(true);
 
     try {
-      const res = await fetch('/api/profile', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(
-          isPortfolio ? { portfolioVisibility: value } : { resumeVisibility: value }
-        ),
-      });
+      if (isCoverLetter) {
+        if (value === 'PUBLIC') {
+          setContentVisibility(prev);
+          return;
+        }
+        const res = await fetch(`/api/cover-letters/${coverLetterId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ visibility: value }),
+        });
+        if (!res.ok) throw new Error('Failed to update visibility');
+      } else {
+        const res = await fetch('/api/profile', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(
+            isPortfolio ? { portfolioVisibility: value } : { resumeVisibility: value }
+          ),
+        });
+        if (!res.ok) throw new Error('Failed to update visibility');
 
-      if (!res.ok) throw new Error('Failed to update visibility');
-
-      const data = await res.json().catch(() => ({}));
-      if (typeof data.vanityUsername === 'string' && data.vanityUsername) {
-        setVanityUsername(data.vanityUsername);
+        const data = await res.json().catch(() => ({}));
+        if (typeof data.vanityUsername === 'string' && data.vanityUsername) {
+          setVanityUsername(data.vanityUsername);
+        }
       }
 
-      // Notify parent so it can sync local state
       onVisibilityChange?.(value);
-
-      // Brief success indicator
       setSavedVisibility(true);
       setTimeout(() => setSavedVisibility(false), 2000);
 
-      // If switching to UNLISTED, ensure we have a key
       if (value === 'UNLISTED' && !unlistedKey) {
         await fetchUnlistedKey();
       }
@@ -559,8 +434,7 @@ export function ShareDialog({
   const handleVisibilityChange = async (value: ContentVisibility) => {
     if (value === contentVisibility) return;
 
-    // Only one resume can be public — confirm before replacing another.
-    if (!isPortfolio && value === 'PUBLIC') {
+    if (!isCoverLetter && !isPortfolio && value === 'PUBLIC' && profile) {
       try {
         const res = await fetch('/api/resumes');
         if (res.ok) {
@@ -601,12 +475,13 @@ export function ShareDialog({
     await persistVisibility('PUBLIC');
   };
 
-  // ── Regenerate secure link ───────────────────────────────────────────
-
   const handleRegenerateKey = async () => {
     setIsRegeneratingKey(true);
     try {
-      const res = await fetch('/api/profile/unlisted-key', { method: 'POST' });
+      const path = isCoverLetter
+        ? `/api/cover-letters/${coverLetterId}/unlisted-key`
+        : '/api/profile/unlisted-key';
+      const res = await fetch(path, { method: 'POST' });
       if (res.ok) {
         const data = await res.json();
         setUnlistedKey(data.unlistedKey);
@@ -618,47 +493,13 @@ export function ShareDialog({
     }
   };
 
-  // ── Copy link ────────────────────────────────────────────────────────
-
   const handleCopyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      setCopiedLink(true);
-      setTimeout(() => setCopiedLink(false), 2000);
-    } catch {
-      // Fallback for non-HTTPS contexts
-      const textarea = document.createElement('textarea');
-      textarea.value = shareUrl;
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textarea);
-      setCopiedLink(true);
-      setTimeout(() => setCopiedLink(false), 2000);
-    }
+    if (!shareUrl) return;
+    const ok = await copyTextToClipboard(shareUrl);
+    if (!ok) return;
+    setCopiedLink(true);
+    window.setTimeout(() => setCopiedLink(false), 2000);
   };
-
-  // ── Copy message ──────────────────────────────────────────────────────
-
-  const handleCopyMessage = async () => {
-    try {
-      await navigator.clipboard.writeText(shareMessage);
-      setCopiedMessage(true);
-      setTimeout(() => setCopiedMessage(false), 2000);
-    } catch {
-      // Fallback for non-HTTPS contexts
-      const textarea = document.createElement('textarea');
-      textarea.value = shareMessage;
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textarea);
-      setCopiedMessage(true);
-      setTimeout(() => setCopiedMessage(false), 2000);
-    }
-  };
-
-  // ── Auto-resize textarea ─────────────────────────────────────────────
 
   const autoResize = useCallback(() => {
     const el = textareaRef.current;
@@ -672,25 +513,21 @@ export function ShareDialog({
     autoResize();
   }, [shareMessage, autoResize]);
 
-  // ── Open webmail compose ──────────────────────────────────────────────
-
-  const handleSendViaEmail = () => {
-    if (!webmailProvider) return;
-    const firstName = profile.firstName?.trim() || '';
-    const subject = `${firstName ? firstName + ' shared' : 'Shared'} a ${contentLabel} with you`;
-    const composeUrl = webmailProvider.buildComposeUrl(subject, shareMessage);
-    window.open(composeUrl, '_blank', 'noopener,noreferrer');
-  };
-
-  // ── Current visibility info ──────────────────────────────────────────
+  const emailSubject = buildLinkShareEmailSubject(resolvedFirstName, meta.linkKind);
 
   const currentVisibility =
     visibilityOptions.find((v) => v.value === contentVisibility) ?? visibilityOptions[0];
   const CurrentIcon = currentVisibility.icon;
 
-  // ── Render ───────────────────────────────────────────────────────────
-
   if (isPortfolio && !isPortfolioEnabled()) {
+    return null;
+  }
+
+  if (isCoverLetter && !coverLetterId) {
+    return null;
+  }
+
+  if (!isCoverLetter && !profile) {
     return null;
   }
 
@@ -713,7 +550,7 @@ export function ShareDialog({
                 </DialogTrigger>
               </TooltipTrigger>
               <TooltipContent side="bottom">
-                <p>{triggerTooltip}</p>
+                <p>{meta.triggerTooltip}</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -721,12 +558,11 @@ export function ShareDialog({
 
         <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-[480px]">
           <DialogHeader className="px-5 pb-3 pt-5">
-            <DialogTitle className="text-base">{dialogTitle}</DialogTitle>
-            <DialogDescription className="text-xs">{dialogDescription}</DialogDescription>
+            <DialogTitle className="text-base">{meta.dialogTitle}</DialogTitle>
+            <DialogDescription className="text-xs">{meta.dialogDescription}</DialogDescription>
           </DialogHeader>
 
           <div className="max-h-[calc(85vh-80px)] overflow-y-auto">
-            {/* ─── Access Section ──────────────────────────────────────── */}
             <div className="px-5 pb-4">
               <div className="mb-2 flex items-center justify-between">
                 <h3 className="text-xs font-medium text-muted-foreground">General access</h3>
@@ -746,7 +582,8 @@ export function ShareDialog({
                   return (
                     <button
                       key={option.value}
-                      onClick={() => handleVisibilityChange(option.value)}
+                      type="button"
+                      onClick={() => void handleVisibilityChange(option.value)}
                       disabled={savingVisibility || isInitializing}
                       className={`flex flex-1 flex-col items-center gap-1 rounded-lg px-2 py-2 text-center transition-colors ${
                         isActive ? 'bg-primary/10 ring-1 ring-primary/20' : 'hover:bg-muted/60'
@@ -783,7 +620,6 @@ export function ShareDialog({
 
             <Separator />
 
-            {/* ─── Link Section ──────────────────────────────────────── */}
             <div className="px-5 py-4">
               <div className="mb-2 flex items-center gap-2">
                 <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
@@ -792,13 +628,10 @@ export function ShareDialog({
 
               {contentVisibility === 'PRIVATE' ? (
                 <div className="rounded-lg border border-dashed bg-muted/30 px-3 py-2 text-center">
-                  <p className="text-xs text-muted-foreground">
-                    Change access to Public or Unlisted to get a link.
-                  </p>
+                  <p className="text-xs text-muted-foreground">{meta.privateLinkHint}</p>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {/* URL display & copy */}
                   <div className="flex items-center gap-2">
                     <div className="min-w-0 flex-1 rounded-md border bg-muted/30 px-2.5 py-1.5">
                       {isLoadingKey && contentVisibility === 'UNLISTED' ? (
@@ -815,8 +648,8 @@ export function ShareDialog({
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={handleCopyLink}
-                      disabled={isLoadingKey}
+                      onClick={() => void handleCopyLink()}
+                      disabled={isLoadingKey || !shareUrl}
                       className="h-7 shrink-0 gap-1 px-2 text-xs"
                     >
                       {copiedLink ? (
@@ -828,25 +661,26 @@ export function ShareDialog({
                     </Button>
                   </div>
 
-                  {/* Preview link */}
-                  <div className="flex items-center justify-end">
-                    <a
-                      href={shareUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
-                    >
-                      <Eye className="h-2.5 w-2.5" />
-                      Preview
-                      <ExternalLink className="h-2 w-2" />
-                    </a>
-                  </div>
+                  {shareUrl ? (
+                    <div className="flex items-center justify-end">
+                      <a
+                        href={shareUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
+                      >
+                        <Eye className="h-2.5 w-2.5" />
+                        Preview
+                        <ExternalLink className="h-2 w-2" />
+                      </a>
+                    </div>
+                  ) : null}
 
-                  {/* Regenerate link — cautious two-step */}
                   {contentVisibility === 'UNLISTED' && (
                     <div className="mt-1">
                       {!showRegenConfirm ? (
                         <button
+                          type="button"
                           onClick={() => setShowRegenConfirm(true)}
                           className="inline-flex items-center gap-1 text-[11px] text-muted-foreground/60 transition-colors hover:text-muted-foreground"
                         >
@@ -882,6 +716,7 @@ export function ShareDialog({
                               {isRegeneratingKey ? 'Generating...' : 'Revoke & regenerate'}
                             </Button>
                             <button
+                              type="button"
                               onClick={() => setShowRegenConfirm(false)}
                               className="text-[11px] text-muted-foreground transition-colors hover:text-foreground"
                             >
@@ -898,7 +733,6 @@ export function ShareDialog({
 
             <Separator />
 
-            {/* ─── Copyable Message Section ─────────────────────────── */}
             <div className="px-5 pb-5 pt-4">
               <div className="mb-2 flex items-center gap-2">
                 <MessageSquareText className="h-3.5 w-3.5 text-muted-foreground" />
@@ -906,9 +740,7 @@ export function ShareDialog({
               </div>
 
               {contentVisibility === 'PRIVATE' ? (
-                <p className="text-xs text-muted-foreground">
-                  Make your {contentLabel} Public or Unlisted to get a shareable message.
-                </p>
+                <p className="text-xs text-muted-foreground">{meta.privateMessageHint}</p>
               ) : (
                 <div className="space-y-2">
                   <p className="text-[11px] text-muted-foreground">
@@ -921,33 +753,17 @@ export function ShareDialog({
                     className="w-full resize-none overflow-y-auto rounded-md border bg-muted/30 px-3 py-2 text-xs leading-relaxed text-foreground outline-none transition-colors focus:ring-1 focus:ring-ring"
                     rows={4}
                     style={{ maxHeight: '12rem' }}
+                    aria-label="Share message"
                   />
-                  <div className="flex items-center justify-end gap-2">
-                    {webmailProvider && (
-                      <Button
-                        onClick={handleSendViaEmail}
-                        size="sm"
-                        variant="outline"
-                        className="h-7 gap-1.5 px-3 text-xs"
-                      >
-                        {webmailProvider.logo}
-                        Send via {webmailProvider.name}
-                      </Button>
-                    )}
-                    <Button
-                      onClick={handleCopyMessage}
-                      size="sm"
-                      variant={copiedMessage ? 'outline' : 'default'}
-                      className="h-7 gap-1.5 px-3 text-xs"
-                    >
-                      {copiedMessage ? (
-                        <Check className="h-3 w-3 text-primary" />
-                      ) : (
-                        <ClipboardCopy className="h-3 w-3" />
-                      )}
-                      {copiedMessage ? 'Copied!' : 'Copy message'}
-                    </Button>
-                  </div>
+                  <ShareComposeActions
+                    message={shareMessage}
+                    subject={emailSubject}
+                    webmail={webmailProvider}
+                    density="compact"
+                    align="end"
+                    webmailLabelMode="send"
+                    actionsOrder="webmail-first"
+                  />
                 </div>
               )}
             </div>
@@ -967,7 +783,7 @@ export function ShareDialog({
             <AlertDialogDescription>
               Only one resume can be public. Making this public will switch{' '}
               <strong>{pendingPublicConfirm?.title}</strong> to Unlisted. Your public URL (
-              follio.me/{vanityUsername || profile.handle}) will then show this resume.
+              follio.me/{vanityUsername || profile?.handle}) will then show this resume.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

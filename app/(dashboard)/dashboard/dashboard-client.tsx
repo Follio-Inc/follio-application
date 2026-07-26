@@ -1,16 +1,6 @@
 'use client';
 
-import {
-  Check,
-  Copy,
-  ExternalLink,
-  FilePenLine,
-  Globe,
-  Link2,
-  Lock,
-  Pencil,
-  Share2,
-} from 'lucide-react';
+import { Check, Copy, ExternalLink, Globe, Link2, Lock, Pencil, Share2 } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useState } from 'react';
 
@@ -23,6 +13,10 @@ import { isPortfolioEnabled } from '@/lib/features';
 import { getPortfolioUrl } from '@/lib/url';
 import { cn } from '@/lib/utils';
 
+import {
+  DashboardCoverLettersSection,
+  type DashboardCoverLetterItem,
+} from './dashboard-cover-letters-section';
 import { DashboardResumesSection, type DashboardResumeItem } from './dashboard-resumes-section';
 import { DashboardSectionHeader } from './dashboard-section-header';
 import { PortfolioThumbnail } from './portfolio-thumbnail';
@@ -43,8 +37,12 @@ interface ActiveProfile {
 export interface DashboardData {
   portfolioProfile: ActiveProfile;
   resumes: DashboardResumeItem[];
+  coverLetters: DashboardCoverLetterItem[];
   activeProfileId: string | null;
   primaryProfileId: string | null;
+  activeCoverLetterId: string | null;
+  /** Open documents tab to cover letters when set */
+  initialDocumentsTab?: 'resumes' | 'cover-letters';
 }
 
 interface DashboardClientProps {
@@ -71,14 +69,22 @@ const documentsTabTriggerClass = cn(
 // ─── Component ────────────────────────────────────────────────────
 
 export function DashboardClient({ data }: DashboardClientProps) {
-  const { portfolioProfile, resumes, activeProfileId, primaryProfileId } = data;
+  const {
+    portfolioProfile,
+    resumes,
+    coverLetters,
+    activeProfileId,
+    primaryProfileId,
+    activeCoverLetterId,
+    initialDocumentsTab = 'resumes',
+  } = data;
   const portfolioEnabled = isPortfolioEnabled();
   const [copied, setCopied] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [portfolioVisibility, setPortfolioVisibility] = useState(
     portfolioProfile.portfolioVisibility
   );
-  const [documentsTab, setDocumentsTab] = useState('resumes');
+  const [documentsTab, setDocumentsTab] = useState(initialDocumentsTab);
 
   const portfolioUrl = getPortfolioUrl(portfolioProfile.handle);
   const displayUrl = portfolioUrl.replace(/^https?:\/\//, '');
@@ -183,7 +189,11 @@ export function DashboardClient({ data }: DashboardClientProps) {
 
       {/* ── Documents: resumes + cover letters ─────────────────── */}
       <section className="space-y-4">
-        <Tabs value={documentsTab} onValueChange={setDocumentsTab} className="space-y-4">
+        <Tabs
+          value={documentsTab}
+          onValueChange={(v) => setDocumentsTab(v as typeof documentsTab)}
+          className="space-y-4"
+        >
           <div className="border-b border-border/60">
             <TabsList className="h-auto w-full justify-start gap-6 rounded-none bg-transparent p-0">
               <TabsTrigger value="resumes" className={documentsTabTriggerClass}>
@@ -195,7 +205,12 @@ export function DashboardClient({ data }: DashboardClientProps) {
                 </span>
               </TabsTrigger>
               <TabsTrigger value="cover-letters" className={documentsTabTriggerClass}>
-                Cover letters
+                <span className="inline-flex items-center gap-2">
+                  Cover letters
+                  <span className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-medium tabular-nums leading-none text-muted-foreground">
+                    {coverLetters.length}
+                  </span>
+                </span>
               </TabsTrigger>
             </TabsList>
           </div>
@@ -210,7 +225,11 @@ export function DashboardClient({ data }: DashboardClientProps) {
           </TabsContent>
 
           <TabsContent value="cover-letters" className="mt-0 focus-visible:outline-none">
-            <CoverLettersEmptyState />
+            <DashboardCoverLettersSection
+              initialCoverLetters={coverLetters}
+              initialActiveCoverLetterId={activeCoverLetterId}
+              embedded
+            />
           </TabsContent>
         </Tabs>
       </section>
@@ -219,18 +238,6 @@ export function DashboardClient({ data }: DashboardClientProps) {
 }
 
 // ─── Sub-components ───────────────────────────────────────────────
-
-function CoverLettersEmptyState() {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/60 bg-muted/10 px-6 py-14 text-center">
-      <FilePenLine className="h-7 w-7 text-muted-foreground" strokeWidth={1.5} />
-      <p className="mt-4 text-sm font-medium text-foreground">No cover letters yet</p>
-      <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-        Write and manage cover letters next to your resumes. This space is ready for them.
-      </p>
-    </div>
-  );
-}
 
 /** Tiny pill showing visibility state. */
 function VisibilityBadge({ visibility }: { visibility: string }) {

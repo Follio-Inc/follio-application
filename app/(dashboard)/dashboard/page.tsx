@@ -2,7 +2,9 @@ import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 
 import { ensurePrimaryProfile, makeProfilePortfolioReady } from '@/lib/active-profile';
+import { parseCoverLetterDesign, normalizeCoverLetterVisibility } from '@/lib/cover-letter';
 import { db } from '@/lib/db';
+import { resolveDocumentPageLayout } from '@/lib/document-design';
 import { isPortfolioEnabled } from '@/lib/features';
 import { resolveResumePageLayout } from '@/lib/resume/page-layout';
 import type { ResumeDesign } from '@/types';
@@ -14,12 +16,20 @@ export const metadata = {
   description: 'Your Follio workspace — edit your profile, manage your sites, and share.',
 };
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
   const { userId: clerkId } = await auth();
 
   if (!clerkId) {
     redirect('/sign-in');
   }
+
+  const params = await searchParams;
+  const initialDocumentsTab =
+    params.tab === 'cover-letters' ? 'cover-letters' : ('resumes' as const);
 
   const user = await db.user.findUnique({
     where: { clerkId },
@@ -142,6 +152,39 @@ export default async function DashboardPage() {
     pageLayout: resolveResumePageLayout((r.resumeDesign as ResumeDesign | null) ?? null),
   }));
 
+  const rawCoverLetters = await db.coverLetter.findMany({
+    where: { userId: user.id, isArchived: false },
+    orderBy: { updatedAt: 'desc' },
+    select: {
+      id: true,
+      title: true,
+      updatedAt: true,
+      createdAt: true,
+      design: true,
+      linkedProfileId: true,
+      activeForUserId: true,
+      visibility: true,
+      unlistedKey: true,
+    },
+  });
+
+  const coverLetters = rawCoverLetters.map((letter) => {
+    const visibility = normalizeCoverLetterVisibility(letter.visibility);
+    return {
+      id: letter.id,
+      title: letter.title,
+      updatedAt: letter.updatedAt.toISOString(),
+      createdAt: letter.createdAt.toISOString(),
+      pageLayout: resolveDocumentPageLayout(parseCoverLetterDesign(letter.design)),
+      linkedProfileId: letter.linkedProfileId,
+      visibility,
+      unlistedKey: visibility === 'UNLISTED' ? letter.unlistedKey : null,
+    };
+  });
+
+  const activeCoverLetterId =
+    rawCoverLetters.find((l) => l.activeForUserId === user.id)?.id ?? null;
+
   const data: DashboardData = {
     portfolioProfile: {
       id: portfolioProfile.id,
@@ -154,8 +197,11 @@ export default async function DashboardPage() {
       resumeVisibility: portfolioProfile.resumeVisibility,
     },
     resumes,
+    coverLetters,
     activeProfileId: user.profile?.id ?? null,
     primaryProfileId: portfolioProfile.id,
+    activeCoverLetterId,
+    initialDocumentsTab,
   };
 
   return (
