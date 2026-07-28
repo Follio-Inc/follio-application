@@ -21,7 +21,7 @@ export function BuilderContentHeader() {
     hasContactDraftChanges(contactDraft, savedContact);
 
   return (
-    <div className="sticky top-0 z-20 flex h-12 shrink-0 items-center justify-between border-b border-border/60 bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:px-6">
+    <div className="sticky top-0 z-20 flex h-12 shrink-0 items-center justify-between border-b border-border/30 bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:px-6">
       <span className="text-eyebrow">Content</span>
       {(hasUnsaved || isSaving) && (
         <>

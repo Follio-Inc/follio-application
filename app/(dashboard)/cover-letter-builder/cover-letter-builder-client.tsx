@@ -24,7 +24,6 @@ export function CoverLetterBuilderClient({ initial }: CoverLetterBuilderClientPr
   return (
     <CoverLetterStoreProvider initial={initial}>
       <DocumentBuilderShell
-        contentClassName="bg-muted/40"
         content={<CoverLetterContentPanel />}
         preview={<CoverLetterPreviewPanel />}
         designer={<CoverLetterDesignerPanel />}

@@ -716,7 +716,7 @@ export function AllSectionsEditor() {
                 entryId: 'new',
               })
             }
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border/60 py-8 text-sm text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-background py-8 text-sm text-muted-foreground transition-colors hover:bg-background/80 hover:text-foreground"
           >
             <Plus className="h-4 w-4" />
             Add {singularName}
@@ -738,14 +738,14 @@ export function AllSectionsEditor() {
             modifiers={[restrictToVerticalAxis, restrictToParentElement]}
           >
             <SortableContext items={entryIds} strategy={verticalListSortingStrategy}>
-              <div className="space-y-1.5 pl-5">
+              <div className="space-y-2 pl-5">
                 {entries.map((entry) => {
                   const entryHidden = entry.isVisible === false;
                   return (
                     <SortableEntryCard key={entry.id} id={entry.id}>
                       <div
                         className={cn(
-                          'group/entry flex w-full items-center gap-3 rounded-lg border border-border/60 bg-card px-3.5 py-3 text-left transition-colors hover:border-border hover:bg-muted/40',
+                          'group/entry flex w-full items-center gap-3 rounded-xl bg-background px-3.5 py-3 text-left transition-colors hover:bg-background/80',
                           entryHidden && 'opacity-50'
                         )}
                       >
@@ -844,7 +844,7 @@ export function AllSectionsEditor() {
                 entryId: 'new',
               })
             }
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border/60 py-2.5 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-background py-2.5 text-xs text-muted-foreground transition-colors hover:bg-background/80 hover:text-foreground"
           >
             <Plus className="h-3.5 w-3.5" />
             Add {singularName}
@@ -944,9 +944,7 @@ export function AllSectionsEditor() {
               onInlineUpdate={handleInlineUpdate}
               embedded
             />
-            <div className="border-t border-border/60" />
             <BasicInfoForm profile={draftProfile} onUpdate={handleProfileUpdate} embedded />
-            <div className="border-t border-border/60" />
             <ContactDetailsSection
               profile={draftProfile}
               onProfileUpdate={handleProfileUpdate}
@@ -1169,7 +1167,7 @@ export function AllSectionsEditor() {
     const title = SECTION_TITLES[editingEntry.sectionType] || section?.title || 'Edit';
 
     return (
-      <div>
+      <div className="rounded-xl bg-muted p-5">
         <button
           type="button"
           onClick={handleBackFromEntry}
@@ -1208,10 +1206,7 @@ export function AllSectionsEditor() {
         {/* Unified section container — header + content share one visual card */}
         <div
           className={cn(
-            'overflow-hidden rounded-lg border transition-colors duration-150',
-            isExpanded
-              ? 'border-border bg-card ring-1 ring-primary/15'
-              : 'border-border/60 bg-card hover:border-border',
+            'overflow-hidden rounded-xl bg-muted transition-colors duration-150',
             sectionHidden && 'opacity-50'
           )}
         >
@@ -1233,7 +1228,9 @@ export function AllSectionsEditor() {
               <span
                 className={cn(
                   'shrink-0 rounded-full px-2 py-0.5 text-[11px] tabular-nums',
-                  entryCount === 0 ? 'bg-muted text-muted-foreground' : 'bg-primary/10 text-primary'
+                  entryCount === 0
+                    ? 'bg-background text-muted-foreground'
+                    : 'bg-primary/10 text-primary'
                 )}
               >
                 {entryCount}
@@ -1280,7 +1277,7 @@ export function AllSectionsEditor() {
                 transition={{ duration: 0.2, ease: 'easeInOut' }}
                 className="overflow-hidden"
               >
-                <div className="rounded-b-lg border-t border-border/60 bg-muted/30 px-4 pb-5 pt-4">
+                <div className="rounded-b-xl bg-muted px-4 pb-5 pt-1">
                   {ENTRY_SECTIONS.has(section.type)
                     ? renderEntryList(section)
                     : renderSection(section)}
@@ -1354,7 +1351,7 @@ export function AllSectionsEditor() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <div className="space-y-3 pl-5">
+      <div className="space-y-4 pl-5">
         {/* Pinned sections (BASIC_INFO) — always at top, not draggable */}
         {pinnedSections.map((section) => renderSectionCard(section))}
 
@@ -1367,7 +1364,7 @@ export function AllSectionsEditor() {
           modifiers={[restrictToVerticalAxis, restrictToParentElement]}
         >
           <SortableContext items={draggableSectionIds} strategy={verticalListSortingStrategy}>
-            <div className="space-y-3">
+            <div className="space-y-4">
               {draggableSections.map((section) => (
                 <SortableSectionCard key={section.id} id={section.id}>
                   {renderSectionCard(section)}

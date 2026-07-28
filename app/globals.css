@@ -233,6 +233,40 @@
       0 8px 24px -6px rgb(0 0 0 / 0.5);
   }
 
+  /*
+   * Builder surface ladder (subtle, modern):
+   *   base   → darker chrome between panels
+   *   panel  → elevated Content / Preview / Designer
+   *   stage  → soft desk under the resume sheet (Preview only)
+   *   paper  → resume sheet (white / theme paper)
+   */
+  .builder-base {
+    background-color: hsl(220 13% 88%);
+  }
+  .dark .builder-base {
+    background-color: hsl(220 15% 5%);
+  }
+  .builder-panel {
+    background-color: hsl(var(--background));
+  }
+  .builder-stage {
+    background-color: hsl(220 14% 94%);
+  }
+  .dark .builder-stage {
+    background-color: hsl(220 15% 12%);
+  }
+  .builder-paper {
+    background-color: hsl(var(--background));
+    box-shadow:
+      0 1px 2px rgb(0 0 0 / 0.04),
+      0 8px 24px -6px rgb(0 0 0 / 0.1);
+  }
+  .dark .builder-paper {
+    box-shadow:
+      0 1px 2px rgb(0 0 0 / 0.35),
+      0 8px 28px -6px rgb(0 0 0 / 0.55);
+  }
+
   /* Remove card backgrounds/borders/shadows inside flat-cards containers */
   .flat-cards [data-slot='card'] {
     background: transparent;

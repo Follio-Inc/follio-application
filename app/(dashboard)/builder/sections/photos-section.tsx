@@ -1218,15 +1218,15 @@ export function PhotosSection({
   // ── Compact trigger row (shared layout for avatar + label) ──────────────
 
   const photoContent = (
-    <div className="flex items-center gap-5">
+    <div className="flex items-center gap-4">
       <div className="shrink-0">{photoDialog}</div>
 
-      <div className="min-w-0 flex-1 space-y-2">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <p className="text-sm font-medium">Profile Photo</p>
-            <p className="text-xs text-muted-foreground">
-              {hasPhoto ? 'Click to change' : 'Click to add a photo'}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-eyebrow">Photo</p>
+            <p className="mt-1.5 text-sm text-muted-foreground">
+              {hasPhoto ? 'Click to change' : 'Add a profile photo'}
             </p>
           </div>
           {hasPhoto && (
@@ -1235,7 +1235,7 @@ export function PhotosSection({
               onClick={handleResumeShowPhotoToggle}
               className={cn(
                 'flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-accent',
-                resumeShowPhoto ? 'text-primary' : 'text-muted-foreground'
+                resumeShowPhoto ? 'text-primary' : 'text-muted-foreground/60'
               )}
               title={
                 resumeShowPhoto

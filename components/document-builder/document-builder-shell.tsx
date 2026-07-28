@@ -74,7 +74,7 @@ export function DocumentBuilderShell({
   }, [designerActive]);
 
   return (
-    <div className="flex min-h-[calc(100vh-3.5rem)] flex-col bg-muted/30 xl:h-[calc(100vh-3.5rem)]">
+    <div className="builder-base flex min-h-[calc(100vh-3.5rem)] flex-col xl:h-[calc(100vh-3.5rem)]">
       <TooltipProvider delayDuration={300}>
         <div className="relative flex-1 xl:min-h-0 xl:overflow-hidden">
           <div
@@ -84,44 +84,60 @@ export function DocumentBuilderShell({
           >
             {/* Content — full width on mobile; flex 4 on xl.
                 Stay in the flex strip when preview-only (invisible gutters) so
-                canvas width/preview size never change during mode transitions. */}
+                canvas width/preview size never change during mode transitions.
+                Column uses builder-base; inner surface is the elevated panel. */}
             <div
               className={cn(
-                'relative flex w-full min-w-0 flex-col bg-background xl:w-auto xl:flex-[4_0_0%] xl:overflow-y-auto',
+                'builder-base relative flex w-full min-w-0 flex-col xl:w-auto xl:flex-[4_0_0%]',
                 previewOnly && 'xl:pointer-events-none xl:invisible',
                 contentClassName
               )}
               aria-hidden={previewOnly || undefined}
               inert={previewOnly || undefined}
             >
-              {content}
+              <div className="builder-panel flex min-h-0 flex-1 flex-col overflow-y-auto xl:m-2.5 xl:mr-2 xl:rounded-xl">
+                {content}
+              </div>
             </div>
 
             {/* Preview — xl only; always flex 5 so fit-zoom stays stable */}
             <div
               className={cn(
-                'relative hidden min-w-0 border-l border-border/60 bg-muted/20 xl:flex xl:flex-[5_0_0%]',
-                previewOnly && 'xl:border-l-0',
+                'builder-base relative hidden min-w-0 xl:flex xl:flex-[5_0_0%]',
                 previewClassName
               )}
             >
-              {mode !== 'preview' ? (
-                <BuilderSideCollapse mode={mode} onCollapse={closeSide} />
-              ) : null}
-              <div className="h-full min-h-0 w-full min-w-0 flex-1 overflow-hidden">{preview}</div>
+              <div
+                className={cn(
+                  'builder-panel relative flex h-full min-h-0 w-full min-w-0 flex-1 overflow-hidden xl:my-2.5 xl:rounded-xl',
+                  // Mirror Content/Designer outer insets when Preview sits on a screen edge
+                  previewOnly && 'xl:mx-2.5',
+                  mode === 'content' && 'xl:mr-2.5',
+                  designerActive && 'xl:ml-2.5'
+                )}
+              >
+                {mode !== 'preview' ? (
+                  <BuilderSideCollapse mode={mode} onCollapse={closeSide} />
+                ) : null}
+                <div className="h-full min-h-0 w-full min-w-0 flex-1 overflow-hidden">
+                  {preview}
+                </div>
+              </div>
             </div>
 
             {/* Designer — xl only; flex 4; invisible gutter in preview-only */}
             <div
               className={cn(
-                'relative hidden min-w-0 border-l border-border/60 bg-background xl:flex xl:flex-[4_0_0%] xl:flex-col',
+                'builder-base relative hidden min-w-0 xl:flex xl:flex-[4_0_0%] xl:flex-col',
                 previewOnly && 'xl:pointer-events-none xl:invisible',
                 designerClassName
               )}
               aria-hidden={previewOnly || undefined}
               inert={previewOnly || undefined}
             >
-              {designer}
+              <div className="builder-panel flex min-h-0 flex-1 flex-col overflow-hidden xl:m-2.5 xl:ml-2 xl:rounded-xl">
+                {designer}
+              </div>
             </div>
           </div>
 
