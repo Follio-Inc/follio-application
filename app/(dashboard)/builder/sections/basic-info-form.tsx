@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { notifyProfileUpdated } from '@/lib/events';
 import type { ContactData } from '@/lib/hooks/use-contact-manager';
+import { cn } from '@/lib/utils';
 import { ProfileBasicInfoSchema, type ProfileBasicInfo } from '@/lib/validations';
 
 import type { FullProfile } from '@/types';
@@ -51,60 +52,86 @@ export function BasicInfoForm({ profile, onUpdate, embedded }: BasicInfoFormProp
   };
 
   const formFields = (
-    <div className="space-y-6">
+    <div className={embedded ? 'space-y-4' : 'space-y-6'}>
       {/* Name */}
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div className="space-y-2">
-          <Label htmlFor="firstName">First Name *</Label>
+      <div className={cn('grid sm:grid-cols-3', embedded ? 'gap-3' : 'gap-4')}>
+        <div className="space-y-1.5">
+          <Label
+            htmlFor="firstName"
+            className={embedded ? 'text-xs text-muted-foreground' : undefined}
+          >
+            First Name *
+          </Label>
           <Input
             id="firstName"
             value={form.watch('firstName')}
             onChange={(e) => handleChange('firstName', e.target.value)}
             placeholder="Alex"
+            className={embedded ? 'h-9' : undefined}
           />
           {form.formState.errors.firstName && (
             <p className="text-sm text-destructive">{form.formState.errors.firstName.message}</p>
           )}
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="middleName">Middle Name</Label>
+        <div className="space-y-1.5">
+          <Label
+            htmlFor="middleName"
+            className={embedded ? 'text-xs text-muted-foreground' : undefined}
+          >
+            Middle Name
+          </Label>
           <Input
             id="middleName"
             value={form.watch('middleName')}
             onChange={(e) => handleChange('middleName', e.target.value)}
             placeholder="Taylor"
+            className={embedded ? 'h-9' : undefined}
           />
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="lastName">Last Name</Label>
+        <div className="space-y-1.5">
+          <Label
+            htmlFor="lastName"
+            className={embedded ? 'text-xs text-muted-foreground' : undefined}
+          >
+            Last Name
+          </Label>
           <Input
             id="lastName"
             value={form.watch('lastName')}
             onChange={(e) => handleChange('lastName', e.target.value)}
             placeholder="Chen"
+            className={embedded ? 'h-9' : undefined}
           />
         </div>
       </div>
 
       {/* Headline */}
-      <div className="space-y-2">
-        <Label htmlFor="headline">Professional Headline</Label>
+      <div className="space-y-1.5">
+        <Label
+          htmlFor="headline"
+          className={embedded ? 'text-xs text-muted-foreground' : undefined}
+        >
+          Professional Headline
+        </Label>
         <Input
           id="headline"
           value={form.watch('headline')}
           onChange={(e) => handleChange('headline', e.target.value)}
           placeholder="Senior Software Engineer at Google"
+          className={embedded ? 'h-9' : undefined}
         />
-        <p className="text-xs text-muted-foreground">
-          A short tagline that appears below your name
-        </p>
+        {!embedded && (
+          <p className="text-xs text-muted-foreground">
+            A short tagline that appears below your name
+          </p>
+        )}
       </div>
     </div>
   );
 
   if (embedded) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-3">
         <p className="text-eyebrow">Name &amp; Headline</p>
         {formFields}
       </div>

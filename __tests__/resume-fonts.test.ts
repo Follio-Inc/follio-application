@@ -131,16 +131,18 @@ describe('mergeResumeDesign', () => {
 
   it('uses template title/heading/contact sizes when unset', () => {
     const studio = mergeResumeDesign({ templateId: 'studio' });
-    expect(studio.titleFontSize).toBe(13);
-    expect(studio.headingFontSize).toBe(13);
+    expect(studio.titleFontSize).toBe(14);
+    expect(studio.headingFontSize).toBe(12);
     expect(studio.contactFontFamily).toBe('open-sans');
-    expect(studio.contactFontSize).toBe(12);
+    expect(studio.contactFontSize).toBe(11);
+    expect(studio.fontSize).toBe(13);
 
     const atelier = mergeResumeDesign({ templateId: 'atelier' });
-    expect(atelier.titleFontSize).toBe(11);
-    expect(atelier.headingFontSize).toBe(12);
+    expect(atelier.titleFontSize).toBe(13);
+    expect(atelier.headingFontSize).toBe(11);
     expect(atelier.contactFontFamily).toBe('lato');
-    expect(atelier.contactFontSize).toBe(11.5);
+    expect(atelier.contactFontSize).toBe(11);
+    expect(atelier.fontSize).toBe(13);
   });
 });
 

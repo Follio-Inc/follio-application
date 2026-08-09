@@ -189,11 +189,11 @@ function DesignSection({
   children: React.ReactNode;
 }) {
   return (
-    <section className="space-y-3">
+    <section className="space-y-3 rounded-xl bg-muted p-4">
       <div className="space-y-1">
-        <h3 className="text-[13px] font-semibold tracking-tight text-foreground">{title}</h3>
+        <h3 className="text-eyebrow">{title}</h3>
         {description ? (
-          <p className="text-[11px] leading-relaxed text-muted-foreground">{description}</p>
+          <p className="text-[12px] leading-relaxed text-muted-foreground">{description}</p>
         ) : null}
       </div>
       {children}
@@ -219,7 +219,7 @@ function SegmentedControl<T extends string>({
       role="radiogroup"
       aria-label={ariaLabel}
       className={cn(
-        'inline-flex w-full items-center rounded-lg bg-muted/60 p-0.5',
+        'inline-flex w-full items-center rounded-xl bg-black/[0.04] p-0.5 dark:bg-white/[0.06]',
         !equalWidth && 'w-auto'
       )}
     >
@@ -237,7 +237,7 @@ function SegmentedControl<T extends string>({
               'inline-flex h-8 items-center justify-center gap-1.5 rounded-md px-2.5 text-[12px] font-medium transition-all',
               equalWidth && 'flex-1',
               selected
-                ? 'bg-background text-foreground shadow-sm'
+                ? 'bg-background text-foreground shadow-sm shadow-black/[0.04]'
                 : 'text-muted-foreground hover:text-foreground'
             )}
           >
@@ -277,7 +277,7 @@ function ColorField({ value, onChange, label }: ColorFieldProps) {
   const isPreset = PRESET_COLORS.includes(value.toLowerCase() as (typeof PRESET_COLORS)[number]);
 
   return (
-    <div className="flex items-center justify-between gap-3">
+    <div className="flex items-center justify-between gap-3 rounded-xl bg-background px-3 py-2.5">
       <Label htmlFor={fieldId} className="shrink-0 text-[12px] font-medium text-muted-foreground">
         {label}
       </Label>
@@ -288,10 +288,10 @@ function ColorField({ value, onChange, label }: ColorFieldProps) {
             id={fieldId}
             type="button"
             className={cn(
-              'group flex h-8 min-w-[7.5rem] items-center gap-2 rounded-lg border border-border/70 bg-background px-1.5 pr-2.5 text-left transition-colors',
-              'hover:border-border hover:bg-muted/30',
+              'group flex h-8 min-w-[7.5rem] items-center gap-2 rounded-lg bg-muted/60 px-1.5 pr-2.5 text-left transition-colors',
+              'hover:bg-muted',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
-              open && 'border-border bg-muted/30'
+              open && 'bg-muted'
             )}
             aria-label={`${label}: ${value}`}
           >
@@ -464,10 +464,10 @@ function HeaderLayoutSelector({
                     aria-pressed={selected}
                     aria-label={opt.description}
                     className={cn(
-                      'inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border px-2 text-[11px] font-medium transition-colors',
+                      'inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-2 text-[11px] font-medium transition-colors',
                       selected
-                        ? 'border-foreground/20 bg-foreground text-background'
-                        : 'border-border/70 bg-background text-muted-foreground hover:border-border hover:bg-muted/40 hover:text-foreground'
+                        ? 'bg-foreground text-background'
+                        : 'bg-background text-muted-foreground hover:text-foreground'
                     )}
                   >
                     <Icon className="h-3.5 w-3.5 shrink-0" />
@@ -539,11 +539,13 @@ function FontFamilySelect({
   onChange,
   id,
   templateDefault,
+  'aria-describedby': ariaDescribedBy,
 }: {
   value: ResumeFontFamily;
   onChange: (font: ResumeFontFamily) => void;
   id?: string;
   templateDefault: ResumeFontFamily;
+  'aria-describedby'?: string;
 }) {
   const otherFonts = RESUME_FONT_OPTIONS.filter((font) => font !== templateDefault);
 
@@ -551,6 +553,7 @@ function FontFamilySelect({
     <Select value={value} onValueChange={(v) => onChange(v as ResumeFontFamily)}>
       <SelectTrigger
         id={id}
+        aria-describedby={ariaDescribedBy}
         className="h-8 min-w-0 flex-1 rounded-lg border-border/70 text-[12px]"
         style={{ fontFamily: RESUME_FONT_MAP[value] }}
       >
@@ -685,8 +688,20 @@ function TextStyleToggleGroup({
   );
 }
 
+function TypographyGroup({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-2">
+      <p className="px-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+        {title}
+      </p>
+      <div className="space-y-2">{children}</div>
+    </div>
+  );
+}
+
 function TypographyRoleRow({
   label,
+  description,
   fontId,
   role,
   templateId,
@@ -701,6 +716,7 @@ function TypographyRoleRow({
   onStyleChange,
 }: {
   label: string;
+  description?: string;
   fontId: string;
   role: ResumeTypographyRole;
   templateId: ResumeDesign['templateId'];
@@ -711,18 +727,26 @@ function TypographyRoleRow({
   sizeMin: number;
   sizeMax: number;
   sizeStep?: number;
-  style: ResumeTextStyle;
-  onStyleChange: (style: ResumeTextStyle) => void;
+  style?: ResumeTextStyle;
+  onStyleChange?: (style: ResumeTextStyle) => void;
 }) {
   const templateDefault = getTemplateDefaultFont(templateId, role);
+  const descriptionId = description ? `${fontId}-description` : undefined;
 
   return (
-    <div className="space-y-2 rounded-xl border border-border/50 bg-muted/20 p-3">
-      <div className="flex items-center justify-between gap-2">
-        <Label htmlFor={fontId} className="text-[12px] font-medium text-foreground">
-          {label}
-        </Label>
-        <div className="flex items-center gap-1.5">
+    <div className="space-y-2 rounded-xl bg-background p-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 space-y-0.5">
+          <Label htmlFor={fontId} className="text-[12px] font-medium text-foreground">
+            {label}
+          </Label>
+          {description ? (
+            <p id={descriptionId} className="text-[11px] leading-snug text-muted-foreground">
+              {description}
+            </p>
+          ) : null}
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
           <FontSizeStepper
             value={size}
             min={sizeMin}
@@ -731,7 +755,9 @@ function TypographyRoleRow({
             onChange={onSizeChange}
             aria-label={`${label} size`}
           />
-          <TextStyleToggleGroup value={style} onChange={onStyleChange} label={label} />
+          {style && onStyleChange ? (
+            <TextStyleToggleGroup value={style} onChange={onStyleChange} label={label} />
+          ) : null}
         </div>
       </div>
       <FontFamilySelect
@@ -739,6 +765,7 @@ function TypographyRoleRow({
         value={font}
         onChange={onFontChange}
         templateDefault={templateDefault}
+        aria-describedby={descriptionId}
       />
     </div>
   );
@@ -796,10 +823,10 @@ function DividerStyleSelector({
               aria-checked={selected}
               onClick={() => onChange(opt.value)}
               className={cn(
-                'flex h-12 flex-col items-center justify-center gap-1.5 rounded-lg border transition-colors',
+                'flex h-12 flex-col items-center justify-center gap-1.5 rounded-lg transition-colors',
                 selected
-                  ? 'border-foreground/20 bg-foreground text-background'
-                  : 'border-border/70 bg-background text-muted-foreground hover:border-border hover:bg-muted/40 hover:text-foreground'
+                  ? 'bg-foreground text-background'
+                  : 'bg-background text-muted-foreground hover:text-foreground'
               )}
             >
               <DividerPreview style={opt.value} />
@@ -823,10 +850,10 @@ function JustifyAllButton() {
         <button
           type="button"
           className={cn(
-            'inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-lg border text-[12px] font-medium transition-colors',
+            'inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-lg text-[12px] font-medium transition-colors',
             allJustified
-              ? 'cursor-default border-border/50 bg-muted/40 text-muted-foreground'
-              : 'border-border/70 bg-background text-foreground hover:bg-muted/40'
+              ? 'cursor-default bg-background/60 text-muted-foreground'
+              : 'bg-background text-foreground hover:bg-background/80'
           )}
           onClick={handleJustifyAll}
           disabled={allJustified}
@@ -957,10 +984,10 @@ export function DesignerPanel() {
         ]}
       />
 
-      {/* Header */}
-      <div className="flex h-12 shrink-0 items-center justify-between border-b border-border/50 px-4">
+      {/* Header — sits on the elevated panel surface */}
+      <div className="sticky top-0 z-20 flex h-12 shrink-0 items-center justify-between border-b border-border/30 bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80">
         <div className="flex items-center gap-2">
-          <span className="text-[13px] font-semibold tracking-tight text-foreground">Design</span>
+          <span className="text-eyebrow">Design</span>
           {isSaving ? <span className="text-[11px] text-muted-foreground">Saving…</span> : null}
         </div>
         <Tooltip>
@@ -982,7 +1009,7 @@ export function DesignerPanel() {
       </div>
 
       <ScrollArea className="flex-1">
-        <div className="space-y-6 p-4 pb-8">
+        <div className="space-y-3 p-4 pb-8">
           {/* Template */}
           <DesignSection
             title="Template"
@@ -1047,14 +1074,12 @@ export function DesignerPanel() {
             >
               <button
                 type="button"
-                className="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-lg border border-border/70 bg-background text-[12px] font-medium text-muted-foreground transition-colors hover:border-border hover:bg-muted/40 hover:text-foreground"
+                className="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-lg bg-background text-[12px] font-medium text-muted-foreground transition-colors hover:text-foreground"
               >
                 Browse all templates
               </button>
             </ResumeTemplateGallery>
           </DesignSection>
-
-          <div className="h-px bg-border/50" />
 
           {/* Theme */}
           <DesignSection
@@ -1083,13 +1108,11 @@ export function DesignerPanel() {
             </div>
           </DesignSection>
 
-          <div className="h-px bg-border/50" />
-
           {/* Colors */}
           <DesignSection title="Colors">
-            <div className="space-y-2.5">
+            <div className="space-y-2">
               <ColorField
-                label="Headings"
+                label="Name & section titles"
                 value={design.headingColor}
                 onChange={(headingColor) => updateDesign({ headingColor })}
               />
@@ -1101,92 +1124,98 @@ export function DesignerPanel() {
             </div>
           </DesignSection>
 
-          <div className="h-px bg-border/50" />
-
           {/* Typography */}
-          <DesignSection title="Typography">
-            <div className="space-y-2">
-              <TypographyRoleRow
-                label="Name"
-                fontId="design-font-name"
-                role="name"
-                templateId={design.templateId}
-                font={design.nameFontFamily}
-                onFontChange={(nameFontFamily) => updateDesign({ nameFontFamily })}
-                size={design.nameFontSize}
-                onSizeChange={(nameFontSize) => updateDesign({ nameFontSize })}
-                sizeMin={16}
-                sizeMax={48}
-                style={design.nameStyle}
-                onStyleChange={(nameStyle) => updateDesign({ nameStyle })}
-              />
+          <DesignSection
+            title="Typography"
+            description="One font per role. Header and section roles can differ; everything inside sections shares Section content."
+          >
+            <div className="space-y-4">
+              <TypographyGroup title="Header">
+                <TypographyRoleRow
+                  label="Name"
+                  description="Your name at the top of the resume"
+                  fontId="design-font-name"
+                  role="name"
+                  templateId={design.templateId}
+                  font={design.nameFontFamily}
+                  onFontChange={(nameFontFamily) => updateDesign({ nameFontFamily })}
+                  size={design.nameFontSize}
+                  onSizeChange={(nameFontSize) => updateDesign({ nameFontSize })}
+                  sizeMin={16}
+                  sizeMax={48}
+                  style={design.nameStyle}
+                  onStyleChange={(nameStyle) => updateDesign({ nameStyle })}
+                />
 
-              <TypographyRoleRow
-                label="Title"
-                fontId="design-font-title"
-                role="title"
-                templateId={design.templateId}
-                font={design.titleFontFamily}
-                onFontChange={(titleFontFamily) => updateDesign({ titleFontFamily })}
-                size={design.titleFontSize}
-                onSizeChange={(titleFontSize) => updateDesign({ titleFontSize })}
-                sizeMin={10}
-                sizeMax={24}
-                style={design.titleStyle}
-                onStyleChange={(titleStyle) => updateDesign({ titleStyle })}
-              />
+                <TypographyRoleRow
+                  label="Subtitle"
+                  description="Job title or headline under your name"
+                  fontId="design-font-title"
+                  role="title"
+                  templateId={design.templateId}
+                  font={design.titleFontFamily}
+                  onFontChange={(titleFontFamily) => updateDesign({ titleFontFamily })}
+                  size={design.titleFontSize}
+                  onSizeChange={(titleFontSize) => updateDesign({ titleFontSize })}
+                  sizeMin={10}
+                  sizeMax={24}
+                  style={design.titleStyle}
+                  onStyleChange={(titleStyle) => updateDesign({ titleStyle })}
+                />
 
-              <TypographyRoleRow
-                label="Headings"
-                fontId="design-font-heading"
-                role="heading"
-                templateId={design.templateId}
-                font={design.headingFontFamily}
-                onFontChange={(headingFontFamily) => updateDesign({ headingFontFamily })}
-                size={design.headingFontSize}
-                onSizeChange={(headingFontSize) => updateDesign({ headingFontSize })}
-                sizeMin={9}
-                sizeMax={18}
-                sizeStep={0.5}
-                style={design.headingStyle}
-                onStyleChange={(headingStyle) => updateDesign({ headingStyle })}
-              />
+                <TypographyRoleRow
+                  label="Info line"
+                  description="Email, phone, location, and links under your name"
+                  fontId="design-font-contact"
+                  role="contact"
+                  templateId={design.templateId}
+                  font={design.contactFontFamily}
+                  onFontChange={(contactFontFamily) => updateDesign({ contactFontFamily })}
+                  size={design.contactFontSize}
+                  onSizeChange={(contactFontSize) => updateDesign({ contactFontSize })}
+                  sizeMin={9}
+                  sizeMax={18}
+                  sizeStep={0.5}
+                  style={design.contactStyle}
+                  onStyleChange={(contactStyle) => updateDesign({ contactStyle })}
+                />
+              </TypographyGroup>
 
-              <TypographyRoleRow
-                label="Contact"
-                fontId="design-font-contact"
-                role="contact"
-                templateId={design.templateId}
-                font={design.contactFontFamily}
-                onFontChange={(contactFontFamily) => updateDesign({ contactFontFamily })}
-                size={design.contactFontSize}
-                onSizeChange={(contactFontSize) => updateDesign({ contactFontSize })}
-                sizeMin={9}
-                sizeMax={18}
-                sizeStep={0.5}
-                style={design.contactStyle}
-                onStyleChange={(contactStyle) => updateDesign({ contactStyle })}
-              />
+              <TypographyGroup title="Sections">
+                <TypographyRoleRow
+                  label="Section headers"
+                  description="Labels like Experience, Education, and Skills"
+                  fontId="design-font-heading"
+                  role="heading"
+                  templateId={design.templateId}
+                  font={design.headingFontFamily}
+                  onFontChange={(headingFontFamily) => updateDesign({ headingFontFamily })}
+                  size={design.headingFontSize}
+                  onSizeChange={(headingFontSize) => updateDesign({ headingFontSize })}
+                  sizeMin={9}
+                  sizeMax={18}
+                  sizeStep={0.5}
+                  style={design.headingStyle}
+                  onStyleChange={(headingStyle) => updateDesign({ headingStyle })}
+                />
 
-              <TypographyRoleRow
-                label="Body"
-                fontId="design-font-body"
-                role="body"
-                templateId={design.templateId}
-                font={design.fontFamily}
-                onFontChange={(fontFamily) => updateDesign({ fontFamily })}
-                size={design.fontSize}
-                onSizeChange={(fontSize) => updateDesign({ fontSize })}
-                sizeMin={10}
-                sizeMax={16}
-                sizeStep={0.5}
-                style={design.bodyStyle}
-                onStyleChange={(bodyStyle) => updateDesign({ bodyStyle })}
-              />
+                <TypographyRoleRow
+                  label="Section content"
+                  description="Roles, companies, bullets, dates, and other details"
+                  fontId="design-font-body"
+                  role="body"
+                  templateId={design.templateId}
+                  font={design.fontFamily}
+                  onFontChange={(fontFamily) => updateDesign({ fontFamily })}
+                  size={design.fontSize}
+                  onSizeChange={(fontSize) => updateDesign({ fontSize })}
+                  sizeMin={10}
+                  sizeMax={16}
+                  sizeStep={0.5}
+                />
+              </TypographyGroup>
             </div>
           </DesignSection>
-
-          <div className="h-px bg-border/50" />
 
           {/* Layout */}
           <DesignSection title="Layout">
@@ -1233,13 +1262,11 @@ export function DesignerPanel() {
             </div>
           </DesignSection>
 
-          <div className="h-px bg-border/50" />
-
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <button
                 type="button"
-                className="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-lg text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+                className="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-lg text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <RotateCcw className="h-3.5 w-3.5" />
                 Restore defaults

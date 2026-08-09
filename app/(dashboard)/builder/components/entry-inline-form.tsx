@@ -42,8 +42,8 @@ export function EntryInlineForm({
   const needsAttention = attentionKey > 0;
 
   return (
-    <div className="space-y-4 rounded-lg border border-primary/20 bg-card p-4 ring-1 ring-primary/10">
-      <div className="flex items-center gap-2 rounded-md bg-primary/5 px-3 py-2 text-xs font-medium text-primary">
+    <div className="space-y-4 rounded-xl bg-background p-4">
+      <div className="flex items-center gap-2 rounded-lg bg-primary/5 px-3 py-2 text-xs font-medium text-primary">
         <div className="h-1.5 w-1.5 rounded-full bg-primary" />
         {banner}
       </div>
@@ -61,7 +61,7 @@ export function EntryInlineForm({
           'scroll-mt-24 transition-[padding,background-color,border-color,box-shadow] duration-500 ease-out',
           needsAttention
             ? 'rounded-xl border border-primary/15 bg-gradient-to-b from-primary/[0.06] to-transparent p-3.5 shadow-[inset_0_0_0_1px_hsl(var(--primary)/0.04)]'
-            : 'border-t border-border/60 pt-4'
+            : 'pt-4'
         )}
       >
         {needsAttention ? (

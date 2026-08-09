@@ -14,11 +14,11 @@ import { db } from '@/lib/db';
  * Permanently delete the user's account from both Clerk and database
  *
  * This is an irreversible operation that:
- * 1. Deletes the user from Clerk authentication (required — must succeed)
- * 2. Deletes all user data from the database (cascades to profile, experiences, etc.)
+ * 1. Deletes all user data from the database (cascades to profiles, experiences, etc.)
+ * 2. Deletes the user from Clerk authentication
  *
- * Clerk is deleted first so the user cannot sign back in and recreate an account
- * if database cleanup fails. The user must be authenticated.
+ * Database is deleted first so a failed/partial cleanup cannot leave an orphan
+ * User that a later signup would resurrect. The user must be authenticated.
  */
 export async function DELETE() {
   try {
@@ -85,6 +85,12 @@ export async function GET() {
       where: { clerkId },
       include: {
         profile: {
+          select: {
+            handle: true,
+            status: true,
+          },
+        },
+        profiles: {
           include: {
             _count: {
               select: {
@@ -104,6 +110,7 @@ export async function GET() {
             importJobs: true,
             importLogs: true,
             shareTokens: true,
+            coverLetters: true,
           },
         },
       },
@@ -113,7 +120,28 @@ export async function GET() {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    // Return a summary of what will be deleted
+    const dataSummary = user.profiles.reduce(
+      (acc, profile) => ({
+        workExperiences: acc.workExperiences + profile._count.workExperiences,
+        educations: acc.educations + profile._count.educations,
+        skills: acc.skills + profile._count.skills,
+        projects: acc.projects + profile._count.projects,
+        awards: acc.awards + profile._count.awards,
+        certifications: acc.certifications + profile._count.certifications,
+        links: acc.links + profile._count.links,
+      }),
+      {
+        workExperiences: 0,
+        educations: 0,
+        skills: 0,
+        projects: 0,
+        awards: 0,
+        certifications: 0,
+        links: 0,
+      }
+    );
+
+    // Return a summary of what will be deleted (all owned resumes, not only active)
     return NextResponse.json({
       user: {
         email: user.email,
@@ -126,13 +154,9 @@ export async function GET() {
           }
         : null,
       dataSummary: {
-        workExperiences: user.profile?._count.workExperiences ?? 0,
-        educations: user.profile?._count.educations ?? 0,
-        skills: user.profile?._count.skills ?? 0,
-        projects: user.profile?._count.projects ?? 0,
-        awards: user.profile?._count.awards ?? 0,
-        certifications: user.profile?._count.certifications ?? 0,
-        links: user.profile?._count.links ?? 0,
+        ...dataSummary,
+        resumes: user.profiles.length,
+        coverLetters: user._count.coverLetters,
         importJobs: user._count.importJobs,
         shareTokens: user._count.shareTokens,
       },

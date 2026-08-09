@@ -42,6 +42,16 @@ export function isBuilderDesignerActive(mode: BuilderViewMode): boolean {
   return mode === 'designer';
 }
 
+/** Content column is the active (fully revealed) side pane. */
+export function isBuilderContentRevealed(mode: BuilderViewMode): boolean {
+  return mode === 'content';
+}
+
+/** Designer column is the active (fully revealed) side pane. */
+export function isBuilderDesignerRevealed(mode: BuilderViewMode): boolean {
+  return mode === 'designer';
+}
+
 /** Design edge tab — shown whenever design is not the active side. */
 export function isDesignEdgeTabVisible(mode: BuilderViewMode): boolean {
   return mode !== 'designer';

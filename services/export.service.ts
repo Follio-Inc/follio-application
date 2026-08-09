@@ -1130,7 +1130,7 @@ const RESUME_CSS = `
   }
   .resume-headline {
     font-family: var(--rd-font-title, inherit);
-    font-size: var(--rd-title-font-size, 15px);
+    font-size: var(--rd-title-font-size, 14px);
     font-weight: var(--rd-title-font-weight, 400);
     font-style: var(--rd-title-font-style, italic);
     text-decoration: var(--rd-title-text-decoration, none);
@@ -1139,7 +1139,7 @@ const RESUME_CSS = `
   }
   .resume-contact-line {
     font-family: var(--rd-font-contact, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
-    font-size: var(--rd-contact-font-size, 12px);
+    font-size: var(--rd-contact-font-size, 11px);
     font-weight: var(--rd-contact-font-weight, 400);
     font-style: var(--rd-contact-font-style, normal);
     text-decoration: var(--rd-contact-text-decoration, none);
@@ -1203,21 +1203,18 @@ const RESUME_CSS = `
     font-size: 12px;
     color: #666;
     white-space: nowrap;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     flex-shrink: 0;
   }
   .resume-entry-tech {
     font-size: 11px;
     color: #777;
     margin: 2px 0 0 0;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
   .resume-entry-description { font-size: 13px; margin: 6px 0 0 0; text-align: justify; }
   .resume-entry-details { margin-top: 4px; font-size: 12px; color: #666; }
   .resume-entry-details p { margin: 2px 0; }
   .resume-entry-tags {
     font-size: 11px; color: #777; margin-top: 4px;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 
   /* Bullets */
@@ -1450,7 +1447,7 @@ const RESUME_CSS = `
     border-top-color: color-mix(in srgb, var(--rd-accent-color-dark, #b6bec9) 35%, transparent);
   }
   .resume-paper--sleek .resume-section-header { grid-column: 1; margin-bottom: 0; }
-  .resume-paper--sleek .resume-section-title { font-size: var(--rd-heading-font-size, 11.5px); letter-spacing: 0.24em; }
+  .resume-paper--sleek .resume-section-title { font-size: var(--rd-heading-font-size, 11px); letter-spacing: 0.24em; }
   .resume-paper--sleek .resume-section-line { display: none; }
   .resume-paper--sleek .resume-section > :not(.resume-section-header) { grid-column: 2; }
   .resume-paper--sleek .resume-section > .resume-entries { grid-column: 1 / -1; }
@@ -1505,7 +1502,7 @@ const RESUME_CSS = `
     font-weight: var(--rd-title-font-weight, 500);
     text-decoration: var(--rd-title-text-decoration, none);
     font-family: var(--rd-font-title, inherit);
-    font-size: var(--rd-title-font-size, 12px); color: #6b7280;
+    font-size: var(--rd-title-font-size, 14px); color: #6b7280;
   }
   [data-resume-theme='dark'] .resume-paper--studio .resume-headline { color: #9ca3af; }
   .resume-studio-contact {
@@ -1519,7 +1516,7 @@ const RESUME_CSS = `
   }
   .resume-studio-contact-item {
     font-family: var(--rd-font-contact, inherit);
-    font-size: var(--rd-contact-font-size, 12px); line-height: 1.45; color: #374151; word-break: break-word;
+    font-size: var(--rd-contact-font-size, 11px); line-height: 1.45; color: #374151; word-break: break-word;
     font-weight: var(--rd-contact-font-weight, 400);
     font-style: var(--rd-contact-font-style, normal);
     text-decoration: var(--rd-contact-text-decoration, none);
@@ -1532,7 +1529,7 @@ const RESUME_CSS = `
   }
   .resume-paper--studio .resume-section-title {
     display: inline-flex; align-items: center; gap: 8px;
-    font-size: var(--rd-heading-font-size, 13px);
+    font-size: var(--rd-heading-font-size, 12px);
     font-weight: var(--rd-heading-font-weight, 700);
     font-style: var(--rd-heading-font-style, normal);
     text-decoration: var(--rd-heading-text-decoration, none);
@@ -1588,7 +1585,7 @@ const RESUME_CSS = `
   }
   .resume-paper--atelier .resume-headline {
     margin-top: 4px; font-family: var(--rd-font-title, 'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif);
-    font-size: var(--rd-title-font-size, 11px);
+    font-size: var(--rd-title-font-size, 13px);
     font-weight: var(--rd-title-font-weight, 400);
     font-style: var(--rd-title-font-style, normal);
     text-decoration: var(--rd-title-text-decoration, none);
@@ -1602,7 +1599,7 @@ const RESUME_CSS = `
   .resume-atelier-contact-item {
     display: flex; align-items: center; gap: 8px;
     font-family: var(--rd-font-contact, 'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif);
-    font-size: var(--rd-contact-font-size, 11.5px); line-height: 1.35; color: #3a3a3a; word-break: break-word;
+    font-size: var(--rd-contact-font-size, 11px); line-height: 1.35; color: #3a3a3a; word-break: break-word;
     font-weight: var(--rd-contact-font-weight, 400);
     font-style: var(--rd-contact-font-style, normal);
     text-decoration: var(--rd-contact-text-decoration, none);
@@ -1625,7 +1622,7 @@ const RESUME_CSS = `
   .resume-paper--atelier .resume-section-header { display: block; margin-bottom: 12px; }
   .resume-paper--atelier .resume-section-title {
     font-family: var(--rd-font-heading, 'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif);
-    font-size: var(--rd-heading-font-size, 12px);
+    font-size: var(--rd-heading-font-size, 11px);
     font-weight: var(--rd-heading-font-weight, 700);
     font-style: var(--rd-heading-font-style, normal);
     text-decoration: var(--rd-heading-text-decoration, none);
@@ -1639,29 +1636,29 @@ const RESUME_CSS = `
     display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 12px 16px; align-items: start;
   }
   .resume-paper.resume-paper--atelier .resume-atelier-exp .resume-entry-date {
-    font-family: var(--rd-font-heading, 'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif);
+    font-family: var(--rd-font-body, 'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif);
     font-size: 12px; font-weight: 700; letter-spacing: 0.02em;
     color: var(--rd-accent-color, #c25b42); white-space: nowrap;
     padding: 0; border: none; margin: 0;
   }
   .resume-atelier-exp-body .resume-entry-title {
-    font-family: var(--rd-font-heading, 'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif);
+    font-family: var(--rd-font-body, 'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif);
     font-size: 13px; font-weight: 700; text-transform: none; letter-spacing: 0;
     color: #1a1a1a; margin: 0;
   }
   .resume-atelier-exp-body .resume-entry-subtitle {
-    font-family: var(--rd-font-heading, 'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif);
+    font-family: var(--rd-font-body, 'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif);
     font-size: 12px; font-weight: 600; font-style: normal; margin-top: 2px; color: #2a2a2a;
   }
   .resume-atelier-exp-body .resume-bullets,
   .resume-atelier-exp-body .rich-text-bullets { margin-top: 8px; }
   .resume-atelier-edu .resume-entry-title {
-    font-family: var(--rd-font-heading, 'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif);
+    font-family: var(--rd-font-body, 'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif);
     font-size: 12.5px; font-weight: 700; margin: 0;
   }
   .resume-atelier-edu .resume-entry-subtitle { font-style: normal; font-size: 12px; margin-top: 2px; }
   .resume-atelier-edu-meta {
-    font-family: var(--rd-font-heading, 'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif);
+    font-family: var(--rd-font-body, 'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif);
     font-size: 11px; color: #6b6b6b; margin-top: 3px;
   }
 `;

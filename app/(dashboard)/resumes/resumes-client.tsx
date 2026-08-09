@@ -563,7 +563,7 @@ export function ResumeDashboardClient({
                 VISIBILITY_CONFIG[resume.resumeVisibility] ?? VISIBILITY_CONFIG.PRIVATE;
               const Icon = config.icon;
               return (
-                <TooltipProvider delayDuration={0}>
+                <TooltipProvider delayDuration={500}>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <span className="inline-flex shrink-0 cursor-default items-center gap-1 whitespace-nowrap">

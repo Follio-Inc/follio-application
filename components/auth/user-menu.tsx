@@ -9,7 +9,6 @@ import {
   FileText,
   Globe,
   LayoutDashboard,
-  Lock,
   LogOut,
   Settings,
 } from 'lucide-react';
@@ -18,8 +17,6 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { AppThemeModeSwitch } from '@/components/app-theme-mode-switch';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { isPortfolioEnabled } from '@/lib/features';
-import { getPortfolioPath, getPortfolioUrl, getResumePath, getResumeUrl } from '@/lib/url';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,14 +25,27 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { isPortfolioEnabled } from '@/lib/features';
+import { resolvePublicResumeLink, type PublicResumeLink } from '@/lib/shareable-resume-link';
+import { getDisplayHost, getPortfolioPath, getPortfolioUrl } from '@/lib/url';
+
+type PublicPortfolioLink = {
+  kind: 'public';
+  url: string;
+  href: string;
+  displayHost: string;
+  label: string;
+};
+
+type AccountPublicLink = PublicResumeLink | PublicPortfolioLink;
 
 export function UserMenu() {
   const { user } = useUser();
   const { signOut } = useClerk();
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [handle, setHandle] = useState<string | null>(null);
-  const [profileStatus, setProfileStatus] = useState<string | null>(null);
+  const [portfolioShare, setPortfolioShare] = useState<PublicPortfolioLink | null>(null);
+  const [resumeShare, setResumeShare] = useState<PublicResumeLink | null>(null);
   // null = still checking; false = incomplete onboarding (no Profile yet)
   const [hasWorkspaceAccess, setHasWorkspaceAccess] = useState<boolean | null>(null);
   const [mounted, setMounted] = useState(false);
@@ -44,17 +54,36 @@ export function UserMenu() {
     setMounted(true);
   }, []);
 
-  const fetchHandle = useCallback(async () => {
+  const fetchShareState = useCallback(async () => {
     try {
       const res = await fetch('/api/profile');
       if (res.ok) {
         const data = await res.json();
-        setHandle(data.profile?.handle || null);
-        setProfileStatus(data.profile?.status || null);
-        setHasWorkspaceAccess(Boolean(data.profile));
+        const profile = data.profile;
+        setHasWorkspaceAccess(Boolean(profile));
+
+        if (profile?.portfolioVisibility === 'PUBLIC' && profile?.handle) {
+          setPortfolioShare({
+            kind: 'public',
+            url: getPortfolioUrl(profile.handle),
+            href: getPortfolioPath(profile.handle),
+            displayHost: getDisplayHost(profile.handle),
+            label: 'Public profile',
+          });
+        } else {
+          setPortfolioShare(null);
+        }
+
+        setResumeShare(
+          resolvePublicResumeLink({
+            hasPublicResume: Boolean(data.hasPublicResume),
+            vanityUsername: data.vanityUsername,
+            activeHandle: profile?.handle,
+          })
+        );
       } else {
-        setHandle(null);
-        setProfileStatus(null);
+        setPortfolioShare(null);
+        setResumeShare(null);
         setHasWorkspaceAccess(false);
       }
     } catch {
@@ -63,8 +92,8 @@ export function UserMenu() {
   }, []);
 
   useEffect(() => {
-    if (user) fetchHandle();
-  }, [user, fetchHandle]);
+    if (user) fetchShareState();
+  }, [user, fetchShareState]);
 
   // Render a stable placeholder during SSR and initial hydration to prevent mismatch.
   // After hydration, useEffect sets `mounted` to true and the real UI renders.
@@ -89,16 +118,13 @@ export function UserMenu() {
   const email = user.emailAddresses[0]?.emailAddress || '';
 
   const portfolioEnabled = isPortfolioEnabled();
-  const follioUrl = handle
-    ? portfolioEnabled
-      ? getPortfolioUrl(handle)
-      : getResumeUrl(handle)
-    : null;
+  const activeShare: AccountPublicLink | null = portfolioEnabled ? portfolioShare : resumeShare;
+  const showShareSection = hasWorkspaceAccess === true;
 
   const handleCopyLink = async () => {
-    if (!follioUrl) return;
+    if (!activeShare) return;
     try {
-      await navigator.clipboard.writeText(follioUrl);
+      await navigator.clipboard.writeText(activeShare.url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -158,69 +184,57 @@ export function UserMenu() {
             </div>
           </div>
 
-          {/* Share your Follio */}
-          {follioUrl && handle && (
-            <>
-              <div className="px-4 py-3">
-                <p className="text-eyebrow mb-2">Your link</p>
-                <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                      {profileStatus === 'PUBLIC' ? (
-                        <Globe className="h-4 w-4" />
-                      ) : (
-                        <Lock className="h-4 w-4" />
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="break-all font-mono text-[13px] font-medium leading-snug tracking-tight text-foreground">
-                        {follioUrl}
-                      </p>
-                      <p className="mt-1 text-[11px] text-muted-foreground">
-                        {portfolioEnabled
-                          ? profileStatus === 'PUBLIC'
-                            ? 'Public profile'
-                            : 'Private link'
-                          : 'Resume link'}
-                      </p>
-                    </div>
+          {/* Public link only — omit entirely when nothing is public. */}
+          {showShareSection && activeShare ? (
+            <div className="px-4 py-3">
+              <p className="text-eyebrow mb-2">Your link</p>
+              <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                    <Globe className="h-4 w-4" />
                   </div>
-                  <div className="mt-3 flex gap-2">
-                    <button
-                      type="button"
-                      onClick={handleCopyLink}
-                      className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
-                        copied
-                          ? 'bg-primary/10 text-primary'
-                          : 'bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary'
-                      }`}
-                    >
-                      {copied ? (
-                        <>
-                          <Check className="h-3.5 w-3.5" />
-                          Copied!
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="h-3.5 w-3.5" />
-                          Copy
-                        </>
-                      )}
-                    </button>
-                    <Link
-                      href={portfolioEnabled ? getPortfolioPath(handle) : getResumePath(handle)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-muted px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
-                    >
-                      <ExternalLink className="h-3.5 w-3.5" />
-                      View
-                    </Link>
+                  <div className="min-w-0 flex-1">
+                    <p className="break-all font-mono text-[13px] font-medium leading-snug tracking-tight text-foreground">
+                      {activeShare.displayHost}
+                    </p>
+                    <p className="mt-1 text-[11px] text-muted-foreground">{activeShare.label}</p>
                   </div>
                 </div>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCopyLink}
+                    className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
+                      copied
+                        ? 'bg-primary/10 text-primary'
+                        : 'bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary'
+                    }`}
+                  >
+                    {copied ? (
+                      <>
+                        <Check className="h-3.5 w-3.5" />
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-3.5 w-3.5" />
+                        Copy
+                      </>
+                    )}
+                  </button>
+                  <Link
+                    href={activeShare.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-muted px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    View
+                  </Link>
+                </div>
               </div>
-            </>
-          )}
+            </div>
+          ) : null}
 
           {/* Workspace links only after onboarding created a Profile.
               Incomplete accounts stay on /onboarding — no escape hatches

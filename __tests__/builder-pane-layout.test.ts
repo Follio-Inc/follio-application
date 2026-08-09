@@ -5,7 +5,9 @@ import {
   builderSideCollapseLabel,
   closeBuilderSide,
   escapeBuilderViewMode,
+  isBuilderContentRevealed,
   isBuilderDesignerActive,
+  isBuilderDesignerRevealed,
   isBuilderPreviewOnly,
   isContentEdgeTabVisible,
   isDesignEdgeTabVisible,
@@ -17,6 +19,8 @@ describe('builder view mode', () => {
     expect(DEFAULT_BUILDER_VIEW_MODE).toBe('content');
     expect(isBuilderPreviewOnly(DEFAULT_BUILDER_VIEW_MODE)).toBe(false);
     expect(isBuilderDesignerActive(DEFAULT_BUILDER_VIEW_MODE)).toBe(false);
+    expect(isBuilderContentRevealed(DEFAULT_BUILDER_VIEW_MODE)).toBe(true);
+    expect(isBuilderDesignerRevealed(DEFAULT_BUILDER_VIEW_MODE)).toBe(false);
   });
 
   it('opening one side replaces the other (mutual exclusion)', () => {
@@ -24,6 +28,17 @@ describe('builder view mode', () => {
     expect(openBuilderSide('designer', 'content')).toBe('content');
     expect(openBuilderSide('preview', 'designer')).toBe('designer');
     expect(openBuilderSide('preview', 'content')).toBe('content');
+  });
+
+  it('revealed helpers match the active side only', () => {
+    expect(isBuilderContentRevealed('content')).toBe(true);
+    expect(isBuilderDesignerRevealed('content')).toBe(false);
+
+    expect(isBuilderContentRevealed('designer')).toBe(false);
+    expect(isBuilderDesignerRevealed('designer')).toBe(true);
+
+    expect(isBuilderContentRevealed('preview')).toBe(false);
+    expect(isBuilderDesignerRevealed('preview')).toBe(false);
   });
 
   it('closing the active side yields preview-only', () => {

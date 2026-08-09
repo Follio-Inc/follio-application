@@ -7,6 +7,11 @@ node_modules
 # Testing
 coverage
 
+# Live QA (developer portal)
+_admin-panel/modules/developer/live-qa/.artifacts/
+_admin-panel/modules/developer/live-qa/.auth/
+_admin-panel/modules/developer/live-qa/fixtures/resumes/uploads/
+
 # Next.js
 .next/
 out/

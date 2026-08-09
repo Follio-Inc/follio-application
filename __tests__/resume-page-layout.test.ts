@@ -79,4 +79,12 @@ describe('paged page geometry', () => {
     expect(getPagedContentOffset(1, LETTER_PAGE_HEIGHT_PX)).toBe(firstBand);
     expect(getPagedContentOffset(2, LETTER_PAGE_HEIGHT_PX)).toBe(firstBand + laterBand);
   });
+
+  it('counts a second A4 page when measure height equals full page min-height', () => {
+    // A4 paper min-height (1123) is taller than the first content band
+    // (1123 − margin). If paged measure inherits that min-height, a blank
+    // resume incorrectly becomes 2 pages — CSS must clear it in the stack.
+    expect(getPagedPageCount(A4_PAGE_HEIGHT_PX, A4_PAGE_HEIGHT_PX)).toBe(2);
+    expect(getPagedPageCount(A4_PAGE_HEIGHT_PX - 48, A4_PAGE_HEIGHT_PX)).toBe(1);
+  });
 });

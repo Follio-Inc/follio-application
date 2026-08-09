@@ -95,7 +95,6 @@ function BuilderLayoutInner({ sections }: BuilderLayoutInnerProps) {
 
   return (
     <DocumentBuilderShell
-      contentClassName="bg-muted/40"
       content={
         <>
           <BuilderContentHeader />

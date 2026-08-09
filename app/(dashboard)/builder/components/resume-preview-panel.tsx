@@ -128,7 +128,7 @@ export function ResumePreviewPanel() {
   return (
     <div className="relative flex h-full flex-col">
       {/* ── Slim panel header — labels the column, keeps the surface calm ── */}
-      <div className="flex h-12 shrink-0 items-center justify-between border-b border-border/60 px-6">
+      <div className="builder-panel flex h-12 shrink-0 items-center justify-between border-b border-border/30 px-6">
         <span className="text-eyebrow">{construction.active ? 'Building resume' : 'Preview'}</span>
         <div className="flex items-center gap-2">
           <ResumePageLayoutSwitch
@@ -151,10 +151,10 @@ export function ResumePreviewPanel() {
         showRefreshHint={construction.showRefreshHint}
       />
 
-      {/* ── Scrollable preview area ─────────────────────────────────── */}
+      {/* Soft stage under the resume — lighter than base chrome, darker than paper */}
       <div
         ref={containerRef}
-        className="scrollbar-thin flex-1 overflow-y-auto overflow-x-hidden px-6 pb-6 pr-14 pt-6"
+        className="builder-stage scrollbar-thin flex-1 overflow-y-auto overflow-x-hidden px-6 pb-6 pr-14 pt-6"
       >
         {/* Centered sheet wrapper */}
         <div className="relative mx-auto" style={{ width: sheetWidth }}>
@@ -168,7 +168,7 @@ export function ResumePreviewPanel() {
               visible so the handoff feels instant. */}
           <div
             className={cn(
-              'group block w-full overflow-hidden rounded-md',
+              'builder-paper group block w-full overflow-hidden rounded-md',
               'focus-within:ring-2 focus-within:ring-primary/40'
             )}
           >

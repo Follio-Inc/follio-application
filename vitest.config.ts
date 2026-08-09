@@ -13,7 +13,14 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['**/*.test.ts', '**/*.test.tsx'],
-    exclude: ['node_modules', '.next', 'dist', '_experiments'],
+    exclude: [
+      'node_modules',
+      '.next',
+      'dist',
+      '_experiments',
+      '_admin-panel/modules/developer/live-qa/pathways/**',
+      '_admin-panel/modules/developer/live-qa/.artifacts/**',
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],

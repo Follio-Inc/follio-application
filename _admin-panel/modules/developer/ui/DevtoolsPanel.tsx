@@ -6,10 +6,11 @@ import { QUICK_LINKS } from '../links';
 import { SMOKE_ITEMS } from '../smoke';
 import { TEST_SUITES } from '../suites-catalog';
 import type { DevtoolsStatus, HealthReport, TestRunResult } from '../types';
+import { LiveQaTab } from './LiveQaTab';
 import { DEVTOOLS_CSS } from './styles';
 import { useSmokeCompletion } from './use-devtools';
 
-type TabId = 'health' | 'suites' | 'smoke' | 'links';
+type TabId = 'health' | 'suites' | 'live-qa' | 'smoke' | 'links';
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -308,7 +309,7 @@ export function DevtoolsPanel() {
           <div>
             <div className="fdx-title">Developer</div>
             <div className="fdx-subtitle">
-              Health, suites, and smoke — admin panel module (not product UI)
+              Health, Vitest suites, Live QA pathways, and smoke — admin panel (not product UI)
             </div>
           </div>
         </div>
@@ -317,6 +318,7 @@ export function DevtoolsPanel() {
             [
               ['health', 'Health'],
               ['suites', 'Suites'],
+              ['live-qa', 'Live QA'],
               ['smoke', 'Smoke'],
               ['links', 'Links'],
             ] as const
@@ -337,6 +339,7 @@ export function DevtoolsPanel() {
         <div className="fdx-body">
           {tab === 'health' ? <HealthTab /> : null}
           {tab === 'suites' ? <SuitesTab /> : null}
+          {tab === 'live-qa' ? <LiveQaTab /> : null}
           {tab === 'smoke' ? <SmokeTab /> : null}
           {tab === 'links' ? <LinksTab /> : null}
         </div>

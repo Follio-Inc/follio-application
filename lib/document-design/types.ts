@@ -158,9 +158,11 @@ export const DOCUMENT_DESIGN_DEFAULTS: Required<DocumentDesign> = {
   nameFontFamily: 'georgia',
   headingFontFamily: 'system',
   dividerStyle: 'line',
+  // Body / section content — primary reading size
   fontSize: 13,
   density: 'normal',
   nameFontSize: 28,
+  // Section headers sit slightly under body; caps + weight carry hierarchy
   headingFontSize: 12,
   nameStyle: { bold: true, italic: false, underline: false },
   headingStyle: { bold: true, italic: false, underline: false },

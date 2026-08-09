@@ -1,0 +1,43 @@
+{
+  "id": "jordan-park",
+  "firstName": "Jordan",
+  "lastName": "Park",
+  "headline": "Senior Product Engineer",
+  "email": "jordan.park.liveqa@example.com",
+  "phone": "+1 415 555 0142",
+  "location": "San Francisco, CA",
+  "summary": "Product-minded engineer with 8+ years shipping reliable interfaces and the systems behind them.",
+  "links": [
+    { "label": "LinkedIn", "url": "https://linkedin.com/in/jordan-park-example" },
+    { "label": "GitHub", "url": "https://github.com/jordan-park-example" }
+  ],
+  "experience": [
+    {
+      "title": "Senior Product Engineer",
+      "company": "Northwind Labs",
+      "location": "San Francisco, CA",
+      "startDate": "2021-03",
+      "endDate": null,
+      "isCurrent": true,
+      "bullets": [
+        "Led end-to-end delivery of the document builder used by 12k weekly actives.",
+        "Cut p95 editor load time by 35% through incremental rendering."
+      ]
+    }
+  ],
+  "education": [
+    {
+      "school": "University of Washington",
+      "degree": "B.S. Computer Science",
+      "startDate": "2012-09",
+      "endDate": "2016-06"
+    }
+  ],
+  "skills": ["TypeScript", "React", "Node.js", "PostgreSQL", "Product sense"],
+  "projects": [
+    {
+      "name": "Calm Editor",
+      "description": "Open-source rich text experiment focused on predictable undo/redo."
+    }
+  ]
+}

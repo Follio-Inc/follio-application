@@ -255,51 +255,26 @@ function SortableEntryRow({
       style={style}
       data-entry-id={dataEntryId}
       className={cn(
-        'group flex items-center gap-2 rounded-lg border bg-background px-2 py-1.5 transition-colors',
-        isDragging && 'z-50 shadow-lg ring-2 ring-primary/20',
-        !isDragging && 'hover:border-border'
+        'group flex items-center gap-1.5 rounded-xl bg-background px-2.5 py-1.5 transition-colors',
+        isDragging && 'z-50 bg-background shadow-md',
+        !isDragging && 'hover:bg-background/80'
       )}
     >
       {/* Drag handle */}
       <button
         ref={setActivatorNodeRef}
         type="button"
-        className="flex shrink-0 cursor-grab touch-none items-center text-muted-foreground/40 hover:text-muted-foreground active:cursor-grabbing"
+        className="flex shrink-0 cursor-grab touch-none items-center text-muted-foreground/30 opacity-0 transition-opacity hover:text-muted-foreground focus-visible:opacity-100 active:cursor-grabbing group-hover:opacity-100"
         {...attributes}
         {...listeners}
       >
-        <GripVertical className="h-4 w-4" />
+        <GripVertical className="h-3.5 w-3.5" />
       </button>
 
-      {/* Visibility toggle */}
-      {hasVisibilityToggle ? (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={onVisibilityToggle}
-              className="flex shrink-0 items-center"
-              tabIndex={-1}
-            >
-              {entry.isVisible ? (
-                <Eye className="h-4 w-4 text-primary" />
-              ) : (
-                <EyeOff className="h-4 w-4 text-muted-foreground/50" />
-              )}
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="top" className="text-xs">
-            {entry.isVisible ? 'Visible on resume' : 'Hidden from resume'}
-          </TooltipContent>
-        </Tooltip>
-      ) : (
-        <div className="w-4 shrink-0" />
-      )}
-
       {/* Type icon + label */}
-      <div className="flex shrink-0 items-center gap-1.5">
-        <Icon className="h-4 w-4 text-muted-foreground" />
-        <span className="w-16 text-xs font-medium text-muted-foreground">{entry.label}</span>
+      <div className="flex w-[5.5rem] shrink-0 items-center gap-1.5">
+        <Icon className="h-3.5 w-3.5 text-muted-foreground/70" />
+        <span className="truncate text-xs text-muted-foreground">{entry.label}</span>
       </div>
 
       {/* Value input */}
@@ -308,17 +283,42 @@ function SortableEntryRow({
         onChange={(e) => onValueChange(e.target.value)}
         onBlur={onBlur}
         placeholder={entry.placeholder}
-        className="h-8 flex-1 border-0 bg-transparent px-2 text-sm shadow-none focus-visible:ring-0"
+        className="h-8 flex-1 border-0 bg-transparent px-1.5 text-sm shadow-none focus-visible:ring-0"
       />
 
+      {/* Visibility toggle — right side, before remove */}
+      {hasVisibilityToggle ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={onVisibilityToggle}
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-accent"
+              tabIndex={-1}
+            >
+              {entry.isVisible ? (
+                <Eye className="h-3.5 w-3.5 text-primary" />
+              ) : (
+                <EyeOff className="h-3.5 w-3.5 text-muted-foreground/45" />
+              )}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="text-xs">
+            {entry.isVisible ? 'Visible on resume' : 'Hidden from resume'}
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        <div className="h-6 w-6 shrink-0" />
+      )}
+
       {/* Remove button (only for removable entries, shown on hover) */}
-      {entry.removable && (
+      {entry.removable ? (
         <Tooltip>
           <TooltipTrigger asChild>
             <button
               type="button"
               onClick={onRemove}
-              className="flex shrink-0 items-center text-muted-foreground/30 opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground/30 opacity-0 transition-opacity hover:bg-accent hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
               tabIndex={-1}
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -328,6 +328,8 @@ function SortableEntryRow({
             Remove
           </TooltipContent>
         </Tooltip>
+      ) : (
+        <div className="h-6 w-6 shrink-0" />
       )}
     </div>
   );
@@ -732,8 +734,10 @@ export function ContactDetailsSection({
   }
 
   return (
-    <div className="space-y-4">
-      {/* Sortable entry list */}
+    <div className="space-y-3">
+      <p className="text-eyebrow">Contact &amp; Links</p>
+
+      {/* Sortable entry list — soft nested surfaces, no borders */}
       <DndContext
         id={dndId}
         sensors={sensors}
@@ -742,7 +746,7 @@ export function ContactDetailsSection({
         onDragEnd={handleDragEnd}
       >
         <SortableContext items={entryIds} strategy={verticalListSortingStrategy}>
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             {entries.map((entry) => (
               <SortableEntryRow
                 key={entry.id}
@@ -759,29 +763,27 @@ export function ContactDetailsSection({
         </SortableContext>
       </DndContext>
 
-      {/* Quick add buttons */}
+      {/* Quick add — quiet ghost chips */}
       {availableQuickAdds.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-xs font-medium text-muted-foreground">Add</p>
-          <div className="flex flex-wrap gap-1.5">
-            {availableQuickAdds.map((option) => {
-              const Icon = option.icon;
-              return (
-                <Button
-                  key={option.type}
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-7 gap-1.5 rounded-full px-3 text-xs"
-                  onClick={() => handleQuickAdd(option.type)}
-                >
-                  <Plus className="h-3 w-3" />
-                  <Icon className="h-3 w-3" />
-                  {option.label}
-                </Button>
-              );
-            })}
-          </div>
+        <div className="flex flex-wrap items-center gap-1 pt-0.5">
+          <span className="mr-1 text-[11px] text-muted-foreground/70">Add</span>
+          {availableQuickAdds.map((option) => {
+            const Icon = option.icon;
+            return (
+              <Button
+                key={option.type}
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
+                onClick={() => handleQuickAdd(option.type)}
+              >
+                <Plus className="h-3 w-3 opacity-60" />
+                <Icon className="h-3 w-3" />
+                {option.label}
+              </Button>
+            );
+          })}
         </div>
       )}
     </div>

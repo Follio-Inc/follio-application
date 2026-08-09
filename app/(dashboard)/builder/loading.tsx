@@ -11,45 +11,46 @@
  */
 export default function BuilderLoading() {
   return (
-    <div className="flex min-h-[calc(100vh-3.5rem)] animate-pulse flex-col bg-muted/30 xl:h-[calc(100vh-3.5rem)]">
+    <div className="builder-base flex min-h-[calc(100vh-3.5rem)] animate-pulse flex-col xl:h-[calc(100vh-3.5rem)]">
       {/* Top toolbar skeleton */}
-      <div className="hidden h-12 shrink-0 items-center justify-between border-b border-border/60 bg-background px-5 xl:flex">
-        <div className="h-3 w-24 rounded bg-muted" />
-        <div className="h-7 w-40 rounded-lg bg-muted" />
+      <div className="builder-base hidden h-12 shrink-0 items-center justify-between border-b border-border/30 px-5 xl:flex">
+        <div className="h-3 w-24 rounded bg-muted-foreground/15" />
+        <div className="h-7 w-40 rounded-lg bg-muted-foreground/15" />
       </div>
 
       <div className="flex flex-1 xl:min-h-0">
         {/* Editor column skeleton */}
-        <div className="flex w-full flex-col gap-3 bg-muted/40 px-6 py-8 xl:flex-[4_0_0%]">
-          <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 pl-5">
-            <div className="h-14 rounded-lg bg-muted" />
-            <div className="h-14 rounded-lg bg-muted" />
-            <div className="h-14 rounded-lg bg-muted" />
-            <div className="h-14 rounded-lg bg-muted" />
-            <div className="h-14 rounded-lg bg-muted" />
+        <div className="builder-base flex w-full flex-col xl:flex-[4_0_0%]">
+          <div className="builder-panel flex flex-1 flex-col gap-3 p-6 xl:m-2.5 xl:mr-2 xl:rounded-xl">
+            <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 pl-5">
+              <div className="h-14 rounded-xl bg-muted" />
+              <div className="h-14 rounded-xl bg-muted" />
+              <div className="h-14 rounded-xl bg-muted" />
+              <div className="h-14 rounded-xl bg-muted" />
+              <div className="h-14 rounded-xl bg-muted" />
+            </div>
           </div>
         </div>
 
         {/* Preview column skeleton */}
-        <div className="hidden flex-col border-l border-border/60 bg-muted/20 xl:flex xl:flex-[5_0_0%]">
-          <div className="flex h-12 shrink-0 items-center border-b border-border/60 px-6">
-            <div className="h-3 w-16 rounded bg-muted" />
-          </div>
-          <div className="flex-1 p-6">
-            <div className="mx-auto h-full w-full max-w-2xl rounded-lg bg-muted" />
+        <div className="builder-base hidden xl:flex xl:flex-[5_0_0%]">
+          <div className="builder-panel flex flex-1 flex-col overflow-hidden xl:my-2.5 xl:rounded-xl">
+            <div className="flex h-12 shrink-0 items-center border-b border-border/30 px-6">
+              <div className="h-3 w-16 rounded bg-muted" />
+            </div>
+            <div className="builder-stage flex-1 p-6">
+              <div className="builder-paper mx-auto h-full w-full max-w-2xl rounded-md" />
+            </div>
           </div>
         </div>
 
         {/* Designer column skeleton */}
-        <div className="hidden flex-col border-l border-border/60 bg-background xl:flex xl:flex-[4_0_0%]">
-          <div className="flex h-12 shrink-0 items-center justify-between border-b border-border/60 px-5">
-            <div className="h-3 w-14 rounded bg-muted" />
-            <div className="h-7 w-7 rounded-md bg-muted" />
-          </div>
-          <div className="flex flex-col gap-4 p-5">
-            <div className="h-8 rounded-md bg-muted" />
-            <div className="h-8 rounded-md bg-muted" />
-            <div className="h-8 rounded-md bg-muted" />
+        <div className="builder-base hidden xl:flex xl:flex-[4_0_0%]">
+          <div className="builder-panel flex flex-1 flex-col gap-3 overflow-hidden p-4 xl:m-2.5 xl:ml-2 xl:rounded-xl">
+            <div className="h-12 shrink-0 border-b border-border/30" />
+            <div className="h-24 rounded-xl bg-muted" />
+            <div className="h-24 rounded-xl bg-muted" />
+            <div className="h-24 rounded-xl bg-muted" />
           </div>
         </div>
       </div>

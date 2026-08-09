@@ -48,7 +48,19 @@ describe('onboarding hard gate', () => {
     const src = readFileSync(resolve(process.cwd(), 'components/auth/user-menu.tsx'), 'utf8');
 
     expect(src).toContain('hasWorkspaceAccess');
-    expect(src).toContain('setHasWorkspaceAccess(Boolean(data.profile))');
+    expect(src).toContain('setHasWorkspaceAccess(Boolean(profile))');
     expect(src).toContain('{hasWorkspaceAccess ? (');
+  });
+
+  it('shows the account-menu link only when a public resume exists', () => {
+    const src = readFileSync(resolve(process.cwd(), 'components/auth/user-menu.tsx'), 'utf8');
+
+    expect(src).toContain('resolvePublicResumeLink');
+    expect(src).toContain('hasPublicResume');
+    expect(src).toContain('showShareSection && activeShare');
+    expect(src).not.toContain('No public resume');
+    expect(src).not.toContain('getResumePath');
+    expect(src).not.toContain('getResumeUrl');
+    expect(src).not.toContain('UNLISTED');
   });
 });

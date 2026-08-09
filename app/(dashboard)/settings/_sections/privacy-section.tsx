@@ -103,6 +103,8 @@ export function PrivacySection({ profile }: PrivacySectionProps) {
       const response = await fetch('/api/account', { method: 'DELETE' });
 
       if (response.ok) {
+        const { clearAccountClientState } = await import('@/lib/account/clear-client-state');
+        await clearAccountClientState();
         await signOut({ redirectUrl: '/' });
       } else {
         const data = await response.json();

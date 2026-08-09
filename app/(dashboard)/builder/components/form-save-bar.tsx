@@ -32,8 +32,8 @@ export function FormSaveBar({
     <div
       className={
         sticky
-          ? 'sticky bottom-0 z-10 -mx-5 border-t bg-background/95 px-5 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80'
-          : 'mt-4 border-t border-border/50 pt-4'
+          ? 'sticky bottom-0 z-10 -mx-5 bg-background/95 px-5 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80'
+          : 'mt-4 pt-4'
       }
     >
       <div className="flex items-center gap-2">
