@@ -45,8 +45,7 @@ const OUT = path.isAbsolute(process.env.LIVE_QA_STORAGE_STATE || '')
   ? /** @type {string} */ (process.env.LIVE_QA_STORAGE_STATE)
   : path.join(
       cwd,
-      process.env.LIVE_QA_STORAGE_STATE ||
-        '_admin-panel/modules/developer/live-qa/.auth/user.json'
+      process.env.LIVE_QA_STORAGE_STATE || '_admin-panel/modules/developer/live-qa/.auth/user.json'
     );
 
 async function clerkFetch(pathname, init) {
