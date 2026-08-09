@@ -1,8 +1,9 @@
 /**
- * Permanent account deletion — removes the Clerk auth user and all local data.
+ * Permanent account deletion — removes all local data, then the Clerk auth user.
  *
- * Order matters: Clerk is deleted first so the user cannot sign back in and
- * recreate an account if the database cleanup fails mid-way.
+ * Order matters: database is deleted first so a failed/partial cleanup cannot
+ * leave an orphan User that a later signup would resurrect. If Clerk deletion
+ * fails after the DB wipe, the next signup creates a clean empty User.
  */
 
 import { isClerkAPIResponseError } from '@clerk/nextjs/errors';
@@ -84,14 +85,14 @@ export async function deleteLocalAccountData(userId: string): Promise<void> {
   } catch (error) {
     throw new AccountDeletionError(
       'DATABASE_DELETE_FAILED',
-      'Authentication was removed, but cleaning up account data failed. Please contact support.',
+      'Cleaning up account data failed. Please try again or contact support.',
       { cause: error }
     );
   }
 }
 
 /**
- * Fully delete an account: Clerk auth first, then database data.
+ * Fully delete an account: database data first, then Clerk auth.
  */
 export async function deleteAccountCompletely(
   clerkId: string,
@@ -102,12 +103,12 @@ export async function deleteAccountCompletely(
     select: { id: true },
   });
 
-  // Always remove Clerk so the identity cannot sign in again
-  await deleteClerkAccount(clerkId, deleteClerkUser);
-
   if (user) {
     await deleteLocalAccountData(user.id);
   }
+
+  // Remove Clerk after local data is gone so orphans cannot be reattached
+  await deleteClerkAccount(clerkId, deleteClerkUser);
 
   return {
     clerkDeleted: true,

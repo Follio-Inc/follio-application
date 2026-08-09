@@ -2,7 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 import { notFound, redirect } from 'next/navigation';
 
 import { db } from '@/lib/db';
-import { AdminSignInForm } from './admin-sign-in-form';
+import { AdminSignInForm } from '../admin-sign-in-form';
 
 export const metadata = {
   title: 'Admin Sign In - Follio',

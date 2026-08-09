@@ -31,7 +31,7 @@ export const DEVTOOLS_CSS = `
 }
 
 .fdx-page {
-  max-width: 760px;
+  max-width: 920px;
   margin: 0;
   padding: 24px 24px 40px;
 }
@@ -238,5 +238,23 @@ export const DEVTOOLS_CSS = `
 .fdx-error {
   color: var(--fdx-fail);
   margin-bottom: 10px;
+}
+
+.fdx-select {
+  display: block;
+  margin-top: 6px;
+  width: min(100%, 360px);
+  border: 1px solid var(--fdx-border);
+  background: #0b0f14;
+  color: var(--fdx-text);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 13px;
+}
+
+.fdx-check input[type='file'] {
+  margin-top: 6px;
+  color: var(--fdx-muted);
+  font-size: 12px;
 }
 `;

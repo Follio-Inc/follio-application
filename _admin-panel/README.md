@@ -4,10 +4,10 @@ Operator tooling that sits **beside** the Follio application — not product UI.
 
 ## Modules (separate on purpose)
 
-| Module        | Path                 | Status                                    |
-| ------------- | -------------------- | ----------------------------------------- |
-| **Developer** | `modules/developer/` | Health, test suites, smoke, quick links   |
-| **Users**     | `modules/users/`     | Placeholder — user monitoring comes later |
+| Module        | Path                 | Status                                                      |
+| ------------- | -------------------- | ----------------------------------------------------------- |
+| **Developer** | `modules/developer/` | Health, Vitest suites, Live QA pathways, smoke, quick links |
+| **Users**     | `modules/users/`     | Placeholder — user monitoring comes later                   |
 
 These modules must not import each other. The shell only composes them.
 
@@ -22,7 +22,7 @@ On production (follio.me), only signed-in admins can reach `/admin/*`. The publi
 ## App touch points (thin shims only)
 
 - `app/admin/(dashboard)/developer/page.tsx`
-- `app/api/admin/developer/*`
+- `app/api/admin/developer/*` (including `live-qa/*`)
 - Admin sidebar reads module nav from `_admin-panel/nav.ts`
 
 Do not put real panel logic under `app/` or `components/`.

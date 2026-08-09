@@ -230,7 +230,25 @@ export async function GET() {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ profile });
+    // Account-menu / share surfaces need vanity + whether any resume is PUBLIC.
+    // Do not infer shareability from profile.status (portfolio publish state).
+    const [vanityUsername, publicResume] = await Promise.all([
+      getVanityUsernameForUser(context.userId),
+      db.profile.findFirst({
+        where: {
+          userId: context.userId,
+          resumeVisibility: 'PUBLIC',
+          isArchived: false,
+        },
+        select: { id: true },
+      }),
+    ]);
+
+    return NextResponse.json({
+      profile,
+      vanityUsername,
+      hasPublicResume: Boolean(publicResume),
+    });
   } catch (error) {
     return handleApiError(error, { path: '/api/profile', method: 'GET' });
   }

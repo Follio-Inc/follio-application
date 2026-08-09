@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
         createData: { mainPurpose },
       });
 
-      // Ensure purpose is set for both create and orphan-reclaim paths
+      // Ensure purpose is set for both create and orphan-purge paths
       user = await db.user.update({
         where: { id: resolved.id },
         data: { mainPurpose },

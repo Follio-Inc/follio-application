@@ -1,17 +1,21 @@
 # Developer module
 
-Health checks, Vitest suites, smoke checklist, and quick links.
+Health checks, Vitest suites, **Live QA** (browser pathways), smoke checklist, and quick links.
 
 Independent from `modules/users`. Accessed only via `/admin/developer` (admin auth).
 
-## Local-only test runner
+## Local-only runners
 
-Running Vitest from the UI requires:
+Running Vitest **or** Live QA from the UI requires:
 
 ```bash
 DEVTOOLS_ENABLED=true
 ```
 
-in `.env.local`. Health / smoke / links work for any admin without that flag.
+in `.env.local`. Health / smoke / links / Live QA catalog work for any admin without that flag; spawning browsers/tests does not.
 
-Vitest runs are blocked when `NODE_ENV === 'production'` (no override).
+Both runners are blocked when `NODE_ENV === 'production'` (no override).
+
+## Live QA
+
+See [`live-qa/README.md`](./live-qa/README.md). Tab: **Live QA** on `/admin/developer`.

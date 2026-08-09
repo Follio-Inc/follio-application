@@ -1,0 +1,37 @@
+{
+  "id": "fresh-grad",
+  "firstName": "Sam",
+  "lastName": "Rivera",
+  "headline": "Software Engineer",
+  "email": "sam.rivera.liveqa@example.com",
+  "phone": "+1 646 555 0199",
+  "location": "Austin, TX",
+  "summary": "Recent CS graduate looking for a first full-time role building user-facing products.",
+  "links": [{ "label": "GitHub", "url": "https://github.com/sam-rivera-example" }],
+  "experience": [
+    {
+      "title": "Software Engineering Intern",
+      "company": "Brightcart",
+      "location": "Remote",
+      "startDate": "2025-05",
+      "endDate": "2025-08",
+      "isCurrent": false,
+      "bullets": ["Shipped checkout bug fixes and wrote Playwright smoke coverage."]
+    }
+  ],
+  "education": [
+    {
+      "school": "UT Austin",
+      "degree": "B.S. Computer Science",
+      "startDate": "2022-08",
+      "endDate": "2026-05"
+    }
+  ],
+  "skills": ["JavaScript", "Python", "SQL"],
+  "projects": [
+    {
+      "name": "Campus Events",
+      "description": "Simple event board for student clubs."
+    }
+  ]
+}

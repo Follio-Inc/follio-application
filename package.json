@@ -25,6 +25,9 @@
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:ui": "vitest --ui",
+    "live-qa": "playwright test --config=_admin-panel/modules/developer/live-qa/playwright.config.ts",
+    "live-qa:install": "playwright install chromium",
+    "live-qa:auth": "node scripts/live-qa-capture-auth.mjs",
     "typecheck": "tsc --noEmit",
     "validate": "npm run typecheck && npm run lint && npm run test:run",
     "prepare": "husky"
@@ -95,6 +98,7 @@
   "devDependencies": {
     "@commitlint/cli": "^18.6.0",
     "@commitlint/config-conventional": "^18.6.0",
+    "@playwright/test": "^1.62.1",
     "@types/jszip": "^3.4.0",
     "@types/node": "^22.9.0",
     "@types/react": "^18.3.12",

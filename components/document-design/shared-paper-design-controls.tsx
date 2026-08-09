@@ -466,7 +466,7 @@ export function SharedPaperDesignControls({
       <DesignSection title="Colors">
         <div className="space-y-2">
           <ColorField
-            label="Heading"
+            label="Name & section titles"
             value={design.headingColor}
             onChange={(headingColor) => onChange({ headingColor })}
           />
@@ -495,7 +495,7 @@ export function SharedPaperDesignControls({
           ) : null}
           {typographyRoles.includes('heading') ? (
             <TypographyRoleRow
-              label="Headings"
+              label="Section headers"
               fontFamily={design.headingFontFamily}
               fontSize={design.headingFontSize}
               textStyle={design.headingStyle}
@@ -508,7 +508,7 @@ export function SharedPaperDesignControls({
           ) : null}
           {typographyRoles.includes('body') ? (
             <TypographyRoleRow
-              label="Body"
+              label="Section content"
               fontFamily={design.fontFamily}
               fontSize={design.fontSize}
               textStyle={design.bodyStyle}

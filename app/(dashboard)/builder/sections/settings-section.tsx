@@ -251,6 +251,8 @@ export function SettingsSection({ profile }: SettingsSectionProps) {
       });
 
       if (response.ok) {
+        const { clearAccountClientState } = await import('@/lib/account/clear-client-state');
+        await clearAccountClientState();
         // Sign out and redirect to home
         await signOut({ redirectUrl: '/' });
       } else {

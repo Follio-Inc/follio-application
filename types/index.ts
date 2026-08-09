@@ -147,8 +147,9 @@ export const RESUME_DESIGN_DEFAULTS: Required<ResumeDesign> = {
   headerAlignment: 'center',
   headerPhotoLayout: 'photo-left',
   photoSize: 80,
-  titleFontSize: 15,
-  contactFontSize: 12,
+  // Hierarchy: name >> subtitle ≥ body > section headers ≥ info line
+  titleFontSize: 14,
+  contactFontSize: 11,
   titleStyle: { bold: false, italic: true, underline: false },
   contactStyle: { bold: false, italic: false, underline: false },
 };

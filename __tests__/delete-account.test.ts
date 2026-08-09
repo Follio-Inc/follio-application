@@ -124,7 +124,7 @@ describe('deleteAccountCompletely', () => {
     deleteMock.mockResolvedValue({});
   });
 
-  it('deletes Clerk first, then database data', async () => {
+  it('deletes database first, then Clerk', async () => {
     const order: string[] = [];
     findUniqueMock.mockResolvedValue({ id: 'user_1' });
     const deleteClerkUser = vi.fn().mockImplementation(async () => {
@@ -137,7 +137,7 @@ describe('deleteAccountCompletely', () => {
 
     const result = await deleteAccountCompletely('clerk_123', deleteClerkUser);
 
-    expect(order).toEqual(['clerk', 'db']);
+    expect(order).toEqual(['db', 'clerk']);
     expect(result).toEqual({
       clerkDeleted: true,
       databaseDeleted: true,
@@ -160,16 +160,14 @@ describe('deleteAccountCompletely', () => {
     });
   });
 
-  it('does not touch the database if Clerk deletion fails', async () => {
+  it('does not delete Clerk if database deletion fails', async () => {
     findUniqueMock.mockResolvedValue({ id: 'user_1' });
-    const deleteClerkUser = vi.fn().mockRejectedValue({
-      status: 503,
-      errors: [{ code: 'unavailable' }],
-    });
+    deleteMock.mockRejectedValue(new Error('fk constraint'));
+    const deleteClerkUser = vi.fn();
 
     await expect(deleteAccountCompletely('clerk_123', deleteClerkUser)).rejects.toMatchObject({
-      code: 'CLERK_DELETE_FAILED',
+      code: 'DATABASE_DELETE_FAILED',
     });
-    expect(deleteMock).not.toHaveBeenCalled();
+    expect(deleteClerkUser).not.toHaveBeenCalled();
   });
 });

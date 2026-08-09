@@ -58,7 +58,7 @@ export function DocumentVisibilityMeta({
 
   return (
     <div className="mt-auto flex items-center gap-2 text-xs text-muted-foreground">
-      <TooltipProvider delayDuration={0}>
+      <TooltipProvider delayDuration={500}>
         <Tooltip>
           <TooltipTrigger asChild>
             <span className="inline-flex shrink-0 cursor-default items-center gap-1 whitespace-nowrap">

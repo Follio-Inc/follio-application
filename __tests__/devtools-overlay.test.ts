@@ -41,6 +41,11 @@ describe('admin-panel developer module', () => {
     expect(new Set(links.map((l) => l.id)).size).toBe(links.length);
   });
 
+  it('keeps Live QA catalog wired through the developer module', async () => {
+    const { LIVE_QA_PATHWAYS } = await import('@/_admin-panel/modules/developer/live-qa');
+    expect(LIVE_QA_PATHWAYS.some((pathway) => pathway.id === 'onboarding.upload')).toBe(true);
+  });
+
   it('never allows suite runs in production, even with the opt-in flag', () => {
     expect(canRunDeveloperSuites({ nodeEnv: 'production', enabledFlag: 'true' })).toBe(false);
     expect(isDevtoolsEnabled({ nodeEnv: 'production', enabledFlag: 'true' })).toBe(false);

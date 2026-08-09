@@ -30,5 +30,10 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules", "_experiments"]
+  "exclude": [
+    "node_modules",
+    "_experiments",
+    "_admin-panel/modules/developer/live-qa/.artifacts",
+    "_admin-panel/modules/developer/live-qa/.auth"
+  ]
 }

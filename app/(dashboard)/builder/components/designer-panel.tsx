@@ -539,11 +539,13 @@ function FontFamilySelect({
   onChange,
   id,
   templateDefault,
+  'aria-describedby': ariaDescribedBy,
 }: {
   value: ResumeFontFamily;
   onChange: (font: ResumeFontFamily) => void;
   id?: string;
   templateDefault: ResumeFontFamily;
+  'aria-describedby'?: string;
 }) {
   const otherFonts = RESUME_FONT_OPTIONS.filter((font) => font !== templateDefault);
 
@@ -551,6 +553,7 @@ function FontFamilySelect({
     <Select value={value} onValueChange={(v) => onChange(v as ResumeFontFamily)}>
       <SelectTrigger
         id={id}
+        aria-describedby={ariaDescribedBy}
         className="h-8 min-w-0 flex-1 rounded-lg border-border/70 text-[12px]"
         style={{ fontFamily: RESUME_FONT_MAP[value] }}
       >
@@ -685,8 +688,20 @@ function TextStyleToggleGroup({
   );
 }
 
+function TypographyGroup({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-2">
+      <p className="px-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+        {title}
+      </p>
+      <div className="space-y-2">{children}</div>
+    </div>
+  );
+}
+
 function TypographyRoleRow({
   label,
+  description,
   fontId,
   role,
   templateId,
@@ -701,6 +716,7 @@ function TypographyRoleRow({
   onStyleChange,
 }: {
   label: string;
+  description?: string;
   fontId: string;
   role: ResumeTypographyRole;
   templateId: ResumeDesign['templateId'];
@@ -711,18 +727,26 @@ function TypographyRoleRow({
   sizeMin: number;
   sizeMax: number;
   sizeStep?: number;
-  style: ResumeTextStyle;
-  onStyleChange: (style: ResumeTextStyle) => void;
+  style?: ResumeTextStyle;
+  onStyleChange?: (style: ResumeTextStyle) => void;
 }) {
   const templateDefault = getTemplateDefaultFont(templateId, role);
+  const descriptionId = description ? `${fontId}-description` : undefined;
 
   return (
     <div className="space-y-2 rounded-xl bg-background p-3">
-      <div className="flex items-center justify-between gap-2">
-        <Label htmlFor={fontId} className="text-[12px] font-medium text-foreground">
-          {label}
-        </Label>
-        <div className="flex items-center gap-1.5">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 space-y-0.5">
+          <Label htmlFor={fontId} className="text-[12px] font-medium text-foreground">
+            {label}
+          </Label>
+          {description ? (
+            <p id={descriptionId} className="text-[11px] leading-snug text-muted-foreground">
+              {description}
+            </p>
+          ) : null}
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
           <FontSizeStepper
             value={size}
             min={sizeMin}
@@ -731,7 +755,9 @@ function TypographyRoleRow({
             onChange={onSizeChange}
             aria-label={`${label} size`}
           />
-          <TextStyleToggleGroup value={style} onChange={onStyleChange} label={label} />
+          {style && onStyleChange ? (
+            <TextStyleToggleGroup value={style} onChange={onStyleChange} label={label} />
+          ) : null}
         </div>
       </div>
       <FontFamilySelect
@@ -739,6 +765,7 @@ function TypographyRoleRow({
         value={font}
         onChange={onFontChange}
         templateDefault={templateDefault}
+        aria-describedby={descriptionId}
       />
     </div>
   );
@@ -1085,7 +1112,7 @@ export function DesignerPanel() {
           <DesignSection title="Colors">
             <div className="space-y-2">
               <ColorField
-                label="Headings"
+                label="Name & section titles"
                 value={design.headingColor}
                 onChange={(headingColor) => updateDesign({ headingColor })}
               />
@@ -1098,85 +1125,95 @@ export function DesignerPanel() {
           </DesignSection>
 
           {/* Typography */}
-          <DesignSection title="Typography">
-            <div className="space-y-2">
-              <TypographyRoleRow
-                label="Name"
-                fontId="design-font-name"
-                role="name"
-                templateId={design.templateId}
-                font={design.nameFontFamily}
-                onFontChange={(nameFontFamily) => updateDesign({ nameFontFamily })}
-                size={design.nameFontSize}
-                onSizeChange={(nameFontSize) => updateDesign({ nameFontSize })}
-                sizeMin={16}
-                sizeMax={48}
-                style={design.nameStyle}
-                onStyleChange={(nameStyle) => updateDesign({ nameStyle })}
-              />
+          <DesignSection
+            title="Typography"
+            description="One font per role. Header and section roles can differ; everything inside sections shares Section content."
+          >
+            <div className="space-y-4">
+              <TypographyGroup title="Header">
+                <TypographyRoleRow
+                  label="Name"
+                  description="Your name at the top of the resume"
+                  fontId="design-font-name"
+                  role="name"
+                  templateId={design.templateId}
+                  font={design.nameFontFamily}
+                  onFontChange={(nameFontFamily) => updateDesign({ nameFontFamily })}
+                  size={design.nameFontSize}
+                  onSizeChange={(nameFontSize) => updateDesign({ nameFontSize })}
+                  sizeMin={16}
+                  sizeMax={48}
+                  style={design.nameStyle}
+                  onStyleChange={(nameStyle) => updateDesign({ nameStyle })}
+                />
 
-              <TypographyRoleRow
-                label="Title"
-                fontId="design-font-title"
-                role="title"
-                templateId={design.templateId}
-                font={design.titleFontFamily}
-                onFontChange={(titleFontFamily) => updateDesign({ titleFontFamily })}
-                size={design.titleFontSize}
-                onSizeChange={(titleFontSize) => updateDesign({ titleFontSize })}
-                sizeMin={10}
-                sizeMax={24}
-                style={design.titleStyle}
-                onStyleChange={(titleStyle) => updateDesign({ titleStyle })}
-              />
+                <TypographyRoleRow
+                  label="Subtitle"
+                  description="Job title or headline under your name"
+                  fontId="design-font-title"
+                  role="title"
+                  templateId={design.templateId}
+                  font={design.titleFontFamily}
+                  onFontChange={(titleFontFamily) => updateDesign({ titleFontFamily })}
+                  size={design.titleFontSize}
+                  onSizeChange={(titleFontSize) => updateDesign({ titleFontSize })}
+                  sizeMin={10}
+                  sizeMax={24}
+                  style={design.titleStyle}
+                  onStyleChange={(titleStyle) => updateDesign({ titleStyle })}
+                />
 
-              <TypographyRoleRow
-                label="Headings"
-                fontId="design-font-heading"
-                role="heading"
-                templateId={design.templateId}
-                font={design.headingFontFamily}
-                onFontChange={(headingFontFamily) => updateDesign({ headingFontFamily })}
-                size={design.headingFontSize}
-                onSizeChange={(headingFontSize) => updateDesign({ headingFontSize })}
-                sizeMin={9}
-                sizeMax={18}
-                sizeStep={0.5}
-                style={design.headingStyle}
-                onStyleChange={(headingStyle) => updateDesign({ headingStyle })}
-              />
+                <TypographyRoleRow
+                  label="Info line"
+                  description="Email, phone, location, and links under your name"
+                  fontId="design-font-contact"
+                  role="contact"
+                  templateId={design.templateId}
+                  font={design.contactFontFamily}
+                  onFontChange={(contactFontFamily) => updateDesign({ contactFontFamily })}
+                  size={design.contactFontSize}
+                  onSizeChange={(contactFontSize) => updateDesign({ contactFontSize })}
+                  sizeMin={9}
+                  sizeMax={18}
+                  sizeStep={0.5}
+                  style={design.contactStyle}
+                  onStyleChange={(contactStyle) => updateDesign({ contactStyle })}
+                />
+              </TypographyGroup>
 
-              <TypographyRoleRow
-                label="Contact"
-                fontId="design-font-contact"
-                role="contact"
-                templateId={design.templateId}
-                font={design.contactFontFamily}
-                onFontChange={(contactFontFamily) => updateDesign({ contactFontFamily })}
-                size={design.contactFontSize}
-                onSizeChange={(contactFontSize) => updateDesign({ contactFontSize })}
-                sizeMin={9}
-                sizeMax={18}
-                sizeStep={0.5}
-                style={design.contactStyle}
-                onStyleChange={(contactStyle) => updateDesign({ contactStyle })}
-              />
+              <TypographyGroup title="Sections">
+                <TypographyRoleRow
+                  label="Section headers"
+                  description="Labels like Experience, Education, and Skills"
+                  fontId="design-font-heading"
+                  role="heading"
+                  templateId={design.templateId}
+                  font={design.headingFontFamily}
+                  onFontChange={(headingFontFamily) => updateDesign({ headingFontFamily })}
+                  size={design.headingFontSize}
+                  onSizeChange={(headingFontSize) => updateDesign({ headingFontSize })}
+                  sizeMin={9}
+                  sizeMax={18}
+                  sizeStep={0.5}
+                  style={design.headingStyle}
+                  onStyleChange={(headingStyle) => updateDesign({ headingStyle })}
+                />
 
-              <TypographyRoleRow
-                label="Body"
-                fontId="design-font-body"
-                role="body"
-                templateId={design.templateId}
-                font={design.fontFamily}
-                onFontChange={(fontFamily) => updateDesign({ fontFamily })}
-                size={design.fontSize}
-                onSizeChange={(fontSize) => updateDesign({ fontSize })}
-                sizeMin={10}
-                sizeMax={16}
-                sizeStep={0.5}
-                style={design.bodyStyle}
-                onStyleChange={(bodyStyle) => updateDesign({ bodyStyle })}
-              />
+                <TypographyRoleRow
+                  label="Section content"
+                  description="Roles, companies, bullets, dates, and other details"
+                  fontId="design-font-body"
+                  role="body"
+                  templateId={design.templateId}
+                  font={design.fontFamily}
+                  onFontChange={(fontFamily) => updateDesign({ fontFamily })}
+                  size={design.fontSize}
+                  onSizeChange={(fontSize) => updateDesign({ fontSize })}
+                  sizeMin={10}
+                  sizeMax={16}
+                  sizeStep={0.5}
+                />
+              </TypographyGroup>
             </div>
           </DesignSection>
 

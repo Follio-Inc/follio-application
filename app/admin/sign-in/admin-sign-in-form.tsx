@@ -18,6 +18,8 @@ export function AdminSignInForm() {
 
       {/* Clerk SignIn — handles all verification flows */}
       <SignIn
+        path="/admin/sign-in"
+        routing="path"
         appearance={{
           baseTheme: dark,
           elements: {

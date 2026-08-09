@@ -1,15 +1,16 @@
 /**
  * Resolve the local User row for an authenticated Clerk session.
  *
- * Handles the common case where a previous Clerk account was deleted (or
- * deletion left the DB behind) and the same email signed up again — without
- * letting a live Clerk account be taken over by another session.
+ * When a previous Clerk account was deleted (or deletion left the DB behind)
+ * and the same email signs up again, any orphaned local User is purged so the
+ * new account starts empty — never reattached to leftover resumes/summary.
  */
 
 import { isClerkAPIResponseError } from '@clerk/nextjs/errors';
 import { clerkClient } from '@clerk/nextjs/server';
 import type { MainPurpose, Profile, User } from '@prisma/client';
 
+import { deleteLocalAccountData } from '@/lib/account/delete-account';
 import { db } from '@/lib/db';
 
 export class EmailConflictError extends Error {
@@ -45,8 +46,8 @@ function isClerkUserNotFound(error: unknown): boolean {
 }
 
 /**
- * Returns true when Clerk has no user for this id (safe to reclaim the DB row).
- * Propagates unexpected Clerk errors so we do not reclaim on outages.
+ * Returns true when Clerk has no user for this id (safe to purge the DB row).
+ * Propagates unexpected Clerk errors so we do not purge on outages.
  */
 export async function isClerkUserMissing(clerkId: string): Promise<boolean> {
   try {
@@ -60,10 +61,12 @@ export async function isClerkUserMissing(clerkId: string): Promise<boolean> {
 }
 
 /**
- * Find the DB user for this Clerk session, creating or reclaiming as needed.
+ * Find the DB user for this Clerk session, creating a clean row as needed.
  *
- * Reclaim only happens when another row owns the email but its `clerkId` no
- * longer exists in Clerk (orphan from a failed/partial account deletion).
+ * If another row owns the email but its `clerkId` no longer exists in Clerk
+ * (orphan from a failed/partial account deletion), that row is hard-deleted
+ * (cascading all profiles/summary) and a fresh User is created for the new
+ * Clerk identity. Live Clerk accounts that own the email still conflict.
  */
 export async function getOrCreateUserForClerk(
   options: GetOrCreateUserOptions
@@ -105,21 +108,17 @@ export async function getOrCreateUserForClerk(
     }
 
     console.warn(
-      '[getOrCreateUserForClerk] Reclaiming orphaned user',
+      '[getOrCreateUserForClerk] Purging orphaned user',
       existingByEmail.id,
       'for email',
       email,
       'old clerkId',
       existingByEmail.clerkId,
-      '→',
+      '→ creating clean user for',
       clerkId
     );
 
-    return db.user.update({
-      where: { id: existingByEmail.id },
-      data: { clerkId },
-      include: { profile: true },
-    });
+    await deleteLocalAccountData(existingByEmail.id);
   }
 
   return db.user.create({

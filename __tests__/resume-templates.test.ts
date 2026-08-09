@@ -67,7 +67,10 @@ describe('resume templates registry', () => {
     expect(restored.headingStyle.bold).toBe(true);
     expect(restored.bodyStyle.bold).toBe(false);
     expect(restored.nameFontSize).toBe(28);
-    expect(restored.titleFontSize).toBe(15);
+    expect(restored.titleFontSize).toBe(14);
+    expect(restored.headingFontSize).toBe(12);
+    expect(restored.contactFontSize).toBe(11);
+    expect(restored.fontSize).toBe(13);
   });
 
   it('restores atelier defaults without switching template to classic', () => {
@@ -77,8 +80,10 @@ describe('resume templates registry', () => {
     expect(restored.nameFontFamily).toBe('great-vibes');
     expect(restored.titleFontFamily).toBe('lato');
     expect(restored.headingFontFamily).toBe('lato');
-    expect(restored.titleFontSize).toBe(11);
-    expect(restored.headingFontSize).toBe(12);
+    expect(restored.titleFontSize).toBe(13);
+    expect(restored.headingFontSize).toBe(11);
+    expect(restored.contactFontSize).toBe(11);
+    expect(restored.fontSize).toBe(13);
     expect(restored.headingColor).toBe('#C25B42');
     expect(restored.accentColor).toBe('#C25B42');
     expect(restored.headerAlignment).toBe('left');
@@ -111,8 +116,9 @@ describe('resume templates registry', () => {
     expect(restored.photoSize).toBe(64);
     expect(restored.headingColor).toBe('#1a1a1a');
     expect(restored.accentColor).toBe('#7a9aa5');
-    expect(restored.titleFontSize).toBe(13);
-    expect(restored.headingFontSize).toBe(13);
+    expect(restored.titleFontSize).toBe(14);
+    expect(restored.headingFontSize).toBe(12);
+    expect(restored.contactFontSize).toBe(11);
   });
 
   it('restores lumen defaults without switching template to classic', () => {
@@ -127,9 +133,10 @@ describe('resume templates registry', () => {
     expect(restored.photoSize).toBe(80);
     expect(restored.headingColor).toBe('#171717');
     expect(restored.accentColor).toBe('#b0aaa3');
-    expect(restored.nameFontSize).toBe(30);
-    expect(restored.titleFontSize).toBe(13);
+    expect(restored.nameFontSize).toBe(28);
+    expect(restored.titleFontSize).toBe(14);
     expect(restored.headingFontSize).toBe(11);
+    expect(restored.contactFontSize).toBe(11);
     expect(restored.titleStyle.italic).toBe(false);
   });
 
