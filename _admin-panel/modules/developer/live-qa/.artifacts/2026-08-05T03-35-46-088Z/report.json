@@ -1,0 +1,149 @@
+{
+  "config": {
+    "argv": [
+      "/Users/shobhitsrivastava/.local/node-v20.20.2-darwin-arm64/bin/node",
+      "/Users/shobhitsrivastava/Documents/Follio/GitHub/follio-application/node_modules/@playwright/test/cli.js",
+      "test",
+      "--config=/Users/shobhitsrivastava/Documents/Follio/GitHub/follio-application/_admin-panel/modules/developer/live-qa/playwright.config.ts",
+      "/Users/shobhitsrivastava/Documents/Follio/GitHub/follio-application/_admin-panel/modules/developer/live-qa/pathways/onboarding-upload.spec.ts"
+    ],
+    "configFile": "/Users/shobhitsrivastava/Documents/Follio/GitHub/follio-application/_admin-panel/modules/developer/live-qa/playwright.config.ts",
+    "rootDir": "/Users/shobhitsrivastava/Documents/Follio/GitHub/follio-application/_admin-panel/modules/developer/live-qa/pathways",
+    "failOnFlakyTests": false,
+    "forbidOnly": true,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/Users/shobhitsrivastava/Documents/Follio/GitHub/follio-application/_admin-panel/modules/developer/live-qa/.artifacts/2026-08-05T03-35-46-088Z/test-output",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/Users/shobhitsrivastava/Documents/Follio/GitHub/follio-application/_admin-panel/modules/developer/live-qa/pathways",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 180000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "/Users/shobhitsrivastava/Documents/Follio/GitHub/follio-application/_admin-panel/modules/developer/live-qa/.artifacts/2026-08-05T03-35-46-088Z/report.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.62.1",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "onboarding-upload.spec.ts",
+      "file": "onboarding-upload.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "onboarding.upload",
+          "file": "onboarding-upload.spec.ts",
+          "line": 3,
+          "column": 6,
+          "specs": [
+            {
+              "title": "upload resume PDF reaches builder",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 180000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 1,
+                      "error": {
+                        "message": "Error: browserType.launch: Executable doesn't exist at /Users/shobhitsrivastava/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell\n╔════════════════════════════════════════════════════════════╗\n║ Looks like Playwright was just installed or updated.       ║\n║ Please run the following command to download new browsers: ║\n║                                                            ║\n║     npx playwright install                                 ║\n║                                                            ║\n║ <3 Playwright Team                                         ║\n╚════════════════════════════════════════════════════════════╝",
+                        "stack": "Error: browserType.launch: Executable doesn't exist at /Users/shobhitsrivastava/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell\n╔════════════════════════════════════════════════════════════╗\n║ Looks like Playwright was just installed or updated.       ║\n║ Please run the following command to download new browsers: ║\n║                                                            ║\n║     npx playwright install                                 ║\n║                                                            ║\n║ <3 Playwright Team                                         ║\n╚════════════════════════════════════════════════════════════╝"
+                      },
+                      "errors": [
+                        {
+                          "message": "Error: browserType.launch: Executable doesn't exist at /Users/shobhitsrivastava/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell\n╔════════════════════════════════════════════════════════════╗\n║ Looks like Playwright was just installed or updated.       ║\n║ Please run the following command to download new browsers: ║\n║                                                            ║\n║     npx playwright install                                 ║\n║                                                            ║\n║ <3 Playwright Team                                         ║\n╚════════════════════════════════════════════════════════════╝"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-08-05T03:35:46.639Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/Users/shobhitsrivastava/Documents/Follio/GitHub/follio-application/_admin-panel/modules/developer/live-qa/.artifacts/2026-08-05T03-35-46-088Z/test-output/onboarding-upload-onboardi-f2a5f--resume-PDF-reaches-builder-chromium/error-context.md"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/shobhitsrivastava/Documents/Follio/GitHub/follio-application/_admin-panel/modules/developer/live-qa/.artifacts/2026-08-05T03-35-46-088Z/test-output/onboarding-upload-onboardi-f2a5f--resume-PDF-reaches-builder-chromium/trace.zip"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "18339ed3e8def110fae6-9dbad4355c3251d75fc1",
+              "file": "onboarding-upload.spec.ts",
+              "line": 4,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-08-05T03:35:46.419Z",
+    "duration": 246.78100000000006,
+    "expected": 0,
+    "skipped": 0,
+    "unexpected": 1,
+    "flaky": 0
+  }
+}

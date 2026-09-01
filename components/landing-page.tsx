@@ -1009,7 +1009,7 @@ function Hero() {
         <p className="text-eyebrow">Own your first impression</p>
 
         <h1 className="text-display mt-4 max-w-3xl text-balance text-[2.4rem] text-foreground sm:mt-5 sm:text-[3.5rem] lg:text-[4rem]">
-          Your Follio, in one link.
+          Your shareable professional identity — much more than a PDF resume
         </h1>
 
         <p className="mt-5 max-w-2xl text-pretty text-[15px] leading-7 text-muted-foreground sm:mt-6 sm:text-lg sm:leading-8">
