@@ -23,6 +23,12 @@ export {
   listPersonaFixtures,
   saveUploadedResume,
 } from './live-qa';
+export {
+  RESUME_READER_MAX_BYTES,
+  buildResumeReaderCatalog,
+  runResumeReader,
+  summarizeResumeRead,
+} from './ai';
 export type {
   HealthCheck,
   HealthReport,
@@ -34,3 +40,9 @@ export type {
   QuickLink,
 } from './types';
 export type { LiveQaCatalog, LiveQaPathway, LiveQaRunResult, LiveQaRunRequest } from './live-qa';
+export type {
+  ResumeReaderCatalog,
+  ResumeReaderFixture,
+  ResumeReaderRunResult,
+  ResumeReaderSummary,
+} from './ai';

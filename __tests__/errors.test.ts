@@ -210,6 +210,19 @@ describe('Error Utilities', () => {
       expect(response.status).toBe(404);
     });
 
+    it('should handle Prisma connection pool timeout as 503', async () => {
+      const error = {
+        code: 'P2024',
+        message: 'Timed out fetching a new connection from the connection pool',
+      };
+      const response = handleApiError(error);
+
+      expect(response.status).toBe(503);
+
+      const body = await response.json();
+      expect(body.error.code).toBe(ErrorCode.SERVICE_UNAVAILABLE);
+    });
+
     it('should handle generic Error', async () => {
       const error = new Error('Something went wrong');
       const response = handleApiError(error);

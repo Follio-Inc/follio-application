@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type Ref } from 'react';
 
 import { DownloadDialog } from '@/app/(dashboard)/builder/components/download-dialog';
 import {
@@ -56,8 +56,7 @@ import {
   NewResumeMenuButton,
   NewResumeTemplatePickerHost,
   NewResumeUploadHost,
-  ResumeListDivider,
-  sortResumesWithPublicFirst,
+  sortResumesWithPortfolioFirst,
   useNewResumeActions,
 } from '../resumes/new-resume-options';
 import { ResumeThumbnail } from '../resumes/resume-thumbnail';
@@ -89,6 +88,8 @@ interface DashboardResumesSectionProps {
    * (e.g. dashboard documents tabs). Actions toolbar is still shown.
    */
   embedded?: boolean;
+  /** Marks the resume the Follio is attached to, for the dashboard rail. */
+  attachedResumeRef?: Ref<HTMLDivElement>;
 }
 
 // ─── Constants ────────────────────────────────────────────────────
@@ -188,6 +189,7 @@ export function DashboardResumesSection({
   initialActiveProfileId,
   initialPrimaryProfileId,
   embedded = false,
+  attachedResumeRef,
 }: DashboardResumesSectionProps) {
   const router = useRouter();
 
@@ -214,16 +216,16 @@ export function DashboardResumesSection({
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [sharingResume, setSharingResume] = useState<DashboardResumeItem | null>(null);
 
-  const sortedResumes = useMemo(() => sortResumesWithPublicFirst(resumes), [resumes]);
+  const sortedResumes = useMemo(
+    () => sortResumesWithPortfolioFirst(resumes, primaryProfileId),
+    [resumes, primaryProfileId]
+  );
   const previewResumes = useMemo(
     () => sortedResumes.slice(0, DASHBOARD_RESUME_PREVIEW_LIMIT),
     [sortedResumes]
   );
   const hasMoreResumes = sortedResumes.length > DASHBOARD_RESUME_PREVIEW_LIMIT;
   const remainingResumeCount = sortedResumes.length - previewResumes.length;
-
-  const showPublicDivider =
-    previewResumes.length > 1 && previewResumes[0]?.resumeVisibility === 'PUBLIC';
 
   // ─── Data refresh ─────────────────────────────────────────────
 
@@ -405,7 +407,7 @@ export function DashboardResumesSection({
     <div className="space-y-4">
       <DashboardDocumentsToolbar
         embedded={embedded}
-        title="Resumes"
+        title="Resume"
         count={resumes.length}
         secondaryActions={
           hasMoreResumes ? (
@@ -463,24 +465,25 @@ export function DashboardResumesSection({
             const portfolioEnabled = isPortfolioEnabled();
 
             return (
-              <Fragment key={resume.id}>
-                {index === 1 && showPublicDivider && <ResumeListDivider />}
+              <div key={resume.id} className="shrink-0">
                 <DashboardDocumentCard
                   accent={isPublic ? 'public' : 'default'}
                   thumbnail={
-                    <DashboardDocumentThumbnailButton
-                      label={`Open ${resume.resumeTitle} in builder`}
-                      disabled={isMutating}
-                      onOpen={() => void handleOpenInBuilder(resume.id)}
-                    >
-                      <ResumeThumbnail
-                        profileId={resume.id}
-                        showPublicBadge={isPublic}
-                        showPortfolioBadge={
-                          portfolioEnabled && resume.id === primaryProfileId && !isPublic
-                        }
-                      />
-                    </DashboardDocumentThumbnailButton>
+                    <div ref={index === 0 ? attachedResumeRef : undefined}>
+                      <DashboardDocumentThumbnailButton
+                        label={`Open ${resume.resumeTitle} in builder`}
+                        disabled={isMutating}
+                        onOpen={() => void handleOpenInBuilder(resume.id)}
+                      >
+                        <ResumeThumbnail
+                          profileId={resume.id}
+                          showPublicBadge={isPublic}
+                          showPortfolioBadge={
+                            portfolioEnabled && resume.id === primaryProfileId && !isPublic
+                          }
+                        />
+                      </DashboardDocumentThumbnailButton>
+                    </div>
                   }
                   title={
                     renamingResumeId === resume.id ? (
@@ -596,7 +599,7 @@ export function DashboardResumesSection({
                     </>
                   }
                 />
-              </Fragment>
+              </div>
             );
           })}
 

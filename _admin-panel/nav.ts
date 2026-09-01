@@ -31,7 +31,7 @@ export const ADMIN_PANEL_NAV: AdminPanelNavItem[] = [
     id: 'developer',
     href: '/admin/developer',
     label: 'Developer',
-    description: 'Health, suites, smoke checks',
+    description: 'Health, suites, Live QA, resume reader, smoke',
   },
   {
     id: 'users',

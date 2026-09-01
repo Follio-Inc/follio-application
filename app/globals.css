@@ -2014,6 +2014,47 @@
     color: #d1d5db;
   }
 
+  /* Recruiter lens — sparse sky-blue evidence tint. Print is unmarked. */
+  mark.resume-lens-mark {
+    background-color: rgb(186 230 253 / 0.4);
+    color: inherit;
+    font: inherit;
+    padding: 0;
+    border-radius: 0.12em;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    cursor: help;
+  }
+
+  mark.resume-lens-mark:hover,
+  mark.resume-lens-mark:focus-visible {
+    background-color: rgb(125 211 252 / 0.55);
+  }
+
+  mark.resume-lens-mark:focus {
+    outline: none;
+  }
+
+  mark.resume-lens-mark:focus-visible {
+    outline: 2px solid rgb(56 189 248 / 0.9);
+    outline-offset: 1px;
+  }
+
+  .resume-paper-wrapper[data-resume-theme='dark'] mark.resume-lens-mark {
+    background-color: rgb(125 211 252 / 0.28);
+  }
+
+  .resume-paper-wrapper[data-resume-theme='dark'] mark.resume-lens-mark:hover,
+  .resume-paper-wrapper[data-resume-theme='dark'] mark.resume-lens-mark:focus-visible {
+    background-color: rgb(125 211 252 / 0.42);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    mark.resume-lens-mark {
+      transition: none;
+    }
+  }
+
   @media (max-width: 640px) {
     .resume-atelier-header {
       flex-direction: column;
@@ -2050,6 +2091,7 @@
   body > *:not(.resume-paper):not(.resume-paper-wrapper),
   .resume-actions,
   .resume-justify-button,
+  .resume-lens-ui,
   header,
   footer,
   nav {
@@ -2065,6 +2107,12 @@
     border-radius: 0 !important;
     background: white !important;
     color: black !important;
+  }
+
+  mark.resume-lens-mark {
+    background: transparent !important;
+    color: inherit !important;
+    box-shadow: none !important;
   }
 
   /* Paged on-screen preview → print the full continuous source once */

@@ -6,18 +6,35 @@ import type { SmokeItem } from './types';
  */
 export const SMOKE_ITEMS: SmokeItem[] = [
   {
-    id: 'dashboard-resumes',
-    area: 'Dashboard',
-    title: 'Resumes section loads',
-    href: '/dashboard',
-    verify: 'Resume cards render; create / open / visibility meta look correct.',
+    id: 'ai-resume-reader',
+    area: 'AI',
+    title: 'Resume reader (dev tool)',
+    href: '/admin/developer?tab=resume-reader',
+    verify:
+      'Open Resume reader, run Alex Morgan or upload a PDF. Name / experience / skills look right. savedToProfile stays false.',
   },
   {
-    id: 'dashboard-cover-letters',
+    id: 'dashboard-follio',
     area: 'Dashboard',
-    title: 'Cover letters section',
+    title: 'Follio home',
     href: '/dashboard',
-    verify: 'Cover letter scroller appears; empty state and create entry work.',
+    verify:
+      'Follio snap is letter-ratio like resume cards, 1.5× size, left-aligned. A hairline joins the Follio to the attached resume. Name, link, and Edit / Share / Open in one compact row.',
+  },
+  {
+    id: 'dashboard-resumes',
+    area: 'Dashboard',
+    title: 'Resume section loads',
+    href: '/dashboard',
+    verify: 'Resume cards render below the Follio; create / open / visibility meta look correct.',
+  },
+  {
+    id: 'public-follio',
+    area: 'Public',
+    title: 'Public Follio',
+    href: '/dashboard',
+    verify:
+      'Open the copied Follio link without auth. Card shows name, connect actions, Resume Open/Download, and Work when those surfaces are public.',
   },
   {
     id: 'cover-letter-builder',
@@ -37,7 +54,7 @@ export const SMOKE_ITEMS: SmokeItem[] = [
     id: 'cover-letter-visibility',
     area: 'Cover letter',
     title: 'Share / visibility',
-    href: '/dashboard',
+    href: '/cover-letter-builder',
     verify: 'Private vs unlisted share dialog works; /cl/[key] opens when unlisted.',
   },
   {

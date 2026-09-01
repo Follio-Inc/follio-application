@@ -2,7 +2,7 @@ import Link from 'next/link';
 
 export const metadata = {
   title: 'Privacy Policy - Follio',
-  description: 'Privacy policy for Follio - Your professional identity platform',
+  description: 'Privacy policy for Follio',
 };
 
 export default function PrivacyPage() {

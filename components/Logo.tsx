@@ -30,8 +30,9 @@ const fullSizeMap = {
 export function Logo({ href, size = 'md', showText = true, className = '' }: LogoProps) {
   const isFullLogo = showText;
   const sizeEntry = isFullLogo ? fullSizeMap[size] : iconSizeMap[size];
-  const src = isFullLogo ? '/logo/follio-logo-full.png' : '/logo/follio-icon.png';
-  const alt = isFullLogo ? 'Follio' : 'Follio Icon';
+  // Short mark = geometric "F" (`follio-mark.png`). `follio-icon.png` is kept as an alias.
+  const src = isFullLogo ? '/logo/follio-logo-full.png' : '/logo/follio-mark.png';
+  const alt = isFullLogo ? 'Follio' : 'Follio';
   const heightClass = isFullLogo ? (sizeEntry as (typeof fullSizeMap)['md']).className : '';
 
   const content = (

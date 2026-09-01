@@ -10,33 +10,25 @@
 
 import { Prisma, PrismaClient } from '@prisma/client';
 
+import { buildDatasourceUrl } from '@/lib/prisma-connection';
+
 const LOG_LEVELS =
   process.env.NODE_ENV === 'development' ? (['error', 'warn'] as const) : (['error'] as const);
-
-/**
- * Connection pool URL parameters for resilience against closed connections.
- * - connection_limit: Max connections in the pool (keep low for dev)
- * - pool_timeout: Seconds to wait for a free connection before erroring
- * - connect_timeout: Seconds to wait when establishing a new connection
- */
-function buildDatasourceUrl(): string {
-  const baseUrl = process.env.DATABASE_URL ?? '';
-  const separator = baseUrl.includes('?') ? '&' : '?';
-  return `${baseUrl}${separator}connection_limit=5&pool_timeout=10&connect_timeout=10`;
-}
 
 function createPrismaClient(): PrismaClient {
   return new PrismaClient({
     log: [...LOG_LEVELS],
-    datasourceUrl: buildDatasourceUrl(),
+    datasourceUrl: buildDatasourceUrl(process.env.DATABASE_URL ?? ''),
   });
 }
 
 /**
- * Bump when Prisma models gain fields that a long-lived `globalThis` client would miss.
+ * Bump when Prisma models gain fields that a long-lived `globalThis` client would miss,
+ * or when connection-pool defaults change and the singleton must be recreated.
  * CoverLetter.visibility / unlistedKey → generation 2.
+ * Pool defaults (limit/timeout, no duplicate URL params) → generation 3.
  */
-const PRISMA_CLIENT_GENERATION = 2;
+const PRISMA_CLIENT_GENERATION = 3;
 
 function schemaFieldFingerprint(): string {
   const modelNames = ['WorkExperience', 'CoverLetter'] as const;

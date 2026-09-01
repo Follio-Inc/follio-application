@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Follio</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header class="header">
+      <div class="brand">
+        <img src="icons/icon32.png" width="20" height="20" alt="" />
+        <span>Follio</span>
+      </div>
+      <button type="button" id="btn-refresh" class="ghost" title="Refresh">Refresh</button>
+    </header>
+
+    <section id="auth-gate" class="panel hidden">
+      <p class="lede">
+        Sign in to Follio in this browser to open your resume library and score matches.
+      </p>
+      <button type="button" id="btn-signin" class="primary">Sign in to Follio</button>
+    </section>
+
+    <section id="status" class="status" role="status" aria-live="polite"></section>
+
+    <section id="match-panel" class="panel">
+      <div class="row between">
+        <h2>Match this page</h2>
+        <button type="button" id="btn-match" class="primary">Score resumes</button>
+      </div>
+      <p id="jd-meta" class="muted"></p>
+      <div id="match-results" class="list"></div>
+    </section>
+
+    <section id="library-panel" class="panel">
+      <div class="row between">
+        <h2>Your resumes</h2>
+        <a id="open-follio" class="link" href="#" target="_blank" rel="noreferrer">Open Follio</a>
+      </div>
+      <div id="resume-list" class="list"></div>
+    </section>
+
+    <footer class="footer">
+      <a href="options.html" target="_blank">Settings</a>
+    </footer>
+
+    <script src="popup.js" type="module"></script>
+  </body>
+</html>

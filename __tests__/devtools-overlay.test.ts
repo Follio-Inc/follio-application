@@ -46,6 +46,13 @@ describe('admin-panel developer module', () => {
     expect(LIVE_QA_PATHWAYS.some((pathway) => pathway.id === 'onboarding.upload')).toBe(true);
   });
 
+  it('exposes resume reader catalog from the developer module', async () => {
+    const { buildResumeReaderCatalog } = await import('@/_admin-panel/modules/developer/ai');
+    const catalog = buildResumeReaderCatalog();
+    expect(catalog.defaults.saveToProfile).toBe(false);
+    expect(catalog.fixtures.some((item) => item.id === 'alex-morgan')).toBe(true);
+  });
+
   it('never allows suite runs in production, even with the opt-in flag', () => {
     expect(canRunDeveloperSuites({ nodeEnv: 'production', enabledFlag: 'true' })).toBe(false);
     expect(isDevtoolsEnabled({ nodeEnv: 'production', enabledFlag: 'true' })).toBe(false);
@@ -56,7 +63,7 @@ describe('admin-panel developer module', () => {
 
   it('requires DEVTOOLS_ENABLED=true for local suite runs (except test)', () => {
     expect(canRunDeveloperSuites({ nodeEnv: 'development', enabledFlag: 'true' })).toBe(true);
-    expect(canRunDeveloperSuites({ nodeEnv: 'development', enabledFlag: undefined })).toBe(false);
+    expect(canRunDeveloperSuites({ nodeEnv: 'development', enabledFlag: '' })).toBe(false);
     expect(canRunDeveloperSuites({ nodeEnv: 'test', enabledFlag: undefined })).toBe(true);
     expect(() =>
       assertDevtoolsEnabled({ nodeEnv: 'development', enabledFlag: 'true' })

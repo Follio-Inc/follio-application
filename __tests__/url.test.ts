@@ -83,10 +83,24 @@ describe('URL Helpers', () => {
 
   // ─── Internal Navigation Paths ─────────────────────────────
 
+  describe('getFollioPath', () => {
+    it('returns the Follio path', async () => {
+      const { getFollioPath } = await importUrl();
+      expect(getFollioPath('alice')).toBe('/u/alice');
+    });
+  });
+
+  describe('getFollioPreviewPath', () => {
+    it('returns the chrome-stripped Follio embed path', async () => {
+      const { getFollioPreviewPath } = await importUrl();
+      expect(getFollioPreviewPath('alice')).toBe('/u/alice?preview=true');
+    });
+  });
+
   describe('getPortfolioPath', () => {
-    it('returns path-based route', async () => {
+    it('returns the work path', async () => {
       const { getPortfolioPath } = await importUrl();
-      expect(getPortfolioPath('alice')).toBe('/u/alice');
+      expect(getPortfolioPath('alice')).toBe('/u/alice/work');
     });
   });
 
@@ -113,19 +127,26 @@ describe('URL Helpers', () => {
       vi.stubEnv('NODE_ENV', 'development');
     });
 
-    it('getPortfolioUrl returns path-based URL', async () => {
+    it('getFollioUrl returns path-based Follio URL', async () => {
+      const { getFollioUrl } = await importUrl();
+      expect(getFollioUrl('alice')).toBe('http://localhost:3000/u/alice');
+    });
+
+    it('getPortfolioUrl returns path-based work URL', async () => {
       const { getPortfolioUrl } = await importUrl();
-      expect(getPortfolioUrl('alice')).toBe('http://localhost:3000/u/alice');
+      expect(getPortfolioUrl('alice')).toBe('http://localhost:3000/u/alice/work');
     });
 
     it('getPortfolioUrl appends unlisted key', async () => {
       const { getPortfolioUrl } = await importUrl();
-      expect(getPortfolioUrl('alice', 'abc-123')).toBe('http://localhost:3000/u/alice?key=abc-123');
+      expect(getPortfolioUrl('alice', 'abc-123')).toBe(
+        'http://localhost:3000/u/alice/work?key=abc-123'
+      );
     });
 
     it('getPortfolioUrl skips null unlisted key', async () => {
       const { getPortfolioUrl } = await importUrl();
-      expect(getPortfolioUrl('alice', null)).toBe('http://localhost:3000/u/alice');
+      expect(getPortfolioUrl('alice', null)).toBe('http://localhost:3000/u/alice/work');
     });
 
     it('getResumeUrl returns vanity apex path for public resumes', async () => {
@@ -164,14 +185,19 @@ describe('URL Helpers', () => {
       delete process.env.NEXT_PUBLIC_ROOT_DOMAIN; // use default follio.me
     });
 
-    it('getPortfolioUrl returns subdomain URL', async () => {
+    it('getFollioUrl returns subdomain Follio URL', async () => {
+      const { getFollioUrl } = await importUrl();
+      expect(getFollioUrl('alice')).toBe('https://alice.follio.me');
+    });
+
+    it('getPortfolioUrl returns subdomain work URL', async () => {
       const { getPortfolioUrl } = await importUrl();
-      expect(getPortfolioUrl('alice')).toBe('https://alice.follio.me');
+      expect(getPortfolioUrl('alice')).toBe('https://alice.follio.me/work');
     });
 
     it('getPortfolioUrl with unlisted key', async () => {
       const { getPortfolioUrl } = await importUrl();
-      expect(getPortfolioUrl('alice', 'secret')).toBe('https://alice.follio.me?key=secret');
+      expect(getPortfolioUrl('alice', 'secret')).toBe('https://alice.follio.me/work?key=secret');
     });
 
     it('getResumeUrl returns apex vanity URL (not subdomain)', async () => {
@@ -319,7 +345,7 @@ describe('URL Helpers', () => {
       process.env.VERCEL_URL = 'my-deploy.vercel.app';
       process.env.NEXT_PUBLIC_SUBDOMAIN_ENABLED = 'false';
       const { getPortfolioUrl } = await importUrl();
-      expect(getPortfolioUrl('test')).toBe('https://my-deploy.vercel.app/u/test');
+      expect(getPortfolioUrl('test')).toBe('https://my-deploy.vercel.app/u/test/work');
     });
 
     it('falls back to localhost:3000 when no URL env vars set', async () => {
@@ -327,7 +353,7 @@ describe('URL Helpers', () => {
       delete process.env.VERCEL_URL;
       process.env.NEXT_PUBLIC_SUBDOMAIN_ENABLED = 'false';
       const { getPortfolioUrl } = await importUrl();
-      expect(getPortfolioUrl('test')).toBe('http://localhost:3000/u/test');
+      expect(getPortfolioUrl('test')).toBe('http://localhost:3000/u/test/work');
     });
   });
 });

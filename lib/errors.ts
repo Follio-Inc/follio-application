@@ -212,6 +212,12 @@ export function handleApiError(
         return createErrorResponse(ErrorCode.NOT_FOUND, 'Record not found', 404);
       case 'P2003': // Foreign key constraint failed
         return createErrorResponse(ErrorCode.BAD_REQUEST, 'Related record not found', 400);
+      case 'P2024': // Connection pool timeout
+        return createErrorResponse(
+          ErrorCode.SERVICE_UNAVAILABLE,
+          'Database is busy, please retry',
+          503
+        );
       default:
         // Log unknown Prisma errors but return generic message
         logger.error('Unknown Prisma error', error, { prismaCode: prismaError.code });

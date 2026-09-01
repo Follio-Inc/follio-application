@@ -64,6 +64,10 @@ describe('Validation Schemas', () => {
         'DRIBBBLE',
         'BEHANCE',
         'YOUTUBE',
+        'MEDIUM',
+        'SUBSTACK',
+        'HASHNODE',
+        'DEVTO',
         'OTHER',
       ];
       validTypes.forEach((type) => {
@@ -234,6 +238,10 @@ describe('Validation Schemas', () => {
 
     it('should reject invalid URL', () => {
       expect(() => LinkSchema.parse({ type: 'GITHUB', url: 'not-a-url' })).toThrow();
+    });
+
+    it('should allow an empty URL so a header row can be created first', () => {
+      expect(LinkSchema.parse({ type: 'GITHUB', url: '' })).toEqual({ type: 'GITHUB', url: '' });
     });
 
     it('should reject javascript: and data: URLs (XSS vectors)', () => {

@@ -7,8 +7,9 @@ import crypto from 'crypto';
 import { cache } from 'react';
 
 import { db } from '@/lib/db';
-import { Errors } from '@/lib/errors';
+import { Errors, isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { withPrismaRetry } from '@/lib/prisma-connection';
 import { applyVisibilityFilter } from '@/lib/visibility';
 import type { ContentVisibility, FullProfile, PublicProfile } from '@/types';
 
@@ -19,32 +20,37 @@ const profileLogger = logger.child({ source: 'profile-service' });
  */
 export async function getProfileByHandle(handle: string): Promise<FullProfile | null> {
   try {
-    const profile = await db.profile.findUnique({
-      where: { handle },
-      include: {
-        contactInfo: true,
-        links: { orderBy: { sortOrder: 'asc' } },
-        workExperiences: { orderBy: { sortOrder: 'asc' } },
-        educations: { orderBy: { sortOrder: 'asc' } },
-        skills: { orderBy: { sortOrder: 'asc' } },
-        skillGroups: {
-          include: { skills: { orderBy: { sortOrder: 'asc' } } },
-          orderBy: { sortOrder: 'asc' },
-        },
-        projects: { orderBy: { sortOrder: 'asc' } },
-        awards: { orderBy: { sortOrder: 'asc' } },
-        certifications: { orderBy: { sortOrder: 'asc' } },
-        blogPosts: { orderBy: { createdAt: 'desc' } },
-        youtubeVideos: { orderBy: { createdAt: 'desc' } },
-        photos: { orderBy: { sortOrder: 'asc' } },
-        sections: { orderBy: { sortOrder: 'asc' } },
-      },
-    });
+    const profile = await withPrismaRetry(
+      () =>
+        db.profile.findUnique({
+          where: { handle },
+          include: {
+            contactInfo: true,
+            links: { orderBy: { sortOrder: 'asc' } },
+            workExperiences: { orderBy: { sortOrder: 'asc' } },
+            educations: { orderBy: { sortOrder: 'asc' } },
+            skills: { orderBy: { sortOrder: 'asc' } },
+            skillGroups: {
+              include: { skills: { orderBy: { sortOrder: 'asc' } } },
+              orderBy: { sortOrder: 'asc' },
+            },
+            projects: { orderBy: { sortOrder: 'asc' } },
+            awards: { orderBy: { sortOrder: 'asc' } },
+            certifications: { orderBy: { sortOrder: 'asc' } },
+            blogPosts: { orderBy: { createdAt: 'desc' } },
+            youtubeVideos: { orderBy: { createdAt: 'desc' } },
+            photos: { orderBy: { sortOrder: 'asc' } },
+            sections: { orderBy: { sortOrder: 'asc' } },
+          },
+        }),
+      'findUnique'
+    );
 
     return profile as FullProfile | null;
   } catch (error) {
     profileLogger.error('Failed to fetch profile by handle', error, { handle });
-    throw Errors.internal('Failed to load profile');
+    if (isAppError(error)) throw error;
+    throw Errors.database('Failed to load profile');
   }
 }
 
@@ -59,27 +65,31 @@ export async function getProfileByHandle(handle: string): Promise<FullProfile | 
  */
 export const getPublicProfile = cache(async (handle: string): Promise<PublicProfile | null> => {
   try {
-    const profile = await db.profile.findUnique({
-      where: { handle },
-      include: {
-        contactInfo: true,
-        links: { orderBy: { sortOrder: 'asc' } },
-        workExperiences: { orderBy: { sortOrder: 'asc' } },
-        educations: { orderBy: { sortOrder: 'asc' } },
-        skills: { orderBy: { sortOrder: 'asc' } },
-        skillGroups: {
-          include: { skills: { orderBy: { sortOrder: 'asc' } } },
-          orderBy: { sortOrder: 'asc' },
-        },
-        projects: { orderBy: { sortOrder: 'asc' } },
-        awards: { orderBy: { sortOrder: 'asc' } },
-        certifications: { orderBy: { sortOrder: 'asc' } },
-        blogPosts: { orderBy: { createdAt: 'desc' } },
-        youtubeVideos: { orderBy: { createdAt: 'desc' } },
-        photos: { orderBy: { sortOrder: 'asc' } },
-        sections: { orderBy: { sortOrder: 'asc' } },
-      },
-    });
+    const profile = await withPrismaRetry(
+      () =>
+        db.profile.findUnique({
+          where: { handle },
+          include: {
+            contactInfo: true,
+            links: { orderBy: { sortOrder: 'asc' } },
+            workExperiences: { orderBy: { sortOrder: 'asc' } },
+            educations: { orderBy: { sortOrder: 'asc' } },
+            skills: { orderBy: { sortOrder: 'asc' } },
+            skillGroups: {
+              include: { skills: { orderBy: { sortOrder: 'asc' } } },
+              orderBy: { sortOrder: 'asc' },
+            },
+            projects: { orderBy: { sortOrder: 'asc' } },
+            awards: { orderBy: { sortOrder: 'asc' } },
+            certifications: { orderBy: { sortOrder: 'asc' } },
+            blogPosts: { orderBy: { createdAt: 'desc' } },
+            youtubeVideos: { orderBy: { createdAt: 'desc' } },
+            photos: { orderBy: { sortOrder: 'asc' } },
+            sections: { orderBy: { sortOrder: 'asc' } },
+          },
+        }),
+      'findUnique'
+    );
 
     if (!profile) return null;
 
@@ -110,7 +120,8 @@ export const getPublicProfile = cache(async (handle: string): Promise<PublicProf
     return filtered as PublicProfile;
   } catch (error) {
     profileLogger.error('Failed to fetch public profile', error, { handle });
-    throw Errors.internal('Failed to load public profile');
+    if (isAppError(error)) throw error;
+    throw Errors.database('Failed to load public profile');
   }
 });
 

@@ -80,7 +80,7 @@ export function LinksPageViewer({ profile, authState, profileHandle }: LinksPage
             <Link href="/" className="font-medium text-primary hover:underline">
               Follio
             </Link>{' '}
-            — Your professional identity, everywhere.
+            — Your Follio, everywhere.
           </p>
         </div>
       </footer>

@@ -14,14 +14,14 @@ Operator tooling lives in `_admin-panel/`, not in Follio product features.
 
 ## Modules stay separate
 
-- `modules/developer/` — health, suites, Live QA, smoke
+- `modules/developer/` — health, suites, Live QA, resume reader (AI lab), smoke
 - `modules/users/` — placeholder for future user monitoring
 
 Do **not** import developer ↔ users. The shell only composes them via `_admin-panel/nav.ts`.
 
 ## When shipping features
 
-1. Update `modules/developer/suites-catalog.ts` / `smoke.ts` / `links.ts` / `live-qa/catalog.ts` as needed
+1. Update `modules/developer/suites-catalog.ts` / `smoke.ts` / `links.ts` / `live-qa/catalog.ts` / `ai/` as needed
 2. Thin shims only: `app/admin/(dashboard)/developer/page.tsx`, `app/api/admin/developer/*`
 
 ## Access

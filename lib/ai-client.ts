@@ -56,6 +56,8 @@ const MAX_TOKENS = {
   agentTurn: 4096,
   /** Resume PDF structured extraction */
   resumeParse: 4096,
+  /** Distill résumé copy into Follio headline + about */
+  follioVoice: 800,
 } as const;
 
 export type AITaskType = 'extraction' | 'strategy' | 'creative';
@@ -293,6 +295,7 @@ export function getStageConfig(stage: PipelineStage): {
     snapViewGeneration: 'strategy',
     agentTurn: 'strategy',
     resumeParse: 'extraction',
+    follioVoice: 'strategy',
   };
 
   const taskType = stageTaskMap[stage];

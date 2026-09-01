@@ -15,6 +15,12 @@ export const QUICK_LINKS: QuickLink[] = [
   { id: 'onboarding', label: 'Onboarding', href: '/onboarding', group: 'App' },
   { id: 'admin', label: 'Admin', href: '/admin', group: 'Admin' },
   { id: 'lab', label: 'Lab', href: '/lab', group: 'Admin' },
+  {
+    id: 'developer-resume-reader',
+    label: 'Resume reader',
+    href: '/admin/developer?tab=resume-reader',
+    group: 'Admin',
+  },
 ];
 
 export function getQuickLinks(): QuickLink[] {

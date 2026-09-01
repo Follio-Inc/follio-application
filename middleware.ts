@@ -1,5 +1,4 @@
 import { getClerkAuthorizedParties, warnIfClerkDevelopmentKeysInProduction } from '@/lib/clerk-env';
-import { isPortfolioEnabled } from '@/lib/features';
 import { extractHandleFromHost, isMainDomain } from '@/lib/url';
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
@@ -68,8 +67,7 @@ export function getSubdomainRewriteUrl(req: SubdomainRewriteRequest) {
   }
 
   if (pathname === '/' || pathname === '') {
-    // Resume-only mode: subdomain root lands on the resume page.
-    url.pathname = isPortfolioEnabled() ? `/u/${handle}` : `/u/${handle}/resume`;
+    url.pathname = `/u/${handle}`;
     return url;
   }
 

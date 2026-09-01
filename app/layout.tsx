@@ -21,11 +21,10 @@ const SITE_URL = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/+$/, '') || 'https:
 
 export const metadata: Metadata = {
   title: {
-    default: 'Follio - Your Digital Resume Platform',
+    default: 'Follio — Own your first impression',
     template: '%s | Follio',
   },
-  description:
-    'Create a digital-native resume that adapts to every viewer. Multiple views, perfect parsing, and seamless exports.',
+  description: 'Your Follio. One link for how people reach you, your resume, and your work.',
   keywords: ['resume', 'portfolio', 'digital resume', 'career', 'professional profile'],
   authors: [{ name: 'Follio' }],
   creator: 'Follio',
@@ -39,15 +38,13 @@ export const metadata: Metadata = {
     locale: 'en_US',
     url: SITE_URL,
     siteName: 'Follio',
-    title: 'Follio - Your Digital Resume Platform',
-    description:
-      'Create a digital-native resume that adapts to every viewer. Multiple views, perfect parsing, and seamless exports.',
+    title: 'Follio — Own your first impression',
+    description: 'Your Follio. One link for how people reach you, your resume, and your work.',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Follio - Your Digital Resume Platform',
-    description:
-      'Create a digital-native resume that adapts to every viewer. Multiple views, perfect parsing, and seamless exports.',
+    title: 'Follio — Own your first impression',
+    description: 'Your Follio. One link for how people reach you, your resume, and your work.',
   },
   robots: {
     index: true,

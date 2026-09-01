@@ -51,6 +51,7 @@ export function buildResumeContactFields(profile: FilteredProfile): ResumeContac
   }
 
   profile.links?.forEach((link) => {
+    if (!link.url?.trim()) return;
     const displayUrl = link.url
       .replace(/^https?:\/\//, '')
       .replace(/^www\./, '')

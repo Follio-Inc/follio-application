@@ -31,7 +31,7 @@ import {
 import { isPortfolioEnabled } from '@/lib/features';
 import { buildResumePdfUrl } from '@/lib/hooks/use-resume-download';
 import { resolveResumePageLayout } from '@/lib/resume-design';
-import { getPortfolioUrl, getResumeUrl } from '@/lib/url';
+import { getFollioUrl, getResumeUrl } from '@/lib/url';
 import type { FullProfile } from '@/types';
 
 interface ShareTokenData {
@@ -105,7 +105,7 @@ export function ShareSection({ profile }: ShareSectionProps) {
   };
 
   // Compute URLs based on visibility
-  const portfolioUrl = getPortfolioUrl(
+  const portfolioUrl = getFollioUrl(
     profile.handle,
     portfolioVisibility === 'UNLISTED' ? unlistedKey : null
   );
@@ -113,7 +113,7 @@ export function ShareSection({ profile }: ShareSectionProps) {
     vanityUsername || profile.handle,
     resumeVisibility === 'UNLISTED' ? unlistedKey : null
   );
-  const publicUrl = getPortfolioUrl(profile.handle);
+  const publicUrl = getFollioUrl(profile.handle);
 
   // Fetch share token on mount and when status changes to PRIVATE
   useEffect(() => {
@@ -237,7 +237,7 @@ export function ShareSection({ profile }: ShareSectionProps) {
   // Determine which URL to show based on status
   const tokenUrl =
     shareToken?.token && origin
-      ? `${getPortfolioUrl(profile.handle)}?token=${shareToken.token}`
+      ? `${getFollioUrl(profile.handle)}?token=${shareToken.token}`
       : null;
 
   const qrCodeUrl =
@@ -270,7 +270,7 @@ export function ShareSection({ profile }: ShareSectionProps) {
               }}
             >
               <iframe
-                src={`/u/${profile.handle}`}
+                src={`/u/${profile.handle}/work?preview=true`}
                 title="Portfolio preview"
                 className="h-full w-full border-0"
                 tabIndex={-1}

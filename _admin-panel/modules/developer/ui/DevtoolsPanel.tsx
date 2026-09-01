@@ -7,10 +7,19 @@ import { SMOKE_ITEMS } from '../smoke';
 import { TEST_SUITES } from '../suites-catalog';
 import type { DevtoolsStatus, HealthReport, TestRunResult } from '../types';
 import { LiveQaTab } from './LiveQaTab';
+import { ResumeReaderTab } from './ResumeReaderTab';
 import { DEVTOOLS_CSS } from './styles';
 import { useSmokeCompletion } from './use-devtools';
 
-type TabId = 'health' | 'suites' | 'live-qa' | 'smoke' | 'links';
+type TabId = 'health' | 'suites' | 'live-qa' | 'resume-reader' | 'smoke' | 'links';
+
+const TAB_IDS: TabId[] = ['health', 'suites', 'live-qa', 'resume-reader', 'smoke', 'links'];
+
+function tabFromSearch(): TabId | null {
+  if (typeof window === 'undefined') return null;
+  const value = new URLSearchParams(window.location.search).get('tab');
+  return value && TAB_IDS.includes(value as TabId) ? (value as TabId) : null;
+}
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -301,6 +310,18 @@ function LinksTab() {
 export function DevtoolsPanel() {
   const [tab, setTab] = useState<TabId>('health');
 
+  useEffect(() => {
+    const fromUrl = tabFromSearch();
+    if (fromUrl) setTab(fromUrl);
+  }, []);
+
+  const selectTab = (next: TabId) => {
+    setTab(next);
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', next);
+    window.history.replaceState(null, '', url);
+  };
+
   return (
     <div className="fdx-root">
       <style dangerouslySetInnerHTML={{ __html: DEVTOOLS_CSS }} />
@@ -309,7 +330,8 @@ export function DevtoolsPanel() {
           <div>
             <div className="fdx-title">Developer</div>
             <div className="fdx-subtitle">
-              Health, Vitest suites, Live QA pathways, and smoke — admin panel (not product UI)
+              Health, Vitest suites, Live QA, resume reader, and smoke — admin panel (not product
+              UI)
             </div>
           </div>
         </div>
@@ -319,6 +341,7 @@ export function DevtoolsPanel() {
               ['health', 'Health'],
               ['suites', 'Suites'],
               ['live-qa', 'Live QA'],
+              ['resume-reader', 'Resume reader'],
               ['smoke', 'Smoke'],
               ['links', 'Links'],
             ] as const
@@ -330,7 +353,7 @@ export function DevtoolsPanel() {
               className="fdx-tab"
               data-active={tab === id}
               aria-selected={tab === id}
-              onClick={() => setTab(id)}
+              onClick={() => selectTab(id)}
             >
               {label}
             </button>
@@ -340,6 +363,7 @@ export function DevtoolsPanel() {
           {tab === 'health' ? <HealthTab /> : null}
           {tab === 'suites' ? <SuitesTab /> : null}
           {tab === 'live-qa' ? <LiveQaTab /> : null}
+          {tab === 'resume-reader' ? <ResumeReaderTab /> : null}
           {tab === 'smoke' ? <SmokeTab /> : null}
           {tab === 'links' ? <LinksTab /> : null}
         </div>

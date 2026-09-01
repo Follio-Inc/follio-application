@@ -13,3 +13,6 @@ coverage
 # Reference/scratch files (not part of the app)
 temp/
 tmp/
+
+# Generated data (regenerate with scripts/build-university-domains.mjs)
+lib/brand-logo/data/

@@ -98,7 +98,7 @@ export function sortByUpdatedAtDesc<T extends { updatedAt: string }>(items: T[])
   );
 }
 
-/** Portfolio resume first; remaining resumes sorted by most recently edited. */
+/** Attached (primary) resume always first / leftmost; remaining by most recently edited. */
 export function sortResumesWithPortfolioFirst<T extends { id: string; updatedAt: string }>(
   items: T[],
   primaryProfileId: string | null
