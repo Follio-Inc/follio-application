@@ -53,7 +53,7 @@ export default async function CoverLetterBuilderPage({
   }
 
   if (!letter) {
-    redirect('/dashboard?tab=cover-letters');
+    redirect('/dashboard');
   }
 
   // Keep active pointer in sync when opening via ?id=

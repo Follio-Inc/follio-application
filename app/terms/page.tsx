@@ -2,7 +2,7 @@ import Link from 'next/link';
 
 export const metadata = {
   title: 'Terms of Service - Follio',
-  description: 'Terms of service for Follio - Your professional identity platform',
+  description: 'Terms of service for Follio',
 };
 
 export default function TermsPage() {

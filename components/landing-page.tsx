@@ -145,15 +145,19 @@ function FollioViewMock() {
           Senior Software Engineer building tools that make distributed systems feel small.
           Currently at Stripe, previously Vercel.
         </p>
-        <div className="flex flex-wrap gap-1.5">
-          {['TypeScript', 'Distributed Systems', 'Postgres', 'React', 'Go'].map((s) => (
+        <div className="flex flex-wrap gap-2">
+          {['Call', 'Email', 'Save'].map((label) => (
             <span
-              key={s}
-              className="rounded-full border border-border/80 bg-muted/40 px-2.5 py-1 text-[11px] text-muted-foreground"
+              key={label}
+              className="rounded-full border border-border/80 bg-background px-3 py-1.5 text-[11px] font-medium text-foreground"
             >
-              {s}
+              {label}
             </span>
           ))}
+        </div>
+        <div className="mt-4 flex gap-4 text-sm font-medium text-foreground">
+          <span>Resume</span>
+          <span>Work</span>
         </div>
       </div>
       <div className="col-span-2 flex flex-col justify-center gap-3">
@@ -193,7 +197,7 @@ function PortfolioViewMock() {
     <div className="h-[460px] overflow-hidden p-8 sm:p-10">
       <div className="mb-6 flex items-end justify-between">
         <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary">Portfolio</p>
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary">Work</p>
           <h3 className="mt-1 text-xl font-semibold tracking-tight">Selected work</h3>
         </div>
         <span className="text-xs text-muted-foreground">4 of 24</span>
@@ -246,22 +250,22 @@ const VIEWS: ReadonlyArray<{
   {
     key: 'follio',
     label: 'Follio',
-    url: '/u/sarahchen/follio',
-    caption: 'A single-screen brand snapshot. The first impression.',
+    url: '/u/sarahchen',
+    caption: 'Your Follio. Call, email, or save — then go deeper.',
     Mock: FollioViewMock,
   },
   {
     key: 'portfolio',
-    label: 'Portfolio',
-    url: '/u/sarahchen',
-    caption: 'Visual showcase of your selected work.',
+    label: 'Work',
+    url: '/u/sarahchen/work',
+    caption: 'Selected work, one tap from your Follio.',
     Mock: PortfolioViewMock,
   },
   {
     key: 'resume',
     label: 'Resume',
     url: '/u/sarahchen/resume',
-    caption: 'A traditional, ATS-friendly document — printable and exportable.',
+    caption: 'The proof document — printable and exportable.',
     Mock: ResumeViewMock,
   },
 ];
@@ -339,12 +343,12 @@ export const STEPS = [
   {
     n: '02',
     title: 'Refine',
-    body: 'Edit any section, reorder content, and choose what stays public. The three views update together.',
+    body: 'Edit any section, reorder content, and choose what stays public. Your Follio, resume, and work stay in sync.',
   },
   {
     n: '03',
     title: 'Share one link',
-    body: 'Send follio.app/u/yourhandle. Your audience picks Follio, Portfolio, or Resume.',
+    body: 'Send one link. They can reach you, read your resume, and see your work.',
   },
 ] as const;
 
@@ -996,16 +1000,16 @@ function Hero() {
   // brand review (and other crawlers) reject homepages that appear blank when
   // Framer Motion SSR-inlines opacity:0 on the purpose text.
   const purpose = isPortfolioEnabled()
-    ? 'Follio is a web app for job seekers and professionals to build one living profile and share it as a resume, portfolio, or quick snapshot through a single link — with clean formatting, viewer-adaptive presentation, and AI assistance that helps answer recruiter questions and suggest skills based on market trends.'
-    : 'Follio is a web app for job seekers and professionals to build a living resume you can share, refine, and export — with clean formatting and AI assistance that helps answer recruiter questions and suggest skills based on market trends.';
+    ? 'Follio is a web app for job seekers and professionals to own their first impression. Share one Follio to connect — with your number, email, resume, and work behind a single link, plus AI assistance that helps answer recruiter questions and suggest skills based on market trends.'
+    : 'Follio is a web app for job seekers and professionals to own their first impression. Share one Follio to connect — with your number, email, and resume behind a single link, plus AI assistance that helps answer recruiter questions and suggest skills based on market trends.';
 
   return (
     <section className="relative flex min-h-[calc(100svh-3.5rem)] items-center overflow-hidden border-b border-border/60">
       <div className="mx-auto w-full max-w-5xl px-5 pb-16 pt-8 text-left sm:px-6 sm:pb-24 sm:pt-16 lg:px-8">
-        <p className="text-eyebrow">The living resume</p>
+        <p className="text-eyebrow">Own your first impression</p>
 
         <h1 className="text-display mt-4 max-w-3xl text-balance text-[2.4rem] text-foreground sm:mt-5 sm:text-[3.5rem] lg:text-[4rem]">
-          A resume that does things a PDF never could.
+          Your Follio, in one link.
         </h1>
 
         <p className="mt-5 max-w-2xl text-pretty text-[15px] leading-7 text-muted-foreground sm:mt-6 sm:text-lg sm:leading-8">

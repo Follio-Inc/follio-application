@@ -33,6 +33,7 @@
   "exclude": [
     "node_modules",
     "_experiments",
+    "_extensions",
     "_admin-panel/modules/developer/live-qa/.artifacts",
     "_admin-panel/modules/developer/live-qa/.auth"
   ]

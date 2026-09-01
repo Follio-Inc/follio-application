@@ -3,7 +3,8 @@
  *
  * Workflow agent: AI-extract structured resume data from plain text,
  * normalize it, optionally save to profile. PDF text extraction stays in
- * importResumeWithAI (I/O), then this agent owns the LLM step.
+ * importResumeWithAI (I/O), then this agent owns the LLM step: extract,
+ * normalize, rewrite Follio-facing copy, optionally save.
  */
 
 import { runAgent } from '@/lib/agents';
@@ -16,6 +17,8 @@ import {
 } from '@/services/import/resume-ai.service';
 
 import type { AgentContext, AgentRunResult, WorkflowAgentDefinition } from '@/types/agents';
+
+import { rewriteNormalizedResumeForFollio } from './rewrite-for-follio';
 
 export interface ResumeParseAgentInput {
   /** Extracted resume plain text */
@@ -36,7 +39,7 @@ export const resumeParseAgent: WorkflowAgentDefinition<
 > = {
   kind: 'workflow',
   id: 'resume-parse',
-  version: 'agent-v1',
+  version: 'agent-v2',
   steps: [
     {
       id: 'parse-resume-ai',
@@ -59,6 +62,16 @@ export const resumeParseAgent: WorkflowAgentDefinition<
         if (!parsed) throw new Error('Missing parsed resume');
         const data = normalizeAIData(parsed, Date.now() - started);
         memory.set('normalized', data);
+      },
+    },
+    {
+      id: 'rewrite-for-follio',
+      description: 'Rewrite headline and about into Follio signal',
+      run: async (memory) => {
+        const data = memory.get<NormalizedResumeData>('normalized');
+        if (!data) throw new Error('Missing normalized resume for Follio rewrite');
+        const voiced = await rewriteNormalizedResumeForFollio(data);
+        memory.set('normalized', voiced);
       },
     },
     {
@@ -101,7 +114,7 @@ export async function runResumeParseAgent(
     userId: input.userId,
     profileId: input.profileId ?? ctx.profileId,
     budget: {
-      maxSteps: 4,
+      maxSteps: 5,
       maxDurationMs: 90_000,
       ...ctx.budget,
     },

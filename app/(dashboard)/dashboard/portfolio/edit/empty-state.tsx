@@ -23,7 +23,7 @@ export function PortfolioEditorEmptyState({ handle }: { handle: string }) {
           </Link>
         </Button>
         <Button asChild>
-          <Link href={`/u/${handle}`} target="_blank">
+          <Link href={`/u/${handle}/work`} target="_blank">
             View portfolio
           </Link>
         </Button>

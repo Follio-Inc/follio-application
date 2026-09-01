@@ -1,86 +1,65 @@
 import { Metadata } from 'next';
-import { notFound, redirect } from 'next/navigation';
+import { notFound } from 'next/navigation';
 
-import { db } from '@/lib/db';
+import {
+  buildFollioIdentity,
+  canShowResumeDoor,
+  canShowWorkDoor,
+  embedAsVisitor,
+} from '@/lib/follio-identity';
+import { renderQrSvg } from '@/lib/follio-identity/qr';
 import { isPortfolioEnabled } from '@/lib/features';
-import { getPortfolioUrl, getResumePath } from '@/lib/url';
+import { getFollioUrl } from '@/lib/url';
 import { getPublicProfile, validateUnlistedKey } from '@/services/profile.service';
 
 import { getViewerAuthState, validateShareToken } from './access';
-import { ProfileViewer } from './profile-viewer';
+import { IdentityViewer } from './identity-viewer';
 
-import type { TemplatePortfolio } from '@/lib/portfolio/templates/types';
-import type { PortfolioPlan, PortfolioUserOverrides } from '@/types/portfolio';
-
-interface ProfilePageProps {
+interface IdentityPageProps {
   params: Promise<{ handle: string }>;
   searchParams: Promise<{ token?: string; key?: string; preview?: string }>;
 }
 
-export async function generateMetadata({ params }: ProfilePageProps): Promise<Metadata> {
+export async function generateMetadata({ params }: IdentityPageProps): Promise<Metadata> {
   const { handle } = await params;
-
-  if (!isPortfolioEnabled()) {
-    return {
-      title: 'Resume | Follio',
-      robots: { index: false, follow: false },
-    };
-  }
-
   const profile = await getPublicProfile(handle);
 
   if (!profile) {
-    return {
-      title: 'Profile Not Found | Follio',
-    };
+    return { title: 'Follio not found' };
   }
 
-  const title = `${profile.firstName} ${profile.lastName} | Follio`;
-  const description =
-    profile.summary ||
-    `${profile.headline || 'Professional'} based in ${profile.location || 'Unknown'}`;
-
-  const portfolioVisibility = profile.portfolioVisibility || 'PUBLIC';
+  const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(' ') || handle;
+  const title = fullName;
+  const description = profile.headline || `${fullName}'s Follio`;
 
   return {
     title,
     description,
-    // Unlisted/private portfolios should not be indexed
-    robots:
-      portfolioVisibility === 'UNLISTED' || portfolioVisibility === 'PRIVATE'
-        ? { index: false, follow: false }
-        : undefined,
+    robots: profile.status === 'PUBLIC' ? undefined : { index: false, follow: false },
     openGraph: {
       title,
       description,
       type: 'profile',
-      firstName: profile.firstName,
+      firstName: profile.firstName || undefined,
       lastName: profile.lastName || undefined,
-      url: getPortfolioUrl(handle),
+      url: getFollioUrl(handle),
       siteName: 'Follio',
     },
     twitter: {
-      card: 'summary_large_image',
+      card: 'summary',
       title,
       description,
     },
     alternates: {
-      canonical: getPortfolioUrl(handle),
+      canonical: getFollioUrl(handle),
     },
   };
 }
 
 export const dynamic = 'force-dynamic';
 
-export default async function ProfilePage({ params, searchParams }: ProfilePageProps) {
+export default async function IdentityPage({ params, searchParams }: IdentityPageProps) {
   const { handle } = await params;
-
-  // Resume-only mode: keep existing portfolio URLs working by sending visitors
-  // to the resume page instead of a hard 404.
-  if (!isPortfolioEnabled()) {
-    redirect(getResumePath(handle));
-  }
-
   const { token, key, preview } = await searchParams;
 
   const [profile, authState] = await Promise.all([
@@ -88,104 +67,48 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
     getViewerAuthState(handle),
   ]);
 
-  if (!profile || profile.status === 'DRAFT') {
+  if (!profile) {
     notFound();
   }
 
-  // For PRIVATE (Unlisted) profiles, require a valid share token or unlisted key (unless owner)
-  if (profile.status === 'PRIVATE' && authState !== 'owner') {
-    const isValidToken = token ? await validateShareToken(handle, token, 'portfolio') : false;
-    const isValidKey = key ? await validateUnlistedKey(handle, key) : false;
-    if (!isValidToken && !isValidKey) {
-      notFound();
-    }
-  }
+  const isOwner = authState === 'owner';
+  const isValidToken = token ? await validateShareToken(handle, token) : false;
+  const isValidKey = key ? await validateUnlistedKey(handle, key) : false;
+  const hasShareAccess = isOwner || isValidToken || isValidKey;
 
-  // Check portfolio-specific visibility
-  const portfolioVisibility = profile.portfolioVisibility || 'PUBLIC';
-  if (portfolioVisibility === 'PRIVATE' && authState !== 'owner') {
+  if (profile.status === 'DRAFT' && !isOwner) {
     notFound();
   }
-  if (portfolioVisibility === 'UNLISTED' && authState !== 'owner') {
-    const isValidToken = token ? await validateShareToken(handle, token, 'portfolio') : false;
-    const isValidKey = key ? await validateUnlistedKey(handle, key) : false;
-    if (!isValidToken && !isValidKey) {
-      notFound();
-    }
+
+  if (profile.status === 'PRIVATE' && !hasShareAccess) {
+    notFound();
   }
 
-  // Determine resume visibility for the cross-link button
-  const resumeVisibility = profile.resumeVisibility || 'PRIVATE';
+  const isPreview = preview === 'true';
+  const doors = isPreview ? embedAsVisitor() : { authState, hasUnlistedAccess: hasShareAccess };
 
-  // Fetch generated portfolio + GitHub profile in parallel using the
-  // already-loaded profile id (avoids two extra `db.profile.findFirst`
-  // round-trips that the previous implementation performed).
-  const [generatedPortfolio, githubProfile] = await Promise.all([
-    db.generatedPortfolio
-      .findFirst({
-        where: {
-          profileId: profile.id,
-          isActive: true,
-          status: { in: ['PUBLISHED', 'DRAFT'] },
-        },
-        orderBy: { version: 'desc' },
-        select: {
-          plan: true,
-          userOverrides: true,
-          status: true,
-        },
-      })
-      // Migration may not yet be applied in some envs \u2014 fall back gracefully.
-      .catch(() => null),
-    db.gitHubProfile
-      .findUnique({
-        where: { profileId: profile.id },
-        select: {
-          username: true,
-          avatarUrl: true,
-          bio: true,
-          publicRepos: true,
-          followers: true,
-          totalStars: true,
-          primaryLanguages: true,
-        },
-      })
-      .catch(() => null),
-  ]);
-
-  let generatedPlan: PortfolioPlan | null = null;
-  let generatedOverrides: PortfolioUserOverrides | null = null;
-  let templatePortfolio: TemplatePortfolio | null = null;
-
-  // Only show published portfolios to non-owners.
-  if (generatedPortfolio) {
-    const isPublished = generatedPortfolio.status === 'PUBLISHED';
-    if (isPublished || authState === 'owner') {
-      const plan = generatedPortfolio.plan as Record<string, unknown> | null;
-
-      // Detect template-based portfolio: plan has a `templateId` field.
-      if (plan && typeof plan.templateId === 'string') {
-        templatePortfolio = plan as unknown as TemplatePortfolio;
-      } else if (plan) {
-        // Legacy AI-generated portfolio plan
-        generatedPlan = plan as unknown as PortfolioPlan;
-        generatedOverrides =
-          generatedPortfolio.userOverrides as unknown as PortfolioUserOverrides | null;
-      }
-    }
-  }
+  const identity = buildFollioIdentity(profile, {
+    showResume: canShowResumeDoor(
+      profile.resumeVisibility,
+      doors.authState,
+      doors.hasUnlistedAccess
+    ),
+    showWork: canShowWorkDoor(
+      isPortfolioEnabled(),
+      profile.portfolioVisibility,
+      doors.authState,
+      doors.hasUnlistedAccess
+    ),
+  });
 
   return (
-    <ProfileViewer
-      profile={profile}
+    <IdentityViewer
+      identity={identity}
+      qrSvg={renderQrSvg(identity.follioUrl)}
       authState={authState}
       profileHandle={handle}
-      resumeVisibility={resumeVisibility}
-      embed={preview === 'true'}
-      generatedPlan={generatedPlan}
-      generatedOverrides={generatedOverrides}
-      templatePortfolio={templatePortfolio}
-      githubProfile={templatePortfolio ? githubProfile : null}
+      unpublished={profile.status !== 'PUBLIC'}
+      embed={isPreview}
     />
   );
 }

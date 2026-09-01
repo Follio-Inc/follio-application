@@ -73,6 +73,7 @@ export function buildResumeAtelierContactFields(profile: FilteredProfile): Ateli
   }
 
   profile.links?.forEach((link) => {
+    if (!link.url?.trim()) return;
     fields.push({
       id: link.id,
       kind: 'link',

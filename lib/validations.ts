@@ -39,6 +39,10 @@ export const LinkTypeSchema = z.enum([
   'DRIBBBLE',
   'BEHANCE',
   'YOUTUBE',
+  'MEDIUM',
+  'SUBSTACK',
+  'HASHNODE',
+  'DEVTO',
   'OTHER',
 ]);
 export const SkillLevelSchema = z.enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT']);
@@ -129,7 +133,8 @@ export const ContactInfoSchema = z.object({
 
 export const LinkSchema = z.object({
   type: LinkTypeSchema,
-  url: httpUrl('Must be a valid URL'),
+  // Empty is allowed so the builder can create a header row before the URL is typed.
+  url: httpUrl('Must be a valid URL').or(z.literal('')),
   label: z.string().max(50).optional(),
   isVisible: z.boolean().optional(),
 });

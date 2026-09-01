@@ -195,7 +195,6 @@ describe('applyVisibilityFilter', () => {
     { type: 'EDUCATION', field: 'educations' },
     { type: 'SKILLS', field: 'skills' },
     { type: 'PROJECTS', field: 'projects' },
-    { type: 'LINKS', field: 'links' },
     { type: 'AWARDS', field: 'awards' },
     { type: 'CERTIFICATIONS', field: 'certifications' },
   ] as const;
@@ -227,6 +226,48 @@ describe('applyVisibilityFilter', () => {
       ).toBeGreaterThan(0);
     });
   }
+
+  it('keeps header links when LINKS is hidden but Header is visible', () => {
+    const raw = buildProfile({
+      sections: [
+        section('BASIC_INFO'),
+        section('LINKS', false),
+      ] as unknown as PublicProfile['sections'],
+    });
+    const result = applyVisibilityFilter(raw);
+
+    expect(result.links).toHaveLength(1);
+  });
+
+  it('empties links when Header and LINKS are both hidden', () => {
+    const raw = buildProfile({
+      sections: [
+        section('BASIC_INFO', false),
+        section('LINKS', false),
+      ] as unknown as PublicProfile['sections'],
+    });
+    const result = applyVisibilityFilter(raw);
+
+    expect(result.links).toEqual([]);
+  });
+
+  it('omits links with empty URLs', () => {
+    const raw = buildProfile({
+      links: [
+        { id: 'l-empty', url: '', label: 'GitHub', type: 'GITHUB', isVisible: true },
+        {
+          id: 'l-1',
+          url: 'https://github.com/alice',
+          label: 'GitHub',
+          type: 'GITHUB',
+          isVisible: true,
+        },
+      ] as unknown as PublicProfile['links'],
+    });
+    const result = applyVisibilityFilter(raw);
+
+    expect(result.links.map((link) => link.id)).toEqual(['l-1']);
+  });
 
   // ── SKILLS also gates skillGroups ─────────────────────────────────────
 

@@ -254,7 +254,7 @@ export function PortfolioEditorClient({
             </Button>
           )}
           <Button variant="outline" size="sm" asChild>
-            <Link href={`/u/${handle}`} target="_blank">
+            <Link href={`/u/${handle}/work`} target="_blank">
               <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
               <span className="hidden sm:inline">View live</span>
             </Link>

@@ -256,7 +256,7 @@ export default async function OGImage({ params }: { params: Promise<{ handle: st
       >
         <div style={{ display: 'flex', flexDirection: 'row', fontSize: 16 }}>
           <span style={{ fontWeight: 700, color: '#94a3b8' }}>Follio</span>
-          <span style={{ color: '#64748b', marginLeft: 8 }}>Digital Resume Platform</span>
+          <span style={{ color: '#64748b', marginLeft: 8 }}>Own your first impression</span>
         </div>
         <div style={{ fontSize: 14, color: '#475569', display: 'flex' }}>
           {getDisplayHost(handle)}

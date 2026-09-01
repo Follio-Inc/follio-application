@@ -1,10 +1,10 @@
-# Follio — Your professional self, three views
+# Follio — Own your first impression
 
 <div align="center">
 
 ![Follio Logo](public/logo/follio-logo-full.png)
 
-**One profile. One link. Three views: Follio, Portfolio, Resume.**
+**Your Follio. One link.**
 
 [Demo](https://follio.app) · [Architecture](#architecture) · [Contributing](CONTRIBUTING.md)
 
@@ -14,20 +14,20 @@
 
 ## What Follio is
 
-Follio is a single source of truth for your professional self. You capture your data once — by uploading a resume, connecting GitHub, or editing directly — and Follio renders it as three coordinated public views, each living at its own shareable URL:
+Follio is the thing you share to connect. You capture your data once — by uploading a resume, connecting GitHub, or editing directly — and Follio renders your page with your contact, resume, and work behind a single URL.
 
-| View          | URL                  | Purpose                                                                        |
-| ------------- | -------------------- | ------------------------------------------------------------------------------ |
-| **Follio**    | `/u/[handle]/follio` | Single-screen brand snapshot — the heart of the product. The first impression. |
-| **Portfolio** | `/u/[handle]`        | Visual, AI-curated showcase. The deeper read.                                  |
-| **Resume**    | `/u/[handle]/resume` | Traditional ATS-friendly document. Printable and exportable.                   |
+| Surface    | URL                  | Purpose                                                       |
+| ---------- | -------------------- | ------------------------------------------------------------- |
+| **Follio** | `/u/[handle]`        | The first impression. Call, email, save to contacts.          |
+| **Resume** | `/u/[handle]/resume` | Traditional ATS-friendly document. Printable and exportable.  |
+| **Work**   | `/u/[handle]/work`   | Visual showcase of selected work (when portfolio is enabled). |
 
-A single slim header bar (`<SiteHeader>`) lets visitors hop between the three views without losing context. Each view respects its own visibility setting (public, unlisted, or private) and is hidden from viewers who lack access.
+Visitors land on the Follio. Resume and work are doors off that card, not competing homepages.
 
 ## Core loop
 
 ```
-Capture (once)  →  Curate (review what AI made)  →  Share (one link, three views)
+Capture (once)  →  Curate (review what AI made)  →  Share (one Follio)
 ```
 
 Every feature serves this loop. If something doesn't, it shouldn't exist.
@@ -41,17 +41,17 @@ follio-app/
 ├── app/
 │   ├── page.tsx                      # Marketing landing (anonymous) / redirect to /dashboard (authed)
 │   ├── (dashboard)/                  # Authenticated workspace
-│   │   ├── dashboard/                # Workspace home — overview, your sites
+│   │   ├── dashboard/                # Home — live Follio + share
 │   │   ├── builder/                  # Profile editor (the canonical data)
 │   │   ├── resumes/                  # List of all your sites/profiles
 │   │   ├── data-sources/             # LinkedIn, GitHub, resume upload
 │   │   ├── share/                    # Share controls and tokens
 │   │   └── settings/                 # Account
-│   ├── u/[handle]/                   # Public site (the three views)
-│   │   ├── page.tsx                  # Portfolio view (default)
+│   ├── u/[handle]/                   # Public Follio
+│   │   ├── page.tsx                  # Follio (the share URL)
 │   │   ├── resume/page.tsx           # Resume view
-│   │   ├── follio/page.tsx           # Follio view (single-screen snapshot)
-│   │   └── views/                    # The view components themselves
+│   │   ├── work/page.tsx             # Work / portfolio view
+│   │   └── views/                    # View components
 │   ├── api/                          # All API routes
 │   ├── admin/                        # Admin dashboard (role-gated)
 │   └── onboarding/                   # First-run flow
@@ -168,29 +168,30 @@ The Resume view is rendered directly from the Profile (no AI needed). The Follio
 
 ### Visibility model
 
-Each view has its own visibility independently:
+Each surface has its own visibility independently:
 
-- `portfolioVisibility` — controls Portfolio view (and Follio view, which shares the same source data)
-- `resumeVisibility` — controls Resume view
+- Profile `status` — controls the Follio (`PUBLIC` / `PRIVATE` / `DRAFT`)
+- `portfolioVisibility` — controls Work
+- `resumeVisibility` — controls Resume
 
-Settings: `PUBLIC`, `UNLISTED` (link-only, not indexed), `PRIVATE` (owner-only).
+Work and resume settings: `PUBLIC`, `UNLISTED` (link-only, not indexed), `PRIVATE` (owner-only).
 
-Share tokens (`ShareToken`) can grant time-limited or view-count-limited access to unlisted views. A token can be scoped to a single view via `allowedView`.
+Share tokens (`ShareToken`) can grant time-limited or view-count-limited access. A token can be scoped to a single view via `allowedView`.
 
 ### URL conventions
 
 Two url shapes are supported, controlled by `NEXT_PUBLIC_SUBDOMAIN_ENABLED`:
 
-| Subdomain mode | Portfolio                  | Resume                       | Follio                       |
-| -------------- | -------------------------- | ---------------------------- | ---------------------------- |
-| **Off** (dev)  | `/u/handle`                | `/u/handle/resume`           | `/u/handle/follio`           |
-| **On** (prod)  | `https://handle.follio.me` | `https://handle.follio.me/r` | `https://handle.follio.me/f` |
+| Subdomain mode | Follio                     | Resume                       | Work                            |
+| -------------- | -------------------------- | ---------------------------- | ------------------------------- |
+| **Off** (dev)  | `/u/handle`                | `/u/handle/resume`           | `/u/handle/work`                |
+| **On** (prod)  | `https://handle.follio.me` | `https://follio.me/username` | `https://handle.follio.me/work` |
 
 Helpers in [`lib/url.ts`](lib/url.ts):
 
-- `getPortfolioUrl(handle)` / `getPortfolioPath(handle)`
-- `getResumeUrl(handle)` / `getResumePath(handle)`
 - `getFollioUrl(handle)` / `getFollioPath(handle)`
+- `getResumeUrl(handle)` / `getResumePath(handle)`
+- `getPortfolioUrl(handle)` / `getPortfolioPath(handle)` — Work
 
 Use the `*Url` variants for OG tags, share buttons, and external links. Use the `*Path` variants for `<Link>` and `redirect()`.
 

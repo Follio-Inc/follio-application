@@ -6,11 +6,15 @@
  * Public chrome + body for the Resume document at `/u/[handle]/resume`.
  * Thin client wrapper so we can keep the browser tab title in sync
  * and provide consistent layout around the `<CleanResumeView>`.
+ *
+ * Mounts the recruiter reading lens (JD-aware highlights) as viewer-only
+ * chrome. Builder preview does not use this shell.
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 import { PublicProfileChrome, useEffectiveAuthState } from '@/components/public-profile-chrome';
+import { ResumeLens } from '@/components/resume-lens/ResumeLens';
 
 import { CleanResumeView } from './views/clean-resume-view';
 
@@ -29,16 +33,19 @@ function ResumeShellBody({
   profileHandle,
 }: Pick<ResumeShellProps, 'profile' | 'authState' | 'profileHandle'>) {
   const effectiveAuthState = useEffectiveAuthState(authState);
+  const [host, setHost] = useState<HTMLDivElement | null>(null);
 
   return (
     <main>
       <div className="mx-auto max-w-5xl px-4 pb-24 pt-6 sm:px-6">
-        <div className="relative mx-auto w-full max-w-[816px]">
-          <CleanResumeView
-            profile={profile}
-            profileHandle={profileHandle}
-            authState={effectiveAuthState}
-          />
+        <div ref={setHost} className="relative mx-auto w-full max-w-[816px]">
+          <ResumeLens profile={profile} host={host}>
+            <CleanResumeView
+              profile={profile}
+              profileHandle={profileHandle}
+              authState={effectiveAuthState}
+            />
+          </ResumeLens>
         </div>
       </div>
     </main>

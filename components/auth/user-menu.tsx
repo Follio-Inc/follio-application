@@ -25,11 +25,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { isPortfolioEnabled } from '@/lib/features';
-import { resolvePublicResumeLink, type PublicResumeLink } from '@/lib/shareable-resume-link';
-import { getDisplayHost, getPortfolioPath, getPortfolioUrl } from '@/lib/url';
+import { getDisplayHost, getFollioPath, getFollioUrl } from '@/lib/url';
 
-type PublicPortfolioLink = {
+type AccountPublicLink = {
   kind: 'public';
   url: string;
   href: string;
@@ -37,15 +35,12 @@ type PublicPortfolioLink = {
   label: string;
 };
 
-type AccountPublicLink = PublicResumeLink | PublicPortfolioLink;
-
 export function UserMenu() {
   const { user } = useUser();
   const { signOut } = useClerk();
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [portfolioShare, setPortfolioShare] = useState<PublicPortfolioLink | null>(null);
-  const [resumeShare, setResumeShare] = useState<PublicResumeLink | null>(null);
+  const [follioShare, setFollioShare] = useState<AccountPublicLink | null>(null);
   // null = still checking; false = incomplete onboarding (no Profile yet)
   const [hasWorkspaceAccess, setHasWorkspaceAccess] = useState<boolean | null>(null);
   const [mounted, setMounted] = useState(false);
@@ -62,28 +57,19 @@ export function UserMenu() {
         const profile = data.profile;
         setHasWorkspaceAccess(Boolean(profile));
 
-        if (profile?.portfolioVisibility === 'PUBLIC' && profile?.handle) {
-          setPortfolioShare({
+        if (profile?.handle && profile?.status === 'PUBLIC') {
+          setFollioShare({
             kind: 'public',
-            url: getPortfolioUrl(profile.handle),
-            href: getPortfolioPath(profile.handle),
+            url: getFollioUrl(profile.handle),
+            href: getFollioPath(profile.handle),
             displayHost: getDisplayHost(profile.handle),
-            label: 'Public profile',
+            label: 'Your Follio',
           });
         } else {
-          setPortfolioShare(null);
+          setFollioShare(null);
         }
-
-        setResumeShare(
-          resolvePublicResumeLink({
-            hasPublicResume: Boolean(data.hasPublicResume),
-            vanityUsername: data.vanityUsername,
-            activeHandle: profile?.handle,
-          })
-        );
       } else {
-        setPortfolioShare(null);
-        setResumeShare(null);
+        setFollioShare(null);
         setHasWorkspaceAccess(false);
       }
     } catch {
@@ -117,8 +103,7 @@ export function UserMenu() {
 
   const email = user.emailAddresses[0]?.emailAddress || '';
 
-  const portfolioEnabled = isPortfolioEnabled();
-  const activeShare: AccountPublicLink | null = portfolioEnabled ? portfolioShare : resumeShare;
+  const activeShare = follioShare;
   const showShareSection = hasWorkspaceAccess === true;
 
   const handleCopyLink = async () => {
@@ -254,9 +239,7 @@ export function UserMenu() {
                     </div>
                     <div className="flex flex-col">
                       <span className="text-sm font-medium">Dashboard</span>
-                      <span className="text-[11px] text-muted-foreground">
-                        {portfolioEnabled ? 'Your portfolio overview' : 'Your workspace overview'}
-                      </span>
+                      <span className="text-[11px] text-muted-foreground">Your Follio</span>
                     </div>
                   </Link>
                 </DropdownMenuItem>

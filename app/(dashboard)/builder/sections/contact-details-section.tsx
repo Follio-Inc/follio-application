@@ -39,7 +39,7 @@ import {
   Twitter,
   Youtube,
 } from 'lucide-react';
-import { useCallback, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -48,6 +48,13 @@ import { notifyProfileUpdated } from '@/lib/events';
 import { cn } from '@/lib/utils';
 
 import type { FullProfile, Link } from '@/types';
+
+import {
+  createDraftLinkEntryId,
+  isDraftContactEntryId,
+  mergeContactEntries,
+  normalizeLinkUrl,
+} from '../lib/contact-entries';
 
 // ──────────────────────────────────────────────
 // Constants
@@ -211,7 +218,8 @@ interface SortableEntryRowProps {
   onValueChange: (value: string) => void;
   onVisibilityToggle: () => void;
   onRemove?: () => void;
-  onBlur?: () => void;
+  onBlur?: (value: string) => void;
+  error?: string;
   /** Whether this kind supports visibility toggle */
   hasVisibilityToggle: boolean;
   /** data-entry-id forwarded from the parent list */
@@ -224,6 +232,7 @@ function SortableEntryRow({
   onVisibilityToggle,
   onRemove,
   onBlur,
+  error,
   hasVisibilityToggle,
   'data-entry-id': dataEntryId,
 }: SortableEntryRowProps) {
@@ -250,87 +259,101 @@ function SortableEntryRow({
       : KIND_ICONS[entry.kind] || LinkIcon;
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      data-entry-id={dataEntryId}
-      className={cn(
-        'group flex items-center gap-1.5 rounded-xl bg-background px-2.5 py-1.5 transition-colors',
-        isDragging && 'z-50 bg-background shadow-md',
-        !isDragging && 'hover:bg-background/80'
-      )}
-    >
-      {/* Drag handle */}
-      <button
-        ref={setActivatorNodeRef}
-        type="button"
-        className="flex shrink-0 cursor-grab touch-none items-center text-muted-foreground/30 opacity-0 transition-opacity hover:text-muted-foreground focus-visible:opacity-100 active:cursor-grabbing group-hover:opacity-100"
-        {...attributes}
-        {...listeners}
+    <div className="space-y-1">
+      <div
+        ref={setNodeRef}
+        style={style}
+        data-entry-id={dataEntryId}
+        className={cn(
+          'group flex items-center gap-1.5 rounded-xl bg-background px-2.5 py-1.5 transition-colors',
+          isDragging && 'z-50 bg-background shadow-md',
+          !isDragging && 'hover:bg-background/80'
+        )}
       >
-        <GripVertical className="h-3.5 w-3.5" />
-      </button>
+        {/* Drag handle */}
+        <button
+          ref={setActivatorNodeRef}
+          type="button"
+          className="flex shrink-0 cursor-grab touch-none items-center text-muted-foreground/30 opacity-0 transition-opacity hover:text-muted-foreground focus-visible:opacity-100 active:cursor-grabbing group-hover:opacity-100"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="h-3.5 w-3.5" />
+        </button>
 
-      {/* Type icon + label */}
-      <div className="flex w-[5.5rem] shrink-0 items-center gap-1.5">
-        <Icon className="h-3.5 w-3.5 text-muted-foreground/70" />
-        <span className="truncate text-xs text-muted-foreground">{entry.label}</span>
+        {/* Type icon + label */}
+        <div className="flex w-[5.5rem] shrink-0 items-center gap-1.5">
+          <Icon className="h-3.5 w-3.5 text-muted-foreground/70" />
+          <span className="truncate text-xs text-muted-foreground">{entry.label}</span>
+        </div>
+
+        {/* Value input */}
+        <Input
+          value={entry.value}
+          onChange={(e) => onValueChange(e.target.value)}
+          onBlur={(event) => onBlur?.(event.currentTarget.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              event.currentTarget.blur();
+            }
+          }}
+          placeholder={entry.placeholder}
+          aria-invalid={Boolean(error)}
+          className="h-8 flex-1 border-0 bg-transparent px-1.5 text-sm shadow-none focus-visible:ring-0"
+        />
+
+        {/* Visibility toggle — right side, before remove */}
+        {hasVisibilityToggle ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={onVisibilityToggle}
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-accent"
+                tabIndex={-1}
+              >
+                {entry.isVisible ? (
+                  <Eye className="h-3.5 w-3.5 text-primary" />
+                ) : (
+                  <EyeOff className="h-3.5 w-3.5 text-muted-foreground/45" />
+                )}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="text-xs">
+              {entry.isVisible ? 'Visible on resume' : 'Hidden from resume'}
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          <div className="h-6 w-6 shrink-0" />
+        )}
+
+        {/* Remove button (only for removable entries, shown on hover) */}
+        {entry.removable ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={onRemove}
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground/30 opacity-0 transition-opacity hover:bg-accent hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
+                tabIndex={-1}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="text-xs">
+              Remove
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          <div className="h-6 w-6 shrink-0" />
+        )}
       </div>
-
-      {/* Value input */}
-      <Input
-        value={entry.value}
-        onChange={(e) => onValueChange(e.target.value)}
-        onBlur={onBlur}
-        placeholder={entry.placeholder}
-        className="h-8 flex-1 border-0 bg-transparent px-1.5 text-sm shadow-none focus-visible:ring-0"
-      />
-
-      {/* Visibility toggle — right side, before remove */}
-      {hasVisibilityToggle ? (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={onVisibilityToggle}
-              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-accent"
-              tabIndex={-1}
-            >
-              {entry.isVisible ? (
-                <Eye className="h-3.5 w-3.5 text-primary" />
-              ) : (
-                <EyeOff className="h-3.5 w-3.5 text-muted-foreground/45" />
-              )}
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="top" className="text-xs">
-            {entry.isVisible ? 'Visible on resume' : 'Hidden from resume'}
-          </TooltipContent>
-        </Tooltip>
-      ) : (
-        <div className="h-6 w-6 shrink-0" />
-      )}
-
-      {/* Remove button (only for removable entries, shown on hover) */}
-      {entry.removable ? (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={onRemove}
-              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground/30 opacity-0 transition-opacity hover:bg-accent hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
-              tabIndex={-1}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="top" className="text-xs">
-            Remove
-          </TooltipContent>
-        </Tooltip>
-      ) : (
-        <div className="h-6 w-6 shrink-0" />
-      )}
+      {error ? (
+        <p className="pl-[7.25rem] text-[11px] text-destructive" role="alert">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -354,7 +377,10 @@ export function ContactDetailsSection({
 }: ContactDetailsSectionProps) {
   const dndId = useId();
   const [entries, setEntries] = useState<ContactEntry[]>(() => buildEntries(profile));
+  const [linkErrors, setLinkErrors] = useState<Record<string, string>>({});
   const savingLinkIds = useRef<Set<string>>(new Set());
+  const entriesRef = useRef(entries);
+  entriesRef.current = entries;
 
   // Debounce refs for link saves
   const linkSaveTimers = useRef<Map<string, NodeJS.Timeout>>(new Map());
@@ -400,7 +426,6 @@ export function ContactDetailsSection({
           onContactUpdate({ phone: newValue, phoneNumber: newValue });
           break;
         case 'link':
-          // Link saves are debounced on blur — no draft update needed
           break;
       }
     },
@@ -411,90 +436,169 @@ export function ContactDetailsSection({
 
   const saveLink = useCallback(
     async (entry: ContactEntry) => {
-      if (!entry.value.trim()) return;
+      const { url, error } = normalizeLinkUrl(entry.value);
+      if (error) {
+        setLinkErrors((prev) => ({ ...prev, [entry.id]: error }));
+        return;
+      }
+      if (!url) {
+        setLinkErrors((prev) => {
+          const next = { ...prev };
+          delete next[entry.id];
+          return next;
+        });
+        return;
+      }
 
-      const isPlaceholder = entry.id.startsWith('placeholder-');
+      const latest =
+        entriesRef.current.find((e) => e.id === entry.id) ||
+        (entry.linkType
+          ? entriesRef.current.find((e) => e.kind === 'link' && e.linkType === entry.linkType)
+          : undefined);
+      const target = latest ? { ...latest, value: url } : { ...entry, value: url };
+
+      if (
+        savingLinkIds.current.has(target.id) ||
+        (target.linkId && savingLinkIds.current.has(target.linkId))
+      ) {
+        return;
+      }
 
       try {
-        savingLinkIds.current.add(entry.id);
+        savingLinkIds.current.add(target.id);
+        if (target.linkId) savingLinkIds.current.add(target.linkId);
 
-        if (isPlaceholder && entry.linkType) {
-          // Create new link
-          const label = LINK_TYPE_CONFIG[entry.linkType]?.label || 'Link';
+        const isDraft = isDraftContactEntryId(target.id) && !target.linkId;
+
+        if (isDraft && target.linkType) {
+          const label = LINK_TYPE_CONFIG[target.linkType]?.label || 'Link';
           const response = await fetch('/api/profile/links', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type: entry.linkType, url: entry.value, label }),
-          });
-          if (!response.ok) throw new Error('Failed to create link');
-          const { link } = (await response.json()) as { link: Link };
-
-          // Update entry with real ID
-          setEntries((prev) =>
-            prev.map((e) => (e.id === entry.id ? { ...e, id: link.id, linkId: link.id } : e))
-          );
-
-          // Update parent state
-          onLinksUpdate([...profile.links, link]);
-          notifyProfileUpdated();
-        } else if (entry.linkId) {
-          // Capture the server's current value so we can revert the input if the save fails.
-          const previousValue = profile.links.find((l) => l.id === entry.linkId)?.url ?? '';
-
-          // Update existing link
-          const response = await fetch(`/api/profile/links/${entry.linkId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: entry.value }),
+            body: JSON.stringify({ type: target.linkType, url, label }),
           });
           if (!response.ok) {
-            // Restore the last-known-good value so the UI never claims an unsaved edit persisted.
-            setEntries((prev) =>
-              prev.map((e) => (e.id === entry.id ? { ...e, value: previousValue } : e))
-            );
-            throw new Error('Failed to update link');
+            const body = (await response.json().catch(() => null)) as { error?: string } | null;
+            throw new Error(body?.error || 'Failed to create link');
           }
           const { link } = (await response.json()) as { link: Link };
 
-          // Update parent state
-          const updatedLinks = profile.links.map((l) => (l.id === link.id ? link : l));
+          setEntries((prev) =>
+            prev.map((e) =>
+              e.id === target.id || (e.linkType === target.linkType && isDraftContactEntryId(e.id))
+                ? {
+                    ...e,
+                    id: link.id,
+                    linkId: link.id,
+                    value: e.value === entry.value ? url : e.value,
+                  }
+                : e
+            )
+          );
+          setLinkErrors((prev) => {
+            const next = { ...prev };
+            delete next[target.id];
+            delete next[entry.id];
+            return next;
+          });
+
+          onLinksUpdate([...profile.links, { ...link, url }]);
+          notifyProfileUpdated();
+        } else if (target.linkId) {
+          const response = await fetch(`/api/profile/links/${target.linkId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url }),
+          });
+          if (!response.ok) {
+            const body = (await response.json().catch(() => null)) as { error?: string } | null;
+            throw new Error(body?.error || 'Failed to update link');
+          }
+          const { link } = (await response.json()) as { link: Link };
+
+          setEntries((prev) =>
+            prev.map((e) =>
+              e.id === target.id || e.linkId === target.linkId
+                ? { ...e, value: e.value === entry.value ? url : e.value }
+                : e
+            )
+          );
+          setLinkErrors((prev) => {
+            const next = { ...prev };
+            delete next[target.id];
+            return next;
+          });
+
+          const updatedLinks = profile.links.map((l) => (l.id === link.id ? { ...link, url } : l));
           onLinksUpdate(updatedLinks);
           notifyProfileUpdated();
         }
-      } catch (error) {
-        console.error('Failed to save link:', error);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to save link';
+        setLinkErrors((prev) => ({ ...prev, [entry.id]: message }));
+        console.error('Failed to save link:', err);
       } finally {
-        savingLinkIds.current.delete(entry.id);
+        savingLinkIds.current.delete(target.id);
+        if (target.linkId) savingLinkIds.current.delete(target.linkId);
       }
     },
     [profile.links, onLinksUpdate]
   );
 
-  const handleLinkBlur = useCallback(
-    (entry: ContactEntry) => {
-      // Clear any pending debounce
-      const existing = linkSaveTimers.current.get(entry.id);
-      if (existing) clearTimeout(existing);
+  const saveLinkRef = useRef(saveLink);
+  saveLinkRef.current = saveLink;
 
-      // Save after a short delay to handle tab-away vs clicking another input
-      const timer = setTimeout(() => {
-        const currentEntry = entries.find((e) => e.id === entry.id);
-        if (currentEntry && currentEntry.value.trim()) {
-          saveLink(currentEntry);
+  const flushLinkSave = useCallback((entry: ContactEntry, latestValue?: string) => {
+    const existing = linkSaveTimers.current.get(entry.id);
+    if (existing) clearTimeout(existing);
+    linkSaveTimers.current.delete(entry.id);
+    const value = (latestValue ?? entry.value).trim();
+    if (!value) return;
+    void saveLinkRef.current({ ...entry, value });
+  }, []);
+
+  const scheduleLinkSave = useCallback((entryId: string, value: string) => {
+    const existing = linkSaveTimers.current.get(entryId);
+    if (existing) clearTimeout(existing);
+    const timer = setTimeout(() => {
+      const currentEntry = entriesRef.current.find((e) => e.id === entryId);
+      if (!currentEntry) return;
+      void saveLinkRef.current({ ...currentEntry, value });
+    }, 400);
+    linkSaveTimers.current.set(entryId, timer);
+  }, []);
+
+  useEffect(() => {
+    const timers = linkSaveTimers.current;
+    return () => {
+      for (const timer of timers.values()) clearTimeout(timer);
+      for (const entry of entriesRef.current) {
+        if (entry.kind === 'link' && entry.value.trim()) {
+          void saveLinkRef.current(entry);
         }
-      }, 300);
-      linkSaveTimers.current.set(entry.id, timer);
+      }
+    };
+  }, []);
+
+  const handleLinkBlur = useCallback(
+    (entry: ContactEntry, latestValue?: string) => {
+      flushLinkSave(entry, latestValue);
     },
-    [entries, saveLink]
+    [flushLinkSave]
   );
 
   const handleRemoveLink = useCallback(
     async (entry: ContactEntry) => {
-      if (!entry.linkId) return;
-
-      // Optimistic removal
+      // Optimistic removal — drafts were never persisted
       const prevEntries = [...entries];
       setEntries((prev) => prev.filter((e) => e.id !== entry.id));
+      setLinkErrors((prev) => {
+        const next = { ...prev };
+        delete next[entry.id];
+        return next;
+      });
+
+      if (!entry.linkId) return;
 
       try {
         const response = await fetch(`/api/profile/links/${entry.linkId}`, {
@@ -636,62 +740,40 @@ export function ContactDetailsSection({
 
   // ── Quick add ──
 
-  const handleQuickAdd = useCallback(
-    async (linkType: string) => {
-      const config = LINK_TYPE_CONFIG[linkType] || LINK_TYPE_CONFIG.OTHER;
-      const tempId = `new-${linkType}-${Date.now()}`;
+  const handleQuickAdd = useCallback((linkType: string) => {
+    const config = LINK_TYPE_CONFIG[linkType] || LINK_TYPE_CONFIG.OTHER;
+    const draftId = createDraftLinkEntryId(linkType);
 
-      // Add entry with temporary ID
-      const newEntry: ContactEntry = {
-        id: tempId,
-        kind: 'link',
-        linkType,
-        label: config.label,
-        value: '',
-        isVisible: true,
-        placeholder: config.placeholder,
-        removable: true,
-      };
+    const newEntry: ContactEntry = {
+      id: draftId,
+      kind: 'link',
+      linkType,
+      label: config.label,
+      value: '',
+      isVisible: true,
+      placeholder: config.placeholder,
+      removable: true,
+    };
 
-      setEntries((prev) => [...prev, newEntry]);
-
-      // Create the link entity immediately (with empty URL — user will fill in)
-      try {
-        const response = await fetch('/api/profile/links', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: linkType,
-            url: '',
-            label: config.label,
-          }),
-        });
-
-        if (!response.ok) throw new Error('Failed to create link');
-        const { link } = (await response.json()) as { link: Link };
-
-        // Replace temp entry with real entity
-        setEntries((prev) =>
-          prev.map((e) => (e.id === tempId ? { ...e, id: link.id, linkId: link.id } : e))
-        );
-
-        onLinksUpdate([...profile.links, link]);
-        notifyProfileUpdated();
-
-        // Focus the new input after a tick
-        setTimeout(() => {
-          const input = document.querySelector(
-            `[data-entry-id="${link.id}"] input`
-          ) as HTMLInputElement | null;
-          input?.focus();
-        }, 100);
-      } catch {
-        // Remove the temp entry on failure
-        setEntries((prev) => prev.filter((e) => e.id !== tempId));
+    setEntries((prev) => {
+      if (prev.some((entry) => entry.kind === 'link' && entry.linkType === linkType)) {
+        return prev;
       }
-    },
-    [profile.links, onLinksUpdate]
-  );
+      return [...prev, newEntry];
+    });
+    setLinkErrors((prev) => {
+      const next = { ...prev };
+      delete next[draftId];
+      return next;
+    });
+
+    setTimeout(() => {
+      const input = document.querySelector(
+        `[data-entry-id="${draftId}"] input`
+      ) as HTMLInputElement | null;
+      input?.focus();
+    }, 50);
+  }, []);
 
   // ── Sync entries when profile changes externally ──
   // (e.g., after import, undo/redo, or link add/remove)
@@ -706,22 +788,7 @@ export function ContactDetailsSection({
     profileContactRef.current = profile.contactInfo;
 
     const freshEntries = buildEntries(profile);
-    const currentIds = new Set(entries.map((e) => e.id));
-
-    const merged: ContactEntry[] = [];
-    for (const existing of entries) {
-      const fresh = freshEntries.find((f) => f.id === existing.id);
-      if (fresh) {
-        merged.push({ ...existing, value: fresh.value, isVisible: fresh.isVisible });
-      } else if (existing.id.startsWith('new-') || existing.id.startsWith('placeholder-')) {
-        merged.push(existing);
-      }
-    }
-    for (const fresh of freshEntries) {
-      if (!currentIds.has(fresh.id)) {
-        merged.push(fresh);
-      }
-    }
+    const merged = mergeContactEntries(entries, freshEntries);
 
     const mergedIds = merged.map((e) => e.id).join(',');
     const currentIdStr = entries.map((e) => e.id).join(',');
@@ -749,13 +816,17 @@ export function ContactDetailsSection({
           <div className="space-y-2">
             {entries.map((entry) => (
               <SortableEntryRow
-                key={entry.id}
+                key={entry.kind === 'link' ? `link-${entry.linkType}` : entry.id}
                 data-entry-id={entry.id}
                 entry={entry}
-                onValueChange={(val) => handleValueChange(entry.id, entry.kind, val)}
+                onValueChange={(val) => {
+                  handleValueChange(entry.id, entry.kind, val);
+                  if (entry.kind === 'link') scheduleLinkSave(entry.id, val);
+                }}
                 onVisibilityToggle={() => handleVisibilityToggle(entry)}
                 onRemove={entry.removable ? () => handleRemoveLink(entry) : undefined}
-                onBlur={entry.kind === 'link' ? () => handleLinkBlur(entry) : undefined}
+                onBlur={entry.kind === 'link' ? (value) => handleLinkBlur(entry, value) : undefined}
+                error={linkErrors[entry.id]}
                 hasVisibilityToggle
               />
             ))}

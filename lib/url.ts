@@ -4,9 +4,9 @@
  * Two types of URLs:
  *
  * 1. CANONICAL / DISPLAY URLs (for sharing, OG tags, copy-to-clipboard):
- *    Portfolio / links are environment-aware (subdomain when enabled):
- *      Subdomains ON  (production):   https://username.follio.me
- *      Subdomains OFF (dev / preview): http://localhost:3000/u/username
+ *    Follio / work / links are environment-aware (subdomain when enabled):
+ *      Follio:    https://username.follio.me      or /u/username
+ *      Work:      https://username.follio.me/work or /u/username/work
  *
  *    Resume URLs are always apex-path (never embed the username in unlisted links):
  *      Public:   https://follio.me/username
@@ -14,12 +14,13 @@
  *
  * 2. INTERNAL NAV PATHS (for <Link>, redirect(), Next.js routing):
  *    Always use the path-based format so Next.js routing works:
- *      Portfolio:       /u/username
- *      Resume (legacy): /u/username/resume
- *      Public resume:   /username
- *      Unlisted resume: /r/{key}
+ *      Follio:            /u/username
+ *      Work:              /u/username/work
+ *      Resume (legacy):   /u/username/resume
+ *      Public resume:     /username
+ *      Unlisted resume:   /r/{key}
  *      Unlisted cover letter: /cl/{key}
- *      Links:           /u/username/links
+ *      Links:             /u/username/links
  */
 
 /** The root domain (e.g., "follio.me") */
@@ -44,16 +45,32 @@ function getAppBaseUrl(): string {
 
 // ─── Canonical / Display URLs ────────────────────────────────────────
 
+function withOptionalKey(base: string, unlistedKey?: string | null): string {
+  return unlistedKey ? `${base}?key=${unlistedKey}` : base;
+}
+
 /**
- * Canonical portfolio URL for display, sharing, OG tags.
+ * Canonical Follio URL — the one link people share.
  * Subdomain ON:  https://username.follio.me
  * Subdomain OFF: http://localhost:3000/u/username
  */
-export function getPortfolioUrl(handle: string, unlistedKey?: string | null): string {
+export function getFollioUrl(handle: string, unlistedKey?: string | null): string {
   const base = SUBDOMAIN_ENABLED
     ? `${PROTOCOL}://${handle}.${ROOT_DOMAIN}`
     : `${getAppBaseUrl()}/u/${handle}`;
-  return unlistedKey ? `${base}?key=${unlistedKey}` : base;
+  return withOptionalKey(base, unlistedKey);
+}
+
+/**
+ * Canonical work (portfolio) URL.
+ * Subdomain ON:  https://username.follio.me/work
+ * Subdomain OFF: http://localhost:3000/u/username/work
+ */
+export function getPortfolioUrl(handle: string, unlistedKey?: string | null): string {
+  const base = SUBDOMAIN_ENABLED
+    ? `${PROTOCOL}://${handle}.${ROOT_DOMAIN}/work`
+    : `${getAppBaseUrl()}/u/${handle}/work`;
+  return withOptionalKey(base, unlistedKey);
 }
 
 /**
@@ -124,10 +141,25 @@ export function getDisplayHost(handle: string, suffix?: string): string {
 // ─── Internal Navigation Paths ───────────────────────────────────────
 
 /**
- * Internal path for portfolio — use in <Link href>, redirect(), etc.
+ * Internal path for the Follio — use in <Link href>, redirect(), etc.
+ */
+export function getFollioPath(handle: string): string {
+  return `/u/${handle}`;
+}
+
+/**
+ * Owner-dashboard iframe of the live Follio. `preview=true` strips workspace
+ * chrome so the snapshot matches what visitors see.
+ */
+export function getFollioPreviewPath(handle: string): string {
+  return `/u/${handle}?preview=true`;
+}
+
+/**
+ * Internal path for work (portfolio) — use in <Link href>, redirect(), etc.
  */
 export function getPortfolioPath(handle: string): string {
-  return `/u/${handle}`;
+  return `/u/${handle}/work`;
 }
 
 /**

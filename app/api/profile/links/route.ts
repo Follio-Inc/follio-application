@@ -54,16 +54,21 @@ export async function POST(request: NextRequest) {
 
     const context = await resolveActiveProfileContext(userId);
 
-    // Check for duplicate URL
-    const existingLink = await db.link.findFirst({
-      where: {
-        profileId: context.profileId,
-        url: { equals: validatedData.data.url, mode: 'insensitive' },
-      },
-    });
+    // Check for duplicate URL (skip blanks — multiple new header rows start empty)
+    if (validatedData.data.url) {
+      const existingLink = await db.link.findFirst({
+        where: {
+          profileId: context.profileId,
+          url: { equals: validatedData.data.url, mode: 'insensitive' },
+        },
+      });
 
-    if (existingLink) {
-      return NextResponse.json({ error: 'This URL already exists in your links' }, { status: 400 });
+      if (existingLink) {
+        return NextResponse.json(
+          { error: 'This URL already exists in your links' },
+          { status: 400 }
+        );
+      }
     }
 
     // Get the highest sortOrder

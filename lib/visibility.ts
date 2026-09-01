@@ -67,6 +67,13 @@ function filterVisible<T>(items: T[] | undefined | null): T[] {
   return (items || []).filter((item) => (item as Record<string, unknown>).isVisible !== false);
 }
 
+/** Header links live in BASIC_INFO; skip blank URLs so new rows don't show empty. */
+function filterVisibleLinks(
+  items: PublicProfile['links'] | undefined | null
+): PublicProfile['links'] {
+  return filterVisible(items).filter((link) => Boolean(link.url?.trim()));
+}
+
 /** Filter skills inside skill groups and drop groups that become empty. */
 function filterSkillGroups(
   groups: PublicProfile['skillGroups'] | undefined | null
@@ -128,7 +135,7 @@ export function applyVisibilityFilter(
       skills: filterVisible(raw.skills),
       skillGroups: filterSkillGroups(raw.skillGroups),
       projects,
-      links: filterVisible(raw.links),
+      links: filterVisibleLinks(raw.links),
       awards: filterVisible(raw.awards),
       certifications: filterVisible(raw.certifications),
       photos: filterVisible(raw.photos),
@@ -204,7 +211,9 @@ export function applyVisibilityFilter(
     skills: isVisible('SKILLS') ? filterVisible(raw.skills) : [],
     skillGroups: isVisible('SKILLS') ? filterSkillGroups(raw.skillGroups) : [],
     projects: filteredProjects,
-    links: isVisible('LINKS') ? filterVisible(raw.links) : [],
+    // Contact links are edited in Header (BASIC_INFO). Keep the legacy LINKS
+    // section as an additional gate for older profiles that still have it.
+    links: showContact || isVisible('LINKS') ? filterVisibleLinks(raw.links) : [],
     awards: isVisible('AWARDS') ? filterVisible(raw.awards) : [],
     certifications: isVisible('CERTIFICATIONS') ? filterVisible(raw.certifications) : [],
     photos: isVisible('PHOTOS') ? filterVisible(raw.photos) : [],
