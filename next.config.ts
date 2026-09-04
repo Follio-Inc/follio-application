@@ -138,6 +138,43 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      {
+        source: '/api/mcp',
+        headers: [
+          { key: 'Access-Control-Allow-Origin', value: '*' },
+          {
+            key: 'Access-Control-Allow-Methods',
+            value: 'GET, POST, DELETE, OPTIONS',
+          },
+          {
+            key: 'Access-Control-Allow-Headers',
+            value:
+              'Authorization, Content-Type, MCP-Protocol-Version, MCP-Session-Id, Last-Event-ID',
+          },
+          {
+            key: 'Access-Control-Expose-Headers',
+            value: 'WWW-Authenticate, MCP-Session-Id, MCP-Protocol-Version',
+          },
+        ],
+      },
+      {
+        source: '/.well-known/:path*',
+        headers: [
+          { key: 'Access-Control-Allow-Origin', value: '*' },
+          { key: 'Access-Control-Allow-Methods', value: 'GET, OPTIONS' },
+        ],
+      },
+      {
+        source: '/api/oauth/:path*',
+        headers: [
+          { key: 'Access-Control-Allow-Origin', value: '*' },
+          { key: 'Access-Control-Allow-Methods', value: 'GET, POST, OPTIONS' },
+          {
+            key: 'Access-Control-Allow-Headers',
+            value: 'Authorization, Content-Type',
+          },
+        ],
+      },
     ];
   },
 };

@@ -43,8 +43,8 @@ export function DownloadDialog({
       forwardSearchParams
       description={
         pagedOnly
-          ? 'Your resume uses print pages — choose A4 or Letter.'
-          : 'Choose a layout for your resume.'
+          ? 'Your resume uses print pages — choose A4 or Letter, then download.'
+          : 'Choose a layout, then download your resume.'
       }
       shareBannerText={
         onShareClick

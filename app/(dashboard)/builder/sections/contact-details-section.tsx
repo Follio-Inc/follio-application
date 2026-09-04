@@ -50,10 +50,11 @@ import { cn } from '@/lib/utils';
 import type { FullProfile, Link } from '@/types';
 
 import {
+  applyContactEntryOrder,
   createDraftLinkEntryId,
   isDraftContactEntryId,
-  mergeContactEntries,
   normalizeLinkUrl,
+  reconcileContactEntries,
 } from '../lib/contact-entries';
 
 // ──────────────────────────────────────────────
@@ -185,28 +186,7 @@ function buildEntries(profile: FullProfile): ContactEntry[] {
     });
   }
 
-  // Apply stored order if present (drag-and-drop order persisted by user)
-  if (storedOrder && storedOrder.length > 0) {
-    const byId = new Map<string, ContactEntry>();
-    for (const e of entries) {
-      byId.set(e.id, e);
-    }
-    const ordered: ContactEntry[] = [];
-    const seen = new Set<string>();
-    for (const orderId of storedOrder) {
-      const entry = byId.get(orderId);
-      if (entry && !seen.has(entry.id)) {
-        ordered.push(entry);
-        seen.add(entry.id);
-      }
-    }
-    for (const e of entries) {
-      if (!seen.has(e.id)) ordered.push(e);
-    }
-    return ordered;
-  }
-
-  return entries;
+  return applyContactEntryOrder(entries, storedOrder);
 }
 
 // ──────────────────────────────────────────────
@@ -259,11 +239,8 @@ function SortableEntryRow({
       : KIND_ICONS[entry.kind] || LinkIcon;
 
   return (
-    <div className="space-y-1">
+    <div ref={setNodeRef} style={style} className="space-y-1" data-entry-id={dataEntryId}>
       <div
-        ref={setNodeRef}
-        style={style}
-        data-entry-id={dataEntryId}
         className={cn(
           'group flex items-center gap-1.5 rounded-xl bg-background px-2.5 py-1.5 transition-colors',
           isDragging && 'z-50 bg-background shadow-md',
@@ -274,6 +251,8 @@ function SortableEntryRow({
         <button
           ref={setActivatorNodeRef}
           type="button"
+          title="Drag to reorder"
+          aria-label={`Reorder ${entry.label}`}
           className="flex shrink-0 cursor-grab touch-none items-center text-muted-foreground/30 opacity-0 transition-opacity hover:text-muted-foreground focus-visible:opacity-100 active:cursor-grabbing group-hover:opacity-100"
           {...attributes}
           {...listeners}
@@ -788,7 +767,11 @@ export function ContactDetailsSection({
     profileContactRef.current = profile.contactInfo;
 
     const freshEntries = buildEntries(profile);
-    const merged = mergeContactEntries(entries, freshEntries);
+    const contactInfo = profile.contactInfo as Record<string, unknown> | null;
+    const storedOrder = Array.isArray(contactInfo?.headerFieldsOrder)
+      ? (contactInfo.headerFieldsOrder as string[])
+      : null;
+    const merged = reconcileContactEntries(entries, freshEntries, storedOrder);
 
     const mergedIds = merged.map((e) => e.id).join(',');
     const currentIdStr = entries.map((e) => e.id).join(',');

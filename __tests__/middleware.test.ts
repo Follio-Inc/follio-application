@@ -51,4 +51,13 @@ describe('middleware subdomain rewrite', () => {
     const result = getSubdomainRewriteUrl(makeRequest('/trpc/something', 'alice.follio.me'));
     expect(result).toBeNull();
   });
+
+  it('does not rewrite well-known or oauth routes on subdomain', () => {
+    expect(
+      getSubdomainRewriteUrl(
+        makeRequest('/.well-known/oauth-authorization-server', 'alice.follio.me')
+      )
+    ).toBeNull();
+    expect(getSubdomainRewriteUrl(makeRequest('/oauth/authorize', 'alice.follio.me'))).toBeNull();
+  });
 });

@@ -9,6 +9,7 @@ import DataSourcesPageClient from '@/app/(dashboard)/builder/data-sources/data-s
 import type { FullProfile } from '@/types';
 
 import { AccountSection, type AccountContactUpdatePayload } from './_sections/account-section';
+import { AiAssistantsSection } from './_sections/ai-assistants-section';
 import { AppearanceSection } from './_sections/appearance-section';
 import { PrivacySection } from './_sections/privacy-section';
 import { SettingsDesktopNav, SettingsMobileNav, type SettingsTab } from './_sections/settings-nav';
@@ -28,7 +29,13 @@ interface SettingsPageClientProps {
 // Component
 // ============================================================================
 
-const VALID_TABS: SettingsTab[] = ['account', 'appearance', 'data-sources', 'privacy'];
+const VALID_TABS: SettingsTab[] = [
+  'account',
+  'appearance',
+  'data-sources',
+  'privacy',
+  'ai-assistants',
+];
 
 function resolveInitialTab(param: string | null): SettingsTab {
   if (param && VALID_TABS.includes(param as SettingsTab)) {
@@ -64,7 +71,8 @@ export function SettingsPageClient({ profile }: SettingsPageClientProps) {
         <p className="text-eyebrow">Settings</p>
         <h1 className="text-display mt-3 text-3xl">Manage your account</h1>
         <p className="mt-3 text-base text-muted-foreground">
-          Update your profile, appearance, connected data sources, and privacy preferences.
+          Update your profile, appearance, connected data sources, AI assistants, and privacy
+          preferences.
         </p>
       </header>
 
@@ -95,6 +103,8 @@ export function SettingsPageClient({ profile }: SettingsPageClientProps) {
           {activeTab === 'data-sources' && <DataSourcesPageClient profile={currentProfile} />}
 
           {activeTab === 'privacy' && <PrivacySection profile={currentProfile} />}
+
+          {activeTab === 'ai-assistants' && <AiAssistantsSection />}
         </section>
       </div>
     </div>

@@ -28,6 +28,7 @@ const isProtectedRoute = createRouteMatcher([
   '/resume-preview(.*)',
   '/cover-letter-preview(.*)',
   '/resumes(.*)',
+  '/oauth(.*)',
 ]);
 
 // Define public routes that should never require auth
@@ -38,6 +39,10 @@ const isPublicRoute = createRouteMatcher([
   '/cl/(.*)',
   '/share/(.*)',
   '/api/export/(.*)',
+  '/api/mcp(.*)',
+  '/api/oauth/token(.*)',
+  '/api/oauth/register(.*)',
+  '/.well-known/(.*)',
   '/sign-in(.*)',
   '/sign-up(.*)',
   '/sign-in/sso-callback',
@@ -50,6 +55,7 @@ export function getSubdomainRewriteUrl(req: SubdomainRewriteRequest) {
 
   if (isMainDomain(hostname)) return null;
   if (pathname.startsWith('/api') || pathname.startsWith('/trpc')) return null;
+  if (pathname.startsWith('/.well-known') || pathname.startsWith('/oauth')) return null;
 
   const handle = extractHandleFromHost(hostname);
   if (!handle) return null;
@@ -89,6 +95,10 @@ export default clerkMiddleware(
     const rewriteUrl = getSubdomainRewriteUrl(req);
     if (rewriteUrl) {
       return NextResponse.rewrite(rewriteUrl);
+    }
+
+    if (isPublicRoute(req)) {
+      return NextResponse.next();
     }
 
     // Protect dashboard and builder routes

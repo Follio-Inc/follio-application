@@ -1,12 +1,17 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { SkillGroupsEditor, type SkillGroupRow } from '@/components/skills/skill-groups-editor';
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
 import { notifyProfileUpdated } from '@/lib/events';
 import { isHtmlEmpty } from '@/lib/html-utils';
-import { extractSkillNamesFromHtml, resolveSkillsHtml, skillsToHtml } from '@/lib/skills/groups';
+import {
+  editorRowsToDraftSkillGroups,
+  extractSkillNamesFromHtml,
+  resolveSkillsHtml,
+  skillsToHtml,
+} from '@/lib/skills/groups';
 
 import { FormSaveBar } from '../components/form-save-bar';
 import { useEntryFormDirty } from '../lib/entry-edit-guard';
@@ -70,7 +75,44 @@ function toEditorRows(
   return [{ id: `skill-group-${Date.now()}`, name: '', skillsHtml: '' }];
 }
 
-export function SkillsSection({ skills, skillGroups, onUpdate, embedded }: SkillsSectionProps) {
+function rowsToPreviewProfile(
+  rows: SkillGroupRow[],
+  profileId: string
+): { skills: Skill[]; skillGroups: (SkillGroup & { skills: Skill[] })[] } {
+  const now = new Date(0);
+  const skillGroups = editorRowsToDraftSkillGroups(rows).map((group) => ({
+    id: group.id,
+    profileId,
+    name: group.name,
+    sortOrder: group.sortOrder,
+    skillsHtml: group.skillsHtml,
+    createdAt: now,
+    updatedAt: now,
+    skills: group.skills.map((skill) => ({
+      id: skill.id,
+      profileId,
+      name: skill.name,
+      level: null,
+      yearsOfExp: null,
+      groupId: skill.groupId,
+      isVisible: true,
+      source: 'MANUAL' as const,
+      sortOrder: skill.sortOrder,
+      createdAt: now,
+      updatedAt: now,
+    })),
+  }));
+
+  return { skills: skillGroups.flatMap((group) => group.skills), skillGroups };
+}
+
+export function SkillsSection({
+  skills,
+  skillGroups,
+  profileId,
+  onUpdate,
+  embedded,
+}: SkillsSectionProps) {
   const [rows, setRows] = useState<SkillGroupRow[]>(() => toEditorRows(skills, skillGroups));
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -87,6 +129,25 @@ export function SkillsSection({ skills, skillGroups, onUpdate, embedded }: Skill
     setRows(next);
     resetBaseline(next);
   }, [skills, skillGroups, isDirty, resetBaseline]);
+
+  const onUpdateRef = useRef(onUpdate);
+  onUpdateRef.current = onUpdate;
+  const persistedRef = useRef({ skills, skillGroups });
+
+  useEffect(() => {
+    if (isDirty) return;
+    persistedRef.current = { skills, skillGroups };
+  }, [skills, skillGroups, isDirty]);
+
+  // Push draft rows into the resume preview as the user types — same as experience.
+  useEffect(() => {
+    if (!isDirty) return;
+    const timer = window.setTimeout(() => {
+      const preview = rowsToPreviewProfile(rows, profileId);
+      onUpdateRef.current(preview.skills, preview.skillGroups);
+    }, 150);
+    return () => window.clearTimeout(timer);
+  }, [rows, isDirty, profileId]);
 
   /** Same contract as entry editors: finish editing → leave the open panel. */
   const closeOpenCategory = useCallback(() => {
@@ -147,9 +208,10 @@ export function SkillsSection({ skills, skillGroups, onUpdate, embedded }: Skill
     const baseline = cloneRows(getBaseline());
     setRows(baseline);
     resetBaseline(baseline);
+    onUpdate(persistedRef.current.skills, persistedRef.current.skillGroups);
     setError(null);
     closeOpenCategory();
-  }, [getBaseline, resetBaseline, closeOpenCategory]);
+  }, [getBaseline, resetBaseline, closeOpenCategory, onUpdate]);
 
   const skillsContent = (
     <div className="space-y-4">

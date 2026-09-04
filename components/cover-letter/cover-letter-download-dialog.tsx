@@ -36,8 +36,8 @@ export function CoverLetterDownloadDialog({
       pageLayout={pageLayout}
       description={
         pagedOnly
-          ? 'Your cover letter uses print pages — choose A4 or Letter.'
-          : 'Choose a layout for your cover letter.'
+          ? 'Your cover letter uses print pages — choose A4 or Letter, then download.'
+          : 'Choose a layout, then download your cover letter.'
       }
       shareBannerText={
         onShareClick

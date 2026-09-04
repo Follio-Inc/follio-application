@@ -137,6 +137,49 @@ export function normalizeSkillGroups(
   return result;
 }
 
+export interface SkillEditorRow {
+  id: string;
+  name: string;
+  skillsHtml: string;
+}
+
+export interface DraftSkillGroup {
+  id: string;
+  name: string;
+  sortOrder: number;
+  skillsHtml: string | null;
+  skills: Array<{ id: string; name: string; groupId: string; sortOrder: number }>;
+}
+
+/**
+ * Map live editor rows onto the skill-group shape the resume preview reads.
+ * Empty rows are dropped so deleting skills/categories disappears immediately.
+ */
+export function editorRowsToDraftSkillGroups(rows: SkillEditorRow[]): DraftSkillGroup[] {
+  const result: DraftSkillGroup[] = [];
+
+  for (const [index, row] of rows.entries()) {
+    const names = extractSkillNamesFromHtml(row.skillsHtml);
+    const html = isHtmlEmpty(row.skillsHtml) ? null : row.skillsHtml;
+    if (!row.name.trim() && names.length === 0 && !html) continue;
+
+    result.push({
+      id: row.id,
+      name: row.name.trim() || 'Skills',
+      sortOrder: index,
+      skillsHtml: html ?? (names.length > 0 ? skillsToHtml(names) : null),
+      skills: names.map((name, skillIndex) => ({
+        id: `${row.id}:${skillIndex}`,
+        name,
+        groupId: row.id,
+        sortOrder: skillIndex,
+      })),
+    });
+  }
+
+  return result;
+}
+
 /** Convert a flat skill list into a single category for the editor. */
 export function skillGroupsFromFlatSkills(skills: string[]): SkillGroupInput[] {
   const parsed = skills.map((s) => s.trim()).filter(Boolean);

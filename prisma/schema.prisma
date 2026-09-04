@@ -9,21 +9,24 @@ datasource db {
 }
 
 model User {
-  id             String          @id @default(cuid())
-  clerkId        String          @unique
-  email          String          @unique
-  lastSignInAt   DateTime?
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  mainPurpose    MainPurpose?
-  importJobs     ImportJob[]
-  importLogs     ImportLog[]
-  importSessions ImportSession[]
-  profile        Profile?        @relation("ActiveProfile")
-  primaryProfile Profile?        @relation("PrimaryProfile")
-  profiles       Profile[]       @relation("OwnedProfiles")
-  coverLetters   CoverLetter[]
-  shareTokens    ShareToken[]
+  id                   String                @id @default(cuid())
+  clerkId              String                @unique
+  email                String                @unique
+  lastSignInAt         DateTime?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  mainPurpose          MainPurpose?
+  importJobs           ImportJob[]
+  importLogs           ImportLog[]
+  importSessions       ImportSession[]
+  profile              Profile?              @relation("ActiveProfile")
+  primaryProfile       Profile?              @relation("PrimaryProfile")
+  profiles             Profile[]             @relation("OwnedProfiles")
+  coverLetters         CoverLetter[]
+  shareTokens          ShareToken[]
+  aiConnectorAuthCodes AiConnectorAuthCode[]
+  aiConnectorTokens    AiConnectorToken[]
+  aiEditDrafts         AiEditDraft[]
 
   @@index([clerkId])
   @@index([email])
@@ -102,6 +105,7 @@ model Profile {
   generatedPortfolios    GeneratedPortfolio[]
   agentRuns              AgentRun[]
   linkedCoverLetters     CoverLetter[]
+  aiEditDrafts           AiEditDraft[]
 
   @@index([handle])
   @@index([status])
@@ -816,6 +820,90 @@ enum ImportSessionStatus {
   APPLIED
   DISCARDED
   EXPIRED
+}
+
+enum AiEditDraftStatus {
+  PENDING
+  APPLIED
+  DISCARDED
+  EXPIRED
+}
+
+/// OAuth client registered by an AI assistant (Claude, ChatGPT, etc.) via DCR.
+model AiConnectorClient {
+  id                      String                @id @default(cuid())
+  clientId                String                @unique
+  clientSecretHash        String?
+  redirectUris            String[]
+  name                    String                @default("AI assistant")
+  tokenEndpointAuthMethod String                @default("none")
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+  authorizationCodes      AiConnectorAuthCode[]
+  tokens                  AiConnectorToken[]
+
+  @@index([clientId])
+}
+
+/// One-time authorization code from the OAuth consent screen.
+model AiConnectorAuthCode {
+  id                  String            @id @default(cuid())
+  codeHash            String            @unique
+  clientId            String
+  userId              String
+  redirectUri         String
+  codeChallenge       String
+  codeChallengeMethod String            @default("S256")
+  scopes              String[]
+  expiresAt           DateTime
+  usedAt              DateTime?
+  createdAt           DateTime          @default(now())
+  client              AiConnectorClient @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
+  user                User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+/// Access token issued after the user connects an AI assistant.
+model AiConnectorToken {
+  id         String             @id @default(cuid())
+  userId     String
+  clientId   String?
+  tokenHash  String             @unique
+  scopes     String[]
+  label      String?
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  lastUsedAt DateTime?
+  createdAt  DateTime           @default(now())
+  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  client     AiConnectorClient? @relation(fields: [clientId], references: [clientId], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+/// AI-proposed profile edits. Nothing goes live until apply.
+model AiEditDraft {
+  id          String            @id @default(cuid())
+  userId      String
+  profileId   String
+  status      AiEditDraftStatus @default(PENDING)
+  operations  Json
+  summary     String
+  clientLabel String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  appliedAt   DateTime?
+  discardedAt DateTime?
+  expiresAt   DateTime
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profile     Profile           @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([profileId])
+  @@index([expiresAt])
 }
 
 enum ConnectionStatus {

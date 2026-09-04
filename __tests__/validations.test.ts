@@ -30,6 +30,7 @@ import {
   SkillSchema,
   UpdateProfileSchema,
   WorkExperienceSchema,
+  emptyToNull,
   normalizeCurrentDates,
 } from '@/lib/validations';
 import { describe, expect, it } from 'vitest';
@@ -361,6 +362,29 @@ describe('Validation Schemas', () => {
       };
       expect(() => EducationSchema.parse(data)).not.toThrow();
     });
+
+    it('clears optional fields on PATCH when sent as empty string or null', () => {
+      const cleared = EducationSchema.partial().parse({
+        gpa: '',
+        degree: '  ',
+        fieldOfStudy: null,
+        location: '',
+        description: '',
+      });
+      expect(cleared).toEqual({
+        gpa: null,
+        degree: null,
+        fieldOfStudy: null,
+        location: null,
+        description: null,
+      });
+    });
+
+    it('does not wipe omitted optional fields on a partial update', () => {
+      const parsed = EducationSchema.partial().parse({ isVisible: false });
+      expect(parsed).toEqual({ isVisible: false });
+      expect('gpa' in parsed).toBe(false);
+    });
   });
 
   describe('SkillSchema', () => {
@@ -603,6 +627,19 @@ describe('Validation Schemas', () => {
       expect(result.company).toBe('Acme');
       expect(result.startDate).toEqual(new Date('2020-01-01'));
       expect(result.endDate).toBeNull();
+    });
+  });
+
+  describe('emptyToNull', () => {
+    it('turns blank values into null so PATCH can clear a field', () => {
+      expect(emptyToNull('')).toBeNull();
+      expect(emptyToNull('   ')).toBeNull();
+      expect(emptyToNull(null)).toBeNull();
+      expect(emptyToNull(undefined)).toBeNull();
+    });
+
+    it('keeps non-empty text', () => {
+      expect(emptyToNull('3.9')).toBe('3.9');
     });
   });
 });

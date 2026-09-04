@@ -18,6 +18,12 @@ describe('buildDocumentPdfUrl', () => {
     const url = buildDocumentPdfUrl('/api/cover-letters/cl_1/pdf', 'a4', '');
     expect(url).toBe('/api/cover-letters/cl_1/pdf?layout=a4');
   });
+
+  it('produces a same-origin path the click handler can download without fetch', () => {
+    const url = buildDocumentPdfUrl('/api/export/jdoe/pdf', 'letter', '');
+    expect(url.startsWith('/api/export/')).toBe(true);
+    expect(url).not.toMatch(/^https?:/);
+  });
 });
 
 describe('buildResumePdfUrl', () => {

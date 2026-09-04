@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  applyContactEntryOrder,
   createDraftLinkEntryId,
   isDraftContactEntryId,
   mergeContactEntries,
   normalizeLinkUrl,
+  reconcileContactEntries,
 } from '@/app/(dashboard)/builder/lib/contact-entries';
 
 function entry(partial: {
@@ -72,5 +74,50 @@ describe('contact header drafts', () => {
     // eslint-disable-next-line no-script-url
     expect(normalizeLinkUrl('javascript:alert(1)').error).toBeTruthy();
     expect(normalizeLinkUrl('not a url').error).toBeTruthy();
+  });
+});
+
+describe('contact header order', () => {
+  it('moves Location off the top when a stored order is present', () => {
+    const rows = [
+      entry({ id: 'location', kind: 'location', value: 'Austin, TX' }),
+      entry({ id: 'email', kind: 'email', value: 'a@b.com' }),
+      entry({ id: 'phone', kind: 'phone', value: '555' }),
+    ];
+
+    expect(
+      applyContactEntryOrder(rows, ['email', 'phone', 'location']).map((row) => row.id)
+    ).toEqual(['email', 'phone', 'location']);
+  });
+
+  it('appends rows that are missing from the stored order and ignores unknown ids', () => {
+    const rows = [
+      entry({ id: 'location', kind: 'location' }),
+      entry({ id: 'email', kind: 'email' }),
+      entry({ id: 'github', linkType: 'GITHUB' }),
+    ];
+
+    expect(
+      applyContactEntryOrder(rows, ['email', 'missing', 'github']).map((row) => row.id)
+    ).toEqual(['email', 'github', 'location']);
+  });
+
+  it('keeps a dragged Location order when a parent re-render still has the old local list', () => {
+    const localBeforeDrag = [
+      entry({ id: 'location', kind: 'location', value: 'Austin, TX' }),
+      entry({ id: 'email', kind: 'email', value: 'a@b.com' }),
+      entry({ id: 'phone', kind: 'phone', value: '555' }),
+    ];
+    const freshAfterDrag = [
+      entry({ id: 'email', kind: 'email', value: 'a@b.com' }),
+      entry({ id: 'phone', kind: 'phone', value: '555' }),
+      entry({ id: 'location', kind: 'location', value: 'Austin, TX' }),
+    ];
+
+    expect(
+      reconcileContactEntries(localBeforeDrag, freshAfterDrag, ['email', 'phone', 'location']).map(
+        (row) => row.id
+      )
+    ).toEqual(['email', 'phone', 'location']);
   });
 });

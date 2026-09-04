@@ -24,6 +24,24 @@ export const httpUrl = (message = 'Must be a valid http(s) URL') =>
     .url(message)
     .refine((value) => /^https?:\/\//i.test(value), { message });
 
+/**
+ * Optional text a PATCH can clear. Missing stays undefined (leave unchanged);
+ * empty / whitespace / null becomes null so Prisma actually unsets the field.
+ */
+export const clearableString = (max: number) =>
+  z.preprocess((value) => {
+    if (value === undefined) return undefined;
+    if (value === null) return null;
+    if (typeof value === 'string' && value.trim() === '') return null;
+    return value;
+  }, z.string().max(max).nullable().optional());
+
+/** Client helper: send null so the API can clear a previously saved field. */
+export function emptyToNull(value: string | null | undefined): string | null {
+  if (value == null) return null;
+  return value.trim() === '' ? null : value;
+}
+
 // ===========================================
 // ENUMS (matching Prisma enums)
 // ===========================================
@@ -167,14 +185,14 @@ export const WorkExperienceSchema = z.object({
 export const EducationSchema = z.object({
   institution: z.string().min(1, 'Institution name is required').max(100),
   institutionUrl: httpUrl().optional().or(z.literal('')),
-  degree: z.string().max(100).optional(),
-  fieldOfStudy: z.string().max(100).optional(),
-  location: z.string().max(100).optional(),
+  degree: clearableString(100),
+  fieldOfStudy: clearableString(100),
+  location: clearableString(100),
   startDate: z.coerce.date().optional().nullable(),
   endDate: z.coerce.date().optional().nullable(),
   isCurrent: z.boolean().optional(),
-  gpa: z.string().max(10).optional(),
-  description: z.string().max(2000).optional(),
+  gpa: clearableString(10),
+  description: clearableString(2000),
   activities: z.array(z.string().max(100)).max(10).optional(),
   honors: z.array(z.string().max(100)).max(10).optional(),
   isVisible: z.boolean().optional(),

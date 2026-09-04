@@ -27,11 +27,12 @@ function createPrismaClient(): PrismaClient {
  * or when connection-pool defaults change and the singleton must be recreated.
  * CoverLetter.visibility / unlistedKey → generation 2.
  * Pool defaults (limit/timeout, no duplicate URL params) → generation 3.
+ * AiConnector* / AiEditDraft → generation 4.
  */
-const PRISMA_CLIENT_GENERATION = 3;
+const PRISMA_CLIENT_GENERATION = 4;
 
 function schemaFieldFingerprint(): string {
-  const modelNames = ['WorkExperience', 'CoverLetter'] as const;
+  const modelNames = ['WorkExperience', 'CoverLetter', 'AiEditDraft'] as const;
   return modelNames
     .map((name) => {
       const fields =

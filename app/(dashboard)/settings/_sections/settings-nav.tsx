@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 // Types
 // ============================================================================
 
-export type SettingsTab = 'account' | 'appearance' | 'data-sources' | 'privacy';
+export type SettingsTab = 'account' | 'appearance' | 'data-sources' | 'privacy' | 'ai-assistants';
 
 interface NavItem {
   id: SettingsTab;
@@ -33,6 +33,10 @@ const NAV_ITEMS: NavItem[] = [
   {
     id: 'privacy',
     label: 'Data & Privacy',
+  },
+  {
+    id: 'ai-assistants',
+    label: 'AI assistants',
   },
 ];
 

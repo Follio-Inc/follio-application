@@ -3,6 +3,7 @@
  */
 
 import {
+  editorRowsToDraftSkillGroups,
   extractSkillNamesFromHtml,
   flattenSkillGroups,
   formatSkillsList,
@@ -154,5 +155,43 @@ describe('skillGroupsHaveCategoryLabels', () => {
     expect(skillGroupsHaveCategoryLabels([{ name: 'Languages' }, { name: 'Frameworks' }])).toBe(
       true
     );
+  });
+});
+
+describe('editorRowsToDraftSkillGroups', () => {
+  it('maps editor HTML onto the preview skill-group shape', () => {
+    expect(
+      editorRowsToDraftSkillGroups([
+        { id: 'g1', name: 'Languages', skillsHtml: skillsToHtml(['Python', 'Go']) },
+      ])
+    ).toEqual([
+      {
+        id: 'g1',
+        name: 'Languages',
+        sortOrder: 0,
+        skillsHtml: skillsToHtml(['Python', 'Go']),
+        skills: [
+          { id: 'g1:0', name: 'Python', groupId: 'g1', sortOrder: 0 },
+          { id: 'g1:1', name: 'Go', groupId: 'g1', sortOrder: 1 },
+        ],
+      },
+    ]);
+  });
+
+  it('drops empty rows so cleared skills disappear from the preview', () => {
+    expect(
+      editorRowsToDraftSkillGroups([
+        { id: 'g1', name: '', skillsHtml: '' },
+        { id: 'g2', name: 'Tools', skillsHtml: skillsToHtml(['Figma']) },
+      ])
+    ).toEqual([
+      {
+        id: 'g2',
+        name: 'Tools',
+        sortOrder: 1,
+        skillsHtml: skillsToHtml(['Figma']),
+        skills: [{ id: 'g2:0', name: 'Figma', groupId: 'g2', sortOrder: 0 }],
+      },
+    ]);
   });
 });

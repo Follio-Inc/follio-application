@@ -48,6 +48,36 @@ export function createDraftLinkEntryId(linkType: string): string {
 }
 
 /**
+ * Apply a persisted Contact & Links row order.
+ * Unknown ids are ignored; rows missing from the stored order are appended.
+ */
+export function applyContactEntryOrder<T extends { id: string }>(
+  entries: T[],
+  storedOrder: string[] | null | undefined
+): T[] {
+  if (!storedOrder || storedOrder.length === 0) return entries;
+
+  const byId = new Map<string, T>();
+  for (const entry of entries) {
+    byId.set(entry.id, entry);
+  }
+
+  const ordered: T[] = [];
+  const seen = new Set<string>();
+  for (const orderId of storedOrder) {
+    const entry = byId.get(orderId);
+    if (entry && !seen.has(entry.id)) {
+      ordered.push(entry);
+      seen.add(entry.id);
+    }
+  }
+  for (const entry of entries) {
+    if (!seen.has(entry.id)) ordered.push(entry);
+  }
+  return ordered;
+}
+
+/**
  * Reconcile local editor rows with a profile snapshot.
  * Keeps unsaved draft rows, and promotes a draft to the persisted link of the
  * same type so a just-created GitHub (etc.) does not appear twice or vanish.
@@ -99,4 +129,17 @@ export function mergeContactEntries<T extends ContactEntryLike>(existing: T[], f
   }
 
   return merged;
+}
+
+/**
+ * Merge a profile snapshot into local rows, then apply the saved header order.
+ * `storedOrder` wins over the pre-sync local order so a just-saved drag is not
+ * undone when the parent re-renders with the new contactInfo.
+ */
+export function reconcileContactEntries<T extends ContactEntryLike>(
+  existing: T[],
+  fresh: T[],
+  storedOrder?: string[] | null
+): T[] {
+  return applyContactEntryOrder(mergeContactEntries(existing, fresh), storedOrder);
 }

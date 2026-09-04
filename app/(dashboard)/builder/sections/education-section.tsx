@@ -1,7 +1,7 @@
 'use client';
 
 import { Eye, EyeOff, GraduationCap, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
@@ -18,7 +18,9 @@ import { Label } from '@/components/ui/label';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { Switch } from '@/components/ui/switch';
 import { notifyProfileUpdated } from '@/lib/events';
+import { isHtmlEmpty } from '@/lib/html-utils';
 import { useReorderPersist } from '@/lib/hooks/use-reorder-persist';
+import { emptyToNull } from '@/lib/validations';
 import { cn, parseMonthInput, toMonthInputValue } from '@/lib/utils';
 
 import { EntryInlineForm } from '../components/entry-inline-form';
@@ -93,6 +95,51 @@ export function EducationSection({
 
   const persistOrder = useReorderPersist<Education>('education', onUpdate);
 
+  const snapshotRef = useRef<Education[]>(autoEditId ? [...educations] : []);
+  const skipRevertRef = useRef(false);
+  const editingId =
+    editingEducation?.id ?? (autoEditId && autoEditId !== 'new' ? autoEditId : null);
+  const editingIdRef = useRef(editingId);
+  editingIdRef.current = editingId;
+  const educationsRef = useRef(educations);
+  educationsRef.current = educations;
+  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const revertPreview = useCallback(() => {
+    onUpdate(snapshotRef.current);
+  }, [onUpdate]);
+
+  useEffect(() => {
+    const id = editingIdRef.current;
+    if (!id) return;
+    if (!autoEditId && !isDialogOpen) return;
+
+    if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
+    previewTimerRef.current = setTimeout(() => {
+      const updated = educationsRef.current.map((edu) =>
+        edu.id === id
+          ? {
+              ...edu,
+              ...formData,
+              gpa: emptyToNull(formData.gpa),
+              degree: emptyToNull(formData.degree),
+              fieldOfStudy: emptyToNull(formData.fieldOfStudy),
+              location: emptyToNull(formData.location),
+              description: isHtmlEmpty(formData.description)
+                ? null
+                : (formData.description ?? null),
+            }
+          : edu
+      );
+      onUpdate(updated);
+    }, 150);
+
+    return () => {
+      if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData, isDialogOpen, autoEditId]);
+
   const handleReorder = useCallback(
     (reordered: Education[]) => {
       persistOrder(reordered, educations);
@@ -102,10 +149,18 @@ export function EducationSection({
 
   const handleDialogOpenChange = (open: boolean) => {
     setIsDialogOpen(open);
-    if (!open && autoEditId) onEditComplete?.();
+    if (!open) {
+      if (!skipRevertRef.current && editingEducation) {
+        revertPreview();
+      }
+      skipRevertRef.current = false;
+      if (autoEditId) onEditComplete?.();
+    }
   };
 
   const handleOpenDialog = (education?: Education) => {
+    snapshotRef.current = [...educations];
+    skipRevertRef.current = false;
     if (education) {
       setEditingEducation(education);
       const next = { ...education };
@@ -128,14 +183,14 @@ export function EducationSection({
     try {
       const payload = {
         institution: formData.institution,
-        degree: formData.degree || undefined,
-        fieldOfStudy: formData.fieldOfStudy || undefined,
-        location: formData.location || undefined,
+        degree: emptyToNull(formData.degree),
+        fieldOfStudy: emptyToNull(formData.fieldOfStudy),
+        location: emptyToNull(formData.location),
         startDate: formData.startDate,
         endDate: formData.isCurrent ? null : formData.endDate,
         isCurrent: formData.isCurrent || false,
-        gpa: formData.gpa || undefined,
-        description: formData.description || undefined,
+        gpa: emptyToNull(formData.gpa),
+        description: isHtmlEmpty(formData.description) ? null : (formData.description ?? null),
         activities: formData.activities || [],
         honors: formData.honors || [],
       };
@@ -175,6 +230,7 @@ export function EducationSection({
         onUpdate([...educations, education]);
       }
 
+      skipRevertRef.current = true;
       setIsDialogOpen(false);
       setFormData(emptyEducation);
       setEditingEducation(null);
@@ -222,7 +278,10 @@ export function EducationSection({
       }
       error={error}
       onSave={handleSave}
-      onDiscard={() => onEditComplete?.()}
+      onDiscard={() => {
+        revertPreview();
+        onEditComplete?.();
+      }}
       canSave={Boolean(formData.institution)}
       isSaving={isLoading}
       actionsRef={actionsRef}
@@ -471,7 +530,11 @@ export function EducationSection({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isLoading}>
+          <Button
+            variant="outline"
+            onClick={() => handleDialogOpenChange(false)}
+            disabled={isLoading}
+          >
             Cancel
           </Button>
           <Button onClick={handleSave} disabled={!formData.institution || isLoading}>

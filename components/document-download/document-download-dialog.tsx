@@ -498,19 +498,30 @@ export function DocumentDownloadDialog({
     }
   }, [pageLayout, allowedLayouts]);
 
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) setError(null);
+  }, [open]);
+
   const { download, isDownloading } = useDocumentDownload({
     pdfPath,
     filename,
     layout,
     forwardSearchParams,
-    onSuccess: () => setOpen(false),
+    onError: (err) => setError(err.message || 'Download failed. Please try again.'),
   });
+
+  const startDownload = () => {
+    setError(null);
+    void download(layout);
+  };
 
   const resolvedDescription =
     description ??
     (pagedOnly
-      ? 'Your document uses print pages — choose A4 or Letter.'
-      : 'Choose a layout for your PDF.');
+      ? 'Your document uses print pages — choose A4 or Letter, then download.'
+      : 'Choose a layout, then download your PDF.');
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -575,8 +586,10 @@ export function DocumentDownloadDialog({
                 key={option.value}
                 type="button"
                 onClick={() => setLayout(option.value)}
+                disabled={isDownloading}
+                aria-pressed={selected}
                 className={cn(
-                  'group flex flex-col items-center rounded-xl border-2 p-4 text-center transition-all',
+                  'group flex flex-col items-center rounded-xl border-2 p-4 text-center transition-all disabled:opacity-60',
                   selected
                     ? 'border-primary bg-primary/5 shadow-sm'
                     : 'border-border hover:border-muted-foreground/40 hover:bg-muted/40',
@@ -611,11 +624,23 @@ export function DocumentDownloadDialog({
           })}
         </div>
 
+        {error ? (
+          <p className="mt-4 text-sm text-destructive" role="alert">
+            {error}
+          </p>
+        ) : isDownloading ? (
+          <p className="mt-4 text-sm text-muted-foreground" role="status">
+            Generating your PDF — it will appear in your downloads shortly. Large resumes can take
+            up to a minute.
+          </p>
+        ) : null}
+
         {/* ── Download button ── */}
         <Button
-          className="mt-5 w-full"
+          type="button"
+          className="sticky bottom-0 mt-5 w-full"
           size="lg"
-          onClick={() => void download()}
+          onClick={startDownload}
           disabled={isDownloading}
         >
           {isDownloading ? (
