@@ -11,7 +11,7 @@ import { generateCoverLetterPDF } from '@/services/cover-letter-export.service';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 type RouteContext = { params: Promise<{ id: string }> };
 

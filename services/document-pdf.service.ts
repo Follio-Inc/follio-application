@@ -1,8 +1,8 @@
 /**
  * HTML → PDF for paper documents.
  *
- * Production: warm Chromium worker (PDF_WORKER_URL) + Postgres cache.
- * Local: Puppeteer on this machine when the worker URL is unset.
+ * Prefers a warm Chromium worker when PDF_WORKER_URL is set.
+ * Otherwise prints on this machine: Puppeteer locally, bundled Chromium on Vercel.
  */
 
 import type { PdfLayout } from '@/lib/document-design';
@@ -12,7 +12,6 @@ import {
   type DocumentPdfCacheKey,
 } from '@/lib/document-pdf/cache';
 import { isPdfWorkerConfigured, renderPdfViaWorker } from '@/lib/document-pdf/render-client';
-import { Errors } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 
 const serviceLogger = logger.child({ source: 'document-pdf' });
@@ -34,10 +33,8 @@ export async function renderHtmlToPdf(html: string, layout: PdfLayout): Promise<
   }
 
   if (isServerlessRuntime()) {
-    throw Errors.externalService(
-      'PDF renderer',
-      'PDF generation is not configured. Set PDF_WORKER_URL and PDF_WORKER_SECRET to the warm Chromium worker.'
-    );
+    const { renderPdfViaServerlessChromium } = await import('@/services/document-pdf.serverless');
+    return renderPdfViaServerlessChromium(html, layout);
   }
 
   const { renderPdfViaLocalChromium } = await import('@/services/document-pdf.local');

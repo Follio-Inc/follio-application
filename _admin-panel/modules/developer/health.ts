@@ -61,8 +61,6 @@ export async function collectHealthReport(): Promise<HealthReport> {
     envPresence('NEXT_PUBLIC_APP_URL', false),
     envPresence('NEXT_PUBLIC_ROOT_DOMAIN', false),
     envPresence('OPENAI_API_KEY', false),
-    envPresence('PDF_WORKER_URL', process.env.VERCEL === '1'),
-    envPresence('PDF_WORKER_SECRET', process.env.VERCEL === '1'),
     {
       id: 'feature:portfolio',
       label: 'Portfolio feature flag',

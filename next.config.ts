@@ -58,7 +58,20 @@ const nextConfig: NextConfig = {
   },
 
   // Externalize packages that don't work with webpack bundling
-  serverExternalPackages: ['pdf-parse', 'puppeteer', 'isomorphic-dompurify', 'jsdom'],
+  serverExternalPackages: [
+    'pdf-parse',
+    'puppeteer',
+    'puppeteer-core',
+    '@sparticuz/chromium',
+    'isomorphic-dompurify',
+    'jsdom',
+  ],
+
+  // Keep the Chromium binary in the PDF Lambdas (not tree-shaken out).
+  outputFileTracingIncludes: {
+    '/api/export/[handle]/pdf': ['./node_modules/@sparticuz/chromium/**'],
+    '/api/cover-letters/[id]/pdf': ['./node_modules/@sparticuz/chromium/**'],
+  },
 
   // Headers for security and SEO
   async headers() {

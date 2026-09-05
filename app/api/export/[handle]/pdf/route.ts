@@ -8,15 +8,15 @@ import { getProfileByHandle } from '@/services/profile.service';
 import { assertResumeExportAccess, contentDispositionAttachment } from '../access';
 
 /**
- * PDF HTML is printed by a warm Chromium worker (not in this function).
+ * PDF is printed with bundled Chromium on this Node.js function.
  */
 export const runtime = 'nodejs';
 
 /** Never cache export responses at the CDN or in Next's data cache. */
 export const dynamic = 'force-dynamic';
 
-/** Worker print + cache write. Generation itself is not on this Lambda. */
-export const maxDuration = 30;
+/** Cold Chromium start can take tens of seconds. */
+export const maxDuration = 60;
 
 /**
  * GET /api/export/[handle]/pdf?layout=continuous|a4|letter

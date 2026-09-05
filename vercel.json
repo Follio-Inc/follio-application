@@ -2,11 +2,11 @@
   "functions": {
     "app/api/export/[handle]/pdf/route.ts": {
       "memory": 1024,
-      "maxDuration": 30
+      "maxDuration": 60
     },
     "app/api/cover-letters/[id]/pdf/route.ts": {
       "memory": 1024,
-      "maxDuration": 30
+      "maxDuration": 60
     }
   }
 }
