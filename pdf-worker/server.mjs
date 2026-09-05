@@ -1,6 +1,6 @@
 /**
  * Warm Chromium PDF worker. One browser stays alive; each request opens a page.
- * Keep this print logic in sync with lib/document-pdf/print-html.ts.
+ * Keep print logic in sync with lib/document-pdf/print-html.ts.
  */
 
 import { timingSafeEqual } from 'node:crypto';
@@ -11,6 +11,9 @@ import { chromium } from 'playwright';
 const PORT = Number(process.env.PORT || 3001);
 const SECRET = process.env.PDF_WORKER_SECRET || '';
 const MAX_BODY_BYTES = 5_000_000;
+const MAX_CONCURRENT = Math.max(1, Number(process.env.PDF_WORKER_CONCURRENCY || 2));
+const SET_CONTENT_TIMEOUT_MS = 20_000;
+const MAX_CONTINUOUS_HEIGHT_PX = 20_000;
 
 const PAGE_SIZES = {
   letter: { widthPx: 816, pdfFormat: 'Letter' },
@@ -19,6 +22,9 @@ const PAGE_SIZES = {
 
 /** @type {import('playwright').Browser | null} */
 let browser = null;
+let inflight = 0;
+/** @type {Array<() => void>} */
+const waiters = [];
 
 function secretsMatch(header) {
   const expected = `Bearer ${SECRET}`;
@@ -38,6 +44,22 @@ async function getBrowser() {
     browser = null;
   });
   return browser;
+}
+
+async function withConcurrencySlot(fn) {
+  while (inflight >= MAX_CONCURRENT) {
+    await new Promise((resolve) => {
+      waiters.push(resolve);
+    });
+  }
+  inflight += 1;
+  try {
+    return await fn();
+  } finally {
+    inflight -= 1;
+    const next = waiters.shift();
+    if (next) next();
+  }
 }
 
 function readBody(req) {
@@ -64,7 +86,7 @@ function normalizeLayout(raw) {
   return 'letter';
 }
 
-async function htmlToPdf(html, layout) {
+async function htmlToPdfOnce(html, layout) {
   const pageSize = layout === 'a4' ? PAGE_SIZES.a4 : PAGE_SIZES.letter;
   const paperWidthOverride =
     layout === 'a4'
@@ -77,17 +99,33 @@ async function htmlToPdf(html, layout) {
   const instance = await getBrowser();
   const page = await instance.newPage();
   try {
-    await page.setContent(finalHtml, { waitUntil: 'load' });
-    await page.evaluate(() => document.fonts.ready);
+    await page.setContent(finalHtml, {
+      waitUntil: 'domcontentloaded',
+      timeout: SET_CONTENT_TIMEOUT_MS,
+    });
+    try {
+      await page.evaluate(() =>
+        Promise.race([
+          document.fonts.ready.then(() => undefined),
+          new Promise((resolve) => setTimeout(resolve, 2500)),
+        ])
+      );
+    } catch {
+      // print with fallback fonts
+    }
 
     if (layout === 'continuous') {
       const contentHeight = await page.evaluate(() => {
         const paper = document.querySelector('.resume-paper');
         return paper ? paper.scrollHeight : document.body.scrollHeight;
       });
+      const heightPx = Math.min(
+        Math.max(Number(contentHeight) || 1056, 1) + 20,
+        MAX_CONTINUOUS_HEIGHT_PX
+      );
       return page.pdf({
         width: `${pageSize.widthPx}px`,
-        height: `${contentHeight + 20}px`,
+        height: `${heightPx}px`,
         printBackground: true,
         margin: { top: '0px', right: '0px', bottom: '0px', left: '0px' },
       });
@@ -99,7 +137,20 @@ async function htmlToPdf(html, layout) {
       margin: { top: '0px', right: '0px', bottom: '0px', left: '0px' },
     });
   } finally {
-    await page.close();
+    await page.close().catch(() => {});
+  }
+}
+
+async function htmlToPdf(html, layout) {
+  try {
+    return await htmlToPdfOnce(html, layout);
+  } catch (error) {
+    console.error('PDF render attempt failed, relaunching browser:', error);
+    if (browser) {
+      await browser.close().catch(() => {});
+      browser = null;
+    }
+    return htmlToPdfOnce(html, layout);
   }
 }
 
@@ -112,9 +163,20 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || '/', `http://127.0.0.1:${PORT}`);
 
   if (req.method === 'GET' && url.pathname === '/health') {
-    send(res, 200, JSON.stringify({ ok: true, browser: Boolean(browser?.isConnected()) }), {
-      'Content-Type': 'application/json',
-    });
+    try {
+      const instance = await getBrowser();
+      send(
+        res,
+        instance.isConnected() ? 200 : 503,
+        JSON.stringify({ ok: instance.isConnected(), inflight }),
+        { 'Content-Type': 'application/json' }
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'browser down';
+      send(res, 503, JSON.stringify({ ok: false, error: message }), {
+        'Content-Type': 'application/json',
+      });
+    }
     return;
   }
 
@@ -143,7 +205,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     const layout = normalizeLayout(payload.layout);
-    const pdf = await htmlToPdf(html, layout);
+    const pdf = await withConcurrencySlot(() => htmlToPdf(html, layout));
     send(res, 200, pdf, {
       'Content-Type': 'application/pdf',
       'Content-Length': String(pdf.length),
@@ -155,6 +217,10 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+server.requestTimeout = 120_000;
+server.headersTimeout = 125_000;
+server.keepAliveTimeout = 65_000;
+
 if (!SECRET) {
   console.error('PDF_WORKER_SECRET is required');
   process.exit(1);
@@ -162,6 +228,6 @@ if (!SECRET) {
 
 const instance = await getBrowser();
 console.log(
-  `PDF worker listening on :${PORT} (browser ${instance.isConnected() ? 'ready' : 'down'})`
+  `PDF worker listening on :${PORT} (browser ${instance.isConnected() ? 'ready' : 'down'}, concurrency ${MAX_CONCURRENT})`
 );
 server.listen(PORT);

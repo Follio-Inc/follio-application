@@ -29,6 +29,7 @@
     "live-qa:install": "playwright install chromium",
     "live-qa:auth": "node scripts/live-qa-capture-auth.mjs",
     "pdf-worker": "npm start --prefix pdf-worker",
+    "pdf-worker:deploy": "bash scripts/deploy-pdf-worker.sh",
     "typecheck": "tsc --noEmit",
     "validate": "npm run typecheck && npm run lint && npm run test:run",
     "prepare": "husky"

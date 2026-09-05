@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { parsePdfLayoutQueryParam } from '@/lib/document-design';
+import { toPdfRenderAppError } from '@/lib/document-pdf/render-errors';
 import { handleApiError } from '@/lib/errors';
 import { generateResumePDF } from '@/services/export.service';
 import { getProfileByHandle } from '@/services/profile.service';
@@ -62,6 +63,9 @@ export async function GET(
       },
     });
   } catch (error) {
-    return handleApiError(error, { path: `/api/export/${handle}/pdf`, method: 'GET' });
+    return handleApiError(toPdfRenderAppError(error), {
+      path: `/api/export/${handle}/pdf`,
+      method: 'GET',
+    });
   }
 }

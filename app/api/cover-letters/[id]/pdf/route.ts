@@ -6,6 +6,7 @@ import { parseCoverLetterContent, parseCoverLetterDesign } from '@/lib/cover-let
 import { formatDocumentDownloadFilename } from '@/lib/document-download/filename';
 import { parsePdfLayoutQueryParam } from '@/lib/document-design';
 import { db } from '@/lib/db';
+import { toPdfRenderAppError } from '@/lib/document-pdf/render-errors';
 import { handleApiError } from '@/lib/errors';
 import { generateCoverLetterPDF } from '@/services/cover-letter-export.service';
 
@@ -90,6 +91,9 @@ export async function GET(request: NextRequest, context: RouteContext) {
       },
     });
   } catch (error) {
-    return handleApiError(error, { path: '/api/cover-letters/[id]/pdf', method: 'GET' });
+    return handleApiError(toPdfRenderAppError(error), {
+      path: '/api/cover-letters/[id]/pdf',
+      method: 'GET',
+    });
   }
 }

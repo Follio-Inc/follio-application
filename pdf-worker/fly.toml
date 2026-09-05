@@ -1,7 +1,5 @@
 # Warm Chromium PDF worker — keep at least one machine running.
-# fly apps create follio-pdf
-# fly secrets set PDF_WORKER_SECRET=...
-# fly deploy
+# From repo: cd pdf-worker && fly apps create follio-pdf && fly secrets set PDF_WORKER_SECRET=... && fly deploy
 
 app = 'follio-pdf'
 primary_region = 'iad'
@@ -12,6 +10,7 @@ primary_region = 'iad'
 [env]
   PORT = '3001'
   NODE_ENV = 'production'
+  PDF_WORKER_CONCURRENCY = '2'
 
 [http_service]
   internal_port = 3001
@@ -21,7 +20,14 @@ primary_region = 'iad'
   min_machines_running = 1
   processes = ['app']
 
+  [[http_service.checks]]
+    interval = '15s'
+    timeout = '5s'
+    grace_period = '40s'
+    method = 'GET'
+    path = '/health'
+
 [[vm]]
-  memory = '1gb'
+  memory = '2gb'
   cpu_kind = 'shared'
   cpus = 1

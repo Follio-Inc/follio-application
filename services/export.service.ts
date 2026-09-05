@@ -8,6 +8,7 @@
  */
 
 import { documentGoogleFontLinkTags } from '@/lib/document-design';
+import { Errors } from '@/lib/errors';
 import {
   containsHtmlFormatting,
   escapeHtml,
@@ -572,7 +573,7 @@ function atelierContactIconSvg(kind: 'phone' | 'email' | 'website' | 'link'): st
 }
 
 function experienceSectionHtml(profile: FullProfile, atelier = false): string {
-  const items = profile.workExperiences.filter((e) => e.isVisible !== false);
+  const items = (profile.workExperiences ?? []).filter((e) => e.isVisible !== false);
   if (items.length === 0) return '';
 
   const entries = items
@@ -634,7 +635,7 @@ function experienceSectionHtml(profile: FullProfile, atelier = false): string {
 }
 
 function educationSectionHtml(profile: FullProfile, atelier = false): string {
-  const items = profile.educations.filter((e) => e.isVisible !== false);
+  const items = (profile.educations ?? []).filter((e) => e.isVisible !== false);
   if (items.length === 0) return '';
 
   const entries = items
@@ -686,10 +687,10 @@ function educationSectionHtml(profile: FullProfile, atelier = false): string {
 
 function skillsSectionHtml(profile: FullProfile, options: { stacked?: boolean } = {}): string {
   const { stacked = false } = options;
-  const visibleSkillGroups = profile.skillGroups
-    .map((g) => ({ ...g, skills: g.skills.filter((s) => s.isVisible !== false) }))
+  const visibleSkillGroups = (profile.skillGroups ?? [])
+    .map((g) => ({ ...g, skills: (g.skills ?? []).filter((s) => s.isVisible !== false) }))
     .filter((g) => g.skills.length > 0 || !isHtmlEmpty(g.skillsHtml));
-  const visibleSkills = profile.skills.filter((s) => s.isVisible !== false);
+  const visibleSkills = (profile.skills ?? []).filter((s) => s.isVisible !== false);
   const groupNames = visibleSkillGroups.map((g) => g.name);
   const hasCategoryLabels = skillGroupsHaveCategoryLabels(visibleSkillGroups);
   const hasRichHtml = visibleSkillGroups.some((g) => g.skillsHtml && !isHtmlEmpty(g.skillsHtml));
@@ -740,7 +741,9 @@ function skillsSectionHtml(profile: FullProfile, options: { stacked?: boolean } 
 }
 
 function projectsSectionHtml(profile: FullProfile): string {
-  const items = profile.projects.filter((p) => p.isVisible !== false && p.showOnResume !== false);
+  const items = (profile.projects ?? []).filter(
+    (p) => p.isVisible !== false && p.showOnResume !== false
+  );
   if (items.length === 0) return '';
 
   const entries = items
@@ -789,7 +792,7 @@ function projectsSectionHtml(profile: FullProfile): string {
 }
 
 function certificationsSectionHtml(profile: FullProfile): string {
-  const items = profile.certifications.filter((c) => c.isVisible !== false);
+  const items = (profile.certifications ?? []).filter((c) => c.isVisible !== false);
   if (items.length === 0) return '';
 
   const entries = items
@@ -813,7 +816,7 @@ function certificationsSectionHtml(profile: FullProfile): string {
 }
 
 function awardsSectionHtml(profile: FullProfile, title = 'AWARDS & RECOGNITION'): string {
-  const items = profile.awards.filter((a) => a.isVisible !== false);
+  const items = (profile.awards ?? []).filter((a) => a.isVisible !== false);
   if (items.length === 0) return '';
 
   const entries = items
@@ -992,7 +995,7 @@ function customSectionHtml(section: ProfileSection): string {
 
   return `
   <section class="resume-section">
-    ${sectionDividerHtml(section.title.toUpperCase())}
+    ${sectionDividerHtml((section.title || 'CUSTOM').toUpperCase())}
     ${entriesHtml}
     ${freeformHtml}
   </section>`;
@@ -2004,7 +2007,18 @@ export async function generateResumePDF(
   profile: FullProfile,
   { layout = 'letter' }: PdfOptions = {}
 ): Promise<Buffer> {
-  return generateDocumentPDF(toPDFHtml(profile), {
+  let html: string;
+  try {
+    html = toPDFHtml(profile);
+  } catch (error) {
+    serviceLogger.error('Failed to generate PDF HTML', error, { profileId: profile.id });
+    throw Errors.externalService(
+      'PDF renderer',
+      'Could not build this resume PDF. Please try again.'
+    );
+  }
+
+  return generateDocumentPDF(html, {
     layout,
     cache: { kind: 'resume', subjectId: profile.id, layout },
   });

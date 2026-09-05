@@ -170,17 +170,21 @@ const SAFE_URI_REGEXP = /^(?:https?|mailto|tel):|^(?:\/|#|\.)/i;
 export function sanitizeRichHtml(html: string | null | undefined): string {
   if (!html) return '';
 
-  return getDOMPurify().sanitize(html, {
-    ALLOWED_TAGS: [...ALLOWED_HTML_TAGS],
-    ALLOWED_ATTR: [...ALLOWED_HTML_ATTRS],
-    ALLOWED_URI_REGEXP: SAFE_URI_REGEXP,
-    // Forbid any inline event handlers and other dangerous vectors outright.
-    FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'srcset'],
-    FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'img', 'svg', 'math'],
-    // Keep the result as an HTML string (not a DOM node).
-    RETURN_DOM: false,
-    RETURN_DOM_FRAGMENT: false,
-  });
+  try {
+    return getDOMPurify().sanitize(html, {
+      ALLOWED_TAGS: [...ALLOWED_HTML_TAGS],
+      ALLOWED_ATTR: [...ALLOWED_HTML_ATTRS],
+      ALLOWED_URI_REGEXP: SAFE_URI_REGEXP,
+      // Forbid any inline event handlers and other dangerous vectors outright.
+      FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'srcset'],
+      FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'img', 'svg', 'math'],
+      // Keep the result as an HTML string (not a DOM node).
+      RETURN_DOM: false,
+      RETURN_DOM_FRAGMENT: false,
+    });
+  } catch {
+    return escapeHtml(stripHtmlTags(html));
+  }
 }
 
 // ─── Bullet ↔ HTML Conversion ───────────────────────────────────────────────
