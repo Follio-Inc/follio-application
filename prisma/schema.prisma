@@ -906,6 +906,22 @@ model AiEditDraft {
   @@index([expiresAt])
 }
 
+/// Cached Chromium print of a resume or cover letter. One row per document+layout.
+/// Regenerated when the source HTML hash changes.
+model DocumentPdfCache {
+  id         String   @id @default(cuid())
+  kind       String
+  subjectId  String
+  layout     String
+  sourceHash String
+  pdf        Bytes
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([kind, subjectId, layout])
+  @@index([subjectId])
+}
+
 enum ConnectionStatus {
   CONNECTED
   DISCONNECTED

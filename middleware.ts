@@ -42,6 +42,7 @@ const isPublicRoute = createRouteMatcher([
   '/api/mcp(.*)',
   '/api/oauth/token(.*)',
   '/api/oauth/register(.*)',
+  '/chromium-v(.*)',
   '/.well-known/(.*)',
   '/sign-in(.*)',
   '/sign-up(.*)',
@@ -56,6 +57,7 @@ export function getSubdomainRewriteUrl(req: SubdomainRewriteRequest) {
   if (isMainDomain(hostname)) return null;
   if (pathname.startsWith('/api') || pathname.startsWith('/trpc')) return null;
   if (pathname.startsWith('/.well-known') || pathname.startsWith('/oauth')) return null;
+  if (pathname.startsWith('/chromium-')) return null;
 
   const handle = extractHandleFromHost(hostname);
   if (!handle) return null;
@@ -116,8 +118,9 @@ export default clerkMiddleware(
 
 export const config = {
   matcher: [
-    // Skip Next.js internals and all static files
-    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    // Skip Next.js internals and static files (include .tar so the Chromium pack
+    // is served from the CDN, not Edge middleware — Lambda PDF gen fetches it).
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest|tar)).*)',
     // Always run for API routes
     '/(api|trpc)(.*)',
   ],

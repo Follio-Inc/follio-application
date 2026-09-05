@@ -1982,7 +1982,7 @@ export function toPDFHtml(profile: FullProfile): string {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// PDF GENERATION (Puppeteer)
+// PDF GENERATION (warm Chromium worker)
 // ═══════════════════════════════════════════════════════════════════
 
 /**
@@ -2004,5 +2004,8 @@ export async function generateResumePDF(
   profile: FullProfile,
   { layout = 'letter' }: PdfOptions = {}
 ): Promise<Buffer> {
-  return generateDocumentPDF(toPDFHtml(profile), { layout });
+  return generateDocumentPDF(toPDFHtml(profile), {
+    layout,
+    cache: { kind: 'resume', subjectId: profile.id, layout },
+  });
 }

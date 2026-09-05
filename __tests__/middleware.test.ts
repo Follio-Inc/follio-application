@@ -60,4 +60,10 @@ describe('middleware subdomain rewrite', () => {
     ).toBeNull();
     expect(getSubdomainRewriteUrl(makeRequest('/oauth/authorize', 'alice.follio.me'))).toBeNull();
   });
+
+  it('does not rewrite Chromium pack URLs on subdomain', () => {
+    expect(
+      getSubdomainRewriteUrl(makeRequest('/chromium-v147.0.0-pack.x64.tar', 'alice.follio.me'))
+    ).toBeNull();
+  });
 });

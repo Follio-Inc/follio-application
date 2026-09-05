@@ -35,6 +35,7 @@
     "_experiments",
     "_extensions",
     "_admin-panel/modules/developer/live-qa/.artifacts",
-    "_admin-panel/modules/developer/live-qa/.auth"
+    "_admin-panel/modules/developer/live-qa/.auth",
+    "pdf-worker"
   ]
 }

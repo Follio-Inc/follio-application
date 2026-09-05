@@ -66,5 +66,5 @@ logs
 # clerk configuration (can include secrets)
 /.clerk/
 
-# Chromium Pack (Downloaded at build time)
+# Legacy Chromium pack (no longer downloaded; worker prints PDFs)
 /public/chromium-*-pack.*

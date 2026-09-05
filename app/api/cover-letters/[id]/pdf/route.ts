@@ -11,7 +11,7 @@ import { generateCoverLetterPDF } from '@/services/cover-letter-export.service';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 30;
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -72,7 +72,10 @@ export async function GET(request: NextRequest, context: RouteContext) {
     const pdfBuffer = await generateCoverLetterPDF(
       parseCoverLetterContent(letter.content),
       parseCoverLetterDesign(letter.design),
-      { layout }
+      {
+        layout,
+        cache: { kind: 'cover_letter', subjectId: letter.id, layout },
+      }
     );
 
     const filename = `${formatDocumentDownloadFilename(letter.title, 'Cover_Letter')}.pdf`;

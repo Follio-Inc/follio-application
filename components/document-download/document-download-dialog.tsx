@@ -500,22 +500,14 @@ export function DocumentDownloadDialog({
 
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (open) setError(null);
-  }, [open]);
-
   const { download, isDownloading } = useDocumentDownload({
     pdfPath,
     filename,
     layout,
     forwardSearchParams,
+    onSuccess: () => setError(null),
     onError: (err) => setError(err.message || 'Download failed. Please try again.'),
   });
-
-  const startDownload = () => {
-    setError(null);
-    void download(layout);
-  };
 
   const resolvedDescription =
     description ??
@@ -628,19 +620,22 @@ export function DocumentDownloadDialog({
           <p className="mt-4 text-sm text-destructive" role="alert">
             {error}
           </p>
-        ) : isDownloading ? (
-          <p className="mt-4 text-sm text-muted-foreground" role="status">
-            Generating your PDF — it will appear in your downloads shortly. Large resumes can take
-            up to a minute.
+        ) : (
+          <p className="mt-4 text-sm text-muted-foreground">
+            {isDownloading
+              ? 'Generating your PDF — the save dialog opens when the file is ready. This can take up to a minute.'
+              : 'Choose a layout, then download. The save dialog opens after the PDF is generated.'}
           </p>
-        ) : null}
+        )}
 
-        {/* ── Download button ── */}
         <Button
           type="button"
           className="sticky bottom-0 mt-5 w-full"
           size="lg"
-          onClick={startDownload}
+          onClick={() => {
+            setError(null);
+            void download(layout);
+          }}
           disabled={isDownloading}
         >
           {isDownloading ? (

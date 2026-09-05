@@ -8,19 +8,15 @@ import { getProfileByHandle } from '@/services/profile.service';
 import { assertResumeExportAccess, contentDispositionAttachment } from '../access';
 
 /**
- * PDF generation launches a headless Chromium instance, which requires the
- * full Node.js runtime (not the Edge runtime).
+ * PDF HTML is printed by a warm Chromium worker (not in this function).
  */
 export const runtime = 'nodejs';
 
 /** Never cache export responses at the CDN or in Next's data cache. */
 export const dynamic = 'force-dynamic';
 
-/**
- * Rendering and converting the resume HTML to PDF can take several seconds,
- * which exceeds the default serverless timeout. Allow up to 60s.
- */
-export const maxDuration = 60;
+/** Worker print + cache write. Generation itself is not on this Lambda. */
+export const maxDuration = 30;
 
 /**
  * GET /api/export/[handle]/pdf?layout=continuous|a4|letter

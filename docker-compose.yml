@@ -35,6 +35,17 @@ services:
       timeout: 5s
       retries: 5
 
+  pdf-worker:
+    profiles: ['pdf']
+    build: ./pdf-worker
+    container_name: follio-pdf-worker
+    restart: unless-stopped
+    ports:
+      - '3001:3001'
+    environment:
+      PORT: 3001
+      PDF_WORKER_SECRET: local-pdf-worker-secret
+
 volumes:
   follio_postgres_data:
   follio_redis_data:

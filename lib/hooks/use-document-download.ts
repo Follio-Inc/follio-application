@@ -2,12 +2,11 @@
 
 import { useCallback, useRef, useState } from 'react';
 
+import { blobHasPdfMagic } from '@/lib/document-download/pdf-bytes';
 import type { PdfLayout } from '@/lib/document-design';
 
 const DEFAULT_LAYOUT: PdfLayout = 'continuous';
-
-/** Debounce double-clicks while Chromium is still generating the PDF. */
-const DOWNLOAD_LOCK_MS = 8_000;
+const BLOB_URL_REVOKE_MS = 60_000;
 
 /**
  * Build a PDF download URL with layout (+ optional forwarded search params).
@@ -15,7 +14,7 @@ const DOWNLOAD_LOCK_MS = 8_000;
  */
 export function buildDocumentPdfUrl(
   pdfPath: string,
-  layout: PdfLayout,
+  layout: PdfLayout = DEFAULT_LAYOUT,
   currentSearch = ''
 ): string {
   const url = new URL(pdfPath, 'http://localhost');
@@ -34,29 +33,10 @@ export function buildDocumentPdfUrl(
   return `${url.pathname}${url.search}`;
 }
 
-/**
- * Start a same-origin file download in the current user-gesture.
- *
- * Must run synchronously in the click handler. `fetch()` + a later `a.click()`
- * is ignored by Safari/Chrome once PDF generation has consumed the activation.
- */
-export function triggerClientFileDownload(href: string, filename: string): void {
-  const a = document.createElement('a');
-  a.href = href;
-  a.download = filename;
-  a.rel = 'noopener';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-}
-
 export interface UseDocumentDownloadOptions {
-  /** Absolute path to the PDF API, e.g. `/api/export/jdoe/pdf` or `/api/cover-letters/abc/pdf`. */
   pdfPath: string;
-  /** Download filename without `.pdf`. */
   filename: string;
   layout?: PdfLayout;
-  /** Forward current URL search (token/key) — resumes only. Default false. */
   forwardSearchParams?: boolean;
   onSuccess?: () => void;
   onError?: (error: Error) => void;
@@ -67,8 +47,32 @@ export interface UseDocumentDownloadReturn {
   isDownloading: boolean;
 }
 
+async function readExportError(response: Response, blob: Blob): Promise<string> {
+  const text = await blob.text().catch(() => '');
+  try {
+    const body = JSON.parse(text) as { error?: string | { message?: string } };
+    if (typeof body.error === 'string' && body.error.trim()) return body.error;
+    if (body.error && typeof body.error === 'object' && body.error.message) {
+      return body.error.message;
+    }
+  } catch {
+    // HTML timeout / 500 page
+  }
+  if (response.status === 504 || /timeout|FUNCTION_INVOCATION/i.test(text)) {
+    return 'PDF generation took too long. Please try again.';
+  }
+  if (!response.ok) {
+    return `Export failed (${response.status}). Please try again.`;
+  }
+  return 'The server did not return a PDF. Please try again.';
+}
+
 /**
- * Shared document PDF download — resume and cover letter compose this.
+ * Wait for the PDF to finish generating, then save the file.
+ *
+ * Chrome's save dialog on an `<a href="/api/export/...">` starts the download
+ * before any bytes exist. If generation is slow or fails, Chrome reports
+ * "Site wasn't available". Fetching first avoids that.
  */
 export function useDocumentDownload({
   pdfPath,
@@ -80,7 +84,6 @@ export function useDocumentDownload({
 }: UseDocumentDownloadOptions): UseDocumentDownloadReturn {
   const [isDownloading, setIsDownloading] = useState(false);
   const lockRef = useRef(false);
-  const unlockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const download = useCallback(
     async (layoutOverride?: PdfLayout) => {
@@ -91,23 +94,38 @@ export function useDocumentDownload({
       try {
         const search = forwardSearchParams ? window.location.search : '';
         const pdfUrl = buildDocumentPdfUrl(pdfPath, layoutOverride ?? layout, search);
-        triggerClientFileDownload(pdfUrl, `${filename}.pdf`);
+        const response = await fetch(pdfUrl, {
+          cache: 'no-store',
+          credentials: 'same-origin',
+        });
+        const blob = await response.blob();
+
+        if (!response.ok || !(await blobHasPdfMagic(blob))) {
+          throw new Error(await readExportError(response, blob));
+        }
+
+        const objectUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = objectUrl;
+        a.download = `${filename}.pdf`;
+        a.rel = 'noopener';
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        window.setTimeout(() => {
+          a.remove();
+          URL.revokeObjectURL(objectUrl);
+        }, BLOB_URL_REVOKE_MS);
+
         onSuccess?.();
       } catch (err) {
         const error = err instanceof Error ? err : new Error('PDF download failed');
         console.error('PDF download failed:', error);
         onError?.(error);
+      } finally {
         lockRef.current = false;
         setIsDownloading(false);
-        return;
       }
-
-      if (unlockTimerRef.current) clearTimeout(unlockTimerRef.current);
-      unlockTimerRef.current = setTimeout(() => {
-        lockRef.current = false;
-        setIsDownloading(false);
-        unlockTimerRef.current = null;
-      }, DOWNLOAD_LOCK_MS);
     },
     [pdfPath, filename, layout, forwardSearchParams, onSuccess, onError]
   );

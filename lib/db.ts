@@ -28,11 +28,12 @@ function createPrismaClient(): PrismaClient {
  * CoverLetter.visibility / unlistedKey → generation 2.
  * Pool defaults (limit/timeout, no duplicate URL params) → generation 3.
  * AiConnector* / AiEditDraft → generation 4.
+ * DocumentPdfCache → generation 5.
  */
-const PRISMA_CLIENT_GENERATION = 4;
+const PRISMA_CLIENT_GENERATION = 5;
 
 function schemaFieldFingerprint(): string {
-  const modelNames = ['WorkExperience', 'CoverLetter', 'AiEditDraft'] as const;
+  const modelNames = ['WorkExperience', 'CoverLetter', 'AiEditDraft', 'DocumentPdfCache'] as const;
   return modelNames
     .map((name) => {
       const fields =
