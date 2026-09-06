@@ -211,7 +211,6 @@ export function buildDocumentDesignStyles(tokens: ResolvedDocumentPaperTokens): 
     ...textStyleToCssVars('body', textStyles.body),
     ...textStyleToCssVars('contact', textStyles.contact),
     '--rd-header-alignment': tokens.headerAlignment,
-    '--rd-justify-all': tokens.justifyAll ? 'justify' : 'initial',
     '--rd-section-gap': `${Math.round(20 * densityScale)}px`,
     '--rd-entry-gap': `${Math.round(16 * densityScale)}px`,
     '--rd-bullet-margin': `${Math.round(8 * densityScale)}px`,

@@ -755,4 +755,43 @@ describe('toPDFHtml', () => {
       '.resume-skill-group { font-size: 13px; margin: 0; text-align: justify; line-height: 1.45; }'
     );
   });
+
+  it('does not apply a preview-only resume-justify-all overlay', () => {
+    const html = toPDFHtml(
+      makeProfile({
+        resumeDesign: { justifyAll: true },
+      } as unknown as Partial<FullProfile>)
+    );
+    expect(html).not.toMatch(/<article class="[^"]*\bresume-justify-all\b/);
+  });
+
+  it('justifies experience bullet paragraphs in PDF CSS the same way as the preview', () => {
+    const html = toPDFHtml(makeProfile());
+    expect(html).toMatch(/\.resume-entry \.rich-text-bullets li p[\s\S]*text-align: justify/);
+    expect(html).toContain('display: list-item');
+    expect(html).toContain('list-style: disc outside');
+  });
+
+  it('keeps editor bullet lists in PDF HTML', () => {
+    const base = makeProfile();
+    const html = toPDFHtml(
+      makeProfile({
+        workExperiences: [
+          {
+            ...base.workExperiences[0],
+            bulletsHtml:
+              '<ul class="rich-text-bullets" data-bullet-style="disc"><li><p>Built scalable APIs</p></li></ul>',
+          },
+        ],
+      } as unknown as Partial<FullProfile>)
+    );
+    expect(html).toContain('class="rich-text-bullets"');
+    expect(html).toContain('<li><p>Built scalable APIs</p></li>');
+  });
+
+  it('wraps plain-text bullets in a paragraph so PDF justify matches preview', () => {
+    const html = toPDFHtml(makeProfile());
+    expect(html).toContain('<li><p style="text-align: justify">Built scalable APIs</p></li>');
+    expect(html).toContain('<li><p style="text-align: justify">Led team of 5</p></li>');
+  });
 });

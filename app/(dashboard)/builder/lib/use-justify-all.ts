@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
-import { isHtmlFullyJustified, justifyHtmlContent } from '@/lib/html-utils';
+import { bulletsToHtml, isHtmlFullyJustified, justifyHtmlContent } from '@/lib/html-utils';
 
 import { useBuilderStore } from '../components/builder-store-provider';
 
@@ -27,9 +27,13 @@ function isProfileContentFullyJustified(profile: FullProfile): boolean {
   // Summary
   if (!isHtmlFullyJustified(profile.summary)) return false;
 
-  // Work experiences
+  // Work experiences — persist justify on stored HTML (create bulletsHtml when missing)
   for (const exp of profile.workExperiences ?? []) {
-    if (!isHtmlFullyJustified(exp.bulletsHtml)) return false;
+    if (exp.bulletsHtml) {
+      if (!isHtmlFullyJustified(exp.bulletsHtml)) return false;
+    } else if ((exp.bullets?.length ?? 0) > 0) {
+      return false;
+    }
   }
 
   // Education
@@ -78,10 +82,18 @@ function buildJustifyUpdates(profile: FullProfile): Partial<FullProfile> {
   }
 
   // Work experiences
-  if ((profile.workExperiences ?? []).some((e) => !isHtmlFullyJustified(e.bulletsHtml))) {
+  if (
+    (profile.workExperiences ?? []).some((e) =>
+      e.bulletsHtml ? !isHtmlFullyJustified(e.bulletsHtml) : (e.bullets?.length ?? 0) > 0
+    )
+  ) {
     updates.workExperiences = profile.workExperiences.map((e) => ({
       ...e,
-      bulletsHtml: justifyHtmlContent(e.bulletsHtml),
+      bulletsHtml: e.bulletsHtml
+        ? justifyHtmlContent(e.bulletsHtml)
+        : e.bullets?.length
+          ? bulletsToHtml(e.bullets)
+          : e.bulletsHtml,
     }));
   }
 
@@ -155,8 +167,8 @@ function buildJustifyUpdates(profile: FullProfile): Partial<FullProfile> {
  *
  * Returns:
  * - `allJustified` — whether every rich-text field in the profile is justified.
- * - `justifyAll`   — callback that sets all content to `text-align: justify`,
- *                     updates the store immediately, and persists via API.
+ * - `justifyAll`   — callback that writes `text-align: justify` into stored
+ *                     rich-text HTML (not a preview-only CSS class).
  */
 export function useJustifyAll() {
   const draftProfile = useBuilderStore((s) => s.draftProfile);
@@ -177,16 +189,8 @@ export function useJustifyAll() {
     // Build content updates (only the fields that actually need changes)
     const contentUpdates = buildJustifyUpdates(profile);
 
-    // Also ensure the CSS override flag stays in sync
-    const designUpdate = {
-      resumeDesign: { ...(profile.resumeDesign ?? {}), justifyAll: true },
-    };
-
     // Commit to both draft and saved state so the preview + editors update immediately
-    commitInlineChange({
-      ...contentUpdates,
-      ...designUpdate,
-    } as Partial<FullProfile>);
+    commitInlineChange(contentUpdates as Partial<FullProfile>);
 
     // Debounced API persistence
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);

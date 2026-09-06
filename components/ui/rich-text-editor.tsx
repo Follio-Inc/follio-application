@@ -168,7 +168,7 @@ export function RichTextEditor({
   const isInternalUpdate = useRef(false);
 
   const EMPTY_BULLET_HTML =
-    '<ul data-bullet-style="disc" class="rich-text-bullets bullet-style-disc"><li><p></p></li></ul>';
+    '<ul data-bullet-style="disc" class="rich-text-bullets bullet-style-disc"><li><p style="text-align: justify"></p></li></ul>';
 
   const initialContent = value || (bulletMode ? EMPTY_BULLET_HTML : '');
 
@@ -188,7 +188,28 @@ export function RichTextEditor({
         HTMLAttributes: { class: 'rich-text-ordered' },
       }),
       ListItem,
-      TextAlign.configure({
+      // Always write text-align into HTML, including justify. TipTap's default
+      // omits the default alignment, which made the preview look justified via
+      // CSS while the stored (and PDF) HTML had no alignment.
+      TextAlign.extend({
+        addGlobalAttributes() {
+          return [
+            {
+              types: this.options.types,
+              attributes: {
+                textAlign: {
+                  default: this.options.defaultAlignment,
+                  parseHTML: (element) => element.style.textAlign || this.options.defaultAlignment,
+                  renderHTML: (attributes) => {
+                    if (!attributes.textAlign) return {};
+                    return { style: `text-align: ${attributes.textAlign}` };
+                  },
+                },
+              },
+            },
+          ];
+        },
+      }).configure({
         types: ['heading', 'paragraph'],
         defaultAlignment: 'justify',
       }),

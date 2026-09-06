@@ -14,8 +14,6 @@ interface ResumeZoomModalProps {
   open: boolean;
   onClose: () => void;
   profile: PublicProfile;
-  allContentJustified: boolean;
-  onJustifyAll: () => void;
 }
 
 /** Horizontal inset reserved so the sheet doesn't hug the viewport edge. */
@@ -43,13 +41,7 @@ export function getResumeZoomFitScale(availableWidthPx: number, nativeWidthPx: n
  *   width (capped at 1×), with vertical scrolling for the full document —
  *   never squeezed or height-crunched to the viewport.
  */
-export function ResumeZoomModal({
-  open,
-  onClose,
-  profile,
-  allContentJustified,
-  onJustifyAll,
-}: ResumeZoomModalProps) {
+export function ResumeZoomModal({ open, onClose, profile }: ResumeZoomModalProps) {
   const [mounted, setMounted] = useState(false);
   const [scale, setScale] = useState(1);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -148,11 +140,7 @@ export function ResumeZoomModal({
             className="overflow-hidden [&>.resume-actions]:hidden"
             style={{ width: nativeWidthPx, zoom: scale }}
           >
-            <CleanResumeView
-              profile={profile}
-              allContentJustified={allContentJustified}
-              onJustifyAll={onJustifyAll}
-            />
+            <CleanResumeView profile={profile} />
           </div>
         </div>
       </div>

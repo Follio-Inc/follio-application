@@ -8,7 +8,9 @@ import {
   isHtmlEmpty,
   isHtmlFullyJustified,
   justifyHtmlContent,
+  resumeBulletInnerHtml,
   sanitizeRichHtml,
+  sanitizeRichHtmlFallback,
   stripHtmlTags,
 } from '@/lib/html-utils';
 
@@ -147,8 +149,8 @@ describe('bulletsToHtml', () => {
     expect(result).toContain(
       '<ul class="rich-text-bullets bullet-style-disc" data-bullet-style="disc">'
     );
-    expect(result).toContain('<li><p>First bullet</p></li>');
-    expect(result).toContain('<li><p>Second bullet</p></li>');
+    expect(result).toContain('<li><p style="text-align: justify">First bullet</p></li>');
+    expect(result).toContain('<li><p style="text-align: justify">Second bullet</p></li>');
   });
 
   it('escapes special characters in plain-text bullets', () => {
@@ -159,7 +161,9 @@ describe('bulletsToHtml', () => {
 
   it('preserves HTML formatting in already-formatted bullets', () => {
     const result = bulletsToHtml(['<strong>Bold</strong> text']);
-    expect(result).toContain('<li><p><strong>Bold</strong> text</p></li>');
+    expect(result).toContain(
+      '<li><p style="text-align: justify"><strong>Bold</strong> text</p></li>'
+    );
   });
 
   it('returns empty string for empty array', () => {
@@ -173,8 +177,8 @@ describe('bulletsToHtml', () => {
 
   it('handles mixed plain and HTML bullets', () => {
     const result = bulletsToHtml(['Plain text', '<em>Italic</em> bullet']);
-    expect(result).toContain('<li><p>Plain text</p></li>');
-    expect(result).toContain('<li><p><em>Italic</em> bullet</p></li>');
+    expect(result).toContain('<li><p style="text-align: justify">Plain text</p></li>');
+    expect(result).toContain('<li><p style="text-align: justify"><em>Italic</em> bullet</p></li>');
   });
 });
 
@@ -200,8 +204,13 @@ describe('htmlToBullets', () => {
     const html = '<ul class="rich-text-bullets bullet-style-disc"><li><p>Content</p></li></ul>';
     const result = htmlToBullets(html);
     expect(result).toEqual(['Content']);
-    // Should NOT contain <p> wrapper
     expect(result[0]).not.toContain('<p>');
+  });
+
+  it('strips default-justify paragraph wrappers like plain paragraphs', () => {
+    const html =
+      '<ul><li><p style="text-align: justify">Content</p></li><li><p style="text-align: center">Centered</p></li></ul>';
+    expect(htmlToBullets(html)).toEqual(['Content', '<p style="text-align: center">Centered</p>']);
   });
 
   it('handles list items without <p> wrapper', () => {
@@ -253,8 +262,8 @@ describe('isHtmlFullyJustified', () => {
     expect(isHtmlFullyJustified('')).toBe(true);
   });
 
-  it('returns true for HTML with no text-align', () => {
-    expect(isHtmlFullyJustified('<p>Hello world</p>')).toBe(true);
+  it('returns false for HTML with no text-align (must be written into the HTML)', () => {
+    expect(isHtmlFullyJustified('<p>Hello world</p>')).toBe(false);
   });
 
   it('returns true for HTML with text-align: justify', () => {
@@ -300,9 +309,9 @@ describe('justifyHtmlContent', () => {
     expect(justifyHtmlContent(html)).toBe(html);
   });
 
-  it('returns unchanged HTML when no text-align exists', () => {
+  it('writes text-align: justify onto paragraphs that have none', () => {
     const html = '<p>Simple text</p>';
-    expect(justifyHtmlContent(html)).toBe(html);
+    expect(justifyHtmlContent(html)).toBe('<p style="text-align: justify">Simple text</p>');
   });
 
   it('replaces text-align: left with justify', () => {
@@ -338,7 +347,7 @@ describe('justifyHtmlContent', () => {
     const html = '<ul><li><p style="text-align: center">Item 1</p></li><li><p>Item 2</p></li></ul>';
     const result = justifyHtmlContent(html);
     expect(result).toBe(
-      '<ul><li><p style="text-align: justify">Item 1</p></li><li><p>Item 2</p></li></ul>'
+      '<ul><li><p style="text-align: justify">Item 1</p></li><li><p style="text-align: justify">Item 2</p></li></ul>'
     );
     expect(isHtmlFullyJustified(result!)).toBe(true);
   });
@@ -417,5 +426,39 @@ describe('sanitizeRichHtml', () => {
     const result = sanitizeRichHtml('<iframe src="https://evil.com"></iframe><p>ok</p>');
     expect(result).not.toContain('<iframe');
     expect(result).toContain('<p>ok</p>');
+  });
+
+  it('fallback keeps lists and justify styles instead of flattening to text', () => {
+    const html =
+      '<ul class="rich-text-bullets" data-bullet-style="disc"><li><p style="text-align: justify">Item</p></li></ul><script>alert(1)</script>';
+    const result = sanitizeRichHtmlFallback(html);
+    expect(result).toContain('rich-text-bullets');
+    expect(result).toContain('<li>');
+    expect(result).toContain('text-align: justify');
+    expect(result).toContain('Item');
+    expect(result).not.toContain('<script');
+    expect(result.toLowerCase()).not.toContain('alert(1)');
+  });
+});
+
+// ── resumeBulletInnerHtml ──────────────────────────────────────────────────
+
+describe('resumeBulletInnerHtml', () => {
+  it('wraps plain text in a justified paragraph so view and PDF share the same HTML', () => {
+    expect(resumeBulletInnerHtml('Led a team')).toBe(
+      '<p style="text-align: justify">Led a team</p>'
+    );
+  });
+
+  it('does not double-wrap an existing paragraph', () => {
+    expect(resumeBulletInnerHtml('<p style="text-align: justify">Led a team</p>')).toBe(
+      '<p style="text-align: justify">Led a team</p>'
+    );
+  });
+
+  it('wraps inline formatting in a justified paragraph', () => {
+    expect(resumeBulletInnerHtml('<strong>Led</strong> a team')).toBe(
+      '<p style="text-align: justify"><strong>Led</strong> a team</p>'
+    );
   });
 });

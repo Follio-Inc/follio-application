@@ -13,6 +13,7 @@ import {
   containsHtmlFormatting,
   escapeHtml,
   isHtmlEmpty,
+  resumeBulletInnerHtml,
   sanitizeRichHtml,
   stripHtmlTags,
 } from '@/lib/html-utils';
@@ -547,6 +548,10 @@ function sectionDividerHtml(title: string): string {
     </div>`;
 }
 
+function resumeBulletListItemHtml(bullet: string): string {
+  return `<li>${resumeBulletInnerHtml(bullet)}</li>`;
+}
+
 // ── Section HTML renderers ────────────────────────────────────────
 
 function summarySectionHtml(profile: FullProfile, title = 'SUMMARY'): string {
@@ -589,13 +594,7 @@ function experienceSectionHtml(profile: FullProfile, atelier = false): string {
       if (exp.bulletsHtml) {
         bulletsHtml = sanitizeRichHtml(exp.bulletsHtml);
       } else if (exp.bullets && exp.bullets.length > 0) {
-        const lis = exp.bullets
-          .map((b) =>
-            containsHtmlFormatting(b)
-              ? `<li>${sanitizeRichHtml(b)}</li>`
-              : `<li>${escapeHtml(b)}</li>`
-          )
-          .join('');
+        const lis = exp.bullets.map((b) => resumeBulletListItemHtml(b)).join('');
         bulletsHtml = `<ul class="resume-bullets">${lis}</ul>`;
       }
 
@@ -759,13 +758,7 @@ function projectsSectionHtml(profile: FullProfile): string {
 
       let highlightsHtml = '';
       if (p.highlights && p.highlights.length > 0) {
-        const lis = p.highlights
-          .map((h) =>
-            containsHtmlFormatting(h)
-              ? `<li>${sanitizeRichHtml(h)}</li>`
-              : `<li>${escapeHtml(h)}</li>`
-          )
-          .join('');
+        const lis = p.highlights.map((h) => resumeBulletListItemHtml(h)).join('');
         highlightsHtml = `<ul class="resume-bullets">${lis}</ul>`;
       }
 
@@ -1220,13 +1213,23 @@ const RESUME_CSS = `
     font-size: 11px; color: #777; margin-top: 4px;
   }
 
-  /* Bullets */
+  /* Bullets — keep in sync with globals.css.
+     Justify lives on the inner <p> (stored HTML). Never justify ul/li:
+     Chromium print hides ::marker when text-align:justify is on the list. */
   .resume-bullets {
     margin: var(--rd-bullet-margin, 8px) 0 0 0;
     padding-left: 18px;
-    list-style: disc;
+    list-style: disc outside;
+    text-align: start !important;
   }
-  .resume-bullets li { margin-bottom: 3px; padding-left: 4px; }
+  .resume-bullets li {
+    display: list-item;
+    list-style: disc outside;
+    margin-bottom: 3px;
+    padding-left: 4px;
+    text-align: start !important;
+  }
+  .resume-bullets li p { margin: 0; text-align: justify; }
   .resume-bullets li strong { font-weight: 600; }
   .resume-bullets li em { font-style: italic; }
   .resume-bullets li u { text-decoration: underline; }
@@ -1237,24 +1240,36 @@ const RESUME_CSS = `
   .resume-entry ul[data-bullet-style] {
     margin: var(--rd-bullet-margin, 8px) 0 0 0;
     padding-left: 18px;
-    list-style: disc;
+    list-style: disc outside;
+    text-align: start !important;
   }
   .resume-entry .rich-text-bullets li,
   .resume-entry ul[data-bullet-style] li {
+    display: list-item;
+    list-style: disc outside;
     margin-bottom: 3px;
     padding-left: 4px;
+    text-align: start !important;
   }
   .resume-entry .rich-text-bullets li p,
-  .resume-entry ul[data-bullet-style] li p { margin: 0; }
+  .resume-entry ul[data-bullet-style] li p {
+    margin: 0;
+    text-align: justify;
+  }
   .resume-entry ul.bullet-style-disc { list-style-type: disc; }
   .resume-entry ul.bullet-style-circle { list-style-type: circle; }
   .resume-entry ul.bullet-style-square { list-style-type: square; }
   .resume-entry ul.bullet-style-dash { list-style-type: '–  '; }
   .resume-entry ol.rich-text-ordered {
-    margin: 8px 0 0 0; padding-left: 18px; list-style-type: decimal;
+    margin: 8px 0 0 0; padding-left: 18px; list-style-type: decimal; list-style-position: outside;
+    text-align: start !important;
   }
-  .resume-entry ol.rich-text-ordered li { margin-bottom: 3px; padding-left: 4px; }
-  .resume-entry ol.rich-text-ordered li p { margin: 0; }
+  .resume-entry ol.rich-text-ordered li {
+    display: list-item; margin-bottom: 3px; padding-left: 4px; text-align: start !important;
+  }
+  .resume-entry ol.rich-text-ordered li p { margin: 0; text-align: justify; }
+
+  /* Rich HTML prose (summary, descriptions) */
 
   /* Rich HTML prose (summary, descriptions) */
   .resume-rich-html { text-align: justify; margin: 0; }

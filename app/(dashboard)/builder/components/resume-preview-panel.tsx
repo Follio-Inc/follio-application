@@ -179,11 +179,7 @@ export function ResumePreviewPanel() {
                   anchor (`top-0` on the sheet wrapper) line up exactly
                   with the resume's top edge. */}
               <div ref={resumeContentRef} className="[&>.resume-actions]:hidden">
-                <CleanResumeView
-                  profile={profile as unknown as PublicProfile}
-                  allContentJustified={allJustified}
-                  onJustifyAll={handleJustifyAll}
-                />
+                <CleanResumeView profile={profile as unknown as PublicProfile} />
               </div>
             </div>
           </div>
@@ -265,8 +261,6 @@ export function ResumePreviewPanel() {
         open={zoomOpen}
         onClose={() => setZoomOpen(false)}
         profile={profile as unknown as PublicProfile}
-        allContentJustified={allJustified}
-        onJustifyAll={handleJustifyAll}
       />
     </div>
   );

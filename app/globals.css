@@ -866,22 +866,26 @@
     color: #888;
   }
 
-  /* Bullet points */
+  /* Bullet points — justify the inner <p> only. Chromium print (and PDF)
+     drops list markers when text-align:justify is on ul/li. Keep this
+     identical to the PDF stylesheet in services/export.service.ts. */
   .resume-bullets {
     margin: var(--rd-bullet-margin, 8px) 0 0 0;
     padding-left: 18px;
-    list-style: disc;
+    list-style: disc outside;
+    text-align: start !important;
   }
 
   .resume-bullets li {
+    display: list-item;
+    list-style: disc outside;
     margin-bottom: 3px;
     padding-left: 4px;
-    /* Match the editor's `defaultAlignment: 'justify'` and the `.rich-text-bullets`
-       path so legacy plain-text bullets (stored in `bullets[]` with no `bulletsHtml`)
-       render justified by default — not the document's left default. Without this,
-       freshly onboarded resumes look unjustified until the highlights editor is
-       opened (which regenerates `bulletsHtml` with inline justify). Explicit
-       per-bullet alignment still wins via the inline-style rules below. */
+    text-align: start !important;
+  }
+
+  .resume-bullets li p {
+    margin: 0;
     text-align: justify;
   }
 
@@ -912,28 +916,30 @@
      When rendering the raw editor HTML (bulletsHtml) in the preview,
      the editor CSS classes must map to the resume's visual style. */
 
-  /* Editor bullet list inside resume entries */
+  /* Editor bullet list inside resume entries — same rules as PDF export. */
   .resume-entry .rich-text-bullets,
   .resume-entry ul[data-bullet-style] {
     margin: var(--rd-bullet-margin, 8px) 0 0 0;
     padding-left: 18px;
-    list-style: disc;
+    list-style: disc outside;
+    text-align: start !important;
   }
 
   .resume-entry .rich-text-bullets li,
   .resume-entry ul[data-bullet-style] li {
+    display: list-item;
+    list-style: disc outside;
     margin-bottom: 3px;
     padding-left: 4px;
+    text-align: start !important;
   }
 
   .resume-entry .rich-text-bullets li p,
   .resume-entry ul[data-bullet-style] li p {
     margin: 0;
-    /* Match the editor's `defaultAlignment: 'justify'` so freshly-parsed
-       bullets — which carry no inline text-align — render identically in
-       the read-only preview and the builder's RichTextEditor. Explicit
-       per-bullet alignments still win because TipTap writes them as inline
-       `style="text-align: …"`, which outranks this class rule. */
+    /* Fallback for legacy HTML with no inline alignment. The editor and
+       Justify All write `text-align: justify` into the stored HTML. The PDF
+       stylesheet uses this same rule — not a preview-only overlay. */
     text-align: justify;
   }
 
@@ -1253,33 +1259,6 @@
     @apply rounded-md shadow-sm backdrop-blur-sm;
     background: hsl(var(--background) / 0.9);
     border: 1px solid hsl(var(--border));
-  }
-
-  /* ── Justify All mode — applies to all text in resume ── */
-  .resume-paper.resume-justify-all {
-    text-align: justify;
-  }
-
-  .resume-paper.resume-justify-all .resume-header {
-    text-align: var(--rd-header-alignment, center);
-  }
-
-  .resume-paper.resume-justify-all .resume-entry-header {
-    text-align: left;
-  }
-
-  .resume-paper.resume-justify-all .resume-entry-date {
-    text-align: right;
-  }
-
-  .resume-paper.resume-justify-all .resume-skills-grouped,
-  .resume-paper.resume-justify-all .resume-skill-group,
-  .resume-paper.resume-justify-all .resume-skills-flat,
-  .resume-paper.resume-justify-all .resume-skills-stack,
-  .resume-paper.resume-justify-all .resume-skills-stack-item,
-  .resume-paper.resume-justify-all .resume-entry-tags,
-  .resume-paper.resume-justify-all .resume-entry-tech {
-    text-align: justify;
   }
 
   /* ── Lumen template (single-column ATS, Instrument Sans, quiet elegance) ── */
@@ -2158,6 +2137,26 @@
     color: #444 !important;
   }
 
+  .resume-bullets {
+    margin: 8px 0 0 0;
+    padding-left: 18px;
+    list-style: disc outside;
+    text-align: start !important;
+  }
+
+  .resume-bullets li {
+    display: list-item;
+    list-style: disc outside;
+    margin-bottom: 3px;
+    padding-left: 4px;
+    text-align: start !important;
+  }
+
+  .resume-bullets li p {
+    margin: 0;
+    text-align: justify;
+  }
+
   .resume-bullets li::marker {
     color: #444 !important;
   }
@@ -2167,13 +2166,17 @@
   .resume-entry ul[data-bullet-style] {
     margin: 8px 0 0 0;
     padding-left: 18px;
-    list-style: disc;
+    list-style: disc outside;
+    text-align: start !important;
   }
 
   .resume-entry .rich-text-bullets li,
   .resume-entry ul[data-bullet-style] li {
+    display: list-item;
+    list-style: disc outside;
     margin-bottom: 3px;
     padding-left: 4px;
+    text-align: start !important;
   }
 
   .resume-entry .rich-text-bullets li::marker,
@@ -2184,8 +2187,6 @@
   .resume-entry .rich-text-bullets li p,
   .resume-entry ul[data-bullet-style] li p {
     margin: 0;
-    /* Keep justify as the default in print too, mirroring the on-screen
-       preview and the editor's default alignment. */
     text-align: justify;
   }
 

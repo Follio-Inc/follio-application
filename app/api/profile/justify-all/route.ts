@@ -3,17 +3,15 @@ import { NextResponse } from 'next/server';
 
 import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
-import { isHtmlFullyJustified, justifyHtmlContent } from '@/lib/html-utils';
+import { bulletsToHtml, isHtmlFullyJustified, justifyHtmlContent } from '@/lib/html-utils';
 import { logger } from '@/lib/logger';
-
-import type { ResumeDesign } from '@/types';
 
 /**
  * POST /api/profile/justify-all
  *
  * Bulk-justify all rich-text HTML content in the user's active profile.
- * Updates every text field that has a non-justify text-align value and
- * sets the `resumeDesign.justifyAll` CSS flag to `true`.
+ * Writes `text-align: justify` into stored editor HTML. Does not apply a
+ * preview-only CSS overlay.
  *
  * Does NOT modify header fields (name, headline, location, etc.).
  */
@@ -31,13 +29,18 @@ export async function POST() {
       // ── Work Experiences ──
       const experiences = await tx.workExperience.findMany({
         where: { profileId },
-        select: { id: true, bulletsHtml: true },
+        select: { id: true, bulletsHtml: true, bullets: true },
       });
       for (const exp of experiences) {
         if (exp.bulletsHtml && !isHtmlFullyJustified(exp.bulletsHtml)) {
           await tx.workExperience.update({
             where: { id: exp.id },
             data: { bulletsHtml: justifyHtmlContent(exp.bulletsHtml) },
+          });
+        } else if (!exp.bulletsHtml && exp.bullets.length > 0) {
+          await tx.workExperience.update({
+            where: { id: exp.id },
+            data: { bulletsHtml: bulletsToHtml(exp.bullets) },
           });
         }
       }
@@ -137,28 +140,26 @@ export async function POST() {
         }
       }
 
-      // ── Profile summary + resumeDesign.justifyAll flag ──
+      // ── Profile summary ──
       const profile = await tx.profile.findUnique({
         where: { id: profileId },
-        select: { summary: true, resumeDesign: true },
+        select: { summary: true },
       });
 
-      const summaryUpdate: Record<string, unknown> = {};
       if (profile?.summary && !isHtmlFullyJustified(profile.summary)) {
-        summaryUpdate.summary = justifyHtmlContent(profile.summary);
+        await tx.profile.update({
+          where: { id: profileId },
+          data: {
+            summary: justifyHtmlContent(profile.summary),
+            updatedAt: new Date(),
+          },
+        });
+      } else {
+        await tx.profile.update({
+          where: { id: profileId },
+          data: { updatedAt: new Date() },
+        });
       }
-
-      const rawDesign = profile?.resumeDesign as ResumeDesign | null;
-      const mergedDesign: ResumeDesign = { ...(rawDesign ?? {}), justifyAll: true };
-
-      await tx.profile.update({
-        where: { id: profileId },
-        data: {
-          ...summaryUpdate,
-          resumeDesign: mergedDesign as object,
-          updatedAt: new Date(),
-        },
-      });
     });
 
     return NextResponse.json({ success: true });

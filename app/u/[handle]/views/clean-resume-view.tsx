@@ -1,9 +1,14 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 import { useResolvedResumeColorTheme } from '@/lib/hooks/use-resume-color-theme';
-import { containsHtmlFormatting, isHtmlEmpty, sanitizeRichHtml } from '@/lib/html-utils';
+import {
+  containsHtmlFormatting,
+  isHtmlEmpty,
+  resumeBulletInnerHtml,
+  sanitizeRichHtml,
+} from '@/lib/html-utils';
 import {
   buildResumeAtelierContactFields,
   formatAtelierYearRange,
@@ -56,12 +61,6 @@ interface CleanResumeViewProps {
    * handled by `<PreviewFloatingActions>` instead.
    */
   authState?: 'owner' | 'authenticated' | 'anonymous';
-  /** Callback when the floating justify-all button is toggled (for persistence). */
-  onJustifyToggle?: (justified: boolean) => void;
-  /** Builder mode: whether all rich-text content is currently justified */
-  allContentJustified?: boolean;
-  /** Builder mode: callback to justify all rich-text content */
-  onJustifyAll?: () => void;
 }
 
 // ============================================================================
@@ -422,13 +421,9 @@ function ExperienceEntry({
     bullets &&
     bullets.length > 0 && (
       <ul className="resume-bullets">
-        {bullets.map((bullet, index) =>
-          containsHtmlFormatting(bullet) ? (
-            <li key={index} dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(bullet) }} />
-          ) : (
-            <li key={index}>{bullet}</li>
-          )
-        )}
+        {bullets.map((bullet, index) => (
+          <li key={index} dangerouslySetInnerHTML={{ __html: resumeBulletInnerHtml(bullet) }} />
+        ))}
       </ul>
     )
   );
@@ -692,16 +687,12 @@ function ProjectsSection({ projects }: { projects: PublicProfile['projects'] }) 
               )}
               {project.highlights && project.highlights.length > 0 && (
                 <ul className="resume-bullets">
-                  {project.highlights.map((highlight, index) =>
-                    containsHtmlFormatting(highlight) ? (
-                      <li
-                        key={index}
-                        dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(highlight) }}
-                      />
-                    ) : (
-                      <li key={index}>{highlight}</li>
-                    )
-                  )}
+                  {project.highlights.map((highlight, index) => (
+                    <li
+                      key={index}
+                      dangerouslySetInnerHTML={{ __html: resumeBulletInnerHtml(highlight) }}
+                    />
+                  ))}
                 </ul>
               )}
             </div>
@@ -989,17 +980,10 @@ function CustomSection({ section }: { section: ProfileSection }) {
 export function CleanResumeView({ profile: rawProfile, authState }: CleanResumeViewProps) {
   const resumeRef = useRef<HTMLDivElement>(null);
 
-  // ── Justify-all local state (derived from design, toggleable) ─────────
   const parsedDesign = useMemo(
     () => parseResumeDesign(rawProfile.resumeDesign) as ResumeDesign | null,
     [rawProfile.resumeDesign]
   );
-  const [justifyAll, setJustifyAll] = useState(parsedDesign?.justifyAll ?? false);
-
-  // Sync local state when the design prop changes (e.g. from designer panel)
-  useEffect(() => {
-    setJustifyAll(parsedDesign?.justifyAll ?? false);
-  }, [parsedDesign?.justifyAll]);
 
   // ── Centralized visibility filtering ──────────────────────────────────
   // Apply section-level visibility once. After this, every array/field is
@@ -1178,7 +1162,6 @@ export function CleanResumeView({ profile: rawProfile, authState }: CleanResumeV
               isStudio && 'resume-paper--studio',
               isAtelier && 'resume-paper--atelier',
               isLumen && 'resume-paper--lumen',
-              justifyAll && 'resume-justify-all',
             ]
               .filter(Boolean)
               .join(' ')}

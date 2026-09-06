@@ -183,8 +183,63 @@ export function sanitizeRichHtml(html: string | null | undefined): string {
       RETURN_DOM_FRAGMENT: false,
     });
   } catch {
-    return escapeHtml(stripHtmlTags(html));
+    // jsdom can fail on serverless. Do not strip lists/alignment — that made
+    // the on-screen resume look fine while the PDF lost bullets and justify.
+    return sanitizeRichHtmlFallback(html);
   }
+}
+
+/**
+ * Keep list markup and text-align when DOMPurify/jsdom is unavailable.
+ * Strips scripts, event handlers, and disallowed tags without flattening
+ * `<ul>`/`<li>` to plain text.
+ */
+export function sanitizeRichHtmlFallback(html: string): string {
+  let out = html
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<\/?(?:iframe|object|embed|form|img|svg|math|link|meta|video|audio)\b[^>]*>/gi, '')
+    .replace(/\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/\s+(?:href|src)\s*=\s*(['"])\s*(?:javascript|data|vbscript):[\s\S]*?\1/gi, '');
+
+  out = out.replace(/<\/?([a-z0-9-]+)([^>]*)>/gi, (full, rawTag: string, rawAttrs: string) => {
+    const tag = rawTag.toLowerCase();
+    const isClose = full.startsWith('</');
+    if (!(ALLOWED_HTML_TAGS as readonly string[]).includes(tag)) {
+      return '';
+    }
+    if (isClose) return `</${tag}>`;
+    const kept: string[] = [];
+    const attrRe =
+      /\s(href|target|rel|style|class|data-bullet-style)\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/gi;
+    let attrMatch: RegExpExecArray | null;
+    while ((attrMatch = attrRe.exec(rawAttrs)) !== null) {
+      const name = attrMatch[1].toLowerCase();
+      const value = attrMatch[3] ?? attrMatch[4] ?? attrMatch[5] ?? '';
+      if (name === 'href' && value && !SAFE_URI_REGEXP.test(value)) continue;
+      kept.push(`${name}="${escapeHtml(value)}"`);
+    }
+    const attrStr = kept.length > 0 ? ` ${kept.join(' ')}` : '';
+    return `<${tag}${attrStr}>`;
+  });
+
+  return out;
+}
+
+/**
+ * Inner HTML for one resume bullet `<li>`. Alignment lives on the inner `<p>`
+ * (the stored editor HTML), never the list item — Chromium print drops markers
+ * when the `<li>` is justified. Used by both CleanResumeView and PDF export.
+ */
+export function resumeBulletInnerHtml(bullet: string): string {
+  if (containsHtmlFormatting(bullet)) {
+    const inner = sanitizeRichHtml(bullet);
+    if (/^<p[\s>/]/i.test(inner.trim())) {
+      return justifyHtmlContent(inner) ?? inner;
+    }
+    return `<p style="text-align: justify">${inner}</p>`;
+  }
+  return `<p style="text-align: justify">${escapeHtml(bullet)}</p>`;
 }
 
 // ─── Bullet ↔ HTML Conversion ───────────────────────────────────────────────
@@ -208,10 +263,10 @@ export function bulletsToHtml(bullets: string[] | undefined | null): string {
     .map((b) => {
       // If the bullet already has a <p> wrapper (from preserved alignment), don't double-wrap
       if (/^<p[\s>]/i.test(b.trim())) {
-        return `<li>${b}</li>`;
+        return `<li>${justifyHtmlContent(b)}</li>`;
       }
       const content = containsHtmlFormatting(b) ? b : escapeHtml(b);
-      return `<li><p>${content}</p></li>`;
+      return `<li><p style="text-align: justify">${content}</p></li>`;
     })
     .join('');
   return `<ul class="rich-text-bullets bullet-style-disc" data-bullet-style="disc">${items}</ul>`;
@@ -238,15 +293,13 @@ export function htmlToBullets(html: string): string[] {
   while ((match = liRegex.exec(html)) !== null) {
     let inner = match[1].trim();
 
-    // Tiptap wraps each <li> content in a <p> tag.
-    // Only strip PLAIN <p> tags (no attributes). When the <p> has attributes
-    // (e.g. style="text-align: center"), keep it so alignment survives the round-trip.
-    const plainPMatch = inner.match(/^<p>([\s\S]*)<\/p>$/i);
-    if (plainPMatch) {
-      inner = plainPMatch[1];
+    // Tiptap wraps each <li> in a <p>. Strip a plain <p> or a default-justify
+    // <p> so bullets[] stay as content. Keep other alignments (left/center/right)
+    // as a full <p style="..."> so they survive the round-trip.
+    const unwrapped = unwrapDefaultBulletParagraph(inner);
+    if (unwrapped !== null) {
+      inner = unwrapped;
     }
-    // If <p> has attributes, leave the full <p style="...">content</p> intact
-    // so it persists through the database and renders correctly in the preview.
 
     if (inner.trim().length > 0) {
       matches.push(inner.trim());
@@ -265,36 +318,62 @@ export function htmlToBullets(html: string): string[] {
 
 // ─── Text Alignment Detection & Modification ────────────────────
 
-/**
- * Regex matching non-justify text-align values in TipTap-generated HTML.
- * TipTap adds `style="text-align: left|center|right"` to elements; the absence
- * of any text-align means the editor's `defaultAlignment` is used (justify).
- */
 const NON_JUSTIFY_ALIGN_RE = /text-align:\s*(?:left|center|right)/i;
 const NON_JUSTIFY_ALIGN_RE_GLOBAL = /text-align:\s*(?:left|center|right)/gi;
+const BLOCK_OPEN_RE = /<(p|h[1-6])(\s[^>]*)?>/gi;
 
 /**
- * Check whether an HTML string is fully justified.
- *
- * Returns `true` when the HTML contains NO non-justify text-align declarations.
- * Null, undefined and empty strings are considered "fully justified" because
- * the TipTap editor defaults to justify alignment for new content.
+ * Unwrap `<p>` or `<p style="text-align: justify">` so default-justified
+ * bullets store as content. Returns null when the paragraph has a
+ * non-default alignment that must be kept on the tag.
  */
-export function isHtmlFullyJustified(html: string | null | undefined): boolean {
-  if (!html) return true;
-  return !NON_JUSTIFY_ALIGN_RE.test(html);
+function unwrapDefaultBulletParagraph(inner: string): string | null {
+  const wrapped = inner.match(/^<p([^>]*)>([\s\S]*)<\/p>$/i);
+  if (!wrapped) return null;
+  const attrs = wrapped[1].trim();
+  const body = wrapped[2];
+  if (!attrs) return body;
+  if (/^style\s*=\s*["']text-align:\s*justify;?\s*["']$/i.test(attrs)) return body;
+  return null;
 }
 
 /**
- * Rewrite every non-justify text-align value to `justify` in the given HTML.
- *
- * Preserves all other inline styles and attributes. Returns `null` for null
- * input so it can be used safely with nullable database fields.
+ * True when every paragraph/heading already has `text-align: justify` in the
+ * stored HTML — not merely "the preview CSS will make it look justified".
+ */
+export function isHtmlFullyJustified(html: string | null | undefined): boolean {
+  if (!html) return true;
+  if (NON_JUSTIFY_ALIGN_RE.test(html)) return false;
+  const opens = html.match(BLOCK_OPEN_RE);
+  if (!opens) return true;
+  return opens.every((tag) => /text-align\s*:\s*justify/i.test(tag));
+}
+
+/**
+ * Write `text-align: justify` into the HTML itself (editor content), replacing
+ * left/center/right and filling in paragraphs that had no alignment.
  */
 export function justifyHtmlContent(html: string): string;
 export function justifyHtmlContent(html: null | undefined): null;
 export function justifyHtmlContent(html: string | null | undefined): string | null;
 export function justifyHtmlContent(html: string | null | undefined): string | null {
   if (html == null) return null;
-  return html.replace(NON_JUSTIFY_ALIGN_RE_GLOBAL, 'text-align: justify');
+  const replaced = html.replace(NON_JUSTIFY_ALIGN_RE_GLOBAL, 'text-align: justify');
+  return replaced.replace(/<(p|h[1-6])(\s[^>]*)?>/gi, (full, tag: string, rawAttrs?: string) => {
+    if (/text-align\s*:/i.test(full)) return full;
+    const attrs = rawAttrs ?? '';
+    const styleMatch = attrs.match(/style\s*=\s*("([^"]*)"|'([^']*)')/i);
+    if (styleMatch) {
+      const quote = styleMatch[1].startsWith("'") ? "'" : '"';
+      const val = (styleMatch[2] ?? styleMatch[3] ?? '').trim();
+      const next = val
+        ? `${val}${val.endsWith(';') ? '' : ';'} text-align: justify`
+        : 'text-align: justify';
+      return full.replace(styleMatch[0], `style=${quote}${next}${quote}`);
+    }
+    if (attrs.trim()) {
+      return `<${tag}${attrs} style="text-align: justify">`;
+    }
+    return `<${tag} style="text-align: justify">`;
+  });
 }
