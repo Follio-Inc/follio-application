@@ -126,7 +126,7 @@ export function domainCandidates(name: string, kind: BrandKind): string[] {
   if (joined.length < 4) return [];
 
   const stems = [joined];
-  // "Molson Coors Beverage" also lives at molsoncoors.com — try dropping the
+  // "Wells Fargo Advisors" also lives at wellsfargo.com — try dropping the
   // trailing descriptor, but never below two words.
   if (core.length > 2) {
     stems.push(core.slice(0, 2).join(''));

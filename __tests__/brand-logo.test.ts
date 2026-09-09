@@ -11,7 +11,7 @@ import {
 
 describe('domainFromUrl', () => {
   it('reduces a URL to a bare public hostname', () => {
-    expect(domainFromUrl('https://www.MolsonCoors.com/careers')).toBe('molsoncoors.com');
+    expect(domainFromUrl('https://www.Google.com/careers')).toBe('google.com');
     expect(domainFromUrl('stanford.edu')).toBe('stanford.edu');
     expect(domainFromUrl('http://sub.example.co.uk?a=1')).toBe('sub.example.co.uk');
   });
@@ -32,11 +32,9 @@ describe('domainFromUrl', () => {
 
 describe('domainCandidates', () => {
   it('guesses a company domain from its name', () => {
-    expect(domainCandidates('Molson Coors', 'company')[0]).toBe('molsoncoors.com');
+    expect(domainCandidates('Google', 'company')[0]).toBe('google.com');
     expect(domainCandidates('Stripe, Inc.', 'company')[0]).toBe('stripe.com');
-    expect(domainCandidates('Molson Coors Beverage Company', 'company')).toContain(
-      'molsoncoors.com'
-    );
+    expect(domainCandidates('Wells Fargo Advisors Inc.', 'company')).toContain('wellsfargo.com');
   });
 
   it('drops legal suffixes and normalizes punctuation', () => {
@@ -78,17 +76,17 @@ describe('resolveBrandDomains', () => {
   it('trusts an explicit URL over any guess', () => {
     expect(
       resolveBrandDomains({
-        name: 'Molson Coors',
-        url: 'https://www.molsoncoors.co.uk',
+        name: 'Google',
+        url: 'https://www.google.co.uk',
         kind: 'company',
       })
-    ).toEqual(['molsoncoors.co.uk']);
+    ).toEqual(['google.co.uk']);
   });
 
   it('falls back to guessing when the URL is unusable', () => {
     expect(
-      resolveBrandDomains({ name: 'Molson Coors', url: 'http://localhost', kind: 'company' })
-    ).toContain('molsoncoors.com');
+      resolveBrandDomains({ name: 'Google', url: 'http://localhost', kind: 'company' })
+    ).toContain('google.com');
   });
 
   it('resolves schools whose domain cannot be derived from their name', () => {
@@ -151,10 +149,10 @@ describe('universityDomain', () => {
 
 describe('brandLogoSrc', () => {
   it('points at our own route and passes the URL hint through', () => {
-    const src = brandLogoSrc({ name: 'Molson Coors', kind: 'company' });
+    const src = brandLogoSrc({ name: 'Google', kind: 'company' });
 
     expect(src).toContain('/api/brand/logo?');
-    expect(src).toContain('name=Molson+Coors');
+    expect(src).toContain('name=Google');
     expect(src).toContain('kind=company');
 
     const withUrl = brandLogoSrc({
@@ -172,7 +170,7 @@ describe('brandLogoSrc', () => {
 
 describe('brandMonogram', () => {
   it('uses initials from the first two words', () => {
-    expect(brandMonogram('Molson Coors')).toBe('MC');
+    expect(brandMonogram('Wells Fargo')).toBe('WF');
     expect(brandMonogram('Stripe')).toBe('ST');
     expect(brandMonogram('  ')).toBe('?');
   });

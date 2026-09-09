@@ -5,7 +5,7 @@ import { domainFromUrl, resolveBrandDomains, type BrandKind } from '@/lib/brand-
 import { fetchBrandLogo } from '@/lib/brand-logo/fetch';
 
 /**
- * GET /api/brand/logo?name=Molson+Coors&kind=company[&url=https://molsoncoors.com]
+ * GET /api/brand/logo?name=Google&kind=company[&url=https://google.com]
  *
  * Returns a normalized 128px PNG, or 404 when no official logo can be found —
  * the caller then renders a monogram.
