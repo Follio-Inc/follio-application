@@ -1,12 +1,13 @@
 'use client';
 
-import { Check, Copy, ExternalLink, QrCode } from 'lucide-react';
+import { Check, Copy, ExternalLink, Share2 } from 'lucide-react';
 import Link from 'next/link';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
-import { FollioShareDialog } from '@/components/follio/follio-share-dialog';
+import { ShareDialog } from '@/components/share-dialog';
 import { Button } from '@/components/ui/button';
-import type { FollioIdentity } from '@/lib/follio-identity';
+import { DOCUMENT_VISIBILITY_CONFIG } from '@/components/document-dashboard';
+import type { FollioIdentity, FollioVisibility } from '@/lib/follio-identity';
 import { copyTextToClipboard } from '@/lib/share';
 
 import { DashboardResumesSection, type DashboardResumeItem } from './dashboard-resumes-section';
@@ -17,6 +18,8 @@ export interface DashboardFollio {
   id: string;
   handle: string;
   status: string;
+  visibility: FollioVisibility;
+  isPublic: boolean;
   displayHost: string;
   url: string;
   identity: FollioIdentity | null;
@@ -38,20 +41,29 @@ export function DashboardClient({ data }: DashboardClientProps) {
   const { follio, resumes, activeProfileId, primaryProfileId } = data;
   const [copied, setCopied] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [visibility, setVisibility] = useState<FollioVisibility>(follio.visibility);
+
+  useEffect(() => {
+    setVisibility(follio.visibility);
+  }, [follio.visibility]);
   const [snapEl, setSnapEl] = useState<HTMLDivElement | null>(null);
   const [attachedResumeEl, setAttachedResumeEl] = useState<HTMLDivElement | null>(null);
 
-  const isPublic = follio.status === 'PUBLIC';
+  const visibilityMeta = DOCUMENT_VISIBILITY_CONFIG[visibility];
   const displayName = follio.identity?.fullName?.trim() || 'Your Follio';
   const headline = follio.identity?.headline?.trim() || null;
-  const canShare = Boolean(follio.identity && follio.qrSvg);
+  const attachedResume = resumes.find((resume) => resume.id === primaryProfileId) ?? resumes[0];
 
   const handleCopy = useCallback(async () => {
+    if (visibility === 'PRIVATE') {
+      setShareOpen(true);
+      return;
+    }
     const ok = await copyTextToClipboard(follio.url);
     if (!ok) return;
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  }, [follio.url]);
+  }, [follio.url, visibility]);
 
   return (
     <div className="space-y-12">
@@ -60,7 +72,7 @@ export function DashboardClient({ data }: DashboardClientProps) {
       <section className="space-y-4">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-section-title">Your Follio</h2>
-          <p className="text-[13px] text-muted-foreground">{isPublic ? 'Public' : 'Private'}</p>
+          <p className="text-[13px] text-muted-foreground">{visibilityMeta.label}</p>
         </div>
 
         <div className="flex items-stretch">
@@ -88,10 +100,16 @@ export function DashboardClient({ data }: DashboardClientProps) {
                   type="button"
                   onClick={() => void handleCopy()}
                   className="mt-4 flex min-w-0 items-center gap-2 text-left text-muted-foreground transition-colors hover:text-foreground"
-                  aria-label={copied ? 'Link copied' : 'Copy link'}
+                  aria-label={
+                    visibility === 'PRIVATE'
+                      ? 'Choose visibility to share'
+                      : copied
+                        ? 'Link copied'
+                        : 'Copy link'
+                  }
                 >
                   <span className="min-w-0 truncate font-mono text-[12px] tracking-tight">
-                    {follio.displayHost}
+                    {visibility === 'PRIVATE' ? 'Private — not shared' : follio.displayHost}
                   </span>
                   {copied ? (
                     <Check className="h-3.5 w-3.5 shrink-0 text-success" />
@@ -101,12 +119,10 @@ export function DashboardClient({ data }: DashboardClientProps) {
                 </button>
 
                 <div className="mt-6 flex flex-wrap items-center gap-2">
-                  {canShare ? (
-                    <Button size="sm" className="gap-1.5" onClick={() => setShareOpen(true)}>
-                      <QrCode className="h-3.5 w-3.5" />
-                      Share
-                    </Button>
-                  ) : null}
+                  <Button size="sm" className="gap-1.5" onClick={() => setShareOpen(true)}>
+                    <Share2 className="h-3.5 w-3.5" />
+                    Share
+                  </Button>
                   <Button variant="outline" size="sm" className="gap-1.5" asChild>
                     <Link href={follio.url} target="_blank" rel="noopener noreferrer">
                       <ExternalLink className="h-3.5 w-3.5" />
@@ -122,17 +138,31 @@ export function DashboardClient({ data }: DashboardClientProps) {
               initialActiveProfileId={activeProfileId}
               initialPrimaryProfileId={primaryProfileId}
               attachedResumeRef={setAttachedResumeEl}
+              onAttachedVisibilityChange={setVisibility}
+              attachedVisibility={visibility}
             />
           </div>
         </div>
       </section>
 
-      {follio.identity ? (
-        <FollioShareDialog
-          identity={follio.identity}
-          qrSvg={follio.qrSvg}
+      {attachedResume ? (
+        <ShareDialog
+          variant="follio"
+          profile={{
+            id: follio.id,
+            handle: follio.handle,
+            firstName: attachedResume.firstName,
+            resumeTitle: attachedResume.resumeTitle,
+            resumeVisibility: visibility,
+          }}
           open={shareOpen}
           onOpenChange={setShareOpen}
+          onBeforeOpen={async () => {
+            if (follio.id === activeProfileId) return;
+            await fetch(`/api/resumes/${follio.id}/activate`, { method: 'PATCH' });
+          }}
+          onVisibilityChange={(next) => setVisibility(next)}
+          hideTrigger
         />
       ) : null}
     </div>

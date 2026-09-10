@@ -138,4 +138,5 @@ export type FollioCompletenessInput = {
   phone?: string | null;
   phonePublic?: boolean | null;
   status?: string | null;
+  resumeVisibility?: string | null;
 };

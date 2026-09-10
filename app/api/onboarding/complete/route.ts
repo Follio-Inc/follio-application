@@ -577,8 +577,8 @@ export async function POST(request: NextRequest) {
           summary: mergedProfile.summary,
           location: mergedProfile.location,
           avatarUrl: finalAvatarUrl,
-          status: 'PUBLIC', // Make profile public by default
-          resumeVisibility: 'PRIVATE', // Resume private by default
+          status: 'PRIVATE', // Follio and resume stay private until the owner shares
+          resumeVisibility: 'PRIVATE',
           portfolioVisibility: 'PUBLIC', // Portfolio public by default
           // Set sources for provenance
           firstNameSource: toDataSource(finalNameSource),
@@ -969,7 +969,7 @@ async function handleReviewedData(
         summary: reviewedData.profile.summary,
         location: reviewedData.profile.location,
         avatarUrl: avatarUrlForDb,
-        status: 'PUBLIC',
+        status: 'PRIVATE',
         resumeVisibility: 'PRIVATE',
         portfolioVisibility: 'PUBLIC',
         ...(resumeDesign ? { resumeDesign: resumeDesign as object } : {}),

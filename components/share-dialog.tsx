@@ -49,7 +49,7 @@ import {
   detectWebmailProvider,
   type LinkShareKind,
 } from '@/lib/share';
-import { getPortfolioUrl, getResumeUrl, getUnlistedCoverLetterUrl } from '@/lib/url';
+import { getFollioUrl, getPortfolioUrl, getResumeUrl, getUnlistedCoverLetterUrl } from '@/lib/url';
 
 import type { ContentVisibility } from '@prisma/client';
 
@@ -59,7 +59,7 @@ import type { ContentVisibility } from '@prisma/client';
  * One share dialog for all link-capable documents.
  * Cover letters omit Public — Unlisted | Private only (same order as resume).
  */
-export type ShareDialogVariant = 'resume' | 'portfolio' | 'cover-letter';
+export type ShareDialogVariant = 'resume' | 'portfolio' | 'cover-letter' | 'follio';
 
 /**
  * Minimal profile shape required by ShareDialog for resume / portfolio.
@@ -195,6 +195,18 @@ function getInitialVisibility(
 }
 
 function variantMeta(variant: ShareDialogVariant) {
+  if (variant === 'follio') {
+    return {
+      contentLabel: 'Follio',
+      dialogTitle: 'Share Follio',
+      dialogDescription:
+        'Public, Unlisted, or Private. Your attached resume always uses the same visibility.',
+      triggerTooltip: 'Share your Follio',
+      privateLinkHint: 'Change access to Public or Unlisted to get a link.',
+      privateMessageHint: 'Make your Follio Public or Unlisted to get a shareable message.',
+      linkKind: 'follio' as LinkShareKind,
+    };
+  }
   if (variant === 'portfolio') {
     return {
       contentLabel: 'portfolio',
@@ -221,7 +233,8 @@ function variantMeta(variant: ShareDialogVariant) {
   return {
     contentLabel: 'resume',
     dialogTitle: 'Share Resume',
-    dialogDescription: 'Control access and share your resume. Only one resume can be public.',
+    dialogDescription:
+      "Control access and share your resume. This visibility also applies to this resume's Follio page. Only one resume can be public.",
     triggerTooltip: 'Share your resume',
     privateLinkHint: 'Change access to Public or Unlisted to get a link.',
     privateMessageHint: 'Make your resume Public or Unlisted to get a shareable message.',
@@ -230,8 +243,8 @@ function variantMeta(variant: ShareDialogVariant) {
 }
 
 /**
- * Shared share dialog for resume, portfolio, and cover letter.
- * Same chrome and Unlisted → Private order everywhere; Public only on resume/portfolio.
+ * Shared share dialog for Follio, resume, portfolio, and cover letter.
+ * Same chrome and Unlisted → Private order everywhere; Public omitted for cover letters.
  */
 export function ShareDialog({
   profile,
@@ -249,6 +262,7 @@ export function ShareDialog({
   const { user: clerkUser } = useUser();
   const isCoverLetter = variant === 'cover-letter';
   const isPortfolio = variant === 'portfolio';
+  const isFollio = variant === 'follio';
 
   const [internalOpen, setInternalOpen] = useState(false);
   const open = controlledOpen ?? internalOpen;
@@ -297,10 +311,12 @@ export function ShareDialog({
           profile?.handle ?? '',
           contentVisibility === 'UNLISTED' ? unlistedKey : null
         )
-      : getResumeUrl(
-          vanityUsername || profile?.handle || '',
-          contentVisibility === 'UNLISTED' ? unlistedKey : null
-        );
+      : isFollio
+        ? getFollioUrl(profile?.handle ?? '', contentVisibility === 'UNLISTED' ? unlistedKey : null)
+        : getResumeUrl(
+            vanityUsername || profile?.handle || '',
+            contentVisibility === 'UNLISTED' ? unlistedKey : null
+          );
 
   const fetchUnlistedKey = useCallback(async () => {
     setIsLoadingKey(true);
@@ -401,12 +417,12 @@ export function ShareDialog({
         });
         if (!res.ok) throw new Error('Failed to update visibility');
       } else {
-        const res = await fetch('/api/profile', {
+        const payload = isPortfolio ? { portfolioVisibility: value } : { resumeVisibility: value };
+        const path = !isPortfolio && profile?.id ? `/api/resumes/${profile.id}` : '/api/profile';
+        const res = await fetch(path, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(
-            isPortfolio ? { portfolioVisibility: value } : { resumeVisibility: value }
-          ),
+          body: JSON.stringify(payload),
         });
         if (!res.ok) throw new Error('Failed to update visibility');
 
@@ -779,11 +795,24 @@ export function ShareDialog({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Make this your public resume?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {isFollio ? 'Make this Follio public?' : 'Make this your public resume?'}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Only one resume can be public. Making this public will switch{' '}
-              <strong>{pendingPublicConfirm?.title}</strong> to Unlisted. Your public URL (
-              follio.me/{vanityUsername || profile?.handle}) will then show this resume.
+              {isFollio ? (
+                <>
+                  Your attached resume will become public too — they always share visibility. Only
+                  one resume can be public. <strong>{pendingPublicConfirm?.title}</strong> will
+                  switch to Unlisted.
+                </>
+              ) : (
+                <>
+                  Only one resume can be public. Making this public will switch{' '}
+                  <strong>{pendingPublicConfirm?.title}</strong> to Unlisted. Your public URL (
+                  follio.me/{vanityUsername || profile?.handle}) will then show this resume. Your
+                  Follio page for this resume uses the same visibility.
+                </>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -12,6 +12,7 @@ function signOff(firstName: string | null | undefined): string {
 function contentLabelForKind(kind: LinkShareKind): string {
   if (kind === 'portfolio') return 'portfolio';
   if (kind === 'cover-letter') return 'cover letter';
+  if (kind === 'follio') return 'Follio';
   return 'resume';
 }
 

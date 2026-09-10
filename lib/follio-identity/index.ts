@@ -16,6 +16,13 @@ export {
   rewriteHighlights,
 } from './voice';
 export { canShowResumeDoor, canShowWorkDoor, embedAsVisitor } from './doors';
+export {
+  canOpenFollioPage,
+  getFollioVisibility,
+  isFollioPublic,
+  profileStatusForVisibility,
+} from './page-access';
+export type { FollioPageAccessInput, FollioPageOpenInput, FollioVisibility } from './page-access';
 export { getFollioCompleteness } from './completeness';
 export { follioCardActions, follioCardDoors, follioCardFacts } from './card';
 export type {

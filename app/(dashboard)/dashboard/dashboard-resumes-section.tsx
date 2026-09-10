@@ -49,6 +49,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { isPortfolioEnabled } from '@/lib/features';
+import type { FollioVisibility } from '@/lib/follio-identity';
 import type { ResumePageLayout } from '@/types';
 
 import {
@@ -90,6 +91,10 @@ interface DashboardResumesSectionProps {
   embedded?: boolean;
   /** Marks the resume the Follio is attached to, for the dashboard rail. */
   attachedResumeRef?: Ref<HTMLDivElement>;
+  /** When the attached resume's visibility changes, Follio stays in lockstep. */
+  onAttachedVisibilityChange?: (visibility: FollioVisibility) => void;
+  /** Live Follio visibility — the attached resume card should match. */
+  attachedVisibility?: FollioVisibility;
 }
 
 // ─── Constants ────────────────────────────────────────────────────
@@ -190,6 +195,8 @@ export function DashboardResumesSection({
   initialPrimaryProfileId,
   embedded = false,
   attachedResumeRef,
+  onAttachedVisibilityChange,
+  attachedVisibility,
 }: DashboardResumesSectionProps) {
   const router = useRouter();
 
@@ -461,7 +468,11 @@ export function DashboardResumesSection({
         <DashboardDocumentsScroller itemCount={previewResumes.length + (hasMoreResumes ? 1 : 0)}>
           {previewResumes.map((resume, index) => {
             const displayName = getDisplayName(resume);
-            const isPublic = resume.resumeVisibility === 'PUBLIC';
+            const cardVisibility =
+              resume.id === primaryProfileId && attachedVisibility
+                ? attachedVisibility
+                : resume.resumeVisibility;
+            const isPublic = cardVisibility === 'PUBLIC';
             const portfolioEnabled = isPortfolioEnabled();
 
             return (
@@ -570,7 +581,7 @@ export function DashboardResumesSection({
                   }
                   meta={
                     <DocumentVisibilityMeta
-                      visibility={resume.resumeVisibility}
+                      visibility={cardVisibility}
                       updatedAt={resume.updatedAt}
                       descriptions={{
                         PUBLIC: 'Anyone can view at your Follio URL',
@@ -738,6 +749,11 @@ export function DashboardResumesSection({
               })
             );
             setSharingResume((prev) => (prev ? { ...prev, resumeVisibility: visibility } : prev));
+            if (sharingResume.id === primaryProfileId) {
+              onAttachedVisibilityChange?.(visibility);
+            } else if (visibility === 'PUBLIC') {
+              onAttachedVisibilityChange?.('UNLISTED');
+            }
           }}
           hideTrigger
         />

@@ -12,8 +12,8 @@ describe('dashboard Follio card', () => {
 
     expect(src).not.toContain('Pencil');
     expect(src).not.toContain('href="/builder"');
-    expect(src).toContain('QrCode');
-    expect(src).toContain('FollioShareDialog');
+    expect(src).toContain('Share2');
+    expect(src).toContain('ShareDialog');
   });
 
   it('keeps resume editing on the resume list', () => {

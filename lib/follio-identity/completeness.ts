@@ -1,3 +1,4 @@
+import { getFollioVisibility } from './page-access';
 import type { FollioCompleteness, FollioCompletenessInput } from './types';
 
 /**
@@ -10,14 +11,19 @@ export function getFollioCompleteness(input: FollioCompletenessInput): FollioCom
   const hasPublicContact = Boolean(
     (input.email?.trim() && input.emailPublic) || (input.phone?.trim() && input.phonePublic)
   );
-  const isPublic = input.status === 'PUBLIC';
+  const visibility = getFollioVisibility({
+    status: input.status,
+    resumeVisibility: input.resumeVisibility,
+  });
+  const isPublic = visibility === 'PUBLIC';
+  const isShareable = visibility !== 'PRIVATE';
 
   const missing: string[] = [];
   if (!hasName) missing.push('Add your name');
   if (!hasHeadline) missing.push('Add a one-line headline');
   if (!hasPhoto) missing.push('Add a photo');
   if (!hasPublicContact) missing.push('Make email or phone visible to visitors');
-  if (!isPublic) missing.push('Publish your Follio so the link works');
+  if (!isShareable) missing.push('Set your Follio to Public or Unlisted so the link works');
 
   return {
     hasName,
@@ -25,7 +31,7 @@ export function getFollioCompleteness(input: FollioCompletenessInput): FollioCom
     hasHeadline,
     hasPublicContact,
     isPublic,
-    readyToShare: hasName && isPublic,
+    readyToShare: hasName && isShareable,
     missing,
   };
 }

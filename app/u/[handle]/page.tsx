@@ -3,9 +3,12 @@ import { notFound } from 'next/navigation';
 
 import {
   buildFollioIdentity,
+  canOpenFollioPage,
   canShowResumeDoor,
   canShowWorkDoor,
   embedAsVisitor,
+  getFollioVisibility,
+  isFollioPublic,
 } from '@/lib/follio-identity';
 import { renderQrSvg } from '@/lib/follio-identity/qr';
 import { isPortfolioEnabled } from '@/lib/features';
@@ -35,7 +38,7 @@ export async function generateMetadata({ params }: IdentityPageProps): Promise<M
   return {
     title,
     description,
-    robots: profile.status === 'PUBLIC' ? undefined : { index: false, follow: false },
+    robots: isFollioPublic(profile) ? undefined : { index: false, follow: false },
     openGraph: {
       title,
       description,
@@ -76,11 +79,14 @@ export default async function IdentityPage({ params, searchParams }: IdentityPag
   const isValidKey = key ? await validateUnlistedKey(handle, key) : false;
   const hasShareAccess = isOwner || isValidToken || isValidKey;
 
-  if (profile.status === 'DRAFT' && !isOwner) {
-    notFound();
-  }
-
-  if (profile.status === 'PRIVATE' && !hasShareAccess) {
+  if (
+    !canOpenFollioPage({
+      status: profile.status,
+      resumeVisibility: profile.resumeVisibility,
+      isOwner,
+      hasShareAccess,
+    })
+  ) {
     notFound();
   }
 
@@ -107,7 +113,7 @@ export default async function IdentityPage({ params, searchParams }: IdentityPag
       qrSvg={renderQrSvg(identity.follioUrl)}
       authState={authState}
       profileHandle={handle}
-      unpublished={profile.status !== 'PUBLIC'}
+      visibility={getFollioVisibility(profile)}
       embed={isPreview}
     />
   );

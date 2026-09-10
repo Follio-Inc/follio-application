@@ -10,6 +10,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
+import { isFollioPublic } from '@/lib/follio-identity';
 import { logger } from '@/lib/logger';
 import { getPublicProfile } from '@/services/profile.service';
 import { generateSnapViewData } from '@/services/snap-view.service';
@@ -29,7 +30,7 @@ export async function GET(
 
     const profile = await getPublicProfile(handle);
 
-    if (!profile || profile.status === 'DRAFT') {
+    if (!profile || !isFollioPublic(profile)) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
