@@ -3655,7 +3655,7 @@ function EducationCard({
           </div>
         </div>
         <div>
-          <label className="mb-1.5 block text-sm font-medium">Description</label>
+          <label className="mb-1.5 block text-sm font-medium">Highlights</label>
           <Textarea
             placeholder={EDUCATION_DESCRIPTION_PLACEHOLDER}
             value={education.description || ''}

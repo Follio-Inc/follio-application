@@ -206,6 +206,23 @@ export function SectionEditor({ sectionType, section }: SectionEditorProps) {
             experiences={draftProfile.workExperiences}
             profileId={draftProfile.id}
             onUpdate={(workExperiences) => handleInlineUpdate({ workExperiences })}
+            totalExperience={draftProfile.totalExperience}
+            totalExperienceVisible={draftProfile.totalExperienceVisible}
+            totalExperienceShowYears={draftProfile.totalExperienceShowYears}
+            totalExperienceShowMonths={draftProfile.totalExperienceShowMonths}
+            onTotalExperiencePreview={(totalExperience) => updateDraft({ totalExperience })}
+            onTotalExperiencePersisted={(totalExperience) =>
+              commitInlineChange({ totalExperience })
+            }
+            onTotalExperienceVisibleChange={(totalExperienceVisible) =>
+              commitInlineChange({ totalExperienceVisible })
+            }
+            onTotalExperienceUnitsChange={({ showYears, showMonths }) =>
+              commitInlineChange({
+                totalExperienceShowYears: showYears,
+                totalExperienceShowMonths: showMonths,
+              })
+            }
             onEditingStateChange={handleInlineEditingChange}
           />
         );

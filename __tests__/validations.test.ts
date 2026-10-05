@@ -168,6 +168,33 @@ describe('Validation Schemas', () => {
       const data = { firstName: 'a'.repeat(51) };
       expect(() => ProfileBasicInfoSchema.parse(data)).toThrow();
     });
+
+    it('should accept a totalExperience override and clear empty values', () => {
+      expect(
+        ProfileBasicInfoSchema.parse({ firstName: 'John', totalExperience: '5 yrs' })
+          .totalExperience
+      ).toBe('5 yrs');
+      expect(
+        ProfileBasicInfoSchema.parse({ firstName: 'John', totalExperience: '' }).totalExperience
+      ).toBeNull();
+    });
+
+    it('should accept totalExperienceVisible', () => {
+      expect(
+        ProfileBasicInfoSchema.parse({ firstName: 'John', totalExperienceVisible: false })
+          .totalExperienceVisible
+      ).toBe(false);
+    });
+
+    it('should accept total experience unit toggles', () => {
+      const parsed = ProfileBasicInfoSchema.parse({
+        firstName: 'John',
+        totalExperienceShowYears: true,
+        totalExperienceShowMonths: false,
+      });
+      expect(parsed.totalExperienceShowYears).toBe(true);
+      expect(parsed.totalExperienceShowMonths).toBe(false);
+    });
   });
 
   describe('CreateProfileSchema', () => {

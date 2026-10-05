@@ -7,6 +7,8 @@ import Image from 'next/image';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import type { OAuthConnectStrategy } from '@/lib/account/connect-external-account';
+import { useConnectExternalAccount } from '@/lib/hooks/use-connect-external-account';
 import { cn } from '@/lib/utils';
 
 import type { SyncStatus } from './source-types';
@@ -120,6 +122,7 @@ export function ConnectionCards({
   onRefreshAction,
 }: ConnectionCardsProps) {
   const { user, isLoaded } = useUser();
+  const connectExternalAccount = useConnectExternalAccount();
   const [connecting, setConnecting] = useState<string | null>(null);
   const [syncing, setSyncing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -247,27 +250,16 @@ export function ConnectionCards({
       if (!user) return;
       setConnecting(config.key);
       setError(null);
-      try {
-        const externalAccount = await user.createExternalAccount({
-          strategy: config.oauthStrategy as Parameters<
-            typeof user.createExternalAccount
-          >[0]['strategy'],
-          redirectUrl: window.location.href,
-        });
-        const url = externalAccount?.verification?.externalVerificationRedirectURL;
-        if (url) window.location.href = url.toString();
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        if (msg.includes('already connected')) {
-          await user.reload();
-          handleRefresh();
-        } else {
-          setError(`Failed to connect ${config.label}: ${msg}`);
-        }
-        setConnecting(null);
+      const result = await connectExternalAccount(config.oauthStrategy as OAuthConnectStrategy);
+      if (result.status === 'redirected') return;
+      if (result.status === 'already_connected') {
+        handleRefresh();
+      } else if (result.status === 'error') {
+        setError(result.message);
       }
+      setConnecting(null);
     },
-    [user, handleRefresh]
+    [user, connectExternalAccount, handleRefresh]
   );
 
   const handleSync = useCallback(

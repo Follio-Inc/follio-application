@@ -10,6 +10,7 @@ export type { SplitFollioLinks } from './links';
 export {
   FOLLIO_VOICE,
   rewriteAbout,
+  rewriteEducationHighlights,
   rewriteEducationNote,
   rewriteExtras,
   rewriteHeadline,

@@ -12,6 +12,7 @@ import {
 } from '@/lib/follio-identity';
 import { renderQrSvg } from '@/lib/follio-identity/qr';
 import { isPortfolioEnabled } from '@/lib/features';
+import { resumeAccessQuery } from '@/lib/resume/presentation';
 import { getFollioUrl } from '@/lib/url';
 import { getPublicProfile, validateUnlistedKey } from '@/services/profile.service';
 
@@ -115,6 +116,7 @@ export default async function IdentityPage({ params, searchParams }: IdentityPag
       profileHandle={handle}
       visibility={getFollioVisibility(profile)}
       embed={isPreview}
+      accessQuery={resumeAccessQuery({ token, key })}
     />
   );
 }

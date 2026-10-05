@@ -98,13 +98,23 @@ export function FollioStudyPeek({
               .join(' · ')}
           </p>
         ) : null}
-        {!item.credential && !item.period && extras.length === 0 && !item.description ? (
+        {!item.credential && !item.period && extras.length === 0 && item.highlights.length === 0 ? (
           <p className="text-[13px] leading-relaxed text-muted-foreground">
             Academic details live on the résumé.
           </p>
         ) : null}
-        {item.description ? (
-          <p className="text-[13px] leading-relaxed text-foreground/85">{item.description}</p>
+        {item.highlights.length > 0 ? (
+          <ul className="space-y-1.5 text-[13px] leading-relaxed text-foreground/85">
+            {item.highlights.map((line) => (
+              <li key={line} className="relative pl-3.5">
+                <span
+                  aria-hidden
+                  className="absolute left-0 top-[0.55em] h-1 w-1 rounded-full bg-foreground/35"
+                />
+                {line}
+              </li>
+            ))}
+          </ul>
         ) : null}
         {extras.length > 0 ? (
           <ul className="space-y-1 text-[13px] leading-relaxed text-foreground/85">

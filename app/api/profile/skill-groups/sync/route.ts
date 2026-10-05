@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
+import { interactiveTransactionOptions } from '@/lib/db-transaction';
 import { isHtmlEmpty } from '@/lib/html-utils';
 import {
   extractSkillNamesFromHtml,
@@ -109,6 +110,12 @@ export async function PUT(request: NextRequest) {
 
       await tx.skill.deleteMany({ where: { profileId, groupId: null } });
 
+      // One read for the skills that remain. Looking each name up again adds a
+      // round trip per skill and can expire this transaction on a full resume.
+      const skillsByName = new Map(
+        (await tx.skill.findMany({ where: { profileId } })).map((skill) => [skill.name, skill])
+      );
+
       const skillGroups = [];
       let skillSortOrder = 0;
 
@@ -136,25 +143,28 @@ export async function PUT(request: NextRequest) {
             });
 
         const desiredKeys = new Set(group.skills.map((name) => name.toLowerCase()));
-        const currentSkills = await tx.skill.findMany({
-          where: { groupId: skillGroup.id },
-        });
+        const currentSkills = [...skillsByName.values()].filter(
+          (skill) => skill.groupId === skillGroup.id
+        );
+        const removedIds = new Set(
+          currentSkills
+            .filter((skill) => !desiredKeys.has(skill.name.toLowerCase()))
+            .map((skill) => skill.id)
+        );
 
-        for (const skill of currentSkills) {
-          if (!desiredKeys.has(skill.name.toLowerCase())) {
-            await tx.skill.delete({ where: { id: skill.id } });
+        if (removedIds.size > 0) {
+          await tx.skill.deleteMany({ where: { id: { in: [...removedIds] } } });
+          for (const skill of currentSkills) {
+            if (removedIds.has(skill.id)) skillsByName.delete(skill.name);
           }
         }
 
+        const groupSkills = [];
         for (const name of group.skills) {
-          const existing = await tx.skill.findUnique({
-            where: {
-              profileId_name: { profileId, name },
-            },
-          });
+          const existing = skillsByName.get(name);
 
           if (existing) {
-            await tx.skill.update({
+            const updated = await tx.skill.update({
               where: { id: existing.id },
               data: {
                 groupId: skillGroup.id,
@@ -162,8 +172,10 @@ export async function PUT(request: NextRequest) {
                 updatedAt: new Date(),
               },
             });
+            skillsByName.set(name, updated);
+            groupSkills.push(updated);
           } else {
-            await tx.skill.create({
+            const created = await tx.skill.create({
               data: {
                 profileId,
                 name,
@@ -172,23 +184,21 @@ export async function PUT(request: NextRequest) {
                 source: 'MANUAL',
               },
             });
+            skillsByName.set(name, created);
+            groupSkills.push(created);
           }
         }
 
-        const withSkills = await tx.skillGroup.findUnique({
-          where: { id: skillGroup.id },
-          include: { skills: { orderBy: { sortOrder: 'asc' } } },
+        skillGroups.push({
+          ...skillGroup,
+          skills: groupSkills.sort((a, b) => a.sortOrder - b.sortOrder),
         });
-        if (withSkills) skillGroups.push(withSkills);
       }
 
-      const skills = await tx.skill.findMany({
-        where: { profileId },
-        orderBy: { sortOrder: 'asc' },
-      });
+      const skills = [...skillsByName.values()].sort((a, b) => a.sortOrder - b.sortOrder);
 
       return { skills, skillGroups };
-    });
+    }, interactiveTransactionOptions);
 
     return NextResponse.json({ success: true, ...result });
   } catch (error) {

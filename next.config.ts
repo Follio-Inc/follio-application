@@ -57,8 +57,12 @@ const nextConfig: NextConfig = {
     ],
   },
 
-  // Externalize packages that don't work with webpack bundling
+  // Externalize packages that don't work with webpack bundling.
+  // Prisma must load from node_modules. If Next bundles it, `prisma generate`
+  // leaves the running server on a stale schema until .next is rebuilt.
   serverExternalPackages: [
+    '@prisma/client',
+    'prisma',
     'pdf-parse',
     'puppeteer',
     'puppeteer-core',

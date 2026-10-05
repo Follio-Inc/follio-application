@@ -28,13 +28,6 @@ export interface ResumeContactField {
 export function buildResumeContactFields(profile: FilteredProfile): ResumeContactField[] {
   const itemMap = new Map<string, ResumeContactField>();
 
-  if (profile.location) {
-    itemMap.set('location', {
-      id: 'location',
-      label: null,
-      value: profile.location,
-    });
-  }
   if (profile.contactInfo?.email) {
     itemMap.set('email', {
       id: 'email',
@@ -47,6 +40,13 @@ export function buildResumeContactFields(profile: FilteredProfile): ResumeContac
       id: 'phone',
       label: null,
       value: cleanPhoneDisplay(profile.contactInfo.phone),
+    });
+  }
+  if (profile.location) {
+    itemMap.set('location', {
+      id: 'location',
+      label: null,
+      value: profile.location,
     });
   }
 
@@ -78,7 +78,7 @@ export function buildResumeContactFields(profile: FilteredProfile): ResumeContac
     return ordered;
   }
 
-  // Default: insertion order (location → email → phone → links)
+  // Default: insertion order (email → phone → location → links)
   return Array.from(itemMap.values());
 }
 
@@ -90,10 +90,10 @@ export function buildResumeContactItems(profile: FilteredProfile): string[] {
   return buildResumeContactFields(profile).map((field) => field.value);
 }
 
-/** Studio contact card prefers phone → email, then links (no address line). */
+/** Studio contact card prefers email → phone, then links (no address line). */
 export function buildResumeStudioContactFields(profile: FilteredProfile): ResumeContactField[] {
   const fields = buildResumeContactFields(profile).filter((field) => field.id !== 'location');
-  const preferred = ['phone', 'email'];
+  const preferred = ['email', 'phone'];
   const ordered: ResumeContactField[] = [];
   const seen = new Set<string>();
   for (const id of preferred) {

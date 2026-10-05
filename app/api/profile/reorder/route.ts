@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
+import { interactiveTransactionOptions } from '@/lib/db-transaction';
 import { AppError, ErrorCode, handleApiError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 
@@ -13,39 +14,39 @@ import { logger } from '@/lib/logger';
  */
 const REORDERABLE_MODELS = {
   education: {
-    delegate: () => db.education,
+    clientKey: 'education' as const,
     ownerField: 'profileId' as const,
   },
   workExperience: {
-    delegate: () => db.workExperience,
+    clientKey: 'workExperience' as const,
     ownerField: 'profileId' as const,
   },
   project: {
-    delegate: () => db.project,
+    clientKey: 'project' as const,
     ownerField: 'profileId' as const,
   },
   certification: {
-    delegate: () => db.certification,
+    clientKey: 'certification' as const,
     ownerField: 'profileId' as const,
   },
   award: {
-    delegate: () => db.award,
+    clientKey: 'award' as const,
     ownerField: 'profileId' as const,
   },
   link: {
-    delegate: () => db.link,
+    clientKey: 'link' as const,
     ownerField: 'profileId' as const,
   },
   skill: {
-    delegate: () => db.skill,
+    clientKey: 'skill' as const,
     ownerField: 'profileId' as const,
   },
   skillGroup: {
-    delegate: () => db.skillGroup,
+    clientKey: 'skillGroup' as const,
     ownerField: 'profileId' as const,
   },
   photo: {
-    delegate: () => db.profilePhoto,
+    clientKey: 'profilePhoto' as const,
     ownerField: 'profileId' as const,
   },
 } as const;
@@ -87,7 +88,7 @@ export async function PATCH(request: NextRequest) {
 
     const modelConfig = REORDERABLE_MODELS[parsed.model];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const delegate = modelConfig.delegate() as any;
+    const delegate = db[modelConfig.clientKey] as any;
 
     // Verify ownership: all IDs must belong to this user's profile
     const existingCount = await delegate.count({
@@ -105,15 +106,18 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    // Update all sortOrders in a single transaction
-    await db.$transaction(
-      parsed.items.map((item) =>
-        delegate.update({
+    // Sequential array transactions cannot raise Prisma's 5s timeout. Run the
+    // updates on one interactive transaction instead.
+    await db.$transaction(async (tx) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const writer = tx[modelConfig.clientKey] as any;
+      for (const item of parsed.items) {
+        await writer.update({
           where: { id: item.id },
           data: { sortOrder: item.sortOrder },
-        })
-      )
-    );
+        });
+      }
+    }, interactiveTransactionOptions);
 
     logger.info('Reordered items', {
       userId: context.userId,

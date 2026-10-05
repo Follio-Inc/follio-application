@@ -413,6 +413,7 @@ export interface JSONResume {
     endDate?: string;
     score?: string;
     courses?: string[];
+    highlights?: string[];
   }[];
   skills?: {
     name: string;

@@ -242,6 +242,24 @@ export function resumeBulletInnerHtml(bullet: string): string {
   return `<p style="text-align: justify">${escapeHtml(bullet)}</p>`;
 }
 
+/**
+ * Shared resume-entry body for experience highlights and education notes.
+ * Prefer stored editor HTML; fall back to a bullet list from `bullets[]`.
+ */
+export function resumeEntryBodyHtml(input: {
+  html?: string | null;
+  bullets?: string[] | null;
+}): string {
+  if (input.html && !isHtmlEmpty(input.html)) {
+    return sanitizeRichHtml(input.html);
+  }
+  if (input.bullets && input.bullets.length > 0) {
+    const lis = input.bullets.map((bullet) => `<li>${resumeBulletInnerHtml(bullet)}</li>`).join('');
+    return `<ul class="resume-bullets">${lis}</ul>`;
+  }
+  return '';
+}
+
 // ─── Bullet ↔ HTML Conversion ───────────────────────────────────────────────
 
 /**

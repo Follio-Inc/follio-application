@@ -155,6 +155,25 @@ describe('buildFollioIdentity', () => {
     expect(identity.doors).toEqual({ resume: true, work: false });
     expect(identity.resumeHref).toBe('/u/ada/resume');
     expect(identity.workHref).toBe('/u/ada/work');
+    expect(identity.totalExperience).toMatch(/yrs/);
+  });
+
+  it('uses a stored total experience override on the Experience header', () => {
+    const identity = buildFollioIdentity(profile({ totalExperience: '10+ years' }), {
+      showResume: false,
+      showWork: false,
+    });
+
+    expect(identity.totalExperience).toBe('10+ years');
+  });
+
+  it('hides total experience when the user turned the tag off', () => {
+    const identity = buildFollioIdentity(
+      profile({ totalExperience: '10+ years', totalExperienceVisible: false }),
+      { showResume: false, showWork: false }
+    );
+
+    expect(identity.totalExperience).toBeNull();
   });
 
   it('makes a legacy stored phone dialable and readable', () => {
@@ -194,6 +213,7 @@ describe('buildFollioIdentity', () => {
       institution: 'University of London',
       credential: 'BS, Mathematics',
       period: '2014 – 2018',
+      highlights: [],
       honors: [],
       activities: [],
     });

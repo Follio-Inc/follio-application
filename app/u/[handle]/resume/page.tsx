@@ -1,6 +1,7 @@
 import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
+import { resumeAccessQuery } from '@/lib/resume/presentation';
 import { getResumeUrl } from '@/lib/url';
 import { getPublicProfile, validateUnlistedKey } from '@/services/profile.service';
 
@@ -100,6 +101,7 @@ export default async function ResumePage({ params, searchParams }: ResumePagePro
       profileHandle={handle}
       resumeVisibility={resumeVisibility}
       minimal={minimal === '1'}
+      accessQuery={resumeAccessQuery({ token, key })}
     />
   );
 }

@@ -105,6 +105,27 @@ export function rewriteEducationNote(value: string | null | undefined): string |
   return plain;
 }
 
+/**
+ * Study peeks get two proof points, same cap as role peeks.
+ * Coursework stays on the résumé.
+ */
+export function rewriteEducationHighlights(value: string | null | undefined): string[] {
+  const picked: string[] = [];
+  const seen = new Set<string>();
+
+  for (const line of highlightLines({ bulletsHtml: value }, { max: 16, maxChars: 2000 })) {
+    if (picked.length >= FOLLIO_VOICE.maxHighlights) break;
+    const note = rewriteEducationNote(line);
+    if (!note) continue;
+    const key = note.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    picked.push(note);
+  }
+
+  return picked;
+}
+
 /** Honors and activities: two facts, shown in full. */
 export function rewriteExtras(values: string[] | null | undefined): string[] {
   const extras: string[] = [];

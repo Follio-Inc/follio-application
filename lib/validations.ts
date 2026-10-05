@@ -92,6 +92,10 @@ export const ProfileBasicInfoSchema = z.object({
   lastName: z.string().max(50).optional(),
   headline: z.string().max(200).optional(),
   summary: z.string().max(5000).optional(),
+  totalExperience: clearableString(60),
+  totalExperienceVisible: z.boolean().optional(),
+  totalExperienceShowYears: z.boolean().optional(),
+  totalExperienceShowMonths: z.boolean().optional(),
   location: z.string().max(100).optional(),
   avatarUrl: httpUrl().optional().or(z.literal('')),
 });
@@ -141,7 +145,7 @@ export const ContactInfoSchema = z.object({
       })
     )
     .optional(),
-  /** Order of header contact fields: ["location","email","phone",linkId,...] */
+  /** Order of header contact fields: ["email","phone","location",linkId,...] */
   headerFieldsOrder: z.array(z.string()).max(50).optional(),
 });
 
@@ -192,7 +196,7 @@ export const EducationSchema = z.object({
   endDate: z.coerce.date().optional().nullable(),
   isCurrent: z.boolean().optional(),
   gpa: clearableString(10),
-  description: clearableString(2000),
+  description: clearableString(15000),
   activities: z.array(z.string().max(100)).max(10).optional(),
   honors: z.array(z.string().max(100)).max(10).optional(),
   isVisible: z.boolean().optional(),

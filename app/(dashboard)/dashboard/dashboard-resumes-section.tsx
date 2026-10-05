@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState, type Ref } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { DownloadDialog } from '@/app/(dashboard)/builder/components/download-dialog';
 import {
@@ -49,7 +49,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { isPortfolioEnabled } from '@/lib/features';
-import type { FollioVisibility } from '@/lib/follio-identity';
+import { resumePresentationHref } from '@/lib/resume/presentation';
 import type { ResumePageLayout } from '@/types';
 
 import {
@@ -89,12 +89,6 @@ interface DashboardResumesSectionProps {
    * (e.g. dashboard documents tabs). Actions toolbar is still shown.
    */
   embedded?: boolean;
-  /** Marks the resume the Follio is attached to, for the dashboard rail. */
-  attachedResumeRef?: Ref<HTMLDivElement>;
-  /** When the attached resume's visibility changes, Follio stays in lockstep. */
-  onAttachedVisibilityChange?: (visibility: FollioVisibility) => void;
-  /** Live Follio visibility — the attached resume card should match. */
-  attachedVisibility?: FollioVisibility;
 }
 
 // ─── Constants ────────────────────────────────────────────────────
@@ -194,9 +188,6 @@ export function DashboardResumesSection({
   initialActiveProfileId,
   initialPrimaryProfileId,
   embedded = false,
-  attachedResumeRef,
-  onAttachedVisibilityChange,
-  attachedVisibility,
 }: DashboardResumesSectionProps) {
   const router = useRouter();
 
@@ -414,7 +405,7 @@ export function DashboardResumesSection({
     <div className="space-y-4">
       <DashboardDocumentsToolbar
         embedded={embedded}
-        title="Resume"
+        title="Resumes"
         count={resumes.length}
         secondaryActions={
           hasMoreResumes ? (
@@ -466,12 +457,9 @@ export function DashboardResumesSection({
         />
       ) : (
         <DashboardDocumentsScroller itemCount={previewResumes.length + (hasMoreResumes ? 1 : 0)}>
-          {previewResumes.map((resume, index) => {
+          {previewResumes.map((resume) => {
             const displayName = getDisplayName(resume);
-            const cardVisibility =
-              resume.id === primaryProfileId && attachedVisibility
-                ? attachedVisibility
-                : resume.resumeVisibility;
+            const cardVisibility = resume.resumeVisibility;
             const isPublic = cardVisibility === 'PUBLIC';
             const portfolioEnabled = isPortfolioEnabled();
 
@@ -480,21 +468,19 @@ export function DashboardResumesSection({
                 <DashboardDocumentCard
                   accent={isPublic ? 'public' : 'default'}
                   thumbnail={
-                    <div ref={index === 0 ? attachedResumeRef : undefined}>
-                      <DashboardDocumentThumbnailButton
-                        label={`Open ${resume.resumeTitle} in builder`}
-                        disabled={isMutating}
-                        onOpen={() => void handleOpenInBuilder(resume.id)}
-                      >
-                        <ResumeThumbnail
-                          profileId={resume.id}
-                          showPublicBadge={isPublic}
-                          showPortfolioBadge={
-                            portfolioEnabled && resume.id === primaryProfileId && !isPublic
-                          }
-                        />
-                      </DashboardDocumentThumbnailButton>
-                    </div>
+                    <DashboardDocumentThumbnailButton
+                      label={`Open ${resume.resumeTitle} in builder`}
+                      disabled={isMutating}
+                      onOpen={() => void handleOpenInBuilder(resume.id)}
+                    >
+                      <ResumeThumbnail
+                        profileId={resume.id}
+                        showPublicBadge={isPublic}
+                        showPortfolioBadge={
+                          portfolioEnabled && resume.id === primaryProfileId && !isPublic
+                        }
+                      />
+                    </DashboardDocumentThumbnailButton>
                   }
                   title={
                     renamingResumeId === resume.id ? (
@@ -534,9 +520,21 @@ export function DashboardResumesSection({
                           Open in Builder
                         </DropdownMenuItem>
                         <DropdownMenuItem asChild>
-                          <Link href={`/u/${resume.handle}/resume`} target="_blank">
+                          <Link
+                            href={resumePresentationHref(resume.handle, 'resume')}
+                            target="_blank"
+                          >
                             <ExternalLink className="mr-2 h-4 w-4" />
-                            View Resume
+                            View resume
+                          </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                          <Link
+                            href={resumePresentationHref(resume.handle, 'follio')}
+                            target="_blank"
+                          >
+                            <ExternalLink className="mr-2 h-4 w-4" />
+                            View Follio
                           </Link>
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => handleOpenDownloadDialog(resume)}>
@@ -584,7 +582,7 @@ export function DashboardResumesSection({
                       visibility={cardVisibility}
                       updatedAt={resume.updatedAt}
                       descriptions={{
-                        PUBLIC: 'Anyone can view at your Follio URL',
+                        PUBLIC: 'Anyone can open this resume and its Follio view',
                         UNLISTED: 'Only people with the secure link can view this resume',
                         PRIVATE: 'Only you can see this resume',
                       }}
@@ -602,7 +600,10 @@ export function DashboardResumesSection({
                         Edit
                       </Button>
                       <Button variant="outline" size="sm" className="flex-1 gap-1.5" asChild>
-                        <Link href={`/u/${resume.handle}/resume`} target="_blank">
+                        <Link
+                          href={resumePresentationHref(resume.handle, 'resume')}
+                          target="_blank"
+                        >
                           <ExternalLink className="h-3.5 w-3.5" />
                           View
                         </Link>
@@ -749,11 +750,6 @@ export function DashboardResumesSection({
               })
             );
             setSharingResume((prev) => (prev ? { ...prev, resumeVisibility: visibility } : prev));
-            if (sharingResume.id === primaryProfileId) {
-              onAttachedVisibilityChange?.(visibility);
-            } else if (visibility === 'PUBLIC') {
-              onAttachedVisibilityChange?.('UNLISTED');
-            }
           }}
           hideTrigger
         />

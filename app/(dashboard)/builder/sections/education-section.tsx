@@ -375,12 +375,13 @@ export function EducationSection({
       </div>
 
       <div className="space-y-2">
-        <Label>Description / Activities</Label>
+        <Label>Highlights</Label>
         <RichTextEditor
           value={formData.description || ''}
           onChange={(html) => setFormData((prev) => ({ ...prev, description: html }))}
-          placeholder="Relevant coursework, clubs, activities..."
+          placeholder="Coursework, honors, thesis, activities..."
           minHeight="120px"
+          bulletMode
         />
       </div>
     </EntryInlineForm>
@@ -520,12 +521,13 @@ export function EducationSection({
           </div>
 
           <div className="space-y-2">
-            <Label>Description / Activities</Label>
+            <Label>Highlights</Label>
             <RichTextEditor
               value={formData.description || ''}
               onChange={(html) => setFormData((prev) => ({ ...prev, description: html }))}
-              placeholder="Relevant coursework, clubs, activities..."
+              placeholder="Coursework, honors, thesis, activities..."
               minHeight="120px"
+              bulletMode
             />
           </div>
         </div>

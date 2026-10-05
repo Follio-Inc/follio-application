@@ -7,6 +7,7 @@ import {
   containsHtmlFormatting,
   isHtmlEmpty,
   resumeBulletInnerHtml,
+  resumeEntryBodyHtml,
   sanitizeRichHtml,
 } from '@/lib/html-utils';
 import {
@@ -31,6 +32,7 @@ import {
 } from '@/lib/resume-design';
 import { isPagedPageLayout } from '@/lib/resume/page-layout';
 import { resolveSkillCategoryLabel, skillGroupsHaveCategoryLabels } from '@/lib/skills/groups';
+import { displayTotalExperience } from '@/lib/total-experience';
 import { formatDate } from '@/lib/utils';
 import { applyVisibilityFilter, type FilteredProfile } from '@/lib/visibility';
 import type {
@@ -47,6 +49,7 @@ import type {
 import { HEADER_SECTION_TYPES, type ResumeDesign } from '@/types';
 
 import { ResumePagedStack } from '@/components/resume-paged-stack';
+import { ViewHighlightsButton } from '@/components/resume-presentation/view-highlights-button';
 
 import { PublicResumeActions } from './public-resume-actions';
 import { ResumeFontLoader } from './resume-font-loader';
@@ -61,16 +64,25 @@ interface CleanResumeViewProps {
    * handled by `<PreviewFloatingActions>` instead.
    */
   authState?: 'owner' | 'authenticated' | 'anonymous';
+  /**
+   * When set, a flying "View Highlights" control sits on the resume's
+   * top-right and opens this Follio URL. Omit in the builder, thumbnails,
+   * and print preview — those surfaces mount their own control or none.
+   */
+  viewHighlightsHref?: string;
 }
 
 // ============================================================================
 // SECTION DIVIDER COMPONENT
 // ============================================================================
 
-function SectionDivider({ title }: { title: string }) {
+function SectionDivider({ title, tag }: { title: string; tag?: string | null }) {
   return (
     <div className="resume-section-header">
-      <h2 className="resume-section-title">{title}</h2>
+      <div className="resume-section-heading">
+        <h2 className="resume-section-title">{title}</h2>
+        {tag ? <span className="resume-section-tag">{tag}</span> : null}
+      </div>
       <div className="resume-section-line" />
     </div>
   );
@@ -369,6 +381,13 @@ function RichHtml({
   return <Tag className={className}>{html}</Tag>;
 }
 
+/** Experience highlights and education notes share this body renderer. */
+function ResumeEntryBody({ html, bullets }: { html?: string | null; bullets?: string[] | null }) {
+  const markup = resumeEntryBodyHtml({ html, bullets });
+  if (!markup) return null;
+  return <div dangerouslySetInnerHTML={{ __html: markup }} />;
+}
+
 // ============================================================================
 // SUMMARY SECTION
 // ============================================================================
@@ -414,19 +433,7 @@ function ExperienceEntry({
       ? formatAtelierYearRange(startDate, endDate, isCurrent)
       : formatDateRange(startDate, endDate, isCurrent);
   const companyLine = [company, location].filter(Boolean).join(', ');
-
-  const bulletsBlock = bulletsHtml ? (
-    <div dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(bulletsHtml) }} />
-  ) : (
-    bullets &&
-    bullets.length > 0 && (
-      <ul className="resume-bullets">
-        {bullets.map((bullet, index) => (
-          <li key={index} dangerouslySetInnerHTML={{ __html: resumeBulletInnerHtml(bullet) }} />
-        ))}
-      </ul>
-    )
-  );
+  const bulletsBlock = <ResumeEntryBody html={bulletsHtml} bullets={bullets} />;
 
   if (variant === 'atelier') {
     return (
@@ -459,16 +466,29 @@ function ExperienceEntry({
 
 function ExperienceSection({
   experiences,
+  totalExperience,
+  totalExperienceVisible,
+  totalExperienceShowYears,
+  totalExperienceShowMonths,
   variant = 'default',
 }: {
   experiences: PublicProfile['workExperiences'];
+  totalExperience?: string | null;
+  totalExperienceVisible?: boolean | null;
+  totalExperienceShowYears?: boolean | null;
+  totalExperienceShowMonths?: boolean | null;
   variant?: 'default' | 'atelier';
 }) {
   if (!experiences || experiences.length === 0) return null;
 
+  const tag = displayTotalExperience(totalExperience, experiences, totalExperienceVisible, {
+    showYears: totalExperienceShowYears,
+    showMonths: totalExperienceShowMonths,
+  });
+
   return (
     <section className="resume-section">
-      <SectionDivider title={variant === 'atelier' ? 'WORK EXPERIENCE' : 'EXPERIENCE'} />
+      <SectionDivider title={variant === 'atelier' ? 'WORK EXPERIENCE' : 'EXPERIENCE'} tag={tag} />
       <div className="resume-entries">
         {experiences.map((exp) => (
           <ExperienceEntry
@@ -513,6 +533,15 @@ function EducationSection({
               ? formatAtelierYearRange(edu.startDate, edu.endDate, edu.isCurrent)
               : formatDateRange(edu.startDate, edu.endDate, edu.isCurrent);
 
+          const body = <ResumeEntryBody html={edu.description} />;
+          const details =
+            edu.gpa || edu.activities ? (
+              <div className="resume-entry-details">
+                {edu.gpa && <p>GPA: {edu.gpa}</p>}
+                {edu.activities && <p>{edu.activities}</p>}
+              </div>
+            ) : null;
+
           if (variant === 'atelier') {
             return (
               <div key={edu.id} className="resume-entry resume-atelier-edu">
@@ -523,12 +552,8 @@ function EducationSection({
                     {[dateRange, edu.location].filter(Boolean).join(' · ')}
                   </p>
                 )}
-                {(edu.gpa || edu.activities) && (
-                  <div className="resume-entry-details">
-                    {edu.gpa && <p>GPA: {edu.gpa}</p>}
-                    {edu.activities && <p>{edu.activities}</p>}
-                  </div>
-                )}
+                {body}
+                {details}
               </div>
             );
           }
@@ -542,12 +567,8 @@ function EducationSection({
                 </div>
                 {dateRange ? <span className="resume-entry-date">{dateRange}</span> : null}
               </div>
-              {(edu.gpa || edu.activities) && (
-                <div className="resume-entry-details">
-                  {edu.gpa && <p>GPA: {edu.gpa}</p>}
-                  {edu.activities && <p>{edu.activities}</p>}
-                </div>
-              )}
+              {body}
+              {details}
             </div>
           );
         })}
@@ -977,7 +998,11 @@ function CustomSection({ section }: { section: ProfileSection }) {
 // MAIN COMPONENT
 // ============================================================================
 
-export function CleanResumeView({ profile: rawProfile, authState }: CleanResumeViewProps) {
+export function CleanResumeView({
+  profile: rawProfile,
+  authState,
+  viewHighlightsHref,
+}: CleanResumeViewProps) {
   const resumeRef = useRef<HTMLDivElement>(null);
 
   const parsedDesign = useMemo(
@@ -1041,6 +1066,10 @@ export function CleanResumeView({ profile: rawProfile, authState }: CleanResumeV
           <ExperienceSection
             key={section.id}
             experiences={profile.workExperiences}
+            totalExperience={profile.totalExperience}
+            totalExperienceVisible={profile.totalExperienceVisible}
+            totalExperienceShowYears={profile.totalExperienceShowYears}
+            totalExperienceShowMonths={profile.totalExperienceShowMonths}
             variant={isAtelier ? 'atelier' : 'default'}
           />
         );
@@ -1136,6 +1165,14 @@ export function CleanResumeView({ profile: rawProfile, authState }: CleanResumeV
         data-resume-theme={resolvedColorTheme}
         data-page-layout={pageLayout}
       >
+        {viewHighlightsHref ? (
+          <div className="pointer-events-none sticky top-6 z-30 h-0 w-full print:hidden">
+            <div className="absolute right-6 top-6">
+              <ViewHighlightsButton href={viewHighlightsHref} />
+            </div>
+          </div>
+        ) : null}
+
         {/* Kebab anchor — sits *outside* the resume's right margin,
             vertically aligned with the top of the paper. The actual
             menu is portalled in by `<PublicResumeActions>` so it

@@ -3,6 +3,8 @@ import { redirect } from 'next/navigation';
 
 import { resolveActiveProfileContextOrNull } from '@/lib/active-profile';
 import { db } from '@/lib/db';
+import { interactiveTransactionOptions } from '@/lib/db-transaction';
+import { withPrismaRetry } from '@/lib/prisma-connection';
 import { BuilderLayoutClient } from './builder-layout-client';
 
 import type { SectionType } from '@prisma/client';
@@ -96,10 +98,14 @@ export default async function BuilderLayout({ children }: { children: React.Reac
 
   let profile;
   try {
-    profile = await db.profile.findUnique({
-      where: { id: context.profileId },
-      include: PROFILE_INCLUDE,
-    });
+    profile = await withPrismaRetry(
+      () =>
+        db.profile.findUnique({
+          where: { id: context.profileId },
+          include: PROFILE_INCLUDE,
+        }),
+      'findUnique'
+    );
   } catch (err) {
     // #region agent log
     const meta =
@@ -168,30 +174,28 @@ export default async function BuilderLayout({ children }: { children: React.Reac
     });
 
     const createdSections = await db.$transaction(async (tx) => {
-      // Create all missing sections \u2014 use individual creates so we get the
-      // generated rows back (createMany doesn't return data on all DBs).
-      const created = await Promise.all(
-        provisionalNewSections.map((data) => tx.profileSection.create({ data }))
-      );
+      // Interactive transactions share one connection, so these writes must
+      // run one at a time. createMany cannot return the new rows.
+      const created = [];
+      for (const data of provisionalNewSections) {
+        created.push(await tx.profileSection.create({ data }));
+      }
 
       // Re-normalize sort orders to dense indices across all sections.
       const merged = [...profile.sections, ...created].sort((a, b) => a.sortOrder - b.sortOrder);
       const normalized = merged.map((s, idx) => ({ ...s, sortOrder: idx }));
 
-      // Only update rows whose sortOrder actually changed.
-      await Promise.all(
-        normalized
-          .filter((s, idx) => merged[idx].sortOrder !== idx)
-          .map((s) =>
-            tx.profileSection.update({
-              where: { id: s.id },
-              data: { sortOrder: s.sortOrder },
-            })
-          )
-      );
+      for (let idx = 0; idx < normalized.length; idx += 1) {
+        const section = normalized[idx];
+        if (!section || merged[idx]?.sortOrder === idx) continue;
+        await tx.profileSection.update({
+          where: { id: section.id },
+          data: { sortOrder: section.sortOrder },
+        });
+      }
 
       return normalized;
-    });
+    }, interactiveTransactionOptions);
 
     // Patch the in-memory profile with the freshly-created + normalized
     // sections so we can hand it directly to the client without re-fetching.

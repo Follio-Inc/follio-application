@@ -4,24 +4,16 @@ import { redirect } from 'next/navigation';
 import { ensurePrimaryProfile, makeProfilePortfolioReady } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { isPortfolioEnabled } from '@/lib/features';
-import {
-  buildFollioIdentity,
-  canShowResumeDoor,
-  canShowWorkDoor,
-  getFollioVisibility,
-} from '@/lib/follio-identity';
-import { renderQrSvg } from '@/lib/follio-identity/qr';
+import { getFollioVisibility } from '@/lib/follio-identity';
 import { setExclusiveResumeVisibility } from '@/lib/public-resume';
 import { resolveResumePageLayout } from '@/lib/resume/page-layout';
-import { getFollioUrl, getDisplayHost } from '@/lib/url';
-import { getOrCreateUnlistedKey, getPublicProfile } from '@/services/profile.service';
 import type { ResumeDesign } from '@/types';
 
 import { DashboardClient, type DashboardData } from './dashboard-client';
 
 export const metadata = {
   title: 'Dashboard - Follio',
-  description: 'Your Follio — share one link, and keep your resume current.',
+  description: 'Your resumes — each one opens as a traditional resume or a Follio view.',
 };
 
 export default async function DashboardPage() {
@@ -136,19 +128,6 @@ export default async function DashboardPage() {
     }
   }
 
-  const publicProfile = await getPublicProfile(identityProfile.handle);
-  const identity = publicProfile
-    ? buildFollioIdentity(publicProfile, {
-        showResume: canShowResumeDoor(identityProfile.resumeVisibility, 'owner', true),
-        showWork: canShowWorkDoor(
-          isPortfolioEnabled(),
-          identityProfile.portfolioVisibility,
-          'owner',
-          true
-        ),
-      })
-    : null;
-
   const resumes = rawProfiles.map((r) => ({
     id: r.id,
     handle: r.handle,
@@ -165,22 +144,7 @@ export default async function DashboardPage() {
     pageLayout: resolveResumePageLayout((r.resumeDesign as ResumeDesign | null) ?? null),
   }));
 
-  const unlistedKey =
-    visibility === 'UNLISTED' ? await getOrCreateUnlistedKey(identityProfile.id) : null;
-  const follioUrl = getFollioUrl(identityProfile.handle, unlistedKey);
-
   const data: DashboardData = {
-    follio: {
-      id: identityProfile.id,
-      handle: identityProfile.handle,
-      status: identityProfile.status,
-      visibility,
-      isPublic: visibility === 'PUBLIC',
-      displayHost: getDisplayHost(identityProfile.handle),
-      url: follioUrl,
-      identity,
-      qrSvg: renderQrSvg(follioUrl),
-    },
     resumes,
     activeProfileId: user.profile?.id ?? null,
     primaryProfileId: identityProfile.id,

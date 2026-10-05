@@ -15,6 +15,7 @@ import {
   Linkedin,
   Mail,
   MapPin,
+  Phone,
   Sparkles,
   Star,
   Twitter,
@@ -26,7 +27,13 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 
-import { containsHtmlFormatting, sanitizeRichHtml } from '@/lib/html-utils';
+import {
+  containsHtmlFormatting,
+  isHtmlEmpty,
+  resumeEntryBodyHtml,
+  sanitizeRichHtml,
+} from '@/lib/html-utils';
+import { cleanPhoneDisplay } from '@/lib/phone';
 import { formatDate } from '@/lib/utils';
 import { applyVisibilityFilter } from '@/lib/visibility';
 import type {
@@ -138,12 +145,6 @@ export function ResumeView({ profile: rawProfile }: ResumeViewProps) {
                 <p className="mt-1 text-xl text-muted-foreground">{profile.headline}</p>
               )}
               <div className="mt-3 flex flex-wrap justify-center gap-3 text-sm text-muted-foreground sm:justify-start">
-                {profile.location && (
-                  <span className="flex items-center gap-1">
-                    <MapPin className="h-4 w-4" />
-                    {profile.location}
-                  </span>
-                )}
                 {profile.contactInfo?.email && (
                   <a
                     href={`mailto:${profile.contactInfo.email}`}
@@ -152,6 +153,21 @@ export function ResumeView({ profile: rawProfile }: ResumeViewProps) {
                     <Mail className="h-4 w-4" />
                     {profile.contactInfo.email}
                   </a>
+                )}
+                {profile.contactInfo?.phone && (
+                  <a
+                    href={`tel:${profile.contactInfo.phone}`}
+                    className="flex items-center gap-1 hover:text-primary"
+                  >
+                    <Phone className="h-4 w-4" />
+                    {cleanPhoneDisplay(profile.contactInfo.phone)}
+                  </a>
+                )}
+                {profile.location && (
+                  <span className="flex items-center gap-1">
+                    <MapPin className="h-4 w-4" />
+                    {profile.location}
+                  </span>
                 )}
               </div>
               {/* Links */}
@@ -381,6 +397,14 @@ export function ResumeView({ profile: rawProfile }: ResumeViewProps) {
                     </div>
                     {edu.gpa && (
                       <p className="mt-1 text-sm text-muted-foreground">GPA: {edu.gpa}</p>
+                    )}
+                    {edu.description && !isHtmlEmpty(edu.description) && (
+                      <div
+                        className="mt-2 text-sm text-muted-foreground"
+                        dangerouslySetInnerHTML={{
+                          __html: resumeEntryBodyHtml({ html: edu.description }),
+                        }}
+                      />
                     )}
                     {edu.activities && (
                       <p className="mt-2 text-sm text-muted-foreground">{edu.activities}</p>

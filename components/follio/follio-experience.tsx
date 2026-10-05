@@ -8,6 +8,7 @@ import { FollioTimeline, FollioTimelineItem } from './follio-timeline';
 
 interface FollioExperienceProps {
   experience: FollioExperienceItem[];
+  totalExperience?: string | null;
   interactive?: boolean;
 }
 
@@ -16,9 +17,13 @@ const NAME_HINT =
 const ROLE_HINT = 'decoration-border/70 underline-offset-4 transition-colors hover:underline';
 
 /** Career history as a connected timeline: role, employer, tenure, dates. */
-export function FollioExperience({ experience, interactive = true }: FollioExperienceProps) {
+export function FollioExperience({
+  experience,
+  totalExperience,
+  interactive = true,
+}: FollioExperienceProps) {
   return (
-    <FollioSection title="Experience">
+    <FollioSection title="Experience" tag={totalExperience}>
       <FollioTimeline>
         {experience.map((item) => (
           <FollioTimelineItem

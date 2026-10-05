@@ -10,6 +10,7 @@
 import { cache } from 'react';
 
 import { db } from '@/lib/db';
+import { interactiveTransactionOptions } from '@/lib/db-transaction';
 import { profileStatusForVisibility } from '@/lib/follio-identity/page-access';
 import { isReservedUsername } from '@/lib/reserved-usernames';
 import { applyVisibilityFilter } from '@/lib/visibility';
@@ -213,7 +214,7 @@ export async function setExclusiveResumeVisibility(
           }
         : null,
     };
-  });
+  }, interactiveTransactionOptions);
 }
 
 /**

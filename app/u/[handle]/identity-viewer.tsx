@@ -2,6 +2,7 @@
 
 import { FollioPage } from '@/components/follio/follio-page';
 import { PublicProfileChrome } from '@/components/public-profile-chrome';
+import { ResumePresentationNav } from '@/components/resume-presentation/resume-presentation-nav';
 import type { FollioIdentity, FollioVisibility } from '@/lib/follio-identity';
 import type { PublicProfileAuthState } from '@/lib/public-profile-chrome';
 
@@ -14,6 +15,8 @@ interface IdentityViewerProps {
   visibility?: FollioVisibility;
   /** Dashboard thumbnail: the live Follio as a visitor would see it. */
   embed?: boolean;
+  /** `token` / `key` query so unlisted access survives the view switch. */
+  accessQuery?: string;
 }
 
 export function IdentityViewer({
@@ -23,12 +26,28 @@ export function IdentityViewer({
   profileHandle,
   visibility = 'PRIVATE',
   embed = false,
+  accessQuery = '',
 }: IdentityViewerProps) {
-  const page = <FollioPage identity={identity} qrSvg={qrSvg} />;
+  const page = (
+    <>
+      {embed ? null : (
+        <div className="flex justify-center px-5 pt-6 sm:pt-8">
+          <ResumePresentationNav
+            handle={profileHandle}
+            current="follio"
+            accessQuery={accessQuery}
+          />
+        </div>
+      )}
+      <FollioPage identity={identity} qrSvg={qrSvg} />
+    </>
+  );
 
   if (embed) {
     return (
       <PublicProfileChrome authState="anonymous" profileHandle={profileHandle}>
+        {/* Snapshot only — the dashboard thumbnail must not scroll this document. */}
+        <style>{`html, body { overflow: hidden !important; height: auto !important; }`}</style>
         <main>{page}</main>
       </PublicProfileChrome>
     );
@@ -38,9 +57,9 @@ export function IdentityViewer({
     authState !== 'owner'
       ? null
       : visibility === 'PRIVATE'
-        ? 'This Follio is private. Set it to Public or Unlisted to share. Your attached resume uses the same visibility.'
+        ? 'This Follio view is private. Set the resume to Public or Unlisted to share it.'
         : visibility === 'UNLISTED'
-          ? 'This Follio is unlisted. Only people with the link can open it. Your attached resume uses the same visibility.'
+          ? 'This Follio view is unlisted. Only people with the link can open it.'
           : null;
 
   return (

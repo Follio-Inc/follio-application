@@ -1,3 +1,6 @@
+export { useConnectExternalAccount } from './use-connect-external-account';
+export type { ConnectExternalAccountOutcome } from './use-connect-external-account';
+
 export { buildEmailsList, useContactManager } from './use-contact-manager';
 export type {
   ContactData,

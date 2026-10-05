@@ -56,9 +56,11 @@ describe('resume-parse Follio rewrite', () => {
     expect(prompt).toContain('Analytical Engine');
     expect(prompt).toContain('Shipped the compiler');
     expect(prompt).toContain('Mathematics');
+    expect(prompt).toContain('Summary status: present');
+    expect(prompt).toContain('preserve verbatim');
   });
 
-  it('caps AI copy and falls back to source signal', () => {
+  it('does not generate a replacement about when the résumé has a summary', () => {
     const draft = sanitizeFollioVoiceDraft(
       {
         headline: 'Engineer | React | Node | AWS | Kubernetes | Docker',
@@ -68,20 +70,39 @@ describe('resume-parse Follio rewrite', () => {
     );
 
     expect(draft.headline).toBe('Engineer');
-    expect(draft.about).toBe('Wrote the first algorithm.');
+    expect(draft.about).toBeNull();
   });
 
-  it('writes Follio copy onto the shared headline and about', () => {
+  it('keeps an extracted summary verbatim', () => {
     const next = applyFollioVoiceToNormalized(normalized(), {
       headline: 'Mathematician and writer',
-      about: 'Wrote the first algorithm.',
+      about: 'A rewritten summary that must not be used.',
     });
 
     expect(next.profile.headline).toBe('Mathematician and writer');
-    expect(next.profile.summary).toBe('Wrote the first algorithm.');
+    expect(next.profile.summary).toBe(
+      'Results-driven professional seeking a challenging role. Wrote the first algorithm.'
+    );
     expect(next.experiences[0]?.bullets).toEqual([
       'Shipped the compiler',
       'Responsible for various duties',
     ]);
+  });
+
+  it('uses generated about copy only when extraction found no summary', () => {
+    const source = normalized({
+      profile: {
+        firstName: 'Ada',
+        lastName: 'Lovelace',
+        headline: 'Mathematician',
+      },
+    });
+    const next = applyFollioVoiceToNormalized(source, {
+      headline: 'Mathematician',
+      about: 'Mathematician who published the first algorithm.',
+    });
+
+    expect(buildFollioVoiceUserPrompt(source)).toContain('Summary status: missing');
+    expect(next.profile.summary).toBe('Mathematician who published the first algorithm.');
   });
 });

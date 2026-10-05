@@ -724,6 +724,13 @@
     margin-bottom: 12px;
   }
 
+  .resume-section-heading {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin: 0 0 6px 0;
+  }
+
   .resume-section-title {
     font-size: var(--rd-heading-font-size, 12px);
     font-weight: var(--rd-heading-font-weight, 700);
@@ -732,7 +739,7 @@
     letter-spacing: 0.15em;
     text-transform: uppercase;
     color: var(--rd-heading-color, inherit);
-    margin: 0 0 6px 0;
+    margin: 0;
     font-family: var(
       --rd-font-heading,
       -apple-system,
@@ -741,6 +748,28 @@
       Roboto,
       sans-serif
     );
+  }
+
+  .resume-section-tag {
+    font-family: var(
+      --rd-font-body,
+      -apple-system,
+      BlinkMacSystemFont,
+      'Segoe UI',
+      Roboto,
+      sans-serif
+    );
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1.2;
+    text-transform: none;
+    white-space: nowrap;
+    flex-shrink: 0;
+    padding: 1px 7px;
+    border: 1px solid color-mix(in srgb, currentColor 32%, transparent);
+    border-radius: 999px;
+    opacity: 0.78;
   }
 
   .resume-paper-wrapper[data-resume-theme='dark'] .resume-section-title {
@@ -1459,6 +1488,13 @@
     letter-spacing: 0.24em;
   }
 
+  .resume-paper--sleek .resume-section-heading {
+    margin: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
   .resume-paper--sleek .resume-section-line {
     display: none;
   }
@@ -1673,6 +1709,14 @@
     margin-bottom: 12px;
   }
 
+  .resume-paper--studio .resume-section-heading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    margin: 0;
+  }
+
   .resume-paper--studio .resume-section-title {
     display: inline-flex;
     align-items: center;
@@ -1704,6 +1748,13 @@
     background: #c4c4c4;
     opacity: 1;
     margin: 0;
+  }
+
+  .resume-paper--studio .resume-section-tag {
+    border-color: #9ca3af;
+    opacity: 1;
+    font-size: 10.5px;
+    padding: 2px 8px;
   }
 
   /* Skills as a plain vertical list — no proficiency bars */
@@ -2064,12 +2115,37 @@
   }
 }
 
+/*
+ * Highlighter stroke. Background covers the words only; the line-height on
+ * the parent leaves a gap, so a wrapped sentence reads as separate marker
+ * passes. Ink stays dark on the mark in both themes — a highlighter lights
+ * the paper, it does not invert with the page.
+ */
+.resume-highlights mark.resume-highlight-stroke {
+  --highlight-ink: #1c1917;
+  --highlight-mark: #ffe14a;
+  color: var(--highlight-ink);
+  font: inherit;
+  background-color: var(--highlight-mark);
+  padding: 0.08em 0.2em 0.02em;
+  border-radius: 0.08em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.dark .resume-highlights mark.resume-highlight-stroke {
+  --highlight-mark: #f5d84a;
+}
+
 /* Print styles for clean resume */
 @media print {
   /* Hide everything except the resume */
   body > *:not(.resume-paper):not(.resume-paper-wrapper),
   .resume-actions,
   .resume-justify-button,
+  .view-highlights,
   .resume-lens-ui,
   header,
   footer,
@@ -2218,7 +2294,8 @@
   outline: none;
 }
 
-.tiptap p.is-editor-empty:first-child::before {
+.tiptap p.is-editor-empty:first-child::before,
+.tiptap.is-editor-empty::before {
   content: attr(data-placeholder);
   pointer-events: none;
   color: hsl(var(--muted-foreground));

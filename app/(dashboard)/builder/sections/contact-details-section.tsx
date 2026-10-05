@@ -140,7 +140,7 @@ function buildEntries(profile: FullProfile): ContactEntry[] {
     kind: 'email',
     label: 'Email',
     value: (contactInfo?.email as string) || '',
-    isVisible: (contactInfo?.emailPublic as boolean) || false,
+    isVisible: (contactInfo?.emailPublic as boolean | undefined) ?? true,
     placeholder: 'you@example.com',
     removable: false,
   });
@@ -149,7 +149,7 @@ function buildEntries(profile: FullProfile): ContactEntry[] {
     kind: 'phone',
     label: 'Phone',
     value: (contactInfo?.phoneNumber as string) || (contactInfo?.phone as string) || '',
-    isVisible: (contactInfo?.phonePublic as boolean) || false,
+    isVisible: (contactInfo?.phonePublic as boolean | undefined) ?? true,
     placeholder: '+1 (555) 123-4567',
     removable: false,
   });

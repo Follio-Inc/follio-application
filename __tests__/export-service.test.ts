@@ -232,6 +232,22 @@ describe('toJSONResume', () => {
     expect(result.education![0].area).toBe('Computer Science');
     expect(result.education![0].score).toBe('3.8');
     expect(result.education![0].courses).toEqual(['Algorithms', 'Data Structures']);
+    expect(result.education![0].highlights).toBeUndefined();
+  });
+
+  it('maps education highlights from the stored description', () => {
+    const result = toJSONResume(
+      makeProfile({
+        educations: [
+          {
+            ...makeProfile().educations[0],
+            description:
+              '<ul class="rich-text-bullets"><li><p>Thesis on compilers</p></li><li><p>Dean’s list</p></li></ul>',
+          },
+        ],
+      } as unknown as Partial<FullProfile>)
+    );
+    expect(result.education![0].highlights).toEqual(['Thesis on compilers', 'Dean’s list']);
   });
 
   it('maps flat skills when no skill groups', () => {
@@ -384,6 +400,36 @@ describe('toPlainText', () => {
     expect(text).toContain('• Led team of 5');
   });
 
+  it('shows total experience as a tag on the experience header', () => {
+    const html = toPDFHtml(
+      makeProfile({ totalExperience: '5+ years' } as unknown as Partial<FullProfile>)
+    );
+    expect(html).toContain('resume-section-tag');
+    expect(html).toContain('5+ years');
+    expect(
+      toPlainText(makeProfile({ totalExperience: '5+ years' } as unknown as Partial<FullProfile>))
+    ).toContain('EXPERIENCE (5+ years)');
+  });
+
+  it('omits the total experience tag when it is hidden', () => {
+    const html = toPDFHtml(
+      makeProfile({
+        totalExperience: '5+ years',
+        totalExperienceVisible: false,
+      } as unknown as Partial<FullProfile>)
+    );
+    expect(html).not.toContain('<span class="resume-section-tag">');
+    expect(html).not.toContain('5+ years');
+    expect(
+      toPlainText(
+        makeProfile({
+          totalExperience: '5+ years',
+          totalExperienceVisible: false,
+        } as unknown as Partial<FullProfile>)
+      )
+    ).not.toContain('EXPERIENCE (5+ years)');
+  });
+
   it('shows "Present" for current positions', () => {
     const text = toPlainText(makeProfile());
     expect(text).toContain('Present');
@@ -394,6 +440,20 @@ describe('toPlainText', () => {
     expect(text).toContain('EDUCATION');
     expect(text).toContain('MIT');
     expect(text).toContain('GPA: 3.8');
+  });
+
+  it('includes education highlights in plain text', () => {
+    const text = toPlainText(
+      makeProfile({
+        educations: [
+          {
+            ...makeProfile().educations[0],
+            description: '<ul class="rich-text-bullets"><li><p>Thesis on compilers</p></li></ul>',
+          },
+        ],
+      } as unknown as Partial<FullProfile>)
+    );
+    expect(text).toContain('• Thesis on compilers');
   });
 
   it('includes SKILLS section', () => {
@@ -457,6 +517,20 @@ describe('toPDFHtml', () => {
   it('includes education section', () => {
     const html = toPDFHtml(makeProfile());
     expect(html).toContain('MIT');
+  });
+
+  it('includes education highlights from the stored description', () => {
+    const html = toPDFHtml(
+      makeProfile({
+        educations: [
+          {
+            ...makeProfile().educations[0],
+            description: '<ul class="rich-text-bullets"><li><p>Thesis on compilers</p></li></ul>',
+          },
+        ],
+      } as unknown as Partial<FullProfile>)
+    );
+    expect(html).toContain('Thesis on compilers');
   });
 
   it('includes skills section', () => {

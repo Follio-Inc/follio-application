@@ -7,6 +7,7 @@ import crypto from 'crypto';
 import type { CoverLetter, Prisma } from '@prisma/client';
 
 import { db } from '@/lib/db';
+import { interactiveTransactionOptions } from '@/lib/db-transaction';
 
 function newUnlistedKey(): string {
   return crypto.randomBytes(16).toString('hex');
@@ -87,7 +88,7 @@ export async function setActiveCoverLetter(userId: string, coverLetterId: string
       where: { id: coverLetterId },
       data: { activeForUserId: userId },
     });
-  });
+  }, interactiveTransactionOptions);
 }
 
 /**

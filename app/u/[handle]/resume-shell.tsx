@@ -15,6 +15,7 @@ import { useEffect, useState } from 'react';
 
 import { PublicProfileChrome, useEffectiveAuthState } from '@/components/public-profile-chrome';
 import { ResumeLens } from '@/components/resume-lens/ResumeLens';
+import { resumeHighlightsHref } from '@/lib/resume/presentation';
 
 import { CleanResumeView } from './views/clean-resume-view';
 
@@ -25,13 +26,16 @@ interface ResumeShellProps {
   authState: 'owner' | 'authenticated' | 'anonymous';
   profileHandle: string;
   resumeVisibility: ContentVisibility;
+  /** `token` / `key` query so unlisted access survives the view switch. */
+  accessQuery?: string;
 }
 
 function ResumeShellBody({
   profile,
   authState,
   profileHandle,
-}: Pick<ResumeShellProps, 'profile' | 'authState' | 'profileHandle'>) {
+  accessQuery,
+}: Pick<ResumeShellProps, 'profile' | 'authState' | 'profileHandle' | 'accessQuery'>) {
   const effectiveAuthState = useEffectiveAuthState(authState);
   const [host, setHost] = useState<HTMLDivElement | null>(null);
 
@@ -44,6 +48,7 @@ function ResumeShellBody({
               profile={profile}
               profileHandle={profileHandle}
               authState={effectiveAuthState}
+              viewHighlightsHref={resumeHighlightsHref(profileHandle, accessQuery)}
             />
           </ResumeLens>
         </div>
@@ -52,7 +57,12 @@ function ResumeShellBody({
   );
 }
 
-export function ResumeShell({ profile, authState, profileHandle }: ResumeShellProps) {
+export function ResumeShell({
+  profile,
+  authState,
+  profileHandle,
+  accessQuery = '',
+}: ResumeShellProps) {
   useEffect(() => {
     if (typeof document === 'undefined') return;
     const fullName = [profile.firstName, profile.middleName, profile.lastName]
@@ -63,7 +73,12 @@ export function ResumeShell({ profile, authState, profileHandle }: ResumeShellPr
 
   return (
     <PublicProfileChrome authState={authState} profileHandle={profileHandle}>
-      <ResumeShellBody profile={profile} authState={authState} profileHandle={profileHandle} />
+      <ResumeShellBody
+        profile={profile}
+        authState={authState}
+        profileHandle={profileHandle}
+        accessQuery={accessQuery}
+      />
     </PublicProfileChrome>
   );
 }

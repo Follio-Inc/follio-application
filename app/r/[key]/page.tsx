@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 
 import { getViewerAuthState } from '@/app/u/[handle]/access';
 import { ResumePageViewer } from '@/app/u/[handle]/resume/resume-page-viewer';
+import { resumeAccessQuery } from '@/lib/resume/presentation';
 import { resolveResumeByUnlistedKey } from '@/lib/public-resume';
 import { getUnlistedResumeUrl } from '@/lib/url';
 
@@ -74,6 +75,7 @@ export default async function UnlistedResumeByKeyPage({
       profileHandle={profile.handle}
       resumeVisibility={resumeVisibility}
       minimal={minimal === '1'}
+      accessQuery={resumeAccessQuery({ key })}
     />
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, Copy, Mail, Phone } from 'lucide-react';
+import { Check, Copy, Mail, Phone, UserRoundPlus } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,7 @@ import { copyTextToClipboard } from '@/lib/share';
 import { cn } from '@/lib/utils';
 
 import { FOLLIO_CHIP, FOLLIO_CHIP_INTERACTIVE } from './chip';
+import { useSaveContact } from './use-save-contact';
 
 interface FollioConnectProps {
   identity: FollioIdentity;
@@ -26,6 +27,7 @@ export function FollioConnect({ identity, interactive = true }: FollioConnectPro
   const { contact } = identity;
   const hasContact = Boolean(contact.email || contact.phone);
   const [open, setOpen] = useState(false);
+  const { save, saved } = useSaveContact(identity);
 
   if (!hasContact) return null;
 
@@ -43,22 +45,45 @@ export function FollioConnect({ identity, interactive = true }: FollioConnectPro
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          className={className}
-          aria-expanded={open}
-          aria-haspopup="dialog"
-          aria-label={`Contact ${identity.shortName}`}
-        >
-          {body}
-        </button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-80 p-2" sideOffset={8}>
-        {open ? <RevealedContact identity={identity} /> : null}
-      </PopoverContent>
-    </Popover>
+    <div className="space-y-2">
+      <Button
+        type="button"
+        className="w-full gap-2"
+        onClick={save}
+        aria-label={
+          saved
+            ? `${identity.shortName}'s contact card is ready to add`
+            : `Save ${identity.shortName}'s contact to your device`
+        }
+      >
+        {saved ? (
+          <Check className="h-4 w-4" aria-hidden />
+        ) : (
+          <UserRoundPlus className="h-4 w-4" aria-hidden />
+        )}
+        {saved ? 'Contact card ready' : 'Save contact'}
+      </Button>
+      <span className="sr-only" aria-live="polite">
+        {saved ? 'Contact card is ready. Use your device prompt to add the contact.' : null}
+      </span>
+
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className={className}
+            aria-expanded={open}
+            aria-haspopup="dialog"
+            aria-label={`Contact ${identity.shortName}`}
+          >
+            {body}
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-80 p-2" sideOffset={8}>
+          {open ? <RevealedContact identity={identity} /> : null}
+        </PopoverContent>
+      </Popover>
+    </div>
   );
 }
 

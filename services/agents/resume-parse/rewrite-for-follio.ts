@@ -28,7 +28,10 @@ not a LinkedIn about, not a job-search objective. High-level signal only.
 
 Rules:
 - Headline: one identity line (role or craft). No keyword soup, no pipes, no "seeking".
-- About: one or two sentences. Who they are and what they do. Ground every claim in the source.
+- If a résumé summary is present, return "about": null. That summary is user-provided source
+  material and must never be rewritten, shortened, corrected, or otherwise changed.
+- If the résumé summary is missing, create "about": a one- or two-sentence professional
+  summary grounded only in the supplied roles, skills, and achievements.
 - No first person. No buzzwords (results-driven, passionate, proven track record).
 - No skill dumps, no tools lists, no "responsible for".
 - Never invent employers, titles, metrics, or facts.
@@ -36,10 +39,15 @@ Rules:
 
 Return ONLY JSON: { "headline": "string or null", "about": "string or null" }`;
 
+function hasSummary(summary: string | null | undefined): summary is string {
+  return typeof summary === 'string' && summary.trim().length > 0;
+}
+
 export function buildFollioVoiceUserPrompt(data: NormalizedResumeData): string {
   const name =
     [data.profile.firstName, data.profile.lastName].filter(Boolean).join(' ') || 'This person';
   const current = data.experiences.find((item) => item.isCurrent) ?? data.experiences[0] ?? null;
+  const summary = data.profile.summary;
 
   const roles = data.experiences.slice(0, 4).map((item) => ({
     role: item.role,
@@ -51,7 +59,10 @@ export function buildFollioVoiceUserPrompt(data: NormalizedResumeData): string {
   return [
     `Person: ${name}`,
     `Headline on file: ${data.profile.headline || 'none'}`,
-    `Summary on file: ${data.profile.summary || 'none'}`,
+    `Summary status: ${hasSummary(summary) ? 'present' : 'missing'}`,
+    hasSummary(summary)
+      ? `Existing summary (preserve verbatim; return "about": null):\n<resume_summary>\n${summary}\n</resume_summary>`
+      : 'Existing summary: none — generate "about" from the facts below.',
     current ? `Current role: ${current.role} at ${current.company}` : 'Current role: unknown',
     `Skills: ${(data.skills ?? []).slice(0, 8).join(', ') || 'none'}`,
     `Recent roles:\n${JSON.stringify(roles)}`,
@@ -64,7 +75,7 @@ export function sanitizeFollioVoiceDraft(
 ): FollioVoiceDraft {
   return {
     headline: rewriteHeadline(draft?.headline) ?? rewriteHeadline(source.profile.headline),
-    about: rewriteAbout(draft?.about) ?? rewriteAbout(source.profile.summary),
+    about: hasSummary(source.profile.summary) ? null : rewriteAbout(draft?.about),
   };
 }
 
@@ -77,15 +88,24 @@ export function applyFollioVoiceToNormalized(
     profile: {
       ...data.profile,
       ...(draft.headline ? { headline: draft.headline } : {}),
-      ...(draft.about ? { summary: draft.about } : {}),
+      // The parsed résumé summary is source material. The generator may only
+      // fill this field when extraction found no summary at all.
+      ...(!hasSummary(data.profile.summary) && draft.about ? { summary: draft.about } : {}),
     },
   };
 }
 
 function deterministicDraft(data: NormalizedResumeData): FollioVoiceDraft {
+  const current = data.experiences.find((item) => item.isCurrent) ?? data.experiences[0];
+  const roleAndCompany =
+    current?.role && current?.company ? `${current.role} at ${current.company}.` : null;
+  const proof = current?.bullets?.find((bullet) => bullet.trim().length > 0) ?? null;
+
   return {
     headline: rewriteHeadline(data.profile.headline),
-    about: rewriteAbout(data.profile.summary),
+    about: hasSummary(data.profile.summary)
+      ? null
+      : rewriteAbout([roleAndCompany, proof].filter(Boolean).join(' ')),
   };
 }
 

@@ -25,6 +25,7 @@ import { cn, parseMonthInput, toMonthInputValue } from '@/lib/utils';
 import { EntryInlineForm } from '../components/entry-inline-form';
 import { SortableCardList } from '../components/sortable-card-list';
 import { useEntryFormDirty, type RegisterEntryEditGuard } from '../lib/entry-edit-guard';
+import { TotalExperienceField } from './total-experience-field';
 
 import type { WorkExperience } from '@/types';
 import type { DateExtractor } from '../components/sortable-card-list';
@@ -38,6 +39,14 @@ interface ExperienceSectionProps {
   experiences: WorkExperience[];
   profileId: string;
   onUpdate: (experiences: WorkExperience[]) => void;
+  totalExperience?: string | null;
+  totalExperienceVisible?: boolean | null;
+  totalExperienceShowYears?: boolean | null;
+  totalExperienceShowMonths?: boolean | null;
+  onTotalExperiencePreview?: (value: string | null) => void;
+  onTotalExperiencePersisted?: (value: string | null) => void;
+  onTotalExperienceVisibleChange?: (visible: boolean) => void;
+  onTotalExperienceUnitsChange?: (units: { showYears: boolean; showMonths: boolean }) => void;
   /** Called when the section enters or exits inline-editing mode. */
   onEditingStateChange?: (isEditing: boolean) => void;
   /** When provided, auto-starts editing this entry and renders only the form. */
@@ -65,6 +74,14 @@ const emptyExperience: Partial<WorkExperience> = {
 export function ExperienceSection({
   experiences,
   onUpdate,
+  totalExperience,
+  totalExperienceVisible,
+  totalExperienceShowYears,
+  totalExperienceShowMonths,
+  onTotalExperiencePreview,
+  onTotalExperiencePersisted,
+  onTotalExperienceVisibleChange,
+  onTotalExperienceUnitsChange,
   onEditingStateChange,
   autoEditId,
   onEditComplete,
@@ -452,6 +469,24 @@ export function ExperienceSection({
       </CardHeader>
       <CardContent>
         <div className="rounded-xl bg-muted/40 p-4">
+          {onTotalExperiencePreview &&
+          onTotalExperiencePersisted &&
+          onTotalExperienceVisibleChange &&
+          onTotalExperienceUnitsChange ? (
+            <div className="mb-3">
+              <TotalExperienceField
+                override={totalExperience}
+                visible={totalExperienceVisible}
+                showYears={totalExperienceShowYears}
+                showMonths={totalExperienceShowMonths}
+                experiences={experiences}
+                onPreviewChange={onTotalExperiencePreview}
+                onPersisted={onTotalExperiencePersisted}
+                onVisibleChange={onTotalExperienceVisibleChange}
+                onUnitsChange={onTotalExperienceUnitsChange}
+              />
+            </div>
+          ) : null}
           {/* Inline form for adding a new experience */}
           <AnimatePresence>
             {editingId === 'new' && (

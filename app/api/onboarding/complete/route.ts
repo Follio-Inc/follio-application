@@ -622,10 +622,10 @@ export async function POST(request: NextRequest) {
           profileId: profile.id,
           email: signupEmail, // Signup email is always primary
           emailSource: 'MANUAL', // Signup email source is always MANUAL
-          emailPublic: false,
+          emailPublic: true,
           phone: mergedProfile.phone,
           phoneSource: toDataSource(mergedProfile.phoneSource),
-          phonePublic: false,
+          phonePublic: true,
           website: mergedProfile.website,
           additionalEmails: additionalEmails.length > 0 ? additionalEmails : undefined,
         },
@@ -1104,12 +1104,12 @@ async function handleReviewedData(
       profileId,
       email: chosenPrimaryEmail,
       emailSource: toDataSource(chosenPrimarySource),
-      emailPublic: false,
+      emailPublic: true,
       phone: primaryPhone,
       phoneCountryCode: primaryPhoneCountryCode,
       phoneNumber: primaryPhoneNumber,
       phoneSource: primaryPhone ? toDataSource(phoneSource) : undefined,
-      phonePublic: false,
+      phonePublic: true,
       additionalEmails: additionalEmails.length > 0 ? additionalEmails : undefined,
     },
     update: {

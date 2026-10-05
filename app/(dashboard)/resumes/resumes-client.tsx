@@ -22,8 +22,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { cn } from '@/lib/utils';
 import { isPortfolioEnabled } from '@/lib/features';
+import { resumePresentationHref } from '@/lib/resume/presentation';
+import { cn } from '@/lib/utils';
 import type { ResumePageLayout } from '@/types';
 
 import { DownloadDialog } from '@/app/(dashboard)/builder/components/download-dialog';
@@ -105,7 +106,7 @@ const VISIBILITY_CONFIG: Record<
 > = {
   PUBLIC: {
     label: 'Public',
-    description: 'Anyone can view at your Follio URL',
+    description: 'Anyone can open this resume and its Follio view',
     variant: 'default',
     icon: Globe,
   },
@@ -513,9 +514,15 @@ export function ResumeDashboardClient({
                   Open in Builder
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href={`/u/${resume.handle}/resume`} target="_blank">
+                  <Link href={resumePresentationHref(resume.handle, 'resume')} target="_blank">
                     <ExternalLink className="mr-2 h-4 w-4" />
-                    View Resume
+                    View resume
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href={resumePresentationHref(resume.handle, 'follio')} target="_blank">
+                    <ExternalLink className="mr-2 h-4 w-4" />
+                    View Follio
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => handleOpenDownloadDialog(resume)}>
@@ -598,7 +605,7 @@ export function ResumeDashboardClient({
               Edit
             </Button>
             <Button variant="outline" size="sm" className="flex-1 gap-1.5" asChild>
-              <Link href={`/u/${resume.handle}/resume`} target="_blank">
+              <Link href={resumePresentationHref(resume.handle, 'resume')} target="_blank">
                 <ExternalLink className="h-3.5 w-3.5" />
                 View
               </Link>
@@ -617,7 +624,7 @@ export function ResumeDashboardClient({
           <p className="text-eyebrow">Library</p>
           <h1 className="text-display text-2xl text-foreground sm:text-3xl">Resumes</h1>
           <p className="text-sm text-muted-foreground">
-            Create and manage tailored resumes for different roles.
+            Each resume opens as a traditional resume or a Follio view.
           </p>
         </div>
 

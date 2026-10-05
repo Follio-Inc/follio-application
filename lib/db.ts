@@ -16,6 +16,19 @@ const LOG_LEVELS =
   process.env.NODE_ENV === 'development' ? (['error', 'warn'] as const) : (['error'] as const);
 
 function createPrismaClient(): PrismaClient {
+  const profileFields =
+    Prisma.dmmf.datamodel.models
+      .find((model) => model.name === 'Profile')
+      ?.fields.map((field) => field.name) ?? [];
+  if (
+    !profileFields.includes('totalExperienceVisible') ||
+    !profileFields.includes('totalExperienceShowYears')
+  ) {
+    throw new Error(
+      'Prisma client is missing Profile total-experience fields. Run `npx prisma generate` and restart Next.js with a clean `.next` cache.'
+    );
+  }
+
   return new PrismaClient({
     log: [...LOG_LEVELS],
     datasourceUrl: buildDatasourceUrl(process.env.DATABASE_URL ?? ''),
@@ -29,11 +42,19 @@ function createPrismaClient(): PrismaClient {
  * Pool defaults (limit/timeout, no duplicate URL params) → generation 3.
  * AiConnector* / AiEditDraft → generation 4.
  * DocumentPdfCache → generation 5.
+ * Profile.totalExperience / totalExperienceVisible → generation 6.
+ * Profile.totalExperienceShowYears / ShowMonths → generation 7.
  */
-const PRISMA_CLIENT_GENERATION = 5;
+const PRISMA_CLIENT_GENERATION = 7;
 
 function schemaFieldFingerprint(): string {
-  const modelNames = ['WorkExperience', 'CoverLetter', 'AiEditDraft', 'DocumentPdfCache'] as const;
+  const modelNames = [
+    'Profile',
+    'WorkExperience',
+    'CoverLetter',
+    'AiEditDraft',
+    'DocumentPdfCache',
+  ] as const;
   return modelNames
     .map((name) => {
       const fields =

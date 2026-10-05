@@ -12,8 +12,10 @@ import { Errors } from '@/lib/errors';
 import {
   containsHtmlFormatting,
   escapeHtml,
+  htmlToBullets,
   isHtmlEmpty,
   resumeBulletInnerHtml,
+  resumeEntryBodyHtml,
   sanitizeRichHtml,
   stripHtmlTags,
 } from '@/lib/html-utils';
@@ -30,6 +32,7 @@ import {
 } from '@/lib/resume-design';
 import { getResumeTemplateId, isResumeAtelierRailSectionType } from '@/lib/resume/templates';
 import { resolveSkillCategoryLabel, skillGroupsHaveCategoryLabels } from '@/lib/skills/groups';
+import { displayTotalExperience, unitsFromProfile } from '@/lib/total-experience';
 import { formatDate } from '@/lib/utils';
 import { generateDocumentPDF } from '@/services/document-pdf.service';
 import type {
@@ -96,9 +99,6 @@ function getOrderedContactItems(profile: FullProfile): ContactItem[] {
   // Build a map: id → ContactItem
   const itemMap = new Map<string, ContactItem>();
 
-  if (profile.location) {
-    itemMap.set('location', { id: 'location', value: profile.location });
-  }
   if (ci?.email && ci.emailPublic) {
     itemMap.set('email', {
       id: 'email',
@@ -112,6 +112,9 @@ function getOrderedContactItems(profile: FullProfile): ContactItem[] {
       value: cleanPhoneDisplay(ci.phone),
       href: `tel:${ci.phone}`,
     });
+  }
+  if (profile.location) {
+    itemMap.set('location', { id: 'location', value: profile.location });
   }
 
   // Links — keyed by their database id
@@ -149,11 +152,11 @@ function getOrderedContactItems(profile: FullProfile): ContactItem[] {
     return ordered;
   }
 
-  // Fallback: default order (location → email → phone → website → links)
+  // Fallback: default order (email → phone → location → website → links)
   const fallback: ContactItem[] = [];
-  if (itemMap.has('location')) fallback.push(itemMap.get('location')!);
   if (itemMap.has('email')) fallback.push(itemMap.get('email')!);
   if (itemMap.has('phone')) fallback.push(itemMap.get('phone')!);
+  if (itemMap.has('location')) fallback.push(itemMap.get('location')!);
   if (ci?.website) {
     fallback.push({ id: 'website', value: ci.website, href: ci.website });
   }
@@ -240,18 +243,22 @@ export function toJSONResume(profile: FullProfile): JSONResume {
           exp.bullets.length > 0 ? exp.bullets.map((b) => stripHtmlTags(b)).join('. ') : undefined,
         highlights: exp.bullets.map((b) => stripHtmlTags(b)),
       })),
-      education: visibleEducations.map((edu) => ({
-        institution: edu.institution,
-        url: edu.institutionUrl || undefined,
-        area: edu.fieldOfStudy || undefined,
-        studyType: edu.degree || undefined,
-        startDate: formatDate(edu.startDate, { year: 'numeric', month: '2-digit' }) || undefined,
-        endDate: edu.isCurrent
-          ? undefined
-          : formatDate(edu.endDate, { year: 'numeric', month: '2-digit' }) || undefined,
-        score: edu.gpa || undefined,
-        courses: edu.activities,
-      })),
+      education: visibleEducations.map((edu) => {
+        const highlights = plainHighlightsFromHtml(edu.description);
+        return {
+          institution: edu.institution,
+          url: edu.institutionUrl || undefined,
+          area: edu.fieldOfStudy || undefined,
+          studyType: edu.degree || undefined,
+          startDate: formatDate(edu.startDate, { year: 'numeric', month: '2-digit' }) || undefined,
+          endDate: edu.isCurrent
+            ? undefined
+            : formatDate(edu.endDate, { year: 'numeric', month: '2-digit' }) || undefined,
+          score: edu.gpa || undefined,
+          courses: edu.activities,
+          ...(highlights.length > 0 ? { highlights } : {}),
+        };
+      }),
       skills:
         visibleSkillGroups.length > 0
           ? visibleSkillGroups.map((group) => ({
@@ -339,7 +346,13 @@ export function toPlainText(profile: FullProfile): string {
 
         case 'EXPERIENCE':
           if (visibleExperiences.length > 0) {
-            lines.push('EXPERIENCE');
+            const totalExperience = displayTotalExperience(
+              profile.totalExperience,
+              visibleExperiences,
+              profile.totalExperienceVisible,
+              unitsFromProfile(profile)
+            );
+            lines.push(totalExperience ? `EXPERIENCE (${totalExperience})` : 'EXPERIENCE');
             lines.push('-'.repeat(50));
             visibleExperiences.forEach((exp) => {
               const dateRange = exp.isCurrent
@@ -369,6 +382,9 @@ export function toPlainText(profile: FullProfile): string {
                 lines.push(dateRange);
               }
               if (edu.gpa) lines.push(`GPA: ${edu.gpa}`);
+              for (const line of plainHighlightsFromHtml(edu.description)) {
+                lines.push(`• ${line}`);
+              }
               lines.push('');
             });
           }
@@ -540,16 +556,27 @@ function getOrderedSectionObjects(profile: FullProfile): ProfileSection[] {
 
 // ── Section divider HTML ──────────────────────────────────────────
 
-function sectionDividerHtml(title: string): string {
+function sectionDividerHtml(title: string, tag?: string | null): string {
+  const tagHtml = tag ? `<span class="resume-section-tag">${escapeHtml(tag)}</span>` : '';
   return `
     <div class="resume-section-header">
-      <h2 class="resume-section-title">${escapeHtml(title)}</h2>
+      <div class="resume-section-heading">
+        <h2 class="resume-section-title">${escapeHtml(title)}</h2>
+        ${tagHtml}
+      </div>
       <div class="resume-section-line"></div>
     </div>`;
 }
 
 function resumeBulletListItemHtml(bullet: string): string {
   return `<li>${resumeBulletInnerHtml(bullet)}</li>`;
+}
+
+function plainHighlightsFromHtml(html: string | null | undefined): string[] {
+  if (!html || isHtmlEmpty(html)) return [];
+  return htmlToBullets(html)
+    .map((line) => stripHtmlTags(line))
+    .filter(Boolean);
 }
 
 // ── Section HTML renderers ────────────────────────────────────────
@@ -587,16 +614,10 @@ function experienceSectionHtml(profile: FullProfile, atelier = false): string {
         ? formatAtelierYearRange(exp.startDate, exp.endDate, exp.isCurrent)
         : formatDateRange(exp.startDate, exp.endDate, exp.isCurrent);
       const companyLine = [exp.company, exp.location].filter(Boolean).join(', ');
-
-      // Prefer bulletsHtml for perfect rendering (same as CleanResumeView).
-      // All editor-authored HTML is sanitized before embedding in the PDF.
-      let bulletsHtml = '';
-      if (exp.bulletsHtml) {
-        bulletsHtml = sanitizeRichHtml(exp.bulletsHtml);
-      } else if (exp.bullets && exp.bullets.length > 0) {
-        const lis = exp.bullets.map((b) => resumeBulletListItemHtml(b)).join('');
-        bulletsHtml = `<ul class="resume-bullets">${lis}</ul>`;
-      }
+      const bulletsHtml = resumeEntryBodyHtml({
+        html: exp.bulletsHtml,
+        bullets: exp.bullets,
+      });
 
       if (atelier) {
         return `
@@ -628,7 +649,15 @@ function experienceSectionHtml(profile: FullProfile, atelier = false): string {
 
   return `
   <section class="resume-section">
-    ${sectionDividerHtml(atelier ? 'WORK EXPERIENCE' : 'EXPERIENCE')}
+    ${sectionDividerHtml(
+      atelier ? 'WORK EXPERIENCE' : 'EXPERIENCE',
+      displayTotalExperience(
+        profile.totalExperience,
+        items,
+        profile.totalExperienceVisible,
+        unitsFromProfile(profile)
+      )
+    )}
     <div class="resume-entries">${entries}</div>
   </section>`;
 }
@@ -644,6 +673,7 @@ function educationSectionHtml(profile: FullProfile, atelier = false): string {
         ? formatAtelierYearRange(edu.startDate, edu.endDate, edu.isCurrent)
         : formatDateRange(edu.startDate, edu.endDate, edu.isCurrent);
 
+      const bodyHtml = resumeEntryBodyHtml({ html: edu.description });
       let detailsHtml = '';
       if (edu.gpa || edu.activities) {
         const parts: string[] = [];
@@ -659,6 +689,7 @@ function educationSectionHtml(profile: FullProfile, atelier = false): string {
         <h3 class="resume-entry-title">${escapeHtml(degreeLine || edu.institution)}</h3>
         ${degreeLine ? `<p class="resume-entry-subtitle">${escapeHtml(edu.institution)}</p>` : ''}
         ${meta ? `<p class="resume-atelier-edu-meta">${escapeHtml(meta)}</p>` : ''}
+        ${bodyHtml}
         ${detailsHtml}
       </div>`;
       }
@@ -672,6 +703,7 @@ function educationSectionHtml(profile: FullProfile, atelier = false): string {
           </div>
           ${dateRange ? `<span class="resume-entry-date">${dateRange}</span>` : ''}
         </div>
+        ${bodyHtml}
         ${detailsHtml}
       </div>`;
     })
@@ -1156,6 +1188,7 @@ const RESUME_CSS = `
     margin-top: var(--rd-section-gap, 20px);
   }
   .resume-section-header { margin-bottom: 12px; }
+  .resume-section-heading { display: flex; align-items: baseline; gap: 8px; margin: 0 0 6px 0; }
   .resume-section-title {
     font-size: var(--rd-heading-font-size, 12px);
     font-weight: var(--rd-heading-font-weight, 700);
@@ -1164,8 +1197,15 @@ const RESUME_CSS = `
     letter-spacing: 0.15em;
     text-transform: uppercase;
     color: var(--rd-heading-color, inherit);
-    margin: 0 0 6px 0;
+    margin: 0;
     font-family: var(--rd-font-heading, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+  }
+  .resume-section-tag {
+    font-family: var(--rd-font-body, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+    font-size: 10px; font-weight: 600; letter-spacing: 0.02em; line-height: 1.2;
+    text-transform: none; white-space: nowrap; flex-shrink: 0; padding: 1px 7px;
+    border: 1px solid color-mix(in srgb, currentColor 32%, transparent);
+    border-radius: 999px; opacity: 0.78;
   }
   .resume-section-line {
     height: var(--rd-divider-height, 1px);
@@ -1465,6 +1505,7 @@ const RESUME_CSS = `
     border-top-color: color-mix(in srgb, var(--rd-accent-color-dark, #b6bec9) 35%, transparent);
   }
   .resume-paper--sleek .resume-section-header { grid-column: 1; margin-bottom: 0; }
+  .resume-paper--sleek .resume-section-heading { margin: 0; flex-direction: column; align-items: flex-start; gap: 6px; }
   .resume-paper--sleek .resume-section-title { font-size: var(--rd-heading-font-size, 11px); letter-spacing: 0.24em; }
   .resume-paper--sleek .resume-section-line { display: none; }
   .resume-paper--sleek .resume-section > :not(.resume-section-header) { grid-column: 2; }
@@ -1545,6 +1586,9 @@ const RESUME_CSS = `
   .resume-paper--studio .resume-section-header {
     display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
   }
+  .resume-paper--studio .resume-section-heading {
+    display: flex; align-items: center; gap: 8px; flex-shrink: 0; margin: 0;
+  }
   .resume-paper--studio .resume-section-title {
     display: inline-flex; align-items: center; gap: 8px;
     font-size: var(--rd-heading-font-size, 12px);
@@ -1562,6 +1606,9 @@ const RESUME_CSS = `
   }
   .resume-paper--studio .resume-section-line {
     flex: 1; height: 1px; background: #c4c4c4; opacity: 1; margin: 0;
+  }
+  .resume-paper--studio .resume-section-tag {
+    border-color: #9ca3af; opacity: 1; font-size: 10.5px; padding: 2px 8px;
   }
   .resume-skills-stack {
     list-style: none; margin: 0; padding: 0;
@@ -1705,14 +1752,14 @@ export function toPDFHtml(profile: FullProfile): string {
     const contactItems: string[] = (() => {
       const itemMap = new Map<string, string>();
 
-      if (profile.location) {
-        itemMap.set('location', profile.location);
-      }
       if (profile.contactInfo?.email && profile.contactInfo.emailPublic) {
         itemMap.set('email', profile.contactInfo.email);
       }
       if (profile.contactInfo?.phone && profile.contactInfo.phonePublic) {
         itemMap.set('phone', cleanPhoneDisplay(profile.contactInfo.phone));
+      }
+      if (profile.location) {
+        itemMap.set('location', profile.location);
       }
 
       // Links — display URL without protocol (same as CleanResumeView)
@@ -1816,18 +1863,18 @@ export function toPDFHtml(profile: FullProfile): string {
         kind: 'phone' | 'email' | 'website' | 'link';
         value: string;
       }[] = [];
-      if (profile.contactInfo?.phone && profile.contactInfo.phonePublic) {
-        atelierFields.push({
-          id: 'phone',
-          kind: 'phone',
-          value: cleanPhoneDisplay(profile.contactInfo.phone),
-        });
-      }
       if (profile.contactInfo?.email && profile.contactInfo.emailPublic) {
         atelierFields.push({
           id: 'email',
           kind: 'email',
           value: profile.contactInfo.email,
+        });
+      }
+      if (profile.contactInfo?.phone && profile.contactInfo.phonePublic) {
+        atelierFields.push({
+          id: 'phone',
+          kind: 'phone',
+          value: cleanPhoneDisplay(profile.contactInfo.phone),
         });
       }
       if (profile.contactInfo?.website) {
@@ -1887,7 +1934,7 @@ export function toPDFHtml(profile: FullProfile): string {
       const seenFields = new Set<string>();
       const preferredOrder = storedOrder?.length
         ? storedOrder.filter((id) => id !== 'location')
-        : ['phone', 'email', ...Array.from(contactFieldMap.keys())];
+        : ['email', 'phone', ...Array.from(contactFieldMap.keys())];
       for (const id of preferredOrder) {
         if (id === 'location') continue;
         const value = contactFieldMap.get(id);

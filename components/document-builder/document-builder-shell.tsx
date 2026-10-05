@@ -78,7 +78,7 @@ export function DocumentBuilderShell({
   }, [designerActive]);
 
   return (
-    <div className="builder-base flex min-h-[calc(100vh-3.5rem)] flex-col xl:h-[calc(100vh-3.5rem)]">
+    <div className="builder-base flex h-full min-h-0 flex-col">
       <TooltipProvider delayDuration={300}>
         <div className="relative flex-1 xl:min-h-0 xl:overflow-hidden">
           <div

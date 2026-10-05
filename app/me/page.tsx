@@ -4,6 +4,8 @@ import { getFollioPath } from '@/lib/url';
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 
+import { WorkspaceUnavailable } from '@/components/workspace-unavailable';
+
 export const dynamic = 'force-dynamic';
 
 /**
@@ -45,9 +47,7 @@ export default async function MyProfilePage() {
     ) {
       throw error;
     }
-    // For any DB or unexpected errors, fall back to onboarding
-    // so the user never sees a blank white page
-    console.error('[/me] Error looking up user, redirecting to onboarding:', error);
-    redirect('/onboarding');
+    console.error('[/me] Error looking up user:', error);
+    return <WorkspaceUnavailable />;
   }
 }

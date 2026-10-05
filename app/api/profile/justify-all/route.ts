@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 
 import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
+import { interactiveTransactionOptions } from '@/lib/db-transaction';
 import { bulletsToHtml, isHtmlFullyJustified, justifyHtmlContent } from '@/lib/html-utils';
 import { logger } from '@/lib/logger';
 
@@ -160,7 +161,7 @@ export async function POST() {
           data: { updatedAt: new Date() },
         });
       }
-    });
+    }, interactiveTransactionOptions);
 
     return NextResponse.json({ success: true });
   } catch (error) {

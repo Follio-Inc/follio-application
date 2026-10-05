@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 
 import { ClientRedirect } from '@/components/client-redirect';
 import { LandingPage } from '@/components/landing-page';
+import { WorkspaceUnavailable } from '@/components/workspace-unavailable';
 import { hasOnboardedProfile } from '@/lib/active-profile';
 
 // Prevent caching during auth state changes
@@ -32,7 +33,7 @@ export default async function HomePage() {
     try {
       onboarded = await hasOnboardedProfile(userId);
     } catch {
-      return <ClientRedirect href="/onboarding" message="Continuing your setup…" />;
+      return <WorkspaceUnavailable />;
     }
 
     if (!onboarded) {

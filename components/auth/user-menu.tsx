@@ -63,7 +63,7 @@ export function UserMenu() {
             url: getFollioUrl(profile.handle),
             href: getFollioPath(profile.handle),
             displayHost: getDisplayHost(profile.handle),
-            label: 'Your Follio',
+            label: 'Follio view',
           });
         } else {
           setFollioShare(null);
@@ -239,7 +239,7 @@ export function UserMenu() {
                     </div>
                     <div className="flex flex-col">
                       <span className="text-sm font-medium">Dashboard</span>
-                      <span className="text-[11px] text-muted-foreground">Your Follio</span>
+                      <span className="text-[11px] text-muted-foreground">Your resumes</span>
                     </div>
                   </Link>
                 </DropdownMenuItem>

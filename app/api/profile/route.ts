@@ -327,6 +327,25 @@ export async function PATCH(request: NextRequest) {
         lastName: body.lastName,
         headline: body.headline,
         summary: body.summary,
+        ...(body.totalExperience !== undefined && {
+          totalExperience:
+            body.totalExperience == null
+              ? null
+              : typeof body.totalExperience === 'string'
+                ? body.totalExperience.trim()
+                  ? body.totalExperience.trim().slice(0, 60)
+                  : null
+                : undefined,
+        }),
+        ...(typeof body.totalExperienceVisible === 'boolean' && {
+          totalExperienceVisible: body.totalExperienceVisible,
+        }),
+        ...(typeof body.totalExperienceShowYears === 'boolean' && {
+          totalExperienceShowYears: body.totalExperienceShowYears,
+        }),
+        ...(typeof body.totalExperienceShowMonths === 'boolean' && {
+          totalExperienceShowMonths: body.totalExperienceShowMonths,
+        }),
         location: body.location,
         avatarUrl: body.avatarUrl,
         status: body.status,

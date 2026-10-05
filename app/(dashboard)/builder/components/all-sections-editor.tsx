@@ -64,6 +64,7 @@ import { PhotosSection } from '../sections/photos-section';
 import { ProjectsSection } from '../sections/projects-section';
 import { SkillsSection } from '../sections/skills-section';
 import { SummarySection } from '../sections/summary-section';
+import { TotalExperienceField } from '../sections/total-experience-field';
 
 import type {
   Award as AwardType,
@@ -434,6 +435,37 @@ export function AllSectionsEditor() {
     [setInlineEditing]
   );
 
+  const handleTotalExperiencePreview = useCallback(
+    (totalExperience: string | null) => {
+      updateDraft({ totalExperience });
+    },
+    [updateDraft]
+  );
+
+  const handleTotalExperiencePersisted = useCallback(
+    (totalExperience: string | null) => {
+      commitInlineChange({ totalExperience });
+    },
+    [commitInlineChange]
+  );
+
+  const handleTotalExperienceVisibleChange = useCallback(
+    (totalExperienceVisible: boolean) => {
+      commitInlineChange({ totalExperienceVisible });
+    },
+    [commitInlineChange]
+  );
+
+  const handleTotalExperienceUnitsChange = useCallback(
+    (units: { showYears: boolean; showMonths: boolean }) => {
+      commitInlineChange({
+        totalExperienceShowYears: units.showYears,
+        totalExperienceShowMonths: units.showMonths,
+      });
+    },
+    [commitInlineChange]
+  );
+
   const handleSave = useCallback(async (): Promise<boolean> => {
     setSaving(true);
     try {
@@ -704,9 +736,25 @@ export function AllSectionsEditor() {
     (section: ProfileSection) => {
       const entries = getEntries(section.type);
       const singularName = ENTRY_SINGULAR[section.type] || section.title || 'Item';
+      const experienceMeta =
+        section.type === 'EXPERIENCE' ? (
+          <div className="-mt-1 mb-5 pl-5">
+            <TotalExperienceField
+              override={draftProfile.totalExperience}
+              visible={draftProfile.totalExperienceVisible}
+              showYears={draftProfile.totalExperienceShowYears}
+              showMonths={draftProfile.totalExperienceShowMonths}
+              experiences={draftProfile.workExperiences}
+              onPreviewChange={handleTotalExperiencePreview}
+              onPersisted={handleTotalExperiencePersisted}
+              onVisibleChange={handleTotalExperienceVisibleChange}
+              onUnitsChange={handleTotalExperienceUnitsChange}
+            />
+          </div>
+        ) : null;
 
       if (entries.length === 0) {
-        return (
+        const emptyState = (
           <button
             type="button"
             onClick={() =>
@@ -722,6 +770,13 @@ export function AllSectionsEditor() {
             Add {singularName}
           </button>
         );
+        if (!experienceMeta) return emptyState;
+        return (
+          <div>
+            {experienceMeta}
+            {emptyState}
+          </div>
+        );
       }
 
       const entryIds = entries.map((e) => e.id);
@@ -729,130 +784,148 @@ export function AllSectionsEditor() {
       const dndId = `entry-dnd-${section.id}`;
 
       return (
-        <div className="space-y-2">
-          <DndContext
-            id={dndId}
-            sensors={sectionSensors}
-            collisionDetection={closestCenter}
-            onDragEnd={(event) => handleEntryDragEnd(section.type, event)}
-            modifiers={[restrictToVerticalAxis, restrictToParentElement]}
-          >
-            <SortableContext items={entryIds} strategy={verticalListSortingStrategy}>
-              <div className="space-y-2 pl-5">
-                {entries.map((entry) => {
-                  const entryHidden = entry.isVisible === false;
-                  return (
-                    <SortableEntryCard key={entry.id} id={entry.id}>
-                      <div
-                        className={cn(
-                          'group/entry flex w-full items-center gap-3 rounded-xl bg-background px-3.5 py-3 text-left transition-colors hover:bg-background/80',
-                          entryHidden && 'opacity-50'
-                        )}
-                      >
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setEditingEntry({
-                              sectionType: section.type,
-                              sectionId: section.id,
-                              entryId: entry.id,
-                            })
-                          }
-                          className="min-w-0 flex-1 text-left"
-                        >
-                          <p className="truncate text-sm font-medium">{entry.title}</p>
-                          {entry.subtitle && (
-                            <p className="truncate text-xs text-muted-foreground">
-                              {entry.subtitle}
-                            </p>
+        <div>
+          {experienceMeta}
+          <div className="space-y-2">
+            <DndContext
+              id={dndId}
+              sensors={sectionSensors}
+              collisionDetection={closestCenter}
+              onDragEnd={(event) => handleEntryDragEnd(section.type, event)}
+              modifiers={[restrictToVerticalAxis, restrictToParentElement]}
+            >
+              <SortableContext items={entryIds} strategy={verticalListSortingStrategy}>
+                <div className="space-y-2 pl-5">
+                  {entries.map((entry) => {
+                    const entryHidden = entry.isVisible === false;
+                    return (
+                      <SortableEntryCard key={entry.id} id={entry.id}>
+                        <div
+                          className={cn(
+                            'group/entry flex w-full items-center gap-3 rounded-xl bg-background px-3.5 py-3 text-left transition-colors hover:bg-background/80',
+                            entryHidden && 'opacity-50'
                           )}
-                        </button>
-                        {entry.meta && (
-                          <span className="shrink-0 text-xs text-muted-foreground/70">
-                            {entry.meta}
-                          </span>
-                        )}
-                        <span
-                          role="button"
-                          tabIndex={0}
-                          onClick={(e) => toggleEntryVisibility(e, section.type, entry.id)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault();
-                              toggleEntryVisibility(
-                                e as unknown as React.MouseEvent,
-                                section.type,
-                                entry.id
-                              );
+                        >
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setEditingEntry({
+                                sectionType: section.type,
+                                sectionId: section.id,
+                                entryId: entry.id,
+                              })
                             }
-                          }}
-                          className={cn(
-                            'flex h-6 w-6 shrink-0 items-center justify-center rounded transition-colors',
-                            'opacity-0 focus-visible:opacity-100 group-hover/entry:opacity-100',
-                            entryHidden
-                              ? 'text-muted-foreground opacity-100'
-                              : 'text-muted-foreground/40 hover:text-muted-foreground'
+                            className="min-w-0 flex-1 text-left"
+                          >
+                            <p className="truncate text-sm font-medium">{entry.title}</p>
+                            {entry.subtitle && (
+                              <p className="truncate text-xs text-muted-foreground">
+                                {entry.subtitle}
+                              </p>
+                            )}
+                          </button>
+                          {entry.meta && (
+                            <span className="shrink-0 text-xs text-muted-foreground/70">
+                              {entry.meta}
+                            </span>
                           )}
-                          title={entryHidden ? 'Show on resume' : 'Hide from resume'}
-                        >
-                          {entryHidden ? (
-                            <EyeOff className="h-3.5 w-3.5" />
-                          ) : (
-                            <Eye className="h-3.5 w-3.5" />
-                          )}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={(e) => requestEntryDelete(e, section.type, entry)}
-                          className={cn(
-                            'flex h-6 w-6 shrink-0 items-center justify-center rounded transition-colors',
-                            'opacity-0 focus-visible:opacity-100 group-hover/entry:opacity-100',
-                            'text-muted-foreground/40 hover:text-destructive'
-                          )}
-                          title={`Delete ${singularName.toLowerCase()}`}
-                          aria-label={`Delete ${entry.title}`}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setEditingEntry({
-                              sectionType: section.type,
-                              sectionId: section.id,
-                              entryId: entry.id,
-                            })
-                          }
-                          className="shrink-0"
-                          aria-label="Edit entry"
-                        >
-                          <ChevronDown className="h-3.5 w-3.5 -rotate-90 text-muted-foreground/40 transition-colors group-hover/entry:text-muted-foreground" />
-                        </button>
-                      </div>
-                    </SortableEntryCard>
-                  );
-                })}
-              </div>
-            </SortableContext>
-          </DndContext>
-          <button
-            type="button"
-            onClick={() =>
-              setEditingEntry({
-                sectionType: section.type,
-                sectionId: section.id,
-                entryId: 'new',
-              })
-            }
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-background py-2.5 text-xs text-muted-foreground transition-colors hover:bg-background/80 hover:text-foreground"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Add {singularName}
-          </button>
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            onClick={(e) => toggleEntryVisibility(e, section.type, entry.id)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                toggleEntryVisibility(
+                                  e as unknown as React.MouseEvent,
+                                  section.type,
+                                  entry.id
+                                );
+                              }
+                            }}
+                            className={cn(
+                              'flex h-6 w-6 shrink-0 items-center justify-center rounded transition-colors',
+                              'opacity-0 focus-visible:opacity-100 group-hover/entry:opacity-100',
+                              entryHidden
+                                ? 'text-muted-foreground opacity-100'
+                                : 'text-muted-foreground/40 hover:text-muted-foreground'
+                            )}
+                            title={entryHidden ? 'Show on resume' : 'Hide from resume'}
+                          >
+                            {entryHidden ? (
+                              <EyeOff className="h-3.5 w-3.5" />
+                            ) : (
+                              <Eye className="h-3.5 w-3.5" />
+                            )}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => requestEntryDelete(e, section.type, entry)}
+                            className={cn(
+                              'flex h-6 w-6 shrink-0 items-center justify-center rounded transition-colors',
+                              'opacity-0 focus-visible:opacity-100 group-hover/entry:opacity-100',
+                              'text-muted-foreground/40 hover:text-destructive'
+                            )}
+                            title={`Delete ${singularName.toLowerCase()}`}
+                            aria-label={`Delete ${entry.title}`}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setEditingEntry({
+                                sectionType: section.type,
+                                sectionId: section.id,
+                                entryId: entry.id,
+                              })
+                            }
+                            className="shrink-0"
+                            aria-label="Edit entry"
+                          >
+                            <ChevronDown className="h-3.5 w-3.5 -rotate-90 text-muted-foreground/40 transition-colors group-hover/entry:text-muted-foreground" />
+                          </button>
+                        </div>
+                      </SortableEntryCard>
+                    );
+                  })}
+                </div>
+              </SortableContext>
+            </DndContext>
+            <button
+              type="button"
+              onClick={() =>
+                setEditingEntry({
+                  sectionType: section.type,
+                  sectionId: section.id,
+                  entryId: 'new',
+                })
+              }
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-background py-2.5 text-xs text-muted-foreground transition-colors hover:bg-background/80 hover:text-foreground"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add {singularName}
+            </button>
+          </div>
         </div>
       );
     },
-    [getEntries, sectionSensors, handleEntryDragEnd, toggleEntryVisibility, requestEntryDelete]
+    [
+      getEntries,
+      sectionSensors,
+      handleEntryDragEnd,
+      toggleEntryVisibility,
+      requestEntryDelete,
+      draftProfile.totalExperience,
+      draftProfile.totalExperienceVisible,
+      draftProfile.totalExperienceShowYears,
+      draftProfile.totalExperienceShowMonths,
+      draftProfile.workExperiences,
+      handleTotalExperiencePreview,
+      handleTotalExperiencePersisted,
+      handleTotalExperienceVisibleChange,
+      handleTotalExperienceUnitsChange,
+    ]
   );
 
   /** Render a section editor with autoEditId for focused entry editing */
@@ -963,6 +1036,14 @@ export function AllSectionsEditor() {
             experiences={draftProfile.workExperiences}
             profileId={draftProfile.id}
             onUpdate={(workExperiences) => handleInlineUpdate({ workExperiences })}
+            totalExperience={draftProfile.totalExperience}
+            totalExperienceVisible={draftProfile.totalExperienceVisible}
+            totalExperienceShowYears={draftProfile.totalExperienceShowYears}
+            totalExperienceShowMonths={draftProfile.totalExperienceShowMonths}
+            onTotalExperiencePreview={handleTotalExperiencePreview}
+            onTotalExperiencePersisted={handleTotalExperiencePersisted}
+            onTotalExperienceVisibleChange={handleTotalExperienceVisibleChange}
+            onTotalExperienceUnitsChange={handleTotalExperienceUnitsChange}
             onEditingStateChange={handleInlineEditingChange}
             embedded
           />

@@ -39,6 +39,7 @@ import {
   ONBOARDING_SURFACE,
   ONBOARDING_SURFACE_PAD,
 } from '@/lib/onboarding-ui';
+import { useConnectExternalAccount } from '@/lib/hooks/use-connect-external-account';
 import { cn } from '@/lib/utils';
 
 type TileStatus = 'idle' | 'editing' | 'connecting' | 'importing' | 'connected' | 'error';
@@ -227,6 +228,7 @@ export function ConstellationField({
   onPlatformDisconnected,
 }: ConstellationFieldProps) {
   const { user, isLoaded: isUserLoaded } = useUser();
+  const connectExternalAccount = useConnectExternalAccount();
   const reduceMotion = useReducedMotion();
   const fieldRef = useRef<HTMLDivElement>(null);
   const oauthAutoTried = useRef<Partial<Record<OAuthPlatformId, boolean>>>(
@@ -471,25 +473,25 @@ export function ConstellationField({
     setActiveId(platform.id);
     try {
       await onBeforeOAuthRedirect?.();
-      const externalAccount = await user.createExternalAccount({
-        strategy: platform.oauthStrategy,
-        redirectUrl: window.location.href,
-      });
-      const url = externalAccount?.verification?.externalVerificationRedirectURL;
-      if (url) {
-        window.location.href = url.toString();
+      const result = await connectExternalAccount(platform.oauthStrategy);
+      if (result.status === 'redirected') {
         return;
       }
-      patch(platform.id, { status: 'editing', error: 'Could not start OAuth' });
+      if (result.status === 'already_connected') {
+        await runOAuthImport(platform);
+        return;
+      }
+      if (result.status === 'cancelled') {
+        patch(platform.id, { status: 'editing', error: undefined });
+        setActiveId(platform.id);
+        return;
+      }
+      patch(platform.id, { status: 'editing', error: result.message });
+      setActiveId(platform.id);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes('already connected')) {
-        await user.reload();
-        await runOAuthImport(platform);
-      } else {
-        patch(platform.id, { status: 'editing', error: msg });
-        setActiveId(platform.id);
-      }
+      patch(platform.id, { status: 'editing', error: msg });
+      setActiveId(platform.id);
     }
   };
 

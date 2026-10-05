@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 
 import { db } from '@/lib/db';
+import { interactiveTransactionOptions } from '@/lib/db-transaction';
 import { handleApiError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 
@@ -51,7 +52,7 @@ export async function PATCH(_request: Request, context: RouteContext) {
           },
         },
       });
-    });
+    }, interactiveTransactionOptions);
 
     resumeActivationLogger.info('Activated resume', {
       userId: user.id,

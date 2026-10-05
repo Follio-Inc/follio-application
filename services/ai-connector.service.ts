@@ -17,6 +17,7 @@ import {
 } from '@/lib/ai-connector/operations';
 import { toConnectorProfileView } from '@/lib/ai-connector/profile-view';
 import { db } from '@/lib/db';
+import { interactiveTransactionOptions } from '@/lib/db-transaction';
 import { Errors } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { normalizeCurrentDates } from '@/lib/validations';
@@ -416,7 +417,7 @@ export async function applyDraft(userId: string, draftId: string) {
       where: { id: draft.id },
       data: { status: 'APPLIED', appliedAt: new Date() },
     });
-  });
+  }, interactiveTransactionOptions);
 
   connectorLogger.info('Applied AI connector draft', {
     userId,

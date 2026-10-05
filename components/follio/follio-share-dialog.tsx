@@ -109,7 +109,7 @@ export function FollioShareDialog({ identity, qrSvg, open, onOpenChange }: Folli
             ) : (
               <UserRoundPlus className="h-4 w-4" aria-hidden />
             )}
-            {saved ? 'Added to contacts' : 'Save contact'}
+            {saved ? 'Contact card ready' : 'Save contact'}
           </Button>
         </div>
       </DialogContent>
