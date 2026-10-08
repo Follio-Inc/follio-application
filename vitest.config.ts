@@ -15,12 +15,13 @@ export default defineConfig({
     // Cap the worker pool. The default is one worker per core, and each one
     // loads Vite plus the TypeScript compiler; the Developer Platform's
     // drift-scan tests additionally parse the ~670-file source tree inside
-    // their worker (PLATFORM_TODO items 5–8), which on a many-core machine put
+    // their worker (PLATFORM_TODO items 5–8). On a many-core machine that put
     // the run over the OS memory limit and killed unrelated workers at
-    // startup. A cap of six keeps peak memory bounded and costs a couple of
-    // seconds locally; CI runners have fewer cores than this, so it changes
-    // nothing there.
-    maxWorkers: 6,
+    // startup, so the pool is bounded rather than sized by core count. Four
+    // fits an 8 GB machine with other applications open and costs a few
+    // seconds; CI runners have fewer cores than this, so it changes nothing
+    // there.
+    maxWorkers: 4,
     include: ['**/*.test.ts', '**/*.test.tsx'],
     exclude: [
       'node_modules',

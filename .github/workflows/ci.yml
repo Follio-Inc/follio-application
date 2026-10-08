@@ -121,3 +121,67 @@ jobs:
       - name: Run npm audit
         run: npm audit --audit-level=high
         continue-on-error: true
+
+  drift:
+    name: Developer Platform Drift
+    runs-on: ubuntu-latest
+    # Warning-only, per PLATFORM_TODO item 9: this job reports drift and can
+    # never gate the build. `continue-on-error` is at the job level so a broken
+    # scanner cannot fail the run either — it still shows red here and
+    # annotates the run, but nobody is blocked while it is fixed. Drift itself
+    # does not depend on that: `npm run platform:scan` exits 0 when it finds
+    # drift (item 4), so only a genuine execution failure exits non-zero, and
+    # the two stay distinguishable.
+    continue-on-error: true
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # No `prisma generate` step: the scanner's whole import closure is
+      # node:fs, node:path and typescript, so it needs no generated client.
+      # Leaving it out keeps a Prisma problem from looking like drift.
+      - name: Run Developer Platform drift scan
+        run: |
+          set +e
+          REPORT="$RUNNER_TEMP/drift-report.txt"
+          npm run platform:scan > "$REPORT" 2>&1
+          status=$?
+          cat "$REPORT"
+
+          {
+            echo "## Developer Platform drift scan"
+            echo
+            if [ "$status" -ne 0 ]; then
+              echo "**The scan failed to run** (exit $status) — an execution failure, not a drift finding. The scan exits 0 when it finds drift, so this is a broken command, setup or scanner."
+            elif grep -q '^No drift found' "$REPORT"; then
+              echo "**No drift found** — the coverage map matches the repository."
+            else
+              echo "**Drift found.** Advisory only: this job does not gate the build."
+            fi
+            echo
+            echo "<details><summary>Full report</summary>"
+            echo
+            echo '```text'
+            cat "$REPORT"
+            echo '```'
+            echo
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$status" -ne 0 ]; then
+            echo "::error title=Drift scan failed to run::npm run platform:scan exited $status. This is an execution failure, not drift."
+            exit "$status"
+          fi
+
+          if ! grep -q '^No drift found' "$REPORT"; then
+            echo "::warning title=Developer Platform drift::The drift scan reported findings. See the job summary. This does not gate the build."
+          fi
