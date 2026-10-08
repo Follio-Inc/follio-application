@@ -19,6 +19,21 @@ import type { ExcludedPath, PlatformFeature } from './types';
  * - Record a known gap in `notes` rather than leaving it implied.
  * - `lab` names an *intended* lab. No labs exist before item 20, so only the
  *   feature whose lab is already planned carries one.
+ *
+ * Why some tests stay `uncategorized` (item 5a). These are not gaps to close by
+ * inventing ownership — they belong to no owner-facing feature:
+ * - The Developer Platform's own tests: `devtools-overlay`, `live-qa-catalog`,
+ *   `platform-coverage-map`, `platform-scan`, `platform-scan-tests`. They cover
+ *   `_admin-panel/`, which is operator tooling, not product.
+ * - Shared infrastructure no single feature owns: `errors`, `html-utils`,
+ *   `logger`, `prisma-connection`, `url`, `utils`, `validations`. Attributing
+ *   `lib/utils.ts` to one feature would be a fiction every other feature pays
+ *   for the next time the drift scan runs.
+ *
+ * Separately, `__tests__/agents/runtime.test.ts` stays `unlisted`: it tests the
+ * shared `lib/agents` runtime and reaches `portfolio` only because it uses
+ * portfolio agents as fixtures. Listing it under portfolio would claim coverage
+ * the test does not provide.
  */
 export const COVERAGE_MAP: PlatformFeature[] = [
   {
@@ -32,7 +47,9 @@ export const COVERAGE_MAP: PlatformFeature[] = [
       'app/onboarding/import/page.tsx',
       'services/import/resume-ai.service.ts',
       'services/agents/resume-parse',
-      'lib/agents',
+      // `lib/agents` is deliberately NOT claimed: the resume-parse agent runs on
+      // that runtime, but so do the portfolio and snap-view agents. A feature
+      // owns what implements it, not the shared machinery it runs on.
     ],
     category: 'Resume import',
     status: 'shipped',
@@ -59,6 +76,12 @@ export const COVERAGE_MAP: PlatformFeature[] = [
       'app/api/photos',
       'lib/total-experience.ts',
       'lib/skills',
+      // Section-editing implementation the builder is actually built from.
+      'lib/document-builder',
+      'lib/rich-text/bullet-mode.ts',
+      'lib/resume/header-layout.ts',
+      'lib/contact',
+      'lib/hooks/use-contact-manager.ts',
     ],
     category: 'Builder',
     status: 'shipped',
@@ -67,10 +90,14 @@ export const COVERAGE_MAP: PlatformFeature[] = [
       '__tests__/entry-edit-guard.test.ts',
       '__tests__/bullet-mode.test.ts',
       '__tests__/contact-entries.test.ts',
-      '__tests__/resume-contact.test.ts',
+      '__tests__/contact-source-label.test.ts',
       '__tests__/resume-header-layout.test.ts',
       '__tests__/total-experience.test.ts',
       '__tests__/skill-groups.test.ts',
+      // Both cover lib/hooks/use-contact-manager, the builder's contact editor —
+      // not the resume parser, where their names suggest they belong.
+      '__tests__/remove-email-from-list.test.ts',
+      '__tests__/remove-phone-from-list.test.ts',
     ],
     pathways: [],
     notes:
@@ -87,6 +114,8 @@ export const COVERAGE_MAP: PlatformFeature[] = [
       'lib/visibility.ts',
       'lib/public-resume.ts',
       'lib/share-token.ts',
+      'lib/share',
+      'lib/shareable-resume-link.ts',
       'app/api/profile/share-token/route.ts',
       'app/api/profile/unlisted-key/route.ts',
       'app/r/[key]/page.tsx',
@@ -113,6 +142,8 @@ export const COVERAGE_MAP: PlatformFeature[] = [
       'app/api/cover-letters',
       'app/cl/[key]/page.tsx',
       'app/cover-letter-preview/[id]',
+      'lib/cover-letter',
+      'components/document-dashboard',
       'services/cover-letter.service.ts',
       'services/cover-letter-export.service.ts',
     ],
@@ -134,7 +165,11 @@ export const COVERAGE_MAP: PlatformFeature[] = [
       'app/[username]',
       'app/me',
       'components/public-profile-chrome.tsx',
+      'lib/public-profile-chrome.ts',
       'lib/follio-identity',
+      'lib/resume/highlights.ts',
+      'lib/resume/presentation.ts',
+      'lib/resume/contact.ts',
       'lib/features.ts',
     ],
     category: 'Public surfaces',
@@ -142,9 +177,11 @@ export const COVERAGE_MAP: PlatformFeature[] = [
     unitTests: [
       '__tests__/public-profile-chrome.test.ts',
       '__tests__/follio-peek.test.ts',
-      '__tests__/resolve-user.test.ts',
       '__tests__/resume-highlights.test.ts',
       '__tests__/follio-identity.test.ts',
+      '__tests__/follio-voice.test.ts',
+      '__tests__/resume-presentation.test.ts',
+      '__tests__/resume-contact.test.ts',
     ],
     pathways: ['links.public-page'],
     notes:
@@ -174,17 +211,24 @@ export const COVERAGE_MAP: PlatformFeature[] = [
     name: 'Sign-in, sign-up and the workspace gate',
     userDescription:
       'Creates an account or signs in — by email or an OAuth provider — and gets sent back to wherever they were heading.',
-    codeLocations: ['app/sign-in', 'app/sign-up', 'middleware.ts', 'lib/active-profile.ts'],
+    codeLocations: [
+      'app/sign-in',
+      'app/sign-up',
+      'middleware.ts',
+      'lib/active-profile.ts',
+      'lib/clerk-env.ts',
+    ],
     category: 'Account',
     status: 'shipped',
     unitTests: [
       '__tests__/middleware.test.ts',
       '__tests__/clerk-env.test.ts',
       '__tests__/active-profile.test.ts',
+      '__tests__/onboarding-hard-gate.test.ts',
     ],
     pathways: ['auth.dashboard-gate'],
     notes:
-      'Clerk-hosted. Live QA never drives the sign-in UI; it replays a captured storage state.',
+      'Clerk-hosted. Live QA never drives the sign-in UI; it replays a captured storage state. onboarding-hard-gate moved here in item 5a: despite its name it asserts on the redirect machinery (lib/active-profile.ts, components/client-redirect.tsx, the dashboard shell), which is the access layer — it reads no app/onboarding file at all.',
   },
   {
     id: 'settings-account',
@@ -203,7 +247,8 @@ export const COVERAGE_MAP: PlatformFeature[] = [
     unitTests: [
       '__tests__/delete-account.test.ts',
       '__tests__/clear-account-client-state.test.ts',
-      '__tests__/profile-url.test.ts',
+      '__tests__/connect-external-account.test.ts',
+      '__tests__/resolve-user.test.ts',
     ],
     pathways: [],
   },
@@ -218,19 +263,21 @@ export const COVERAGE_MAP: PlatformFeature[] = [
       'app/onboarding',
       'app/api/onboarding',
       'lib/onboarding',
+      'lib/onboarding-ui.ts',
       'components/onboarding',
     ],
     category: 'Onboarding',
     status: 'shipped',
     unitTests: [
-      '__tests__/onboarding-hard-gate.test.ts',
       '__tests__/onboarding-no-review.test.ts',
       '__tests__/onboarding-resume-start-choice.test.ts',
       '__tests__/onboarding-skip-next.test.ts',
       '__tests__/onboarding-summary-overwrite.test.ts',
       '__tests__/onboarding-ui.test.ts',
       '__tests__/onboarding-resume-construction.test.ts',
-      '__tests__/resume-template-preview-profile.test.ts',
+      '__tests__/project-import-prefill.test.ts',
+      '__tests__/review-import.test.ts',
+      '__tests__/lab-import-constellation.test.ts',
     ],
     pathways: ['onboarding.blank'],
     notes:
@@ -246,6 +293,9 @@ export const COVERAGE_MAP: PlatformFeature[] = [
     codeLocations: [
       'app/(dashboard)/resumes',
       'app/(dashboard)/dashboard/page.tsx',
+      'app/(dashboard)/dashboard/dashboard-client.tsx',
+      'app/(dashboard)/dashboard/dashboard-resumes-section.tsx',
+      'components/document-dashboard',
       'app/api/resumes',
       'lib/resume-title.ts',
       'lib/resume/new-resume-defaults.ts',
@@ -272,26 +322,27 @@ export const COVERAGE_MAP: PlatformFeature[] = [
       'app/(dashboard)/builder/components/designer-panel.tsx',
       'app/(dashboard)/builder/components/resume-design-panel.tsx',
       'app/(dashboard)/builder/components/resume-template-gallery.tsx',
+      'app/(dashboard)/builder/components/resume-zoom-modal.tsx',
       'app/api/profile/resume-design',
       'lib/resume/templates',
       'lib/resume-design.ts',
+      'lib/resume/atelier.ts',
+      'lib/resume/page-layout.ts',
       'app/preview/[templateId]',
     ],
     category: 'Builder',
     status: 'shipped',
     unitTests: [
       '__tests__/resume-templates.test.ts',
-      '__tests__/template-switch.test.ts',
       '__tests__/resume-fonts.test.ts',
       '__tests__/resume-page-layout.test.ts',
       '__tests__/resume-zoom-modal.test.ts',
       '__tests__/resume-atelier.test.ts',
-      '__tests__/resume-presentation.test.ts',
-      '__tests__/minimal-studio-utils.test.ts',
+      '__tests__/resume-template-preview-profile.test.ts',
     ],
     pathways: ['builder.designer-templates'],
     notes:
-      'Pathway moved here from resume-builder in item 2 — it exercises the Designer panel, not section editing.',
+      'Pathway moved here from resume-builder in item 2 — it exercises the Designer panel, not section editing. Item 5a moved template-switch and minimal-studio-utils to portfolio: the import graph showed both test lib/portfolio template code, not resume templates.',
   },
   {
     id: 'download-export',
@@ -302,6 +353,8 @@ export const COVERAGE_MAP: PlatformFeature[] = [
       'app/(dashboard)/builder/components/download-dialog.tsx',
       'app/api/export',
       'lib/document-download',
+      'lib/document-pdf',
+      'lib/hooks/use-resume-download.ts',
       'services/export.service.ts',
       'services/document-pdf.service.ts',
       'app/resume-preview/[id]',
@@ -339,16 +392,14 @@ export const COVERAGE_MAP: PlatformFeature[] = [
       'services/import',
       'services/github.service.ts',
       'services/github-enhanced.service.ts',
+      'lib/import/profile-url.ts',
     ],
     category: 'Data sources',
     status: 'shipped',
     unitTests: [
       '__tests__/github-service.test.ts',
-      '__tests__/connect-external-account.test.ts',
       '__tests__/linkedin-profile-url.test.ts',
-      '__tests__/contact-source-label.test.ts',
-      '__tests__/project-import-prefill.test.ts',
-      '__tests__/review-import.test.ts',
+      '__tests__/profile-url.test.ts',
     ],
     pathways: [],
     notes:
@@ -385,7 +436,7 @@ export const COVERAGE_MAP: PlatformFeature[] = [
     codeLocations: ['services/agents/resume-parse/rewrite-for-follio.ts'],
     category: 'AI',
     status: 'shipped',
-    unitTests: ['__tests__/follio-voice.test.ts', '__tests__/agents/follio-voice.test.ts'],
+    unitTests: ['__tests__/agents/follio-voice.test.ts'],
     pathways: [],
     notes:
       'No route or page of its own — it runs as a step inside the resume-parse agent, so it ships only via resume-import-ai. MAX_TOKENS key: follioVoice.',
@@ -397,6 +448,7 @@ export const COVERAGE_MAP: PlatformFeature[] = [
     codeLocations: [
       'app/api/profile/[handle]/snap-view',
       'services/snap-view.service.ts',
+      'services/agents/snap-view',
       'types/snap-view.ts',
     ],
     category: 'AI',
@@ -485,7 +537,9 @@ export const COVERAGE_MAP: PlatformFeature[] = [
       'app/api/portfolio',
       'app/(dashboard)/dashboard/portfolio/edit',
       'services/portfolio',
+      'services/agents/portfolio',
       'lib/portfolio',
+      'lib/portfolio-appearance.ts',
       'lib/features.ts',
     ],
     category: 'Portfolio',
@@ -498,10 +552,14 @@ export const COVERAGE_MAP: PlatformFeature[] = [
       '__tests__/portfolio-resolve-copy.test.ts',
       '__tests__/portfolio-rich-html.test.ts',
       '__tests__/features.test.ts',
+      '__tests__/template-switch.test.ts',
+      '__tests__/minimal-studio-utils.test.ts',
+      '__tests__/agents/narrative-prompt.test.ts',
+      '__tests__/agents/section-write.test.ts',
     ],
     pathways: [],
     notes:
-      'Off unless NEXT_PUBLIC_PORTFOLIO_ENABLED=true. Six-stage pipeline at services/portfolio/pipeline/stage-a..f. The only feature flag in lib/features.ts.',
+      'Off unless NEXT_PUBLIC_PORTFOLIO_ENABLED=true. Six-stage pipeline at services/portfolio/pipeline/stage-a..f. The only feature flag in lib/features.ts. template-switch and minimal-studio-utils moved here in item 5a — both test lib/portfolio template code. __tests__/agents/runtime.test.ts is deliberately NOT listed: it tests the shared lib/agents runtime and only reaches portfolio because it uses portfolio agents as fixtures.',
   },
 ];
 
