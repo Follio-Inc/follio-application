@@ -1,6 +1,7 @@
+import { scanLiveQaPathways, type PathwayScanOptions } from './pathways';
 import { scanProductSurface, type SurfaceScanOptions } from './surface';
 import { scanTestAttribution, type TestScanOptions } from './tests';
-import type { DriftReport, SurfaceScanReport, TestScanReport } from './types';
+import type { DriftReport, PathwayScanReport, SurfaceScanReport, TestScanReport } from './types';
 
 /**
  * Assembling and rendering the drift report.
@@ -13,15 +14,16 @@ import type { DriftReport, SurfaceScanReport, TestScanReport } from './types';
  * same report without going through the CLI.
  */
 
-export type DriftScanOptions = SurfaceScanOptions & TestScanOptions;
+export type DriftScanOptions = SurfaceScanOptions & TestScanOptions & PathwayScanOptions;
 
-/** Runs every signal implemented so far. Items 6–8 add to this list. */
+/** Runs every signal implemented so far. Items 7–8 add to this list. */
 export function runDriftScan(options: DriftScanOptions = {}): DriftReport {
   const surface = scanProductSurface(options);
   const tests = scanTestAttribution(options);
+  const pathways = scanLiveQaPathways(options);
 
   return {
-    signals: [surface, tests],
+    signals: [surface, tests, pathways],
     // Drift means the map contradicts the repository. Unmapped surface and a
     // `unitTests` entry the graph cannot support are both contradictions.
     // `uncategorized` and `unlisted` tests are gaps, tracked but not failures.
@@ -126,10 +128,56 @@ function formatTestSignal(report: TestScanReport): string[] {
   return lines;
 }
 
+function formatPathwaySignal(report: PathwayScanReport): string[] {
+  const { summary } = report;
+  const lines = [
+    'Signal: Live QA pathways vs coverage map',
+    `  pathways       ${summary.total}`,
+    `  mapped         ${summary.mapped}   (a feature claims it)`,
+    `  unmapped       ${summary.unmapped}   (catalogued, no feature claims it)`,
+    `  missing spec   ${summary.missingSpec}   (catalog entry, no file on disk)`,
+    `  orphan specs   ${summary.orphanSpecs}   (file on disk, no catalog entry)`,
+  ];
+
+  if (report.stale.length > 0) {
+    lines.push('', `Stale coverage-map pathway references (${report.stale.length}):`);
+    for (const entry of report.stale) {
+      lines.push(`  ${entry.featureId}  ←  ${entry.pathwayId}  (${entry.reason})`);
+    }
+  }
+
+  if (report.missingSpec.length > 0) {
+    lines.push('', `Catalog entries with no spec file (${report.missingSpec.length}):`);
+    for (const finding of report.missingSpec) {
+      lines.push(`  ${finding.id}  →  ${finding.spec}`);
+    }
+  }
+
+  if (report.orphanSpecs.length > 0) {
+    lines.push('', `Spec files absent from the catalog (${report.orphanSpecs.length}):`);
+    for (const specPath of report.orphanSpecs) lines.push(`  ${specPath}`);
+  }
+
+  if (report.unmapped.length > 0) {
+    lines.push('', `Pathways no feature claims (${report.unmapped.length}):`);
+    for (const finding of report.unmapped) {
+      lines.push(`  ${finding.id}  (area ${finding.area})`);
+    }
+  }
+
+  lines.push(
+    '',
+    `Features with no Live QA pathway (${report.featuresWithoutPathway.length} of ${summary.featuresWithPathway + summary.featuresWithoutPathway}) — recorded gaps, not drift:`
+  );
+  for (const featureId of report.featuresWithoutPathway) lines.push(`  ${featureId}`);
+
+  return lines;
+}
+
 function formatSignal(signal: DriftReport['signals'][number]): string[] {
-  return signal.signal === 'product-surface'
-    ? formatSurfaceSignal(signal)
-    : formatTestSignal(signal);
+  if (signal.signal === 'product-surface') return formatSurfaceSignal(signal);
+  if (signal.signal === 'test-attribution') return formatTestSignal(signal);
+  return formatPathwaySignal(signal);
 }
 
 /** Renders the report as the text the CLI prints. */

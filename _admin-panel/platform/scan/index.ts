@@ -2,6 +2,8 @@ export { covers, discoverProductSurface, scanProductSurface } from './surface';
 export type { DiscoveredSurface, SurfaceScanOptions } from './surface';
 export { discoverTestFiles, scanTestAttribution } from './tests';
 export type { TestScanOptions } from './tests';
+export { discoverPathwaySpecs, scanLiveQaPathways, specPathFor } from './pathways';
+export type { PathwayScanOptions } from './pathways';
 export {
   barrelTargets,
   createReferenceReader,
@@ -15,6 +17,11 @@ export type { DriftScanOptions } from './report';
 export type {
   DriftReport,
   DriftSignalReport,
+  PathwayClassification,
+  PathwayFinding,
+  PathwayScanReport,
+  PathwayScanSummary,
+  StalePathwayReference,
   StaleTestReference,
   SurfaceClassification,
   SurfaceFinding,

@@ -143,14 +143,74 @@ export type TestScanReport = {
   stale: StaleTestReference[];
 };
 
+/** Whether a catalog pathway has an owner in the coverage map. */
+export type PathwayClassification = 'mapped' | 'unmapped';
+
+/** One Live QA pathway, as the catalog defines it and the map claims it. */
+export type PathwayFinding = {
+  /** `LIVE_QA_PATHWAYS` id. */
+  id: string;
+  /** `spec` exactly as the catalog records it, relative to the Live QA root. */
+  spec: string;
+  /** Repo-relative spec path, or null when the file is absent — itself drift. */
+  specPath: string | null;
+  area: string;
+  requiresAuth: boolean;
+  stability: string;
+  /** Feature ids whose `pathways` list this id, sorted. */
+  claimedBy: string[];
+  classification: PathwayClassification;
+};
+
+/** A coverage-map `pathways` entry naming an id the catalog does not define. */
+export type StalePathwayReference = {
+  featureId: string;
+  pathwayId: string;
+  reason: 'unknown-pathway';
+};
+
+export type PathwayScanSummary = {
+  total: number;
+  mapped: number;
+  unmapped: number;
+  /** Catalog entries whose spec file is missing from disk. */
+  missingSpec: number;
+  /** `*.spec.ts` files under `pathways/` with no catalog entry. */
+  orphanSpecs: number;
+  featuresWithPathway: number;
+  featuresWithoutPathway: number;
+};
+
+/** Signal 3: the Live QA catalog vs the coverage map and the specs on disk. */
+export type PathwayScanReport = {
+  signal: 'live-qa-pathways';
+  summary: PathwayScanSummary;
+  /** Every catalog pathway, sorted by id. The lists below are sorted subsets. */
+  pathways: PathwayFinding[];
+  mapped: PathwayFinding[];
+  unmapped: PathwayFinding[];
+  missingSpec: PathwayFinding[];
+  /** Repo-relative spec paths the catalog does not mention, sorted. */
+  orphanSpecs: string[];
+  stale: StalePathwayReference[];
+  /**
+   * Features with no pathway at all, sorted.
+   *
+   * Reported, never counted as drift. Most areas genuinely have no browser
+   * coverage yet, and inventing ownership to shrink this list would turn an
+   * honest gap into a false claim.
+   */
+  featuresWithoutPathway: string[];
+};
+
 /**
  * One signal's findings.
  *
  * Discriminated by `signal`, so the CLI and formatter iterate signals rather
- * than knowing about any one of them. Items 6–8 add Live QA pathways, AI
- * stages, flags, Prisma models and reachability as further members.
+ * than knowing about any one of them. Items 7–8 add AI stages, flags, Prisma
+ * models and reachability as further members.
  */
-export type DriftSignalReport = SurfaceScanReport | TestScanReport;
+export type DriftSignalReport = SurfaceScanReport | TestScanReport | PathwayScanReport;
 
 /** The whole scan: every signal that ran, plus whether anything drifted. */
 export type DriftReport = {
