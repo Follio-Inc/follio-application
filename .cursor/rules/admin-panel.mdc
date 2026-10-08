@@ -12,20 +12,53 @@ alwaysApply: false
 
 Operator tooling lives in `_admin-panel/`, not in Follio product features.
 
+## Two developer surfaces during the transition
+
+There are deliberately **two** Developer Platform surfaces right now, and both must keep working:
+
+| Surface                        | Route              | Owns                                                                     | Status                                 |
+| ------------------------------ | ------------------ | ------------------------------------------------------------------------ | -------------------------------------- |
+| First Developer Platform       | `/admin/developer` | `modules/developer/` — health, suites, Live QA, resume reader, smoke      | Live and **unchanged**. Use this today. |
+| Developer Platform (rebuild)   | `/admin/platform`  | `platform/` — coverage map, drift scan, and the Tests / Drift / Labs shell | Shell only; sections fill in over items 11–24. |
+
+Rules while both exist:
+
+- Do **not** change `/admin/developer`, `modules/developer/ui/DevtoolsPanel.tsx`, `suites.ts` or
+  `suites-catalog.ts` to make the new platform easier to build. The old panel is retired in
+  `PLATFORM_TODO` item 25, not before, and its tests retire with it.
+- Do **not** use `DevtoolsPanel` as the design reference for the new platform.
+- The new platform's sections must say when they are empty. No zeroed counters, no sample data, and
+  no number that was not measured — see `platform/nav.ts`'s `status` and `plan` fields.
+
 ## Modules stay separate
 
 - `modules/developer/` — health, suites, Live QA, resume reader (AI lab), smoke
 - `modules/users/` — placeholder for future user monitoring
+- `platform/` — the rebuild: `coverage-map/` (inventory), `scan/` (drift signals),
+  `nav.ts` + `ui/` (shell)
 
-Do **not** import developer ↔ users. The shell only composes them via `_admin-panel/nav.ts`.
+Do **not** import developer ↔ users ↔ platform. The shell only composes them via
+`_admin-panel/nav.ts`.
+
+## Client vs server inside `platform/`
+
+- `platform/coverage-map/` and `platform/nav.ts` are **client-safe**: data and types, no Node APIs.
+- `platform/scan/` is **server-only**: it walks the filesystem and parses the tree with the
+  TypeScript compiler.
+- `platform/ui/` must never import `platform/scan/` or a `node:` module. `PlatformShell` is a
+  client component; server data belongs in a route shim that passes it down as props.
 
 ## When shipping features
 
 1. Update `modules/developer/suites-catalog.ts` / `smoke.ts` / `links.ts` / `live-qa/catalog.ts` / `ai/` as needed
-2. Thin shims only: `app/admin/(dashboard)/developer/page.tsx`, `app/api/admin/developer/*`
+2. Keep the coverage map current when a feature is added, changed or removed — `npm run platform:scan`
+   fails the map, not the repository
+3. Thin shims only: `app/admin/(dashboard)/developer/page.tsx`,
+   `app/admin/(dashboard)/platform/**/page.tsx` + `layout.tsx`, `app/api/admin/developer/*`
 
 ## Access
 
-- UI: `/admin/developer` (requires Admin table auth)
+- UI: `/admin/developer` and `/admin/platform` (both require Admin table auth — the `(dashboard)`
+  layout checks the `Admin` table and every page calls `requireAdmin()`)
 - Suite + Live QA runs: local only (`DEVTOOLS_ENABLED=true`, never in production)
 - Public must never reach these APIs without admin auth

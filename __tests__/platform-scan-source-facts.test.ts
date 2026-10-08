@@ -673,12 +673,13 @@ describe('drift report integration', { timeout: 30_000 }, () => {
 
     expect(surface?.signal === 'product-surface' && surface.summary).toEqual({
       // Item 8a widened route discovery from `app/api` to all of `app/`,
-      // which added the three `.well-known` OAuth handlers.
-      total: 149,
+      // which added the three `.well-known` OAuth handlers. Item 10 added the
+      // four Developer Platform pages, excluded by the `app/admin` entry.
+      total: 153,
       mapped: 130,
-      excluded: 19,
+      excluded: 23,
       unmapped: 0,
-      pages: 44,
+      pages: 48,
       routes: 105,
     });
   });
