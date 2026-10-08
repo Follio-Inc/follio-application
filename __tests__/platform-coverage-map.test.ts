@@ -11,7 +11,7 @@
  * test has no reason to load.
  */
 
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -19,30 +19,65 @@ import { describe, expect, it } from 'vitest';
 import { LIVE_QA_PATHWAYS } from '@/_admin-panel/modules/developer/live-qa/catalog';
 import {
   COVERAGE_MAP,
+  EXCLUDED,
   FEATURE_CATEGORIES,
   getFeature,
   listFeatures,
 } from '@/_admin-panel/platform/coverage-map';
 
-/** The five features item 1 seeds. Item 2 extends this; update it there. */
-const SEED_IDS = [
-  'resume-import-ai',
-  'resume-builder',
-  'resume-share-visibility',
-  'cover-letter',
-  'public-follio',
-];
-
 function resolveFromRepoRoot(relativePath: string): string {
   return path.join(process.cwd(), relativePath);
 }
 
+/**
+ * Walks a directory for files with the given basename.
+ *
+ * Hand-rolled rather than `readdirSync(dir, { recursive: true })` because CI
+ * pins Node 20, where that option is only available in later minors. Returns
+ * repo-relative POSIX paths so they compare directly against map entries.
+ */
+function findFilesNamed(startDir: string, basename: string): string[] {
+  const found: string[] = [];
+
+  const walk = (relativeDir: string): void => {
+    const entries = readdirSync(resolveFromRepoRoot(relativeDir), { withFileTypes: true });
+    for (const entry of entries) {
+      const relativePath = `${relativeDir}/${entry.name}`;
+      if (entry.isDirectory()) {
+        walk(relativePath);
+      } else if (entry.name === basename) {
+        found.push(relativePath);
+      }
+    }
+  };
+
+  walk(startDir);
+  return found.sort();
+}
+
+/** True when `claim` is the path itself or a directory containing it. */
+function claims(claim: string, targetPath: string): boolean {
+  return targetPath === claim || targetPath.startsWith(`${claim}/`);
+}
+
+/**
+ * Every route and page the product surface is made of.
+ *
+ * Item 2's done condition: each one is claimed by a feature or explicitly
+ * excluded. Discovered from disk, not listed here, so a new route shows up
+ * without anyone remembering to add it.
+ */
+function productSurfacePaths(): string[] {
+  return [...findFilesNamed('app', 'page.tsx'), ...findFilesNamed('app/api', 'route.ts')];
+}
+
 describe('coverage map', () => {
-  it('seeds exactly the five item-1 features with unique ids', () => {
+  it('registers unique ids across the whole inventory', () => {
     const ids = COVERAGE_MAP.map((feature) => feature.id);
 
     expect(new Set(ids).size).toBe(ids.length);
-    expect([...ids].sort()).toEqual([...SEED_IDS].sort());
+    // Item 2 filled the map out from the five item-1 seeds.
+    expect(COVERAGE_MAP.length).toBeGreaterThan(5);
   });
 
   it('resolves every id through the lookup helper', () => {
@@ -122,5 +157,59 @@ describe('coverage map', () => {
     const entry = await import('@/_admin-panel/platform/coverage-map');
     expect(entry.COVERAGE_MAP).toHaveLength(COVERAGE_MAP.length);
     expect(entry.getFeature('resume-import-ai')?.category).toBe('Resume import');
+    expect(entry.EXCLUDED.length).toBeGreaterThan(0);
+  });
+});
+
+describe('product surface coverage', () => {
+  it('finds the product surface on disk', () => {
+    // Guards the walker itself: if this returned nothing, the completeness
+    // check below would pass vacuously.
+    const pages = findFilesNamed('app', 'page.tsx');
+    const routes = findFilesNamed('app/api', 'route.ts');
+
+    expect(pages.length).toBeGreaterThan(40);
+    expect(routes.length).toBeGreaterThan(95);
+  });
+
+  it('claims or explicitly excludes every page and API route', () => {
+    const allClaims = COVERAGE_MAP.flatMap((feature) => feature.codeLocations);
+    const allExclusions = EXCLUDED.map((entry) => entry.path);
+
+    const unaccounted = productSurfacePaths().filter(
+      (surfacePath) =>
+        !allClaims.some((claim) => claims(claim, surfacePath)) &&
+        !allExclusions.some((exclusion) => claims(exclusion, surfacePath))
+    );
+
+    expect(
+      unaccounted,
+      `Unclaimed product surface — add a feature codeLocation or an EXCLUDED entry:\n${unaccounted.join('\n')}`
+    ).toEqual([]);
+  });
+
+  it('gives every exclusion a real path and a reason', () => {
+    expect(EXCLUDED.length).toBeGreaterThan(0);
+
+    for (const entry of EXCLUDED) {
+      expect(entry.path, 'exclusions must be repo-relative').not.toMatch(/^[./]/);
+      expect(
+        existsSync(resolveFromRepoRoot(entry.path)),
+        `EXCLUDED path does not exist: ${entry.path}`
+      ).toBe(true);
+      // A bare "not product" tells the next reader nothing.
+      expect(entry.reason.length, `EXCLUDED ${entry.path} needs a real reason`).toBeGreaterThan(30);
+    }
+  });
+
+  it('never both claims and excludes the same path', () => {
+    const allClaims = COVERAGE_MAP.flatMap((feature) => feature.codeLocations);
+
+    for (const entry of EXCLUDED) {
+      const conflicting = allClaims.filter(
+        (claim) => claims(entry.path, claim) || claims(claim, entry.path)
+      );
+      expect(conflicting, `EXCLUDED ${entry.path} is also claimed by a feature`).toEqual([]);
+    }
   });
 });

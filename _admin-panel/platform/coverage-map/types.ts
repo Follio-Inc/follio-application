@@ -80,3 +80,17 @@ export type PlatformFeature = {
   /** Anything a reader would otherwise get wrong — gaps, caveats, partial gating. */
   notes?: string;
 };
+
+/**
+ * A route or page deliberately outside the product inventory.
+ *
+ * The drift scan treats "not in the map" as a finding, so anything that should
+ * never have a feature needs an explicit entry here with a reason. Silence is
+ * not an exclusion — an unlisted, unclaimed route is drift.
+ */
+export type ExcludedPath = {
+  /** Repo-relative file or directory. A directory excludes everything under it. */
+  path: string;
+  /** Why this is not product. Written for someone deciding whether to re-include it. */
+  reason: string;
+};

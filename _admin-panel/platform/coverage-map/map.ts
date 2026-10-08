@@ -1,18 +1,24 @@
-import type { PlatformFeature } from './types';
+import type { ExcludedPath, PlatformFeature } from './types';
 
 /**
- * The coverage map.
+ * The coverage map — the owner-facing Follio inventory (PLATFORM_TODO item 2).
  *
- * Seeded with five features to prove the shape (PLATFORM_TODO item 1). The full
- * owner-facing inventory lands in item 2, and reachability classification in
- * item 3 — do not add either here.
+ * Reachability classification is item 3 and deliberately absent here. In
+ * particular the `lib/resume-parser/` tests are **not** attached to any feature:
+ * they cover a parser reachable only through an orphaned service, and listing
+ * them under AI resume import would assert coverage that does not exist.
  *
  * Rules for entries:
  * - `codeLocations` and `unitTests` are repo-relative and must exist on disk.
  *   `__tests__/platform-coverage-map.test.ts` enforces this.
+ * - A directory in `codeLocations` claims everything beneath it.
+ * - Overlapping claims are allowed and expected: `/onboarding/import` is both an
+ *   onboarding step and the resume-import entry point. Ownership is not exclusive.
  * - `pathways` must resolve to a real `LIVE_QA_PATHWAYS` id.
  * - `userDescription` describes what a person does, not how the code works.
  * - Record a known gap in `notes` rather than leaving it implied.
+ * - `lab` names an *intended* lab. No labs exist before item 20, so only the
+ *   feature whose lab is already planned carries one.
  */
 export const COVERAGE_MAP: PlatformFeature[] = [
   {
@@ -50,6 +56,7 @@ export const COVERAGE_MAP: PlatformFeature[] = [
       'app/(dashboard)/builder',
       'app/(dashboard)/builder/components/all-sections-editor.tsx',
       'app/api/profile',
+      'app/api/photos',
       'lib/total-experience.ts',
       'lib/skills',
     ],
@@ -65,9 +72,9 @@ export const COVERAGE_MAP: PlatformFeature[] = [
       '__tests__/total-experience.test.ts',
       '__tests__/skill-groups.test.ts',
     ],
-    pathways: ['builder.designer-templates'],
+    pathways: [],
     notes:
-      'Every section renders inline on /builder via all-sections-editor; there is no per-section route. Autosave has no unit coverage — entry-edit-guard covers change detection only.',
+      'Every section renders inline on /builder via all-sections-editor; there is no per-section route, and /builder/[section] is a redirect stub. Autosave has no unit coverage — entry-edit-guard covers change detection only. No Live QA pathway covers section editing; builder.designer-templates belongs to designer-templates.',
   },
   {
     id: 'resume-share-visibility',
@@ -105,6 +112,7 @@ export const COVERAGE_MAP: PlatformFeature[] = [
       'app/(dashboard)/cover-letter-builder',
       'app/api/cover-letters',
       'app/cl/[key]/page.tsx',
+      'app/cover-letter-preview/[id]',
       'services/cover-letter.service.ts',
       'services/cover-letter-export.service.ts',
     ],
@@ -123,6 +131,8 @@ export const COVERAGE_MAP: PlatformFeature[] = [
       'Shares one link that shows who they are, with doors through to their resume, work, links and highlights.',
     codeLocations: [
       'app/u/[handle]',
+      'app/[username]',
+      'app/me',
       'components/public-profile-chrome.tsx',
       'lib/follio-identity',
       'lib/features.ts',
@@ -134,10 +144,395 @@ export const COVERAGE_MAP: PlatformFeature[] = [
       '__tests__/follio-peek.test.ts',
       '__tests__/resolve-user.test.ts',
       '__tests__/resume-highlights.test.ts',
+      '__tests__/follio-identity.test.ts',
     ],
     pathways: ['links.public-page'],
     notes:
-      'Status is shipped, but the /work door alone is gated by NEXT_PUBLIC_PORTFOLIO_ENABLED. `flag` is left unset deliberately — setting it would imply the whole page is off.',
+      'Status is shipped, but the /work door alone is gated by NEXT_PUBLIC_PORTFOLIO_ENABLED. `flag` is left unset deliberately — setting it would imply the whole page is off. Also owns the vanity /[username] and /me entry points.',
+  },
+
+  // ── Entry and account ───────────────────────────────────────────────────
+  {
+    id: 'marketing-site',
+    name: 'Marketing and legal pages',
+    userDescription:
+      'Lands on follio.me, learns what Follio is, and finds the contact, privacy and terms pages.',
+    codeLocations: [
+      'app/page.tsx',
+      'components/landing-page.tsx',
+      'app/contact',
+      'app/privacy',
+      'app/terms',
+    ],
+    category: 'Public surfaces',
+    status: 'shipped',
+    unitTests: ['__tests__/landing-page-oauth-visibility.test.ts'],
+    pathways: ['public.landing'],
+  },
+  {
+    id: 'auth-access',
+    name: 'Sign-in, sign-up and the workspace gate',
+    userDescription:
+      'Creates an account or signs in — by email or an OAuth provider — and gets sent back to wherever they were heading.',
+    codeLocations: ['app/sign-in', 'app/sign-up', 'middleware.ts', 'lib/active-profile.ts'],
+    category: 'Account',
+    status: 'shipped',
+    unitTests: [
+      '__tests__/middleware.test.ts',
+      '__tests__/clerk-env.test.ts',
+      '__tests__/active-profile.test.ts',
+    ],
+    pathways: ['auth.dashboard-gate'],
+    notes:
+      'Clerk-hosted. Live QA never drives the sign-in UI; it replays a captured storage state.',
+  },
+  {
+    id: 'settings-account',
+    name: 'Settings and account',
+    userDescription:
+      'Changes their handle, privacy and appearance preferences, manages AI assistants, or deletes their account.',
+    codeLocations: [
+      'app/(dashboard)/settings',
+      'app/api/account',
+      'app/api/profile/check-handle',
+      'app/api/profile/dismiss-banner',
+      'lib/account',
+    ],
+    category: 'Account',
+    status: 'shipped',
+    unitTests: [
+      '__tests__/delete-account.test.ts',
+      '__tests__/clear-account-client-state.test.ts',
+      '__tests__/profile-url.test.ts',
+    ],
+    pathways: [],
+  },
+
+  // ── Getting started ─────────────────────────────────────────────────────
+  {
+    id: 'onboarding',
+    name: 'Onboarding',
+    userDescription:
+      'Picks why they are here, chooses to upload a resume or start blank, and comes out with a first resume in the builder.',
+    codeLocations: [
+      'app/onboarding',
+      'app/api/onboarding',
+      'lib/onboarding',
+      'components/onboarding',
+    ],
+    category: 'Onboarding',
+    status: 'shipped',
+    unitTests: [
+      '__tests__/onboarding-hard-gate.test.ts',
+      '__tests__/onboarding-no-review.test.ts',
+      '__tests__/onboarding-resume-start-choice.test.ts',
+      '__tests__/onboarding-skip-next.test.ts',
+      '__tests__/onboarding-summary-overwrite.test.ts',
+      '__tests__/onboarding-ui.test.ts',
+      '__tests__/onboarding-resume-construction.test.ts',
+      '__tests__/resume-template-preview-profile.test.ts',
+    ],
+    pathways: ['onboarding.blank'],
+    notes:
+      'Five of these tests assert on Follio source text via readFileSync rather than on behavior, so they catch deletions but not behavioral regressions. /onboarding/review is a redirect stub to /onboarding/build.',
+  },
+
+  // ── Resume lifecycle ────────────────────────────────────────────────────
+  {
+    id: 'resume-management',
+    name: 'Resume library',
+    userDescription:
+      'Keeps several resumes side by side — creates, clones, renames and deletes them, and picks which one is their main public resume.',
+    codeLocations: [
+      'app/(dashboard)/resumes',
+      'app/(dashboard)/dashboard/page.tsx',
+      'app/api/resumes',
+      'lib/resume-title.ts',
+      'lib/resume/new-resume-defaults.ts',
+    ],
+    category: 'Resumes',
+    status: 'shipped',
+    unitTests: [
+      '__tests__/resume-title.test.ts',
+      '__tests__/new-resume-defaults.test.ts',
+      '__tests__/sort-resumes-public-first.test.ts',
+      '__tests__/dashboard-follio-card.test.ts',
+      '__tests__/document-dashboard-foundation.test.ts',
+    ],
+    pathways: ['multi-resume.create-blank'],
+    notes:
+      'Clone, rename, delete and set-primary are covered only at the title-helper level; the operations themselves and their API routes have no test.',
+  },
+  {
+    id: 'designer-templates',
+    name: 'Designer and templates',
+    userDescription:
+      'Switches resume templates, fonts, colours and page layout, and zooms in to check how the page will print.',
+    codeLocations: [
+      'app/(dashboard)/builder/components/designer-panel.tsx',
+      'app/(dashboard)/builder/components/resume-design-panel.tsx',
+      'app/(dashboard)/builder/components/resume-template-gallery.tsx',
+      'app/api/profile/resume-design',
+      'lib/resume/templates',
+      'lib/resume-design.ts',
+      'app/preview/[templateId]',
+    ],
+    category: 'Builder',
+    status: 'shipped',
+    unitTests: [
+      '__tests__/resume-templates.test.ts',
+      '__tests__/template-switch.test.ts',
+      '__tests__/resume-fonts.test.ts',
+      '__tests__/resume-page-layout.test.ts',
+      '__tests__/resume-zoom-modal.test.ts',
+      '__tests__/resume-atelier.test.ts',
+      '__tests__/resume-presentation.test.ts',
+      '__tests__/minimal-studio-utils.test.ts',
+    ],
+    pathways: ['builder.designer-templates'],
+    notes:
+      'Pathway moved here from resume-builder in item 2 — it exercises the Designer panel, not section editing.',
+  },
+  {
+    id: 'download-export',
+    name: 'Download and export',
+    userDescription:
+      'Downloads their resume as a PDF, or pulls their profile out as JSON or plain text.',
+    codeLocations: [
+      'app/(dashboard)/builder/components/download-dialog.tsx',
+      'app/api/export',
+      'lib/document-download',
+      'services/export.service.ts',
+      'services/document-pdf.service.ts',
+      'app/resume-preview/[id]',
+      'pdf-worker',
+    ],
+    category: 'Export',
+    status: 'shipped',
+    unitTests: [
+      '__tests__/export-service.test.ts',
+      '__tests__/document-download-share.test.ts',
+      '__tests__/document-pdf-render.test.ts',
+      '__tests__/use-resume-download.test.ts',
+    ],
+    pathways: [],
+    notes:
+      'document-pdf-render stubs fetch, so the worker contract is covered but no test ever produces real PDF bytes.',
+  },
+
+  // ── Bringing data in ────────────────────────────────────────────────────
+  {
+    id: 'data-sources',
+    name: 'Data sources',
+    userDescription:
+      'Connects GitHub, LinkedIn, Medium, YouTube, Google or plain links, and pulls that work into their profile.',
+    codeLocations: [
+      'app/(dashboard)/builder/data-sources',
+      'app/(dashboard)/data-sources',
+      'app/api/data-sources',
+      'app/api/import/github',
+      'app/api/import/google',
+      'app/api/import/linkedin',
+      'app/api/import/links',
+      'app/api/import/medium',
+      'app/api/import/youtube',
+      'services/import',
+      'services/github.service.ts',
+      'services/github-enhanced.service.ts',
+    ],
+    category: 'Data sources',
+    status: 'shipped',
+    unitTests: [
+      '__tests__/github-service.test.ts',
+      '__tests__/connect-external-account.test.ts',
+      '__tests__/linkedin-profile-url.test.ts',
+      '__tests__/contact-source-label.test.ts',
+      '__tests__/project-import-prefill.test.ts',
+      '__tests__/review-import.test.ts',
+    ],
+    pathways: [],
+    notes:
+      'Connect flows cross third-party OAuth consent screens and stay manual — automating them needs real test apps per provider. No Live QA pathway covers this area.',
+  },
+  {
+    id: 'import-sync',
+    name: 'Import sync and merge',
+    userDescription:
+      'Re-pulls from a connected source, previews what would change, and applies only the parts they want.',
+    codeLocations: [
+      'app/(dashboard)/builder/import-sync',
+      'app/api/import/jobs',
+      'app/api/import/sessions',
+      'app/api/import/sync-apply',
+      'app/api/import/sync-preview',
+      'app/api/import/sync-status',
+      'services/merge.service.ts',
+      'services/multi-source-merger.service.ts',
+      'services/import-session.service.ts',
+    ],
+    category: 'Data sources',
+    status: 'shipped',
+    unitTests: ['__tests__/merge.service.test.ts', '__tests__/multi-source-merger.test.ts'],
+    pathways: [],
+  },
+
+  // ── AI features ─────────────────────────────────────────────────────────
+  {
+    id: 'follio-voice',
+    name: 'Follio voice',
+    userDescription:
+      'Has their imported resume copy rewritten into a Follio headline and about section that sound like a person, not a CV.',
+    codeLocations: ['services/agents/resume-parse/rewrite-for-follio.ts'],
+    category: 'AI',
+    status: 'shipped',
+    unitTests: ['__tests__/follio-voice.test.ts', '__tests__/agents/follio-voice.test.ts'],
+    pathways: [],
+    notes:
+      'No route or page of its own — it runs as a step inside the resume-parse agent, so it ships only via resume-import-ai. MAX_TOKENS key: follioVoice.',
+  },
+  {
+    id: 'snap-view',
+    name: 'Snap view',
+    userDescription: 'Gets an at-a-glance generated summary card of their profile.',
+    codeLocations: [
+      'app/api/profile/[handle]/snap-view',
+      'services/snap-view.service.ts',
+      'types/snap-view.ts',
+    ],
+    category: 'AI',
+    status: 'shipped',
+    unitTests: ['__tests__/agents/snap-view-agent.test.ts'],
+    pathways: [],
+    notes: 'MAX_TOKENS key: snapViewGeneration.',
+  },
+  {
+    id: 'brand-insight',
+    name: 'Brand insight and logos',
+    userDescription:
+      'Sees the companies and schools on their profile recognised, with the right logo and a short read on each.',
+    codeLocations: [
+      'app/api/brand/insight',
+      'app/api/brand/logo',
+      'lib/brand-insight',
+      'lib/brand-logo',
+    ],
+    category: 'AI',
+    status: 'shipped',
+    unitTests: ['__tests__/follio-insight.test.ts', '__tests__/brand-logo.test.ts'],
+    pathways: [],
+  },
+  {
+    id: 'jd-match',
+    name: 'JD match / resume lens',
+    userDescription:
+      'Pastes a job description and sees which parts of their resume line up with it, highlighted in place.',
+    codeLocations: [
+      'lib/jd-match',
+      'lib/resume-lens',
+      'components/resume-lens',
+      'app/api/extension/match-jd',
+    ],
+    category: 'AI',
+    status: 'shipped',
+    unitTests: ['__tests__/jd-match.test.ts', '__tests__/resume-lens.test.ts'],
+    pathways: [],
+    notes:
+      'Shipped on two paths: the resume lens on the public resume page (app/u/[handle]/resume-shell.tsx) and the extension match-jd endpoint. It has no MAX_TOKENS key, so a drift signal keyed on MAX_TOKENS alone would miss this feature entirely.',
+  },
+
+  // ── Integrations ────────────────────────────────────────────────────────
+  {
+    id: 'ai-connector-mcp',
+    name: 'AI connector and MCP',
+    userDescription:
+      'Connects an AI assistant to their Follio so it can read their profile and propose edits they approve.',
+    codeLocations: [
+      'app/api/ai-connector',
+      'app/api/mcp',
+      'app/api/oauth',
+      'app/oauth/authorize',
+      'lib/ai-connector',
+      'lib/mcp',
+      'services/ai-connector.service.ts',
+      'services/ai-connector-oauth.service.ts',
+    ],
+    category: 'Integrations',
+    status: 'shipped',
+    unitTests: ['__tests__/ai-connector.test.ts'],
+    pathways: [],
+  },
+  {
+    id: 'chrome-extension',
+    name: 'Chrome extension',
+    userDescription:
+      'Uses the Follio browser extension to pull up their resumes and match them against a job posting while browsing.',
+    codeLocations: ['_extensions/chrome', 'app/api/extension'],
+    category: 'Integrations',
+    status: 'shipped',
+    unitTests: [],
+    pathways: [],
+    notes:
+      'No unit tests of its own. Its match-jd endpoint is covered indirectly by jd-match; the extension client code is untested.',
+  },
+
+  // ── Flagged off ─────────────────────────────────────────────────────────
+  {
+    id: 'portfolio',
+    name: 'Portfolio',
+    userDescription:
+      'Generates a full portfolio site from their profile and publishes it — unavailable unless the flag is on.',
+    codeLocations: [
+      'app/api/portfolio',
+      'app/(dashboard)/dashboard/portfolio/edit',
+      'services/portfolio',
+      'lib/portfolio',
+      'lib/features.ts',
+    ],
+    category: 'Portfolio',
+    status: 'flagged',
+    flag: 'NEXT_PUBLIC_PORTFOLIO_ENABLED',
+    unitTests: [
+      '__tests__/portfolio-appearance.test.ts',
+      '__tests__/portfolio-content.test.ts',
+      '__tests__/portfolio-overrides.test.ts',
+      '__tests__/portfolio-resolve-copy.test.ts',
+      '__tests__/portfolio-rich-html.test.ts',
+      '__tests__/features.test.ts',
+    ],
+    pathways: [],
+    notes:
+      'Off unless NEXT_PUBLIC_PORTFOLIO_ENABLED=true. Six-stage pipeline at services/portfolio/pipeline/stage-a..f. The only feature flag in lib/features.ts.',
+  },
+];
+
+/**
+ * Routes and pages deliberately outside the product inventory.
+ *
+ * A directory excludes everything beneath it. Every `app/**` page and
+ * `app/api/**` route must be either claimed by a feature above or listed here —
+ * `__tests__/platform-coverage-map.test.ts` fails otherwise, so a new route
+ * cannot land unnoticed.
+ */
+export const EXCLUDED: ExcludedPath[] = [
+  {
+    path: 'app/admin',
+    reason:
+      'Operator tooling: the admin shell plus the Developer Platform page shim. Not product, and gated by requireAdmin.',
+  },
+  {
+    path: 'app/api/admin',
+    reason:
+      'Admin-only API shims for the operator panel (health, status, catalog, test, live-qa, resume reader, users, stats). Not product.',
+  },
+  {
+    path: 'app/lab',
+    reason:
+      'Scratch experiment surface (import-constellation). Not linked from product navigation.',
+  },
+  {
+    path: 'app/portfolio-preview',
+    reason:
+      'Preview harness for portfolio templates, used while building them. Not a user-reachable product surface.',
   },
 ];
 
