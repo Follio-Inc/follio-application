@@ -94,3 +94,55 @@ export type ExcludedPath = {
   /** Why this is not product. Written for someone deciding whether to re-include it. */
   reason: string;
 };
+
+/**
+ * How a module relates to shipped product behavior.
+ *
+ * Reachability is not binary, and these three classes exist because three
+ * near-identically named services in `services/` sit in three different states.
+ * A scan that collapses them would quarantine live code.
+ *
+ * Note the frame: these describe reachability **from a shipped entry point**,
+ * not merely "does anything import this".
+ *
+ * - `orphan` — not reachable from any shipped entry point. Either nothing
+ *   imports it, or every importer is itself an orphan. `importedBy` tells the
+ *   two apart: empty means nothing imports it; non-empty means its importers
+ *   are dead too, so it is transitively dead.
+ * - `module-reachable-call-unused` — a shipped entry point causes the module to
+ *   be evaluated (usually through a barrel re-export), but no caller uses any of
+ *   its symbols. Deleting it changes runtime behavior; deleting its exports does
+ *   not. **This is not an orphan.**
+ * - `live` — its symbols are called from shipped code.
+ */
+export type ReachabilityClass = 'orphan' | 'module-reachable-call-unused' | 'live';
+
+/**
+ * A verified reachability finding.
+ *
+ * Every field is evidence someone checked, not a judgement call, so
+ * `__tests__/platform-coverage-map.test.ts` re-derives `importedBy` from the
+ * repository on each run. Rewiring any of these modules fails that test rather
+ * than silently invalidating the record.
+ */
+export type ReachabilityRecord = {
+  /** Repo-relative module path. A directory covers its whole subtree. */
+  path: string;
+  reachability: ReachabilityClass;
+  /**
+   * Every non-test file that imports this module, in any form — alias,
+   * relative, or dynamic. Empty only for a module nothing imports at all.
+   * Re-derived from the repo by the test, so it must be exhaustive.
+   */
+  importedBy: string[];
+  /**
+   * The chain from a shipped entry point down to this module, entry point
+   * first. Empty when no such chain exists. Present so the difference between
+   * `orphan` and `module-reachable-call-unused` is visible as data.
+   */
+  entryChain: string[];
+  /** Why this class, written for someone deciding whether to delete the module. */
+  evidence: string;
+  /** Tests covering this module, when the number is itself the finding. */
+  tests?: { files: string[]; count: number };
+};
