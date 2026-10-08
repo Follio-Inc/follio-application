@@ -128,10 +128,13 @@ describe('scanProductSurface on the real tree', () => {
     }
   });
 
+  // Two full scans, and since item 7 each one parses the product source tree.
+  // The default 5s timeout is not enough for that under a loaded worker pool;
+  // the assertion is unchanged.
   it('produces an identical report on a second run', () => {
     expect(scanProductSurface()).toEqual(report);
     expect(formatDriftReport(runDriftScan())).toBe(formatDriftReport(runDriftScan()));
-  });
+  }, 30_000);
 });
 
 describe('scanProductSurface on an injected tree', () => {

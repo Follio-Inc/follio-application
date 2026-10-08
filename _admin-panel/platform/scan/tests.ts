@@ -10,7 +10,7 @@ import {
   toModuleKey,
   type ModuleReference,
 } from './import-graph';
-import { covers } from './surface';
+import { covers, featuresCovering } from './surface';
 import type {
   StaleTestReference,
   TestClassification,
@@ -51,17 +51,6 @@ export function discoverTestFiles(repoRoot: string = process.cwd()): string[] {
 
   walk(TEST_ROOT);
   return found.sort();
-}
-
-/** Features whose `codeLocations` cover any of these paths. */
-function featuresCovering(targets: string[], features: PlatformFeature[]): string[] {
-  const matched = features
-    .filter((feature) =>
-      feature.codeLocations.some((location) => targets.some((target) => covers(location, target)))
-    )
-    .map((feature) => feature.id);
-
-  return [...new Set(matched)].sort();
 }
 
 /** Features whose `unitTests` list this file. */

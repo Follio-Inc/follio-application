@@ -24,8 +24,8 @@ import type { ExcludedPath, PlatformFeature } from './types';
  * inventing ownership — they belong to no owner-facing feature:
  * - The Developer Platform's own tests: `devtools-overlay`, `live-qa-catalog`,
  *   `platform-coverage-map`, `platform-scan`, `platform-scan-tests`,
- *   `platform-scan-pathways`. They cover `_admin-panel/`, which is operator
- *   tooling, not product.
+ *   `platform-scan-pathways`, `platform-scan-source-facts`. They cover
+ *   `_admin-panel/`, which is operator tooling, not product.
  * - Shared infrastructure no single feature owns: `errors`, `html-utils`,
  *   `logger`, `prisma-connection`, `url`, `utils`, `validations`. Attributing
  *   `lib/utils.ts` to one feature would be a fiction every other feature pays
@@ -35,6 +35,22 @@ import type { ExcludedPath, PlatformFeature } from './types';
  * shared `lib/agents` runtime and reaches `portfolio` only because it uses
  * portfolio agents as fixtures. Listing it under portfolio would claim coverage
  * the test does not provide.
+ *
+ * Rules for `aiStages` and `prismaModels` (item 7). Both are *declarations*,
+ * checked against what the repository actually does:
+ * - `aiStages` names the `MAX_TOKENS` keys a feature's own code passes. All
+ *   eleven budgeted keys but `agentTurn` are declared; `agentTurn` belongs to
+ *   the shared `lib/agents` runtime, which no feature claims for the same
+ *   reason `codeLocations` leaves it out. An AI feature with no key is normal —
+ *   `jd-match` imports no AI client at all.
+ * - `prismaModels` names only the models a feature's code queries **and no
+ *   other feature's does**. That is eight of thirty-one. The shared tables are
+ *   deliberately declared nowhere: `Profile` is queried from seventeen
+ *   features' code and `User` from fourteen, so listing them everywhere would
+ *   record ownership nobody has — the same judgement item 5a made about
+ *   `uncategorized` tests over shared utilities. The scan still reports every
+ *   model, and still names the one with no feature owner at all (`Admin`,
+ *   queried only from the excluded admin surfaces).
  */
 export const COVERAGE_MAP: PlatformFeature[] = [
   {
@@ -55,6 +71,12 @@ export const COVERAGE_MAP: PlatformFeature[] = [
     category: 'Resume import',
     status: 'shipped',
     lab: 'resume-import-ai',
+    // Both call sites are in this feature's own code: resumeParse in
+    // services/import/resume-ai.service.ts, follioVoice in the agent's rewrite
+    // step. `data-sources` also reaches resumeParse, but only because it claims
+    // the whole `services/import` directory — the import pipeline is this
+    // feature's, so the stage is declared here and not there.
+    aiStages: ['follioVoice', 'resumeParse'],
     unitTests: [
       // Covers the agent definition plus the Follio-voice rewrite step.
       '__tests__/agents/follio-voice.test.ts',
@@ -150,6 +172,7 @@ export const COVERAGE_MAP: PlatformFeature[] = [
     ],
     category: 'Cover letter',
     status: 'shipped',
+    prismaModels: ['CoverLetter'],
     unitTests: [
       '__tests__/cover-letter-visibility.test.ts',
       '__tests__/cover-letter-document-design.test.ts',
@@ -245,6 +268,8 @@ export const COVERAGE_MAP: PlatformFeature[] = [
     ],
     category: 'Account',
     status: 'shipped',
+    // Only this feature queries AgentRun, through account deletion.
+    prismaModels: ['AgentRun'],
     unitTests: [
       '__tests__/delete-account.test.ts',
       '__tests__/clear-account-client-state.test.ts',
@@ -363,6 +388,7 @@ export const COVERAGE_MAP: PlatformFeature[] = [
     ],
     category: 'Export',
     status: 'shipped',
+    prismaModels: ['DocumentPdfCache'],
     unitTests: [
       '__tests__/export-service.test.ts',
       '__tests__/document-download-share.test.ts',
@@ -424,6 +450,7 @@ export const COVERAGE_MAP: PlatformFeature[] = [
     ],
     category: 'Data sources',
     status: 'shipped',
+    prismaModels: ['ImportSession'],
     unitTests: ['__tests__/merge.service.test.ts', '__tests__/multi-source-merger.test.ts'],
     pathways: [],
   },
@@ -437,10 +464,11 @@ export const COVERAGE_MAP: PlatformFeature[] = [
     codeLocations: ['services/agents/resume-parse/rewrite-for-follio.ts'],
     category: 'AI',
     status: 'shipped',
+    aiStages: ['follioVoice'],
     unitTests: ['__tests__/agents/follio-voice.test.ts'],
     pathways: [],
     notes:
-      'No route or page of its own — it runs as a step inside the resume-parse agent, so it ships only via resume-import-ai. MAX_TOKENS key: follioVoice.',
+      'No route or page of its own — it runs as a step inside the resume-parse agent, so it ships only via resume-import-ai. Its MAX_TOKENS key is in aiStages, where the drift scan can check it.',
   },
   {
     id: 'snap-view',
@@ -454,9 +482,9 @@ export const COVERAGE_MAP: PlatformFeature[] = [
     ],
     category: 'AI',
     status: 'shipped',
+    aiStages: ['snapViewGeneration'],
     unitTests: ['__tests__/agents/snap-view-agent.test.ts'],
     pathways: [],
-    notes: 'MAX_TOKENS key: snapViewGeneration.',
   },
   {
     id: 'brand-insight',
@@ -490,7 +518,7 @@ export const COVERAGE_MAP: PlatformFeature[] = [
     unitTests: ['__tests__/jd-match.test.ts', '__tests__/resume-lens.test.ts'],
     pathways: [],
     notes:
-      'Shipped on two paths: the resume lens on the public resume page (app/u/[handle]/resume-shell.tsx) and the extension match-jd endpoint. It has no MAX_TOKENS key, so a drift signal keyed on MAX_TOKENS alone would miss this feature entirely.',
+      'Shipped on two paths: the resume lens on the public resume page (app/u/[handle]/resume-shell.tsx) and the extension match-jd endpoint. `aiStages` is deliberately unset: it has no MAX_TOKENS key because it imports no AI client at all — the matching is lexical. A drift signal keyed on MAX_TOKENS alone would miss this feature entirely, which is why the scan reports it under "AI-category features that call no AI client" rather than as a gap.',
   },
 
   // ── Integrations ────────────────────────────────────────────────────────
@@ -511,6 +539,8 @@ export const COVERAGE_MAP: PlatformFeature[] = [
     ],
     category: 'Integrations',
     status: 'shipped',
+    // The four connector tables are queried nowhere else.
+    prismaModels: ['AiConnectorAuthCode', 'AiConnectorClient', 'AiConnectorToken', 'AiEditDraft'],
     unitTests: ['__tests__/ai-connector.test.ts'],
     pathways: [],
   },
@@ -546,6 +576,19 @@ export const COVERAGE_MAP: PlatformFeature[] = [
     category: 'Portfolio',
     status: 'flagged',
     flag: 'NEXT_PUBLIC_PORTFOLIO_ENABLED',
+    // Seven of the eleven budgeted stages: the six pipeline stages plus the
+    // content transform. `agentTurn` is not here — it belongs to the shared
+    // lib/agents runtime, which no feature claims, for the same reason
+    // `codeLocations` leaves it out.
+    aiStages: [
+      'contentTransform',
+      'designBrief',
+      'evidenceExtraction',
+      'narrativeGeneration',
+      'portfolioStrategy',
+      'profileUnderstanding',
+      'validation',
+    ],
     unitTests: [
       '__tests__/portfolio-appearance.test.ts',
       '__tests__/portfolio-content.test.ts',

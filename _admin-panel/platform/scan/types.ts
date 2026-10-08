@@ -204,13 +204,231 @@ export type PathwayScanReport = {
 };
 
 /**
+ * Whether a repository fact has an owner in the coverage map.
+ *
+ * `mapped` means the same thing it means in signal 1: some feature's
+ * `codeLocations` cover the file where the fact is used. Whether a feature also
+ * *declares* the fact (`aiStages`, `prismaModels`, `flag`) is a second,
+ * stricter statement, carried separately on each finding so the gap between
+ * "owned in code" and "written down" stays visible.
+ */
+export type OwnershipClassification = 'mapped' | 'unclaimed';
+
+/** One `MAX_TOKENS` key, as the budget defines it and the map claims it. */
+export type AiStageFinding = {
+  /** Key of the token budget, e.g. `narrativeGeneration`. */
+  stage: string;
+  /** Source files naming it in a call, sorted. Empty means nothing calls it. */
+  usedBy: string[];
+  /** Feature ids whose `codeLocations` cover a call site, sorted. */
+  inferredFeatures: string[];
+  /** Feature ids whose `aiStages` list it, sorted. */
+  declaredFeatures: string[];
+  classification: OwnershipClassification;
+};
+
+/** A coverage-map `aiStages` entry the repository cannot support. */
+export type StaleAiStageReference = {
+  featureId: string;
+  stage: string;
+  /**
+   * `unknown-stage`: the token budget defines no such key.
+   * `no-usage-link`: the key exists, but no call site sits in this feature's code.
+   */
+  reason: 'unknown-stage' | 'no-usage-link';
+};
+
+export type AiStageScanSummary = {
+  /** Keys the budget defines. */
+  total: number;
+  /** Keys whose call site sits in some feature's `codeLocations`. */
+  mapped: number;
+  unclaimed: number;
+  /** Keys some feature's `aiStages` names. */
+  declared: number;
+  /** Budgeted keys no call site names. */
+  unused: number;
+  /** Features whose own code imports the AI client. */
+  aiFeatures: number;
+  /** Of those, how many declare no stage. */
+  aiFeaturesWithoutStage: number;
+};
+
+/**
+ * Signal 4: the AI token budget vs the coverage map's declared stages.
+ *
+ * A `MAX_TOKENS` key is one input and never the gate on "is this an AI
+ * feature" — `jd-match` ships with no key because its matching is lexical. The
+ * gap lists below keep that distinction in the data rather than in prose.
+ */
+export type AiStageScanReport = {
+  signal: 'ai-stages';
+  summary: AiStageScanSummary;
+  /** Every budgeted stage, sorted by name. The lists below are sorted subsets. */
+  stages: AiStageFinding[];
+  mapped: AiStageFinding[];
+  unclaimed: AiStageFinding[];
+  unused: AiStageFinding[];
+  /** Owned by a feature's code, named in no feature's `aiStages`. Gaps. */
+  undeclared: AiStageFinding[];
+  stale: StaleAiStageReference[];
+  /**
+   * Stages named at a call site that the budget does not define, sorted.
+   *
+   * Legal at runtime — the client falls back to its default allowance — so
+   * reported, not failed. It still means that call has no reviewed budget.
+   */
+  unbudgetedStages: string[];
+  /**
+   * Features that import the AI client but declare no stage, sorted. Gaps.
+   */
+  aiFeaturesWithoutStage: string[];
+  /**
+   * AI-category features whose code imports no AI client, sorted.
+   *
+   * Not a gap at all: these are deterministic features in the AI category, and
+   * expecting a token budget from them is what item 7 warns against.
+   */
+  aiFeaturesWithoutClient: string[];
+};
+
+/** One feature flag, as its module declares it and the map claims it. */
+export type FlagFinding = {
+  /** Env var name, e.g. `NEXT_PUBLIC_PORTFOLIO_ENABLED`. */
+  flag: string;
+  /** Exported helpers in the flag module that gate on it, sorted. */
+  helpers: string[];
+  /**
+   * Files outside the flag module that read the env var or import a helper,
+   * sorted. This is where the flag is actually enforced.
+   */
+  enforcedIn: string[];
+  /** Feature ids whose `codeLocations` cover an enforcement site, sorted. */
+  inferredFeatures: string[];
+  /** Feature ids whose `flag` names it, sorted. */
+  declaredFeatures: string[];
+  classification: OwnershipClassification;
+};
+
+/** A coverage-map `flag` the repository cannot support. */
+export type StaleFlagReference = {
+  featureId: string;
+  flag: string;
+  /**
+   * `unknown-flag`: the flag module declares no such flag.
+   * `no-enforcement-link`: it exists, but nothing in this feature's code gates on it.
+   */
+  reason: 'unknown-flag' | 'no-enforcement-link';
+};
+
+/** A feature gating on a flag it does not declare — partial gating. */
+export type PartialGating = { featureId: string; flag: string };
+
+export type FlagScanSummary = {
+  /** Flags the flag module declares. */
+  total: number;
+  /** Flags enforced in code some feature's `codeLocations` cover. */
+  mapped: number;
+  unclaimed: number;
+  /** Flags some feature's `flag` names. */
+  declared: number;
+  /** Declared flags nothing outside the flag module reads. */
+  unenforced: number;
+  /** Features carrying a `flag`. */
+  gatedFeatures: number;
+};
+
+/** Signal 5: declared feature flags vs the coverage map's `flag` fields. */
+export type FlagScanReport = {
+  signal: 'feature-flags';
+  summary: FlagScanSummary;
+  /** Every declared flag, sorted by name. The lists below are sorted subsets. */
+  flags: FlagFinding[];
+  mapped: FlagFinding[];
+  unclaimed: FlagFinding[];
+  unenforced: FlagFinding[];
+  stale: StaleFlagReference[];
+  /**
+   * Features whose code reads a flag they do not declare, sorted.
+   *
+   * Reported, never failed. `flag` means the *whole* feature is gated, and
+   * `public-follio` gates one door — setting `flag` there would be the lie.
+   */
+  partiallyGated: PartialGating[];
+};
+
+/** One Prisma model, as the schema declares it and the map claims it. */
+export type PrismaModelFinding = {
+  /** Schema name, e.g. `ShareToken`. */
+  model: string;
+  /** Prisma client property for it, e.g. `shareToken`. */
+  delegate: string;
+  /** Source files querying the delegate, sorted. */
+  usedBy: string[];
+  /** Feature ids whose `codeLocations` cover a query site, sorted. */
+  inferredFeatures: string[];
+  /** Feature ids whose `prismaModels` list it, sorted. */
+  declaredFeatures: string[];
+  classification: OwnershipClassification;
+};
+
+/** A coverage-map `prismaModels` entry the repository cannot support. */
+export type StalePrismaReference = {
+  featureId: string;
+  model: string;
+  /**
+   * `unknown-model`: the schema declares no such model.
+   * `no-usage-link`: it exists, but no query site sits in this feature's code.
+   */
+  reason: 'unknown-model' | 'no-usage-link';
+};
+
+export type PrismaScanSummary = {
+  /** Models the schema declares. */
+  total: number;
+  /** Models queried from code some feature's `codeLocations` cover. */
+  mapped: number;
+  unclaimed: number;
+  /** Models some feature's `prismaModels` names. */
+  declared: number;
+  /** Models no query in product source names. */
+  unused: number;
+};
+
+/** Signal 6: the Prisma schema vs the coverage map's declared models. */
+export type PrismaScanReport = {
+  signal: 'prisma-models';
+  summary: PrismaScanSummary;
+  /** Every schema model, sorted by name. The lists below are sorted subsets. */
+  models: PrismaModelFinding[];
+  mapped: PrismaModelFinding[];
+  unclaimed: PrismaModelFinding[];
+  unused: PrismaModelFinding[];
+  /**
+   * Queried by a feature's code, named in no feature's `prismaModels`. Gaps.
+   *
+   * Expected for the shared tables: `Profile` is queried by seventeen features
+   * and `User` by fourteen, and declaring them in all of them would record
+   * ownership nobody has.
+   */
+  undeclared: PrismaModelFinding[];
+  stale: StalePrismaReference[];
+};
+
+/**
  * One signal's findings.
  *
  * Discriminated by `signal`, so the CLI and formatter iterate signals rather
- * than knowing about any one of them. Items 7–8 add AI stages, flags, Prisma
- * models and reachability as further members.
+ * than knowing about any one of them. Item 8 adds reachability as a further
+ * member.
  */
-export type DriftSignalReport = SurfaceScanReport | TestScanReport | PathwayScanReport;
+export type DriftSignalReport =
+  | SurfaceScanReport
+  | TestScanReport
+  | PathwayScanReport
+  | AiStageScanReport
+  | FlagScanReport
+  | PrismaScanReport;
 
 /** The whole scan: every signal that ran, plus whether anything drifted. */
 export type DriftReport = {

@@ -73,6 +73,28 @@ export type PlatformFeature = {
    * until PLATFORM_TODO item 20, and nothing validates this field until then.
    */
   lab?: string;
+  /**
+   * `MAX_TOKENS` keys (`lib/ai-client.ts`) this feature's AI calls run under.
+   *
+   * Leave unset for a feature that makes no AI call. An empty list and an
+   * absent field mean the same thing, and neither is a defect: PLATFORM_TODO
+   * item 7 is explicit that a token budget is not what makes something an AI
+   * feature — `jd-match` is shipped, in the AI category, and matches lexically.
+   *
+   * The drift scan reports an entry the budget does not define, and an entry
+   * whose call site is not in this feature's `codeLocations`, as stale.
+   */
+  aiStages?: string[];
+  /**
+   * `prisma/schema.prisma` models this feature's own code reads or writes.
+   *
+   * Derived from the query sites in `codeLocations`, not from which models the
+   * feature's data happens to touch through relations. Leave unset for a
+   * feature with no database access of its own. The drift scan reports an entry
+   * the schema does not declare, and an entry this feature never queries, as
+   * stale.
+   */
+  prismaModels?: string[];
   /** Repo-relative Vitest files that cover this feature. Existence is tested. */
   unitTests: string[];
   /** `LIVE_QA_PATHWAYS` ids. Each is resolved against the catalog by the test. */

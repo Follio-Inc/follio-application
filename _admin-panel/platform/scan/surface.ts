@@ -39,6 +39,23 @@ export function covers(claim: string, targetPath: string): boolean {
 }
 
 /**
+ * Feature ids whose `codeLocations` cover any of these repo paths, sorted.
+ *
+ * The one implementation of "which feature owns this file", shared by every
+ * signal. Two copies would eventually disagree, and then the same file would
+ * have two owners depending on which part of the report you read.
+ */
+export function featuresCovering(targets: string[], features: PlatformFeature[]): string[] {
+  const matched = features
+    .filter((feature) =>
+      feature.codeLocations.some((location) => targets.some((target) => covers(location, target)))
+    )
+    .map((feature) => feature.id);
+
+  return [...new Set(matched)].sort();
+}
+
+/**
  * Walks `root` for files named `basename`.
  *
  * Hand-rolled rather than `readdirSync(dir, { recursive: true })` because CI

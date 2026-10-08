@@ -28,7 +28,14 @@ import {
   listByReachability,
   listFeatures,
 } from '@/_admin-panel/platform/coverage-map';
-import { covers, discoverProductSurface, scanProductSurface } from '@/_admin-panel/platform/scan';
+import {
+  SOURCE_ROOTS as SCANNED_SOURCE_ROOTS,
+  covers,
+  discoverAiStages,
+  discoverProductSurface,
+  discoverPrismaModels,
+  scanProductSurface,
+} from '@/_admin-panel/platform/scan';
 
 function resolveFromRepoRoot(relativePath: string): string {
   return path.join(process.cwd(), relativePath);
@@ -112,6 +119,51 @@ describe('coverage map', () => {
       }
       if (feature.flag) {
         expect(feature.status, `${feature.id} names a flag but is not flagged`).toBe('flagged');
+      }
+    }
+  });
+
+  it('names only AI stages the token budget defines', () => {
+    // Item 7: `aiStages` is a declaration about `lib/ai-client.ts`, so an entry
+    // the budget no longer defines must fail here and not just in the scan.
+    const budgeted = new Set(discoverAiStages());
+    expect(budgeted.size, 'the token budget was not discovered').toBeGreaterThan(0);
+
+    for (const feature of COVERAGE_MAP) {
+      for (const stage of feature.aiStages ?? []) {
+        expect(budgeted, `${feature.id} → unknown MAX_TOKENS key: ${stage}`).toContain(stage);
+      }
+      expect(feature.aiStages ?? [], `${feature.id}: aiStages must be sorted`).toEqual(
+        [...(feature.aiStages ?? [])].sort()
+      );
+    }
+  });
+
+  it('names only Prisma models the schema declares', () => {
+    const declared = new Set(discoverPrismaModels());
+    expect(declared.size, 'the Prisma schema was not discovered').toBeGreaterThan(0);
+
+    for (const feature of COVERAGE_MAP) {
+      for (const model of feature.prismaModels ?? []) {
+        expect(declared, `${feature.id} → unknown Prisma model: ${model}`).toContain(model);
+      }
+      expect(feature.prismaModels ?? [], `${feature.id}: prismaModels must be sorted`).toEqual(
+        [...(feature.prismaModels ?? [])].sort()
+      );
+    }
+  });
+
+  it('keeps every codeLocation inside the roots the source scan walks', () => {
+    // The item-7 signals attribute a stage, flag or model to a feature by
+    // walking `SOURCE_ROOTS`. A feature owning code outside those roots would
+    // be invisible to them, so that gap fails here rather than silently
+    // producing an unclaimed finding.
+    for (const feature of COVERAGE_MAP) {
+      for (const location of feature.codeLocations) {
+        expect(
+          SCANNED_SOURCE_ROOTS.some((root) => covers(root, location)),
+          `${feature.id} → ${location} is outside the scanned source roots`
+        ).toBe(true);
       }
     }
   });

@@ -1,7 +1,19 @@
+import { scanAiStages, type AiStageScanOptions } from './ai-stages';
+import { scanFeatureFlags, type FlagScanOptions } from './flags';
 import { scanLiveQaPathways, type PathwayScanOptions } from './pathways';
+import { scanPrismaModels, type PrismaScanOptions } from './prisma-models';
+import { collectSourceFacts, type SourceFactsOptions } from './source-facts';
 import { scanProductSurface, type SurfaceScanOptions } from './surface';
 import { scanTestAttribution, type TestScanOptions } from './tests';
-import type { DriftReport, PathwayScanReport, SurfaceScanReport, TestScanReport } from './types';
+import type {
+  AiStageScanReport,
+  DriftReport,
+  FlagScanReport,
+  PathwayScanReport,
+  PrismaScanReport,
+  SurfaceScanReport,
+  TestScanReport,
+} from './types';
 
 /**
  * Assembling and rendering the drift report.
@@ -14,21 +26,45 @@ import type { DriftReport, PathwayScanReport, SurfaceScanReport, TestScanReport 
  * same report without going through the CLI.
  */
 
-export type DriftScanOptions = SurfaceScanOptions & TestScanOptions & PathwayScanOptions;
+export type DriftScanOptions = SurfaceScanOptions &
+  TestScanOptions &
+  PathwayScanOptions &
+  AiStageScanOptions &
+  FlagScanOptions &
+  PrismaScanOptions &
+  Pick<SourceFactsOptions, 'files'>;
 
-/** Runs every signal implemented so far. Items 7–8 add to this list. */
+/** Runs every signal implemented so far. Item 8 adds to this list. */
 export function runDriftScan(options: DriftScanOptions = {}): DriftReport {
+  // The last three signals all want references from the same ~670 source
+  // files. Collected once here and handed down, so the CLI parses the tree
+  // once rather than three times.
+  const sourceFacts =
+    options.sourceFacts ?? collectSourceFacts({ repoRoot: options.repoRoot, files: options.files });
+  const withFacts = { ...options, sourceFacts };
+
   const surface = scanProductSurface(options);
   const tests = scanTestAttribution(options);
   const pathways = scanLiveQaPathways(options);
+  const aiStages = scanAiStages(withFacts);
+  const flags = scanFeatureFlags(withFacts);
+  const prismaModels = scanPrismaModels(withFacts);
 
   return {
-    signals: [surface, tests, pathways],
-    // Drift means the map contradicts the repository. Unmapped surface and a
-    // `unitTests` entry the graph cannot support are both contradictions.
-    // `uncategorized` and `unlisted` tests are gaps, tracked but not failures.
+    signals: [surface, tests, pathways, aiStages, flags, prismaModels],
+    // Drift means the map contradicts the repository. Unmapped surface, a
+    // `unitTests` entry the graph cannot support, and a map reference to a
+    // stage, flag or model the repository does not define are contradictions.
+    // Everything the item-7 signals report beyond `stale` is a gap: an
+    // unclaimed model, an unused stage and a partially gated feature are all
+    // tracked without failing, as items 4–6 established for their own gaps.
     ok:
-      surface.unmapped.length === 0 && tests.stale.length === 0 && tests.misattributed.length === 0,
+      surface.unmapped.length === 0 &&
+      tests.stale.length === 0 &&
+      tests.misattributed.length === 0 &&
+      aiStages.stale.length === 0 &&
+      flags.stale.length === 0 &&
+      prismaModels.stale.length === 0,
   };
 }
 
@@ -174,10 +210,170 @@ function formatPathwaySignal(report: PathwayScanReport): string[] {
   return lines;
 }
 
+function formatAiStageSignal(report: AiStageScanReport): string[] {
+  const { summary } = report;
+  const lines = [
+    'Signal: AI stages vs coverage map',
+    `  stages         ${summary.total}   (keys in the AI token budget)`,
+    `  mapped         ${summary.mapped}   (its call site is in a feature's codeLocations)`,
+    `  unclaimed      ${summary.unclaimed}   (budgeted, called from code no feature claims)`,
+    `  declared       ${summary.declared}   (a feature's aiStages names it)`,
+    `  unused         ${summary.unused}   (budgeted, no call site names it)`,
+  ];
+
+  if (report.stale.length > 0) {
+    lines.push('', `Stale coverage-map aiStages entries (${report.stale.length}):`);
+    for (const entry of report.stale) {
+      lines.push(`  ${entry.featureId}  ←  ${entry.stage}  (${entry.reason})`);
+    }
+  }
+
+  if (report.unclaimed.length > 0) {
+    lines.push(
+      '',
+      `Stages called from code no feature claims (${report.unclaimed.length}) — gaps, not drift:`
+    );
+    for (const finding of report.unclaimed) {
+      lines.push(`  ${finding.stage}  →  ${finding.usedBy.join(', ') || 'no call site'}`);
+    }
+  }
+
+  if (report.undeclared.length > 0) {
+    lines.push(
+      '',
+      `Stages owned in code but named in no feature's aiStages (${report.undeclared.length}) — gaps, not drift:`
+    );
+    for (const finding of report.undeclared) {
+      lines.push(`  ${finding.stage}  →  ${finding.inferredFeatures.join(', ')}`);
+    }
+  }
+
+  if (report.unused.length > 0) {
+    lines.push('', `Budgeted stages nothing calls (${report.unused.length}):`);
+    for (const finding of report.unused) lines.push(`  ${finding.stage}`);
+  }
+
+  if (report.unbudgetedStages.length > 0) {
+    lines.push(
+      '',
+      `Call sites naming a stage with no budget (${report.unbudgetedStages.length}) — they run on the default allowance:`
+    );
+    for (const stage of report.unbudgetedStages) lines.push(`  ${stage}`);
+  }
+
+  lines.push(
+    '',
+    `Features calling the AI client with no declared stage (${report.aiFeaturesWithoutStage.length} of ${summary.aiFeatures}) — gaps, not drift:`
+  );
+  for (const featureId of report.aiFeaturesWithoutStage) lines.push(`  ${featureId}`);
+
+  lines.push(
+    '',
+    `AI-category features that call no AI client (${report.aiFeaturesWithoutClient.length}) — deterministic, no token budget expected:`
+  );
+  for (const featureId of report.aiFeaturesWithoutClient) lines.push(`  ${featureId}`);
+
+  return lines;
+}
+
+function formatFlagSignal(report: FlagScanReport): string[] {
+  const { summary } = report;
+  const lines = [
+    'Signal: feature flags vs coverage map',
+    `  flags          ${summary.total}   (declared by the flag module)`,
+    `  mapped         ${summary.mapped}   (enforced in a feature's codeLocations)`,
+    `  unclaimed      ${summary.unclaimed}   (declared, enforced in no feature's code)`,
+    `  declared       ${summary.declared}   (a feature's flag field names it)`,
+    `  unenforced     ${summary.unenforced}   (declared, nothing outside the flag module reads it)`,
+    `  gated features ${summary.gatedFeatures}   (carry a flag in the map)`,
+  ];
+
+  if (report.stale.length > 0) {
+    lines.push('', `Stale coverage-map flag references (${report.stale.length}):`);
+    for (const entry of report.stale) {
+      lines.push(`  ${entry.featureId}  ←  ${entry.flag}  (${entry.reason})`);
+    }
+  }
+
+  lines.push('', 'Declared flags:');
+  for (const finding of report.flags) {
+    lines.push(
+      `  ${finding.flag}`,
+      `    helpers      ${finding.helpers.join(', ') || '—'}`,
+      `    declared by  ${finding.declaredFeatures.join(', ') || '— (no feature names it)'}`,
+      `    enforced in  ${finding.enforcedIn.length} files, owned by ${finding.inferredFeatures.length} features`
+    );
+  }
+
+  if (report.partiallyGated.length > 0) {
+    lines.push(
+      '',
+      `Features gating on a flag they do not declare (${report.partiallyGated.length}) — partial gating, not drift:`
+    );
+    for (const entry of report.partiallyGated) {
+      lines.push(`  ${entry.featureId}  ←  ${entry.flag}`);
+    }
+  }
+
+  return lines;
+}
+
+function formatPrismaSignal(report: PrismaScanReport): string[] {
+  const { summary } = report;
+  const lines = [
+    'Signal: Prisma models vs coverage map',
+    `  models         ${summary.total}   (declared in the schema)`,
+    `  mapped         ${summary.mapped}   (queried from a feature's codeLocations)`,
+    `  unclaimed      ${summary.unclaimed}   (in the schema, queried by no feature's code)`,
+    `  declared       ${summary.declared}   (a feature's prismaModels names it)`,
+    `  unused         ${summary.unused}   (no query in product source names it)`,
+  ];
+
+  if (report.stale.length > 0) {
+    lines.push('', `Stale coverage-map prismaModels entries (${report.stale.length}):`);
+    for (const entry of report.stale) {
+      lines.push(`  ${entry.featureId}  ←  ${entry.model}  (${entry.reason})`);
+    }
+  }
+
+  if (report.unclaimed.length > 0) {
+    lines.push(
+      '',
+      `Models queried only from code no feature claims (${report.unclaimed.length}) — gaps, not drift:`
+    );
+    for (const finding of report.unclaimed) {
+      lines.push(`  ${finding.model}  →  ${finding.usedBy.join(', ') || 'no query site'}`);
+    }
+  }
+
+  if (report.undeclared.length > 0) {
+    lines.push(
+      '',
+      `Models owned in code but named in no feature's prismaModels (${report.undeclared.length}) — shared tables, by decision:`
+    );
+    for (const finding of report.undeclared) {
+      lines.push(`  ${finding.model}  →  ${finding.inferredFeatures.length} features query it`);
+    }
+  }
+
+  if (report.unused.length > 0) {
+    lines.push(
+      '',
+      `Models with no query in product source (${report.unused.length}) — written through a relation, or unused:`
+    );
+    for (const finding of report.unused) lines.push(`  ${finding.model}`);
+  }
+
+  return lines;
+}
+
 function formatSignal(signal: DriftReport['signals'][number]): string[] {
   if (signal.signal === 'product-surface') return formatSurfaceSignal(signal);
   if (signal.signal === 'test-attribution') return formatTestSignal(signal);
-  return formatPathwaySignal(signal);
+  if (signal.signal === 'live-qa-pathways') return formatPathwaySignal(signal);
+  if (signal.signal === 'ai-stages') return formatAiStageSignal(signal);
+  if (signal.signal === 'feature-flags') return formatFlagSignal(signal);
+  return formatPrismaSignal(signal);
 }
 
 /** Renders the report as the text the CLI prints. */

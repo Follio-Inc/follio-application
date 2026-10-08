@@ -258,7 +258,9 @@ describe('drift report integration', () => {
   it('carries the pathway signal alongside the existing two', () => {
     const report = runDriftScan();
 
-    expect(report.signals.map((signal) => signal.signal)).toEqual([
+    // The first three in order; item 7 appended its own signals after them,
+    // which is the point of the discriminated union.
+    expect(report.signals.slice(0, 3).map((signal) => signal.signal)).toEqual([
       'product-surface',
       'test-attribution',
       'live-qa-pathways',
