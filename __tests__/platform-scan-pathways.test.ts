@@ -254,7 +254,11 @@ describe('scanLiveQaPathways on synthetic catalogs', () => {
   });
 });
 
-describe('drift report integration', () => {
+// Each of these runs the whole drift scan, which since item 8 parses the
+// ~670-file source tree to classify reachability. The first call in a worker
+// takes a couple of seconds, so the suite gets room beyond the 5s default; the
+// assertions are unchanged.
+describe('drift report integration', { timeout: 30_000 }, () => {
   it('carries the pathway signal alongside the existing two', () => {
     const report = runDriftScan();
 

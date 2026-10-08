@@ -203,7 +203,11 @@ describe('scanProductSurface on an injected tree', () => {
   });
 });
 
-describe('drift report', () => {
+// Each of these runs the whole drift scan, which since item 8 parses the
+// ~670-file source tree to classify reachability. The first call in a worker
+// takes a couple of seconds, so the suite gets room beyond the 5s default; the
+// assertions are unchanged.
+describe('drift report', { timeout: 30_000 }, () => {
   /**
    * `ok` covers every signal, so it is not a statement about the product
    * surface alone. These assertions stay scoped to this signal; the aggregate

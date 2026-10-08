@@ -635,11 +635,17 @@ describe('scanPrismaModels on synthetic input', () => {
   });
 });
 
-describe('drift report integration', () => {
+// Each of these runs the whole drift scan, which since item 8 parses the
+// ~670-file source tree to classify reachability. The first call in a worker
+// takes a couple of seconds, so the suite gets room beyond the 5s default; the
+// assertions are unchanged.
+describe('drift report integration', { timeout: 30_000 }, () => {
   const report = runDriftScan();
 
   it('carries the three item-7 signals after the existing three', () => {
-    expect(report.signals.map((signal) => signal.signal)).toEqual([
+    // The first six in order; item 8 appended its own signals after them,
+    // which is the point of the discriminated union.
+    expect(report.signals.slice(0, 6).map((signal) => signal.signal)).toEqual([
       'product-surface',
       'test-attribution',
       'live-qa-pathways',

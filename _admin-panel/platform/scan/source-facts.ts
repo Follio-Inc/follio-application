@@ -258,21 +258,21 @@ function mightBeWatched(moduleKey: string, watched: Set<string>): boolean {
   return false;
 }
 
-function collectFromSource(
+/**
+ * Harvests every fact from a file that has already been parsed.
+ *
+ * Separated from the reading and parsing so one pass over the tree can feed
+ * this and the module graph from the same syntax tree. Parsing ~670 files
+ * twice costs a second and a lot of transient allocation for no new
+ * information.
+ */
+function collectFromSourceFile(
+  source: ts.SourceFile,
   relativePath: string,
-  sourceText: string,
   facts: SourceFacts,
   repoRoot: string,
   watched: Set<string>
 ): void {
-  const source = ts.createSourceFile(
-    relativePath,
-    sourceText,
-    ts.ScriptTarget.Latest,
-    /* setParentNodes */ false,
-    scriptKindFor(relativePath)
-  );
-
   const visit = (node: ts.Node): void => {
     // `process.env.NAME` and `process.env['NAME']`. A destructured
     // `const { NAME } = process.env` is not used in this repository and is not
@@ -412,6 +412,99 @@ export function clearSourceFactsCache(): void {
   factsCache.clear();
 }
 
+/**
+ * Stores facts gathered elsewhere under the full-tree key.
+ *
+ * `runDriftScan` parses the tree once and feeds both this and the module
+ * graph; priming the cache means a later `collectSourceFacts()` in the same
+ * process answers from that single pass instead of parsing again.
+ */
+export function cacheSourceFacts(repoRoot: string, facts: SourceFacts): void {
+  factsCache.set(repoRoot, facts);
+}
+
+/** Reads the memoised facts without building them. */
+export function peekSourceFacts(repoRoot: string): SourceFacts | undefined {
+  return factsCache.get(repoRoot);
+}
+
+function emptyFacts(files: string[]): SourceFacts {
+  return {
+    files: [...files].sort(),
+    stageReferences: new Map(),
+    envReferences: new Map(),
+    delegateReferences: new Map(),
+    importedBindings: new Map(),
+    moduleImporters: new Map(),
+  };
+}
+
+/** Sorts every index, so two runs over one tree agree to the character. */
+function sortFacts(facts: SourceFacts): SourceFacts {
+  for (const index of [
+    facts.stageReferences,
+    facts.envReferences,
+    facts.delegateReferences,
+    facts.importedBindings,
+    facts.moduleImporters,
+  ]) {
+    for (const [key, value] of index) index.set(key, [...value].sort());
+  }
+
+  return facts;
+}
+
+/** The last path segment of each watched module, e.g. `features`. */
+function hintsFor(watched: Set<string>): string[] {
+  return [...watched].map((modulePath) =>
+    modulePath
+      .split('/')
+      .pop()!
+      .replace(/\.tsx?$/, '')
+  );
+}
+
+/**
+ * A collector that takes files someone else has already parsed.
+ *
+ * The seam that lets `runDriftScan` walk the tree once: the module graph parses
+ * each file and hands the syntax tree here, so both get what they need from one
+ * pass. `accept` keeps the same cheap text gate as the standalone pass, so a
+ * file with nothing to find costs a `String.includes` and no visitor walk.
+ */
+export type SourceFactsSink = {
+  /** True once at least one file has been offered. */
+  readonly used: boolean;
+  accept(source: ts.SourceFile, relativePath: string, sourceText: string): void;
+  /** Sorts and returns what was collected. */
+  finish(files: string[]): SourceFacts;
+};
+
+export function createSourceFactsSink(options: SourceFactsOptions = {}): SourceFactsSink {
+  const repoRoot = options.repoRoot ?? process.cwd();
+  const watched = new Set(
+    options.watchedModules ?? [DEFINITION_SITES.aiClient, DEFINITION_SITES.featureFlags]
+  );
+  const watchedHints = hintsFor(watched);
+  const facts = emptyFacts([]);
+  let used = false;
+
+  return {
+    get used() {
+      return used;
+    },
+    accept(source, relativePath, sourceText) {
+      used = true;
+      if (!mightHoldFacts(sourceText, watchedHints)) return;
+      collectFromSourceFile(source, relativePath, facts, repoRoot, watched);
+    },
+    finish(files) {
+      facts.files = [...files].sort();
+      return sortFacts(facts);
+    },
+  };
+}
+
 /** Collects every item-7 fact from product source in one pass. */
 export function collectSourceFacts(options: SourceFactsOptions = {}): SourceFacts {
   const repoRoot = options.repoRoot ?? process.cwd();
@@ -422,25 +515,9 @@ export function collectSourceFacts(options: SourceFactsOptions = {}): SourceFact
   const watched = new Set(
     options.watchedModules ?? [DEFINITION_SITES.aiClient, DEFINITION_SITES.featureFlags]
   );
+  const watchedHints = hintsFor(watched);
   const files = options.files ?? discoverSourceFiles(repoRoot);
-
-  const facts: SourceFacts = {
-    files: [...files].sort(),
-    stageReferences: new Map(),
-    envReferences: new Map(),
-    delegateReferences: new Map(),
-    importedBindings: new Map(),
-    moduleImporters: new Map(),
-  };
-
-  // The last path segment of each watched module, e.g. `features` — enough to
-  // decide whether a file could possibly name it.
-  const watchedHints = [...watched].map((modulePath) =>
-    modulePath
-      .split('/')
-      .pop()!
-      .replace(/\.tsx?$/, '')
-  );
+  const facts = emptyFacts(files);
 
   for (const relativePath of facts.files) {
     let sourceText: string;
@@ -452,21 +529,17 @@ export function collectSourceFacts(options: SourceFactsOptions = {}): SourceFact
     }
     if (!mightHoldFacts(sourceText, watchedHints)) continue;
 
-    collectFromSource(relativePath, sourceText, facts, repoRoot, watched);
+    const source = ts.createSourceFile(
+      relativePath,
+      sourceText,
+      ts.ScriptTarget.Latest,
+      /* setParentNodes */ false,
+      scriptKindFor(relativePath)
+    );
+    collectFromSourceFile(source, relativePath, facts, repoRoot, watched);
   }
 
-  // Files are appended in walk order, which is already sorted; sorting again
-  // keeps the guarantee local to this function rather than depending on it.
-  for (const index of [
-    facts.stageReferences,
-    facts.envReferences,
-    facts.delegateReferences,
-    facts.importedBindings,
-    facts.moduleImporters,
-  ]) {
-    for (const [key, value] of index) index.set(key, [...value].sort());
-  }
-
+  sortFacts(facts);
   if (cacheable) factsCache.set(repoRoot, facts);
   return facts;
 }

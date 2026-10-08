@@ -11,6 +11,30 @@ export type { FlagDeclaration, FlagScanOptions } from './flags';
 export { delegateFor, discoverPrismaModels, scanPrismaModels } from './prisma-models';
 export type { PrismaScanOptions } from './prisma-models';
 export {
+  ENTRY_BASENAMES,
+  analyzeModuleSource,
+  buildModuleGraph,
+  clearModuleGraphCache,
+  discoverEntryPoints,
+  entryPointsAmong,
+  importersOf,
+  modulesUnder,
+} from './module-graph';
+export type {
+  ImportEdge,
+  ModuleAnalysis,
+  ModuleGraph,
+  ModuleGraphOptions,
+  ModuleNode,
+  ReexportEdge,
+} from './module-graph';
+export { scanReachability } from './reachability';
+export type { ReachabilityScanOptions } from './reachability';
+export { moveCandidatesFor, scanMapReferences } from './map-references';
+export type { MapReferenceScanOptions } from './map-references';
+export { scanCategoryHealth } from './categories';
+export type { CategoryHealthOptions } from './categories';
+export {
   DEFINITION_SITES,
   SOURCE_ROOTS,
   clearSourceFactsCache,
@@ -33,11 +57,22 @@ export type {
   AiStageFinding,
   AiStageScanReport,
   AiStageScanSummary,
+  CategoryHealthFinding,
+  CategoryHealthReport,
+  CategoryHealthSummary,
+  CategorySize,
   DriftReport,
   DriftSignalReport,
+  FeatureContradiction,
   FlagFinding,
   FlagScanReport,
   FlagScanSummary,
+  MapReferenceClassification,
+  MapReferenceFinding,
+  MapReferenceKind,
+  MapReferenceScanReport,
+  MapReferenceScanSummary,
+  MoveCandidate,
   OwnershipClassification,
   PartialGating,
   PathwayClassification,
@@ -47,6 +82,10 @@ export type {
   PrismaModelFinding,
   PrismaScanReport,
   PrismaScanSummary,
+  ReachabilityDisagreement,
+  ReachabilityRecordFinding,
+  ReachabilityScanReport,
+  ReachabilityScanSummary,
   StaleAiStageReference,
   StaleFlagReference,
   StalePathwayReference,

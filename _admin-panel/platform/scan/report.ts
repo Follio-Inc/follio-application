@@ -1,16 +1,30 @@
 import { scanAiStages, type AiStageScanOptions } from './ai-stages';
+import { scanCategoryHealth, type CategoryHealthOptions } from './categories';
 import { scanFeatureFlags, type FlagScanOptions } from './flags';
+import { scanMapReferences, type MapReferenceScanOptions } from './map-references';
+import { buildModuleGraph } from './module-graph';
 import { scanLiveQaPathways, type PathwayScanOptions } from './pathways';
 import { scanPrismaModels, type PrismaScanOptions } from './prisma-models';
-import { collectSourceFacts, type SourceFactsOptions } from './source-facts';
+import { scanReachability, type ReachabilityScanOptions } from './reachability';
+import {
+  cacheSourceFacts,
+  collectSourceFacts,
+  createSourceFactsSink,
+  discoverSourceFiles,
+  type SourceFactsOptions,
+} from './source-facts';
 import { scanProductSurface, type SurfaceScanOptions } from './surface';
 import { scanTestAttribution, type TestScanOptions } from './tests';
 import type {
   AiStageScanReport,
+  CategoryHealthReport,
   DriftReport,
+  FeatureContradiction,
   FlagScanReport,
+  MapReferenceScanReport,
   PathwayScanReport,
   PrismaScanReport,
+  ReachabilityScanReport,
   SurfaceScanReport,
   TestScanReport,
 } from './types';
@@ -32,39 +46,150 @@ export type DriftScanOptions = SurfaceScanOptions &
   AiStageScanOptions &
   FlagScanOptions &
   PrismaScanOptions &
+  ReachabilityScanOptions &
+  MapReferenceScanOptions &
+  CategoryHealthOptions &
   Pick<SourceFactsOptions, 'files'>;
 
-/** Runs every signal implemented so far. Item 8 adds to this list. */
+/**
+ * Contradictions the signals found, attributed to a feature.
+ *
+ * Collected so category health can say which areas are actually in trouble
+ * without re-deriving anything. Only findings that name a feature appear:
+ * unmapped surface belongs to nobody by definition, and a reachability
+ * disagreement is about a module, not a feature.
+ */
+function featureContradictions(
+  tests: TestScanReport,
+  pathways: PathwayScanReport,
+  aiStages: AiStageScanReport,
+  flags: FlagScanReport,
+  prismaModels: PrismaScanReport,
+  mapReferences: MapReferenceScanReport
+): FeatureContradiction[] {
+  const found: FeatureContradiction[] = [
+    ...tests.stale.map((entry) => ({
+      featureId: entry.featureId,
+      signal: 'test-attribution',
+      detail: `${entry.testPath} (${entry.reason})`,
+    })),
+    ...tests.misattributed.flatMap((finding) =>
+      finding.declaredFeatures.map((featureId) => ({
+        featureId,
+        signal: 'test-attribution',
+        detail: `${finding.path} (misattributed)`,
+      }))
+    ),
+    ...pathways.stale.map((entry) => ({
+      featureId: entry.featureId,
+      signal: 'live-qa-pathways',
+      detail: `${entry.pathwayId} (${entry.reason})`,
+    })),
+    ...aiStages.stale.map((entry) => ({
+      featureId: entry.featureId,
+      signal: 'ai-stages',
+      detail: `${entry.stage} (${entry.reason})`,
+    })),
+    ...flags.stale.map((entry) => ({
+      featureId: entry.featureId,
+      signal: 'feature-flags',
+      detail: `${entry.flag} (${entry.reason})`,
+    })),
+    ...prismaModels.stale.map((entry) => ({
+      featureId: entry.featureId,
+      signal: 'prisma-models',
+      detail: `${entry.model} (${entry.reason})`,
+    })),
+    ...mapReferences.missing
+      .filter((finding) => finding.featureId !== null)
+      .map((finding) => ({
+        featureId: finding.featureId!,
+        signal: 'map-references',
+        detail: `${finding.path} (missing)`,
+      })),
+  ];
+
+  return found.sort(
+    (a, b) =>
+      a.featureId.localeCompare(b.featureId) ||
+      a.signal.localeCompare(b.signal) ||
+      a.detail.localeCompare(b.detail)
+  );
+}
+
+/** Runs every signal implemented so far. */
 export function runDriftScan(options: DriftScanOptions = {}): DriftReport {
-  // The last three signals all want references from the same ~670 source
-  // files. Collected once here and handed down, so the CLI parses the tree
-  // once rather than three times.
-  const sourceFacts =
-    options.sourceFacts ?? collectSourceFacts({ repoRoot: options.repoRoot, files: options.files });
-  const withFacts = { ...options, sourceFacts };
+  // Signals 4–6 want references from the same ~670 source files, and signals
+  // 7–8 want the module graph over those same files. One pass produces both:
+  // the graph parses each file and hands the tree to the facts sink, so the
+  // CLI parses the tree once rather than nine times. A cached graph never
+  // calls the sink, which is why the facts fall back to their own cached pass.
+  const repoRoot = options.repoRoot ?? process.cwd();
+  const sink = createSourceFactsSink({ repoRoot, files: options.files });
+  const graph = options.graph ?? buildModuleGraph({ ...options, onSourceFile: sink.accept });
+
+  let sourceFacts = options.sourceFacts;
+  if (!sourceFacts) {
+    if (sink.used && options.files === undefined && options.sources === undefined) {
+      sourceFacts = sink.finish(discoverSourceFiles(repoRoot));
+      // Both passes are memoised per repo root, so priming this one keeps a
+      // later standalone `collectSourceFacts()` from parsing the tree again.
+      cacheSourceFacts(repoRoot, sourceFacts);
+    } else {
+      sourceFacts = collectSourceFacts({ repoRoot, files: options.files });
+    }
+  }
+
+  const shared = { ...options, sourceFacts, graph };
 
   const surface = scanProductSurface(options);
   const tests = scanTestAttribution(options);
   const pathways = scanLiveQaPathways(options);
-  const aiStages = scanAiStages(withFacts);
-  const flags = scanFeatureFlags(withFacts);
-  const prismaModels = scanPrismaModels(withFacts);
+  const aiStages = scanAiStages(shared);
+  const flags = scanFeatureFlags(shared);
+  const prismaModels = scanPrismaModels(shared);
+  const reachability = scanReachability(shared);
+  const mapReferences = scanMapReferences(shared);
+  const categoryHealth = scanCategoryHealth({
+    ...options,
+    contradictions:
+      options.contradictions ??
+      featureContradictions(tests, pathways, aiStages, flags, prismaModels, mapReferences),
+  });
 
   return {
-    signals: [surface, tests, pathways, aiStages, flags, prismaModels],
+    signals: [
+      surface,
+      tests,
+      pathways,
+      aiStages,
+      flags,
+      prismaModels,
+      reachability,
+      mapReferences,
+      categoryHealth,
+    ],
     // Drift means the map contradicts the repository. Unmapped surface, a
-    // `unitTests` entry the graph cannot support, and a map reference to a
-    // stage, flag or model the repository does not define are contradictions.
-    // Everything the item-7 signals report beyond `stale` is a gap: an
-    // unclaimed model, an unused stage and a partially gated feature are all
-    // tracked without failing, as items 4–6 established for their own gaps.
+    // `unitTests` entry the graph cannot support, a map reference to a stage,
+    // flag or model the repository does not define, a reachability record the
+    // graph disproves, and a `codeLocations` path that is not on disk are all
+    // contradictions.
+    //
+    // Everything else the signals report is a gap, tracked without failing: an
+    // unclaimed model, an unused stage, a partially gated feature, a module
+    // that has gone dead, a feature owning dead code, and a category with no
+    // pathway or lab. Category health never fails the scan — a product gap is
+    // not a defect, and failing on it would reward writing a pathway to quiet
+    // a number rather than to test something.
     ok:
       surface.unmapped.length === 0 &&
       tests.stale.length === 0 &&
       tests.misattributed.length === 0 &&
       aiStages.stale.length === 0 &&
       flags.stale.length === 0 &&
-      prismaModels.stale.length === 0,
+      prismaModels.stale.length === 0 &&
+      reachability.disagreements.length === 0 &&
+      mapReferences.missing.length === 0,
   };
 }
 
@@ -367,13 +492,181 @@ function formatPrismaSignal(report: PrismaScanReport): string[] {
   return lines;
 }
 
+function formatReachabilitySignal(report: ReachabilityScanReport): string[] {
+  const { summary } = report;
+  const lines = [
+    'Signal: reachability classes vs coverage map',
+    `  modules        ${summary.modules}   (classified from ${summary.entryPoints} framework entry points)`,
+    `  live           ${summary.live}   (a reachable consumer uses an export, or it is an entry point)`,
+    `  call-unused    ${summary.moduleReachableCallUnused}   (reachable, nothing uses an export)`,
+    `  orphan         ${summary.orphan}   (no entry point reaches it)`,
+    `  records        ${summary.records}   (${summary.recordsInAgreement} in agreement with the repository)`,
+  ];
+
+  if (report.disagreements.length > 0) {
+    lines.push('', `Records the repository contradicts (${report.disagreements.length}):`);
+    for (const finding of report.disagreements) {
+      lines.push(
+        `  ${finding.path}  (${finding.disagreements.join(', ')})`,
+        `    recorded  ${finding.recordedClass}`,
+        `    computed  ${finding.computedClasses.join(', ') || '— (no module under this path)'}`
+      );
+      if (finding.lostImporters.length > 0) {
+        lines.push(`    lost importers    ${finding.lostImporters.join(', ')}`);
+      }
+      if (finding.gainedImporters.length > 0) {
+        lines.push(`    gained importers  ${finding.gainedImporters.join(', ')}`);
+      }
+      if (!finding.entryChainValid) {
+        lines.push(
+          `    recorded chain    ${finding.recordedEntryChain.join(' → ') || '— (none)'}`,
+          `    repository chain  ${finding.derivedEntryChain.join(' → ') || '— (none)'}`
+        );
+      }
+    }
+  }
+
+  lines.push('', `Recorded classes (${report.records.length}):`);
+  for (const finding of report.records) {
+    lines.push(
+      `  ${finding.recordedClass.padEnd(29)} ${finding.path}  (modules ${finding.moduleCount}, importers ${finding.derivedImporters.length})`
+    );
+  }
+
+  if (report.deadEnds.length > 0) {
+    lines.push(
+      '',
+      `Dead ends — unreachable code another unreachable module still imports (${report.deadEnds.length}):`
+    );
+    for (const entry of report.deadEnds) {
+      lines.push(`  ${entry.path}  ←  ${entry.importedBy.join(', ')}`);
+    }
+  }
+
+  if (report.unrecordedCallUnused.length > 0) {
+    lines.push(
+      '',
+      `Reachable but unused, not yet recorded (${report.unrecordedCallUnused.length}) — gaps, not drift:`
+    );
+    for (const modulePath of report.unrecordedCallUnused) lines.push(`  ${modulePath}`);
+  }
+
+  if (report.unrecordedOrphans.length > 0) {
+    lines.push(
+      '',
+      `Unreachable, not yet recorded (${report.unrecordedOrphans.length}) — gaps, not drift:`
+    );
+    for (const modulePath of report.unrecordedOrphans) lines.push(`  ${modulePath}`);
+  }
+
+  return lines;
+}
+
+function formatMapReferenceSignal(report: MapReferenceScanReport): string[] {
+  const { summary } = report;
+  const lines = [
+    'Signal: coverage-map references vs the tree',
+    `  references     ${summary.total}   (${summary.codeLocations} codeLocations, ${summary.excluded} excluded)`,
+    `  present        ${summary.present}`,
+    `  orphaned       ${summary.orphaned}   (on disk, every module unreachable)`,
+    `  missing        ${summary.missing}   (not on disk)`,
+    `  labs declared  ${summary.labsDeclared}   (no lab surface exists before item 20)`,
+  ];
+
+  if (report.missing.length > 0) {
+    lines.push('', `Paths the map names that are not on disk (${report.missing.length}):`);
+    for (const finding of report.missing) {
+      lines.push(`  ${finding.featureId ?? '(excluded)'}  ←  ${finding.path}`);
+      if (finding.moveCandidates.length === 0) {
+        lines.push('    no move candidate: nothing on disk shares the name');
+        continue;
+      }
+      lines.push(
+        `    advisory move candidates (${finding.moveCandidates.length} of ${finding.moveCandidatesConsidered}) — evidence only, never applied:`
+      );
+      for (const candidate of finding.moveCandidates) {
+        lines.push(
+          `      ${candidate.path}  [${candidate.strength}: ${candidate.evidence.join('; ')}]`
+        );
+      }
+    }
+  }
+
+  if (report.orphaned.length > 0) {
+    lines.push(
+      '',
+      `Mapped code no entry point reaches (${report.orphaned.length}) — gaps, not drift:`
+    );
+    for (const finding of report.orphaned) {
+      lines.push(
+        `  ${finding.featureId ?? '(excluded)'}  ←  ${finding.path}  (modules ${finding.moduleCount}, all unreachable)`
+      );
+    }
+  }
+
+  if (report.labsDeclared.length > 0) {
+    lines.push('', `Declared labs (${report.labsDeclared.length}) — listed, not checked:`);
+    for (const entry of report.labsDeclared) lines.push(`  ${entry}`);
+  }
+
+  return lines;
+}
+
+function formatCategorySignal(report: CategoryHealthReport): string[] {
+  const { summary } = report;
+  const lines = [
+    'Signal: category health',
+    `  categories     ${summary.categories}   (${summary.features} features)`,
+    `  large          ${summary.large}   (at or above ${summary.largeThreshold} features)`,
+    `  balanced       ${summary.balanced}`,
+    `  thin           ${summary.thin}   (below ${summary.thinThreshold} features)`,
+    `  empty          ${summary.empty}   (no feature uses the category)`,
+    '',
+    `  ${'category'.padEnd(16)} ${'size'.padEnd(9)} feat  shipped  flagged  tested  pathway  lab  contradictions`,
+  ];
+
+  for (const finding of report.categories) {
+    lines.push(
+      `  ${finding.category.padEnd(16)} ${finding.size.padEnd(9)} ` +
+        `${String(finding.features.length).padEnd(5)} ` +
+        `${String(finding.shipped).padEnd(8)} ` +
+        `${String(finding.flagged).padEnd(8)} ` +
+        `${String(finding.featuresWithTests).padEnd(7)} ` +
+        `${String(finding.featuresWithPathway).padEnd(8)} ` +
+        `${String(finding.featuresWithLab).padEnd(4)} ` +
+        `${finding.contradictions}`
+    );
+  }
+
+  const withSuggestion = report.categories.filter((finding) => finding.regroup !== null);
+  if (withSuggestion.length > 0) {
+    lines.push('', `Suggested regroups (${withSuggestion.length}) — advisory:`);
+    for (const finding of withSuggestion) {
+      lines.push(`  ${finding.category}: ${finding.regroup}`);
+    }
+  }
+
+  lines.push(
+    '',
+    `No Live QA pathway (${report.withoutPathway.length} of ${summary.categories}): ${report.withoutPathway.join(', ') || '—'}`,
+    `No unit test (${report.withoutTests.length} of ${summary.categories}): ${report.withoutTests.join(', ') || '—'}`,
+    `No lab (${report.withoutLab.length} of ${summary.categories}): ${report.withoutLab.join(', ') || '—'}`,
+    'These are product gaps, recorded and never failed.'
+  );
+
+  return lines;
+}
+
 function formatSignal(signal: DriftReport['signals'][number]): string[] {
   if (signal.signal === 'product-surface') return formatSurfaceSignal(signal);
   if (signal.signal === 'test-attribution') return formatTestSignal(signal);
   if (signal.signal === 'live-qa-pathways') return formatPathwaySignal(signal);
   if (signal.signal === 'ai-stages') return formatAiStageSignal(signal);
   if (signal.signal === 'feature-flags') return formatFlagSignal(signal);
-  return formatPrismaSignal(signal);
+  if (signal.signal === 'prisma-models') return formatPrismaSignal(signal);
+  if (signal.signal === 'reachability') return formatReachabilitySignal(signal);
+  if (signal.signal === 'map-references') return formatMapReferenceSignal(signal);
+  return formatCategorySignal(signal);
 }
 
 /** Renders the report as the text the CLI prints. */

@@ -12,6 +12,8 @@
  * Client-safe: types only, no Node APIs.
  */
 
+import type { FeatureCategory, ReachabilityClass } from '../coverage-map';
+
 /** What kind of product surface a discovered file is. */
 export type SurfaceKind = 'page' | 'route';
 
@@ -415,12 +417,235 @@ export type PrismaScanReport = {
   stale: StalePrismaReference[];
 };
 
+/** How a reachability record and the repository disagree. */
+export type ReachabilityDisagreement =
+  | 'class-changed'
+  | 'importers-changed'
+  | 'entry-chain-invalid'
+  | 'missing-path';
+
+/** One reachability record, recomputed from the current module graph. */
+export type ReachabilityRecordFinding = {
+  /** Repo-relative module or directory the record names. */
+  path: string;
+  recordedClass: ReachabilityClass;
+  /**
+   * Classes the graph computes for the modules under `path`, sorted.
+   *
+   * More than one means a directory record no longer describes its whole
+   * subtree, which is itself the disagreement.
+   */
+  computedClasses: ReachabilityClass[];
+  /** Modules found under `path`. Zero means the record points at nothing. */
+  moduleCount: number;
+  recordedImporters: string[];
+  derivedImporters: string[];
+  /** Recorded importers the repository no longer shows, sorted. */
+  lostImporters: string[];
+  /** Importers the repository shows that the record does not name, sorted. */
+  gainedImporters: string[];
+  recordedEntryChain: string[];
+  /** The graph's own shortest chain, entry first. Empty for an orphan. */
+  derivedEntryChain: string[];
+  /**
+   * Whether the recorded chain is still a real path: every hop a reference the
+   * repository has, starting at an entry point. Checked rather than compared
+   * for equality, because several entry points may reach one module and naming
+   * a different one is not drift.
+   */
+  entryChainValid: boolean;
+  disagreements: ReachabilityDisagreement[];
+};
+
+export type ReachabilityScanSummary = {
+  /** Modules classified. Declaration files are excluded. */
+  modules: number;
+  /** Next.js entry points the graph was walked from. */
+  entryPoints: number;
+  live: number;
+  moduleReachableCallUnused: number;
+  orphan: number;
+  records: number;
+  recordsInAgreement: number;
+  /** Orphans no record names. */
+  unrecordedOrphans: number;
+  /** Call-unused modules no record names. */
+  unrecordedCallUnused: number;
+};
+
+/**
+ * Signal 7: item 3's reachability records vs the repository's module graph.
+ *
+ * Every module in the tree is classified, so the five hand-written records are
+ * falsifiable rather than merely written down.
+ */
+export type ReachabilityScanReport = {
+  signal: 'reachability';
+  summary: ReachabilityScanSummary;
+  /** Entry points the classification was derived from, sorted. */
+  entryPoints: string[];
+  /** Every record, sorted by path. */
+  records: ReachabilityRecordFinding[];
+  /** Records the repository contradicts. These fail the scan. */
+  disagreements: ReachabilityRecordFinding[];
+  /** Orphan modules no record names, sorted. Gaps, not contradictions. */
+  unrecordedOrphans: string[];
+  /** Call-unused modules no record names, sorted. Gaps, not contradictions. */
+  unrecordedCallUnused: string[];
+  /**
+   * Orphans that still have an importer from another directory, sorted.
+   *
+   * Transitively dead rather than unimported — the shape of the
+   * `lib/resume-parser/` dead end, rediscovered rather than asserted. Every
+   * importer of an orphan is itself an orphan, since a reachable importer
+   * would make it reachable.
+   */
+  deadEnds: { path: string; importedBy: string[] }[];
+};
+
+/** Whether a path the map names is there, dead, or gone. */
+export type MapReferenceClassification = 'present' | 'orphaned' | 'missing';
+
+/** What a map reference points at. */
+export type MapReferenceKind = 'code-location' | 'excluded';
+
+/**
+ * A file or directory that might be where a lost path went.
+ *
+ * Advisory. A name match is the only evidence available without a history
+ * walk, and it is never written back to the map or counted as a mapping.
+ */
+export type MoveCandidate = {
+  path: string;
+  /** `basename-and-parent` also matches the parent directory name. */
+  strength: 'basename' | 'basename-and-parent';
+  /** What the match was. */
+  evidence: string[];
+};
+
+/** One implementation path the map names, checked against the tree. */
+export type MapReferenceFinding = {
+  /** Owning feature, or null for an `EXCLUDED` entry. */
+  featureId: string | null;
+  kind: MapReferenceKind;
+  path: string;
+  classification: MapReferenceClassification;
+  /** TypeScript modules under this path. Zero for a non-TypeScript path. */
+  moduleCount: number;
+  /** Of those, the ones no shipped entry point reaches, sorted. */
+  orphanModules: string[];
+  /** Advisory candidates for a `missing` path, best first. Capped. */
+  moveCandidates: MoveCandidate[];
+  /** How many candidates matched before the cap, so nothing is hidden. */
+  moveCandidatesConsidered: number;
+};
+
+export type MapReferenceScanSummary = {
+  total: number;
+  present: number;
+  /** Paths whose every module is unreachable. Gaps, not contradictions. */
+  orphaned: number;
+  /** Paths that are not on disk. Contradictions. */
+  missing: number;
+  codeLocations: number;
+  excluded: number;
+  /** `lab` ids the map declares. Unverifiable until item 20. */
+  labsDeclared: number;
+  moveCandidates: number;
+};
+
+/** Signal 8: the map's `codeLocations` and `EXCLUDED` paths vs the tree. */
+export type MapReferenceScanReport = {
+  signal: 'map-references';
+  summary: MapReferenceScanSummary;
+  /** Every reference, sorted by path then owner. The lists below are subsets. */
+  references: MapReferenceFinding[];
+  present: MapReferenceFinding[];
+  orphaned: MapReferenceFinding[];
+  missing: MapReferenceFinding[];
+  /**
+   * Declared `lab` references as `featureId → lab`, sorted.
+   *
+   * Listed, not checked: nothing defines where a lab module lives until item
+   * 20, and guessing a directory to report it missing would invent a path.
+   */
+  labsDeclared: string[];
+};
+
+/** How a category sits against the distribution the map actually has. */
+export type CategorySize = 'empty' | 'thin' | 'balanced' | 'large';
+
+/** A contradiction another signal found, attributed to a feature. */
+export type FeatureContradiction = {
+  featureId: string;
+  /** The signal that found it. */
+  signal: string;
+  /** What it was, for a reader who has only this line. */
+  detail: string;
+};
+
+/** One category, and the evidence behind its size verdict. */
+export type CategoryHealthFinding = {
+  category: FeatureCategory;
+  /** Feature ids in this category, sorted. */
+  features: string[];
+  shipped: number;
+  flagged: number;
+  unshipped: number;
+  deprecated: number;
+  featuresWithTests: number;
+  featuresWithPathway: number;
+  featuresWithLab: number;
+  /** Contradictions other signals found in this category's features. */
+  contradictions: number;
+  size: CategorySize;
+  /** Derived suggestion, or null when the category is fine as it is. */
+  regroup: string | null;
+};
+
+export type CategoryHealthSummary = {
+  categories: number;
+  features: number;
+  empty: number;
+  thin: number;
+  balanced: number;
+  large: number;
+  /** `ceil(2 x features / categories)`, at least 2. Printed so it is auditable. */
+  largeThreshold: number;
+  /** `floor(features / categories)`. */
+  thinThreshold: number;
+  categoriesWithoutPathway: number;
+  categoriesWithoutLab: number;
+};
+
+/**
+ * Signal 9: category size and representation.
+ *
+ * Nothing in here fails the scan. A category with no pathway and no lab is a
+ * product gap, not a defect, and making it a failure would reward writing a
+ * pathway to quiet a number.
+ */
+export type CategoryHealthReport = {
+  signal: 'category-health';
+  summary: CategoryHealthSummary;
+  /** Every category, sorted by name. The lists below are subsets. */
+  categories: CategoryHealthFinding[];
+  empty: CategoryHealthFinding[];
+  thin: CategoryHealthFinding[];
+  large: CategoryHealthFinding[];
+  /** Categories with no Live QA pathway at all, sorted. Gaps. */
+  withoutPathway: string[];
+  /** Categories with no lab, sorted. No labs exist before item 20. */
+  withoutLab: string[];
+  /** Categories where no feature lists a unit test, sorted. Gaps. */
+  withoutTests: string[];
+};
+
 /**
  * One signal's findings.
  *
  * Discriminated by `signal`, so the CLI and formatter iterate signals rather
- * than knowing about any one of them. Item 8 adds reachability as a further
- * member.
+ * than knowing about any one of them.
  */
 export type DriftSignalReport =
   | SurfaceScanReport
@@ -428,7 +653,10 @@ export type DriftSignalReport =
   | PathwayScanReport
   | AiStageScanReport
   | FlagScanReport
-  | PrismaScanReport;
+  | PrismaScanReport
+  | ReachabilityScanReport
+  | MapReferenceScanReport
+  | CategoryHealthReport;
 
 /** The whole scan: every signal that ran, plus whether anything drifted. */
 export type DriftReport = {
