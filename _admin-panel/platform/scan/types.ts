@@ -70,15 +70,87 @@ export type SurfaceScanReport = {
   unmapped: SurfaceFinding[];
 };
 
+/** Whether a test asserts on behavior or on how the source is written. */
+export type TestAssertionStyle = 'behavior' | 'source-text';
+
+/**
+ * What the import graph says about a test, against what the map claims.
+ *
+ * - `mapped` — the graph attributes it to a feature that also lists it
+ * - `unlisted` — the graph attributes it to a feature that does *not* list it
+ * - `misattributed` — the map lists it under features the graph does not support
+ * - `uncategorized` — the graph reaches no feature code at all (platform tests,
+ *   shared utilities). A gap, not a contradiction.
+ * - `dead-code` — everything it reaches is recorded as an orphan, so it covers
+ *   code no shipped entry point can reach
+ */
+export type TestClassification =
+  | 'mapped'
+  | 'unlisted'
+  | 'misattributed'
+  | 'uncategorized'
+  | 'dead-code';
+
+/** One test file and what the import graph found in it. */
+export type TestFinding = {
+  path: string;
+  assertion: TestAssertionStyle;
+  /** Repo paths the test references directly, sorted. */
+  directTargets: string[];
+  /** Repo paths reached one hop through a barrel re-export, sorted. */
+  barrelTargets: string[];
+  /** Specifiers that resolved to nothing on disk — themselves worth knowing. */
+  unresolved: string[];
+  /** Feature ids the graph attributes it to, sorted. */
+  inferredFeatures: string[];
+  /** Feature ids whose `unitTests` list it, sorted. */
+  declaredFeatures: string[];
+  classification: TestClassification;
+};
+
+/** A coverage-map `unitTests` entry the import graph cannot support. */
+export type StaleTestReference = {
+  featureId: string;
+  testPath: string;
+  /** `missing-file`: nothing on disk. `no-import-link`: exists, reaches elsewhere. */
+  reason: 'missing-file' | 'no-import-link';
+};
+
+export type TestScanSummary = {
+  total: number;
+  mapped: number;
+  unlisted: number;
+  misattributed: number;
+  uncategorized: number;
+  deadCode: number;
+  /** Tests asserting on source text rather than behavior. */
+  sourceText: number;
+  /** Tests that resolved to no repo path at all. */
+  unresolvable: number;
+};
+
+/** Signal 2: test files vs the coverage map's `unitTests`, via the import graph. */
+export type TestScanReport = {
+  signal: 'test-attribution';
+  summary: TestScanSummary;
+  /** Every test, sorted by path. The lists below are subsets, also sorted. */
+  tests: TestFinding[];
+  mapped: TestFinding[];
+  unlisted: TestFinding[];
+  misattributed: TestFinding[];
+  uncategorized: TestFinding[];
+  deadCode: TestFinding[];
+  stale: StaleTestReference[];
+};
+
 /**
  * One signal's findings.
  *
- * A union with a single member today. Items 5–8 add tests, Live QA pathways,
- * AI stages, flags, Prisma models and reachability as further members, each
- * discriminated by its own `signal` literal — the CLI and the report formatter
- * iterate signals rather than knowing about any one of them.
+ * Discriminated by `signal`, so the CLI and formatter iterate signals rather
+ * than knowing about any one of them. Items 6–8 add Live QA pathways, AI
+ * stages, flags, Prisma models and reachability as further members.
  */
-export type DriftSignalReport = SurfaceScanReport;
+export type DriftSignalReport = SurfaceScanReport | TestScanReport;
 
 /** The whole scan: every signal that ran, plus whether anything drifted. */
 export type DriftReport = {

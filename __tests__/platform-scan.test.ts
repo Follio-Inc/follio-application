@@ -201,8 +201,15 @@ describe('scanProductSurface on an injected tree', () => {
 });
 
 describe('drift report', () => {
-  it('is ok on the real tree', () => {
-    expect(runDriftScan().ok).toBe(true);
+  /**
+   * `ok` covers every signal, so it is not a statement about the product
+   * surface alone. These assertions stay scoped to this signal; the aggregate
+   * is the test-attribution signal's business (see platform-scan-tests).
+   */
+  it('finds no product-surface drift on the real tree', () => {
+    const surface = runDriftScan().signals.find((signal) => signal.signal === 'product-surface');
+
+    expect(surface?.unmapped).toEqual([]);
   });
 
   it('is not ok when a signal finds drift', () => {
@@ -217,12 +224,26 @@ describe('drift report', () => {
     expect(text).not.toContain('No drift found');
   });
 
-  it('says so plainly when there is no drift', () => {
+  it('renders a diffable report with no timestamps or absolute paths', () => {
     const text = formatDriftReport(runDriftScan());
 
-    expect(text).toContain('No drift found');
-    // No timestamps or absolute paths — the text must stay diffable.
+    expect(text).toContain('Signal: product surface vs coverage map');
+    expect(text).toContain('unmapped    0');
     expect(text).not.toMatch(/\d{4}-\d{2}-\d{2}T/);
     expect(text).not.toContain(process.cwd());
+  });
+
+  it('says so plainly when nothing drifts', () => {
+    // A synthetic tree with a map that accounts for everything — the only way
+    // to assert the clean-report wording now that more than one signal runs.
+    const text = formatDriftReport(
+      runDriftScan({
+        surfaces: [{ path: 'app/api/admin/stats/route.ts', kind: 'route' }],
+        testFiles: ['__tests__/visibility.test.ts'],
+        features: [],
+      })
+    );
+
+    expect(text).toContain('No drift found');
   });
 });
