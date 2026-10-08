@@ -672,12 +672,14 @@ describe('drift report integration', { timeout: 30_000 }, () => {
     const surface = report.signals.find((signal) => signal.signal === 'product-surface');
 
     expect(surface?.signal === 'product-surface' && surface.summary).toEqual({
-      total: 146,
-      mapped: 127,
+      // Item 8a widened route discovery from `app/api` to all of `app/`,
+      // which added the three `.well-known` OAuth handlers.
+      total: 149,
+      mapped: 130,
       excluded: 19,
       unmapped: 0,
       pages: 44,
-      routes: 102,
+      routes: 105,
     });
   });
 

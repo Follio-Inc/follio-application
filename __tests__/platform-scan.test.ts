@@ -9,6 +9,9 @@
  * trustworthy if we have watched it report drift when drift exists.
  */
 
+import { readdirSync } from 'node:fs';
+import path from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import { COVERAGE_MAP, EXCLUDED } from '@/_admin-panel/platform/coverage-map';
@@ -28,6 +31,33 @@ const FAKE_SURFACES: DiscoveredSurface[] = [
   { path: 'app/api/brand-new-thing/route.ts', kind: 'route' },
 ];
 
+/**
+ * Every file of a given name under `app/`, re-derived here.
+ *
+ * Deliberately a second implementation, the way the item-3 reachability test
+ * re-derives `importedBy`: it knows only the framework convention and nothing
+ * about which subdirectories exist, so comparing the scanner against it proves
+ * discovery follows the convention rather than a list of places to look. Item
+ * 8a exists because the scanner used to look for `route.ts` under `app/api`
+ * alone and missed three handlers under `app/.well-known/`.
+ */
+function everyFileNamed(basename: string, root = 'app'): string[] {
+  const found: string[] = [];
+
+  const walk = (relativeDir: string): void => {
+    for (const entry of readdirSync(path.join(process.cwd(), relativeDir), {
+      withFileTypes: true,
+    })) {
+      const relativePath = `${relativeDir}/${entry.name}`;
+      if (entry.isDirectory()) walk(relativePath);
+      else if (entry.name === basename) found.push(relativePath);
+    }
+  };
+
+  walk(root);
+  return found.sort();
+}
+
 describe('product surface discovery', () => {
   it('finds the real pages and routes', () => {
     const discovered = discoverProductSurface();
@@ -43,6 +73,43 @@ describe('product surface discovery', () => {
       expect(surface.path).toMatch(surface.kind === 'page' ? /\/page\.tsx$/ : /\/route\.ts$/);
       expect(surface.path, 'paths must be repo-relative POSIX').not.toMatch(/^[./]|\\/);
     }
+  });
+
+  it('finds every route handler under app, not only those under app/api', () => {
+    const discovered = discoverProductSurface()
+      .filter((surface) => surface.kind === 'route')
+      .map((surface) => surface.path);
+
+    // The convention is `route.ts` anywhere under `app/`; `app/api` is this
+    // codebase's habit, not the framework's rule.
+    expect(discovered).toEqual(everyFileNamed('route.ts'));
+    expect(discovered.filter((route) => !route.startsWith('app/api/')).length).toBeGreaterThan(0);
+    // And the ordinary case still works.
+    expect(discovered.filter((route) => route.startsWith('app/api/')).length).toBeGreaterThan(95);
+  });
+
+  it('finds the handlers outside app/api that signal 1 used to miss', () => {
+    // Named here, not in the scanner: the assertion above is what proves the
+    // rule is general, and this one pins the regression item 8a fixed.
+    const discovered = discoverProductSurface().map((surface) => surface.path);
+
+    for (const route of [
+      'app/.well-known/oauth-authorization-server/route.ts',
+      'app/.well-known/oauth-protected-resource/route.ts',
+      'app/.well-known/oauth-protected-resource/api/mcp/route.ts',
+    ]) {
+      expect(discovered, `${route} is a real route handler and must be discovered`).toContain(
+        route
+      );
+    }
+  });
+
+  it('finds every page under app, unchanged', () => {
+    const discovered = discoverProductSurface()
+      .filter((surface) => surface.kind === 'page')
+      .map((surface) => surface.path);
+
+    expect(discovered).toEqual(everyFileNamed('page.tsx'));
   });
 
   it('discovers deterministically', () => {
@@ -172,6 +239,32 @@ describe('scanProductSurface on an injected tree', () => {
       'app/api/admin/stats/route.ts',
     ]);
     expect(report.excluded[0].matchedBy).toBe('app/api/admin');
+  });
+
+  it('puts a route outside app/api through the same three classes', () => {
+    // No special case for where a handler sits: ownership comes from the map,
+    // the same way it does for `app/api`.
+    const report = scanProductSurface({
+      surfaces: [
+        { path: 'app/.well-known/oauth-authorization-server/route.ts', kind: 'route' },
+        { path: 'app/.well-known/something-else/route.ts', kind: 'route' },
+        { path: 'app/lab/well-known-ish/route.ts', kind: 'route' },
+      ],
+    });
+
+    expect(report.mapped.map((finding) => finding.path)).toEqual([
+      'app/.well-known/oauth-authorization-server/route.ts',
+    ]);
+    expect(report.mapped[0].claimedBy).toEqual(['ai-connector-mcp']);
+    // A different well-known endpoint is not claimed by proximity.
+    expect(report.unmapped.map((finding) => finding.path)).toEqual([
+      'app/.well-known/something-else/route.ts',
+    ]);
+    // And an exclusion still wins where one covers the path.
+    expect(report.excluded.map((finding) => finding.path)).toEqual([
+      'app/lab/well-known-ish/route.ts',
+    ]);
+    expect(report.excluded[0].matchedBy).toBe('app/lab');
   });
 
   it('records every feature that claims a shared path', () => {

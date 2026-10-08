@@ -196,11 +196,11 @@ describe('entry point discovery', () => {
     expect(discoverEntryPoints()).toEqual(entryPoints);
   });
 
-  it('includes route handlers outside app/api, which signal 1 does not walk', () => {
-    // Recorded as item 8a: these are real route handlers and real entry points,
-    // but signal 1 only globs `app/api` for `route.ts`, so they are outside the
-    // 146 it discovers. The reachability graph needs them or everything they
-    // import looks dead.
+  it('includes route handlers outside app/api', () => {
+    // These are real route handlers and real entry points, and the graph needs
+    // them or everything they import looks dead. Signal 1 missed them until
+    // item 8a widened its route rule from `app/api` to all of `app/`; the two
+    // discoveries now agree about what a route handler is.
     expect(discoverEntryPoints()).toContain('app/.well-known/oauth-authorization-server/route.ts');
   });
 });
@@ -859,12 +859,14 @@ describe('drift report integration', { timeout: 30_000 }, () => {
     const prisma = report.signals.find((signal) => signal.signal === 'prisma-models');
 
     expect(surface?.signal === 'product-surface' && surface.summary).toEqual({
-      total: 146,
-      mapped: 127,
+      // Item 8a widened route discovery from `app/api` to all of `app/`,
+      // which added the three `.well-known` OAuth handlers.
+      total: 149,
+      mapped: 130,
       excluded: 19,
       unmapped: 0,
       pages: 44,
-      routes: 102,
+      routes: 105,
     });
     expect(pathways?.signal === 'live-qa-pathways' && pathways.summary).toMatchObject({
       total: 9,

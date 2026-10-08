@@ -52,7 +52,13 @@ export type SurfaceScanSummary = {
   mapped: number;
   excluded: number;
   unmapped: number;
-  /** Discovered counts by kind, so a collapsed walker is visible in the report. */
+  /**
+   * Discovered counts by kind, so a collapsed walker is visible in the report.
+   *
+   * `routes` counts every `route.ts` under `app/`, not only those under
+   * `app/api` — the framework allows a handler anywhere, and three of this
+   * repository's live under `app/.well-known/`.
+   */
   pages: number;
   routes: number;
 };

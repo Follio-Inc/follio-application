@@ -197,7 +197,7 @@ function formatSurfaceSignal(report: SurfaceScanReport): string[] {
   const { summary } = report;
   const lines = [
     'Signal: product surface vs coverage map',
-    `  discovered  ${summary.total}  (${summary.pages} pages, ${summary.routes} API routes)`,
+    `  discovered  ${summary.total}  (${summary.pages} pages, ${summary.routes} route handlers)`,
     `  mapped      ${summary.mapped}`,
     `  excluded    ${summary.excluded}`,
     `  unmapped    ${summary.unmapped}`,

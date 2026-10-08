@@ -12,7 +12,7 @@ import type {
 } from './types';
 
 /**
- * Signal 1 of the drift scan: every page and API route vs the coverage map.
+ * Signal 1 of the drift scan: every page and route handler vs the coverage map.
  *
  * Server-only (walks the filesystem). The classification rule lives here and
  * nowhere else — `__tests__/platform-coverage-map.test.ts` calls this rather
@@ -20,10 +20,21 @@ import type {
  * never disagree about what "mapped" means.
  */
 
-/** Where each kind of surface lives, and what filename identifies it. */
+/**
+ * How Next.js names each kind of product surface, and where it looks for them.
+ *
+ * Both conventions apply anywhere under `app/`: a `page.tsx` renders the route
+ * its directory describes, and a `route.ts` handles it. Routes used to be
+ * walked from `app/api` alone, which is a convention of this codebase rather
+ * than of the framework — it missed the three OAuth metadata handlers under
+ * `app/.well-known/`, so a `route.ts` outside `app/api` could never be
+ * reported as unmapped (PLATFORM_TODO item 8a). The root is the framework's
+ * `app` directory for both kinds, and nothing here knows which subdirectories
+ * exist.
+ */
 const SURFACE_SOURCES: { kind: SurfaceKind; root: string; basename: string }[] = [
   { kind: 'page', root: 'app', basename: 'page.tsx' },
-  { kind: 'route', root: 'app/api', basename: 'route.ts' },
+  { kind: 'route', root: 'app', basename: 'route.ts' },
 ];
 
 export type DiscoveredSurface = { path: string; kind: SurfaceKind };

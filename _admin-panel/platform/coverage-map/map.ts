@@ -533,6 +533,14 @@ export const COVERAGE_MAP: PlatformFeature[] = [
       'app/api/mcp',
       'app/api/oauth',
       'app/oauth/authorize',
+      // OAuth discovery metadata, served from the well-known prefix the specs
+      // require rather than from `app/api`. Listed as three files, not as the
+      // `app/.well-known` directory: a future well-known endpoint for
+      // something else must surface as unmapped, not be claimed by this
+      // feature because of where it sits (PLATFORM_TODO item 8a).
+      'app/.well-known/oauth-authorization-server/route.ts',
+      'app/.well-known/oauth-protected-resource/route.ts',
+      'app/.well-known/oauth-protected-resource/api/mcp/route.ts',
       'lib/ai-connector',
       'lib/mcp',
       'services/ai-connector.service.ts',
@@ -544,6 +552,8 @@ export const COVERAGE_MAP: PlatformFeature[] = [
     prismaModels: ['AiConnectorAuthCode', 'AiConnectorClient', 'AiConnectorToken', 'AiEditDraft'],
     unitTests: ['__tests__/ai-connector.test.ts'],
     pathways: [],
+    notes:
+      "The three app/.well-known handlers are this feature's own code: each one imports only lib/ai-connector/oauth-metadata and lib/ai-connector/cors, and returns the authorization-server or protected-resource metadata an AI assistant reads before connecting. They were outside signal 1 until item 8a widened route discovery from app/api to all of app/.",
   },
   {
     id: 'chrome-extension',
