@@ -28,6 +28,7 @@
     "live-qa": "playwright test --config=_admin-panel/modules/developer/live-qa/playwright.config.ts",
     "live-qa:install": "playwright install chromium",
     "live-qa:auth": "node scripts/live-qa-capture-auth.mjs",
+    "platform:scan": "npx tsx _admin-panel/platform/scan/cli.ts",
     "pdf-worker": "npm start --prefix pdf-worker",
     "pdf-worker:deploy": "bash scripts/deploy-pdf-worker.sh",
     "typecheck": "tsc --noEmit",

@@ -28,51 +28,10 @@ import {
   listByReachability,
   listFeatures,
 } from '@/_admin-panel/platform/coverage-map';
+import { covers, discoverProductSurface, scanProductSurface } from '@/_admin-panel/platform/scan';
 
 function resolveFromRepoRoot(relativePath: string): string {
   return path.join(process.cwd(), relativePath);
-}
-
-/**
- * Walks a directory for files with the given basename.
- *
- * Hand-rolled rather than `readdirSync(dir, { recursive: true })` because CI
- * pins Node 20, where that option is only available in later minors. Returns
- * repo-relative POSIX paths so they compare directly against map entries.
- */
-function findFilesNamed(startDir: string, basename: string): string[] {
-  const found: string[] = [];
-
-  const walk = (relativeDir: string): void => {
-    const entries = readdirSync(resolveFromRepoRoot(relativeDir), { withFileTypes: true });
-    for (const entry of entries) {
-      const relativePath = `${relativeDir}/${entry.name}`;
-      if (entry.isDirectory()) {
-        walk(relativePath);
-      } else if (entry.name === basename) {
-        found.push(relativePath);
-      }
-    }
-  };
-
-  walk(startDir);
-  return found.sort();
-}
-
-/** True when `claim` is the path itself or a directory containing it. */
-function claims(claim: string, targetPath: string): boolean {
-  return targetPath === claim || targetPath.startsWith(`${claim}/`);
-}
-
-/**
- * Every route and page the product surface is made of.
- *
- * Item 2's done condition: each one is claimed by a feature or explicitly
- * excluded. Discovered from disk, not listed here, so a new route shows up
- * without anyone remembering to add it.
- */
-function productSurfacePaths(): string[] {
-  return [...findFilesNamed('app', 'page.tsx'), ...findFilesNamed('app/api', 'route.ts')];
 }
 
 describe('coverage map', () => {
@@ -165,26 +124,26 @@ describe('coverage map', () => {
   });
 });
 
+/**
+ * Item 2's completeness condition, now checked through the item-4 scanner.
+ *
+ * This block used to carry its own walker and prefix matcher. It delegates to
+ * `scanProductSurface` so there is exactly one implementation of "mapped":
+ * two copies would eventually disagree, and then the map's own test and the
+ * CLI would give different answers about the same tree.
+ */
 describe('product surface coverage', () => {
   it('finds the product surface on disk', () => {
-    // Guards the walker itself: if this returned nothing, the completeness
-    // check below would pass vacuously.
-    const pages = findFilesNamed('app', 'page.tsx');
-    const routes = findFilesNamed('app/api', 'route.ts');
+    // Guards the walker: if discovery returned nothing, the completeness check
+    // below would pass vacuously.
+    const discovered = discoverProductSurface();
 
-    expect(pages.length).toBeGreaterThan(40);
-    expect(routes.length).toBeGreaterThan(95);
+    expect(discovered.filter((surface) => surface.kind === 'page').length).toBeGreaterThan(40);
+    expect(discovered.filter((surface) => surface.kind === 'route').length).toBeGreaterThan(95);
   });
 
   it('claims or explicitly excludes every page and API route', () => {
-    const allClaims = COVERAGE_MAP.flatMap((feature) => feature.codeLocations);
-    const allExclusions = EXCLUDED.map((entry) => entry.path);
-
-    const unaccounted = productSurfacePaths().filter(
-      (surfacePath) =>
-        !allClaims.some((claim) => claims(claim, surfacePath)) &&
-        !allExclusions.some((exclusion) => claims(exclusion, surfacePath))
-    );
+    const unaccounted = scanProductSurface().unmapped.map((finding) => finding.path);
 
     expect(
       unaccounted,
@@ -211,7 +170,7 @@ describe('product surface coverage', () => {
 
     for (const entry of EXCLUDED) {
       const conflicting = allClaims.filter(
-        (claim) => claims(entry.path, claim) || claims(claim, entry.path)
+        (claim) => covers(entry.path, claim) || covers(claim, entry.path)
       );
       expect(conflicting, `EXCLUDED ${entry.path} is also claimed by a feature`).toEqual([]);
     }
