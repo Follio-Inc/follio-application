@@ -41,6 +41,7 @@ import {
   PLATFORM_SECTIONS,
   getPlatformSection,
   isSectionActive,
+  listPlannedSections,
   listPlatformTools,
 } from '@/_admin-panel/platform/nav';
 import {
@@ -96,13 +97,20 @@ describe('platform section registry', () => {
     expect(overview?.status).toBe('available');
     expect(overview?.plan).toEqual([]);
 
-    // Item 10 ships the shell only: Labs, Tests and Drift are routed and empty.
+    // Item 10 shipped the shell with Labs, Tests and Drift routed and empty;
+    // item 11 filled Tests in. The planned set shrinks as later items land, so
+    // this asserts the invariant rather than today's membership.
     for (const section of listPlatformTools()) {
-      expect(section.status, section.id).toBe('planned');
+      expect(['available', 'planned'], section.id).toContain(section.status);
+    }
+    for (const section of listPlannedSections()) {
       // A planned section has to name what it will show, or its placeholder
       // has nothing honest to say.
       expect(section.plan.length, section.id).toBeGreaterThan(0);
+      expect(section.deliveredBy.length, section.id).toBeGreaterThan(0);
     }
+    // At least one is still empty, or the placeholder has become dead code.
+    expect(listPlannedSections().length).toBeGreaterThan(0);
   });
 
   it('highlights the owning section for a nested path', () => {
@@ -225,7 +233,9 @@ describe('client safety', () => {
     `${PLATFORM_UI}/platform-shell.tsx`,
     `${PLATFORM_UI}/platform-overview.tsx`,
     `${PLATFORM_UI}/platform-section.tsx`,
+    `${PLATFORM_UI}/test-console.tsx`,
     '_admin-panel/platform/nav.ts',
+    '_admin-panel/platform/tests/types.ts',
   ];
 
   it('keeps the scanner out of the shell', () => {
@@ -253,6 +263,7 @@ describe('client safety', () => {
     expect(read(`${PLATFORM_UI}/platform-shell.tsx`).startsWith("'use client'")).toBe(true);
     expect(read(`${PLATFORM_UI}/platform-overview.tsx`)).not.toContain("'use client'");
     expect(read(`${PLATFORM_UI}/platform-section.tsx`)).not.toContain("'use client'");
+    expect(read(`${PLATFORM_UI}/test-console.tsx`)).not.toContain("'use client'");
   });
 
   it('keeps the section registry free of anything server-only', () => {
@@ -297,8 +308,12 @@ describe('the shell renders', () => {
   });
 
   it('labels the sections that do nothing yet', () => {
-    // Three planned sections, each badged in the nav.
-    expect(shell.split('Planned').length - 1).toBe(listPlatformTools().length);
+    // One badge per planned section, and none for a section that works.
+    expect(shell.split('Planned').length - 1).toBe(listPlannedSections().length);
+    for (const section of listPlatformTools()) {
+      // Badged or not, every tool is still reachable from the nav.
+      expect(shell, `${section.id} is missing from the nav`).toContain(`href="${section.href}"`);
+    }
   });
 
   it('renders whatever the section passed in', () => {
@@ -315,10 +330,13 @@ describe('the shell renders', () => {
 describe('the overview renders', () => {
   const overview = renderToStaticMarkup(<PlatformOverview />);
 
-  it('links to every tool section and says which milestone builds it', () => {
+  it('links to every tool section and says which milestone builds the empty ones', () => {
     for (const section of listPlatformTools()) {
       expect(overview, `${section.id} is missing a card`).toContain(`href="${section.href}"`);
       expect(overview, `${section.id} has no description`).toContain(section.description);
+    }
+    // "Arrives in …" belongs only to a section that has not arrived.
+    for (const section of listPlannedSections()) {
       expect(overview, `${section.id} does not name its milestone`).toContain(section.deliveredBy);
     }
   });
@@ -331,7 +349,7 @@ describe('the overview renders', () => {
 
 describe('an unbuilt section renders honestly', () => {
   it('says it is empty and names what will fill it', () => {
-    for (const section of listPlatformTools()) {
+    for (const section of listPlannedSections()) {
       const html = renderToStaticMarkup(<PlatformSectionPlaceholder id={section.id} />);
 
       expect(html, `${section.id} does not name itself`).toContain(section.label);
@@ -358,7 +376,7 @@ describe('an unbuilt section renders honestly', () => {
           <PlatformOverview />
         </PlatformShell>
       ),
-      ...listPlatformTools().map((section) =>
+      ...listPlannedSections().map((section) =>
         renderToStaticMarkup(<PlatformSectionPlaceholder id={section.id} />)
       ),
     ]

@@ -1,4 +1,5 @@
-import { PlatformSectionPlaceholder } from '@/_admin-panel/platform/ui';
+import { buildTestInventory } from '@/_admin-panel/platform/tests';
+import { TestConsole } from '@/_admin-panel/platform/ui';
 import { requireAdmin } from '@/lib/admin';
 
 export const dynamic = 'force-dynamic';
@@ -9,10 +10,10 @@ export const metadata = {
 };
 
 /**
- * Thin shim. Routed and reachable, with no implementation yet — see
- * `_admin-panel/platform/nav.ts` for the milestone that fills it.
+ * Thin shim. The inventory is built server-side in
+ * `_admin-panel/platform/tests` and rendered by `_admin-panel/platform/ui`.
  */
 export default async function AdminPlatformTestsPage() {
   await requireAdmin();
-  return <PlatformSectionPlaceholder id="tests" />;
+  return <TestConsole inventory={buildTestInventory()} />;
 }

@@ -78,9 +78,11 @@ export const PLATFORM_SECTIONS: PlatformSection[] = [
     href: `${PLATFORM_ROOT}/tests`,
     label: 'Tests',
     description: 'Every Vitest file and Live QA pathway, grouped by the feature it covers.',
-    status: 'planned',
+    // Item 11 landed the read-only inventory. Running a category, reading a
+    // failure and keeping history are items 12–16, and the section says so
+    // on the page rather than pretending to run anything.
+    status: 'available',
     plan: [
-      'Categories from the coverage map, never a hand-kept glob list',
       'Run a category and read per-test name, duration and status',
       'Assertion text, expected against actual, and the stack for a failure',
       'Live QA runs with trace and screenshot links',
@@ -110,6 +112,17 @@ export function getPlatformSection(id: string): PlatformSection | undefined {
 /** Sections other than the overview, in nav order. */
 export function listPlatformTools(): PlatformSection[] {
   return PLATFORM_SECTIONS.filter((section) => section.id !== 'overview');
+}
+
+/**
+ * Sections with no implementation yet, in nav order.
+ *
+ * The set that still renders `PlatformSectionPlaceholder`. It shrinks as items
+ * 12–24 land, which is why callers ask for it rather than assuming every
+ * tool section is empty.
+ */
+export function listPlannedSections(): PlatformSection[] {
+  return PLATFORM_SECTIONS.filter((section) => section.status === 'planned');
 }
 
 /**

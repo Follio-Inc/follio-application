@@ -1,6 +1,7 @@
 export { covers, discoverProductSurface, featuresCovering, scanProductSurface } from './surface';
 export type { DiscoveredSurface, SurfaceScanOptions } from './surface';
-export { discoverTestFiles, scanTestAttribution } from './tests';
+export { scanTestAttribution } from './tests';
+export { TEST_ROOT, discoverTestFiles } from './test-files';
 export type { TestScanOptions } from './tests';
 export { discoverPathwaySpecs, scanLiveQaPathways, specPathFor } from './pathways';
 export type { PathwayScanOptions } from './pathways';

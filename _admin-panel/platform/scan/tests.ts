@@ -1,6 +1,3 @@
-import { readdirSync } from 'node:fs';
-import path from 'node:path';
-
 import { COVERAGE_MAP, REACHABILITY } from '../coverage-map';
 import type { PlatformFeature, ReachabilityRecord } from '../coverage-map';
 import {
@@ -11,6 +8,7 @@ import {
   type ModuleReference,
 } from './import-graph';
 import { covers, featuresCovering } from './surface';
+import { discoverTestFiles } from './test-files';
 import type {
   StaleTestReference,
   TestClassification,
@@ -32,26 +30,10 @@ import type {
  * mentions it.
  */
 
-const TEST_ROOT = '__tests__';
-
-/** Every Vitest file, sorted. */
-export function discoverTestFiles(repoRoot: string = process.cwd()): string[] {
-  const found: string[] = [];
-
-  const walk = (relativeDir: string): void => {
-    for (const entry of readdirSync(path.join(repoRoot, relativeDir), { withFileTypes: true })) {
-      const relativePath = `${relativeDir}/${entry.name}`;
-      if (entry.isDirectory()) {
-        walk(relativePath);
-      } else if (/\.test\.tsx?$/.test(entry.name)) {
-        found.push(relativePath);
-      }
-    }
-  };
-
-  walk(TEST_ROOT);
-  return found.sort();
-}
+// Re-exported so this signal stays the obvious place to look for it, while a
+// caller that only needs the walk can import `./test-files` and skip the
+// TypeScript compiler this module pulls in.
+export { discoverTestFiles, TEST_ROOT } from './test-files';
 
 /** Features whose `unitTests` list this file. */
 function featuresDeclaring(testPath: string, features: PlatformFeature[]): string[] {

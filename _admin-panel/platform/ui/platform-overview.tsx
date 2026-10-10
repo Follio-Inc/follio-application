@@ -47,9 +47,11 @@ export function PlatformOverview() {
                 </span>
               </div>
               <p className="mt-2 flex-1 text-sm text-muted-foreground">{section.description}</p>
-              <p className="mt-3 text-xs text-muted-foreground">
-                Arrives in PLATFORM_TODO {section.deliveredBy}
-              </p>
+              {section.status === 'planned' && (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Arrives in PLATFORM_TODO {section.deliveredBy}
+                </p>
+              )}
               <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-foreground">
                 Open section
                 <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
