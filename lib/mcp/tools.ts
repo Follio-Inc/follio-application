@@ -6,6 +6,11 @@ import {
   ProposeProjectSchema,
   ProposeSummarySchema,
 } from '@/lib/ai-connector/operations';
+import {
+  ResumeEditSelectionSchema,
+  SuggestResumeEditsSchema,
+} from '@/lib/ai-connector/resume-edits';
+import { RESUME_EDIT_LIMITS } from '@/lib/resume-edit/types';
 
 export type JsonSchema = Record<string, unknown>;
 
@@ -109,6 +114,87 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     ),
     requiredScope: 'follio.draft',
   },
+  {
+    name: 'get_resume_lines',
+    description:
+      'Read the editable lines of the active resume, each with a ref: "H" (headline), "S" (summary), "E1.2" (role 1, bullet 2). Also returns writingGuide (the step-by-step playbooks Follio uses for each kind of edit) and scores (writing checks with the lines that fail them). Call this before suggest_resume_edits.',
+    inputSchema: objectSchema({}),
+    requiredScope: 'follio.read',
+  },
+  {
+    name: 'suggest_resume_edits',
+    description: `Suggest line edits by ref: rewrite a line, add a bullet after one (ref "E1.2+", or "E1.0+" to put it first), or remove a bullet (remove: true). Saves them for review; the resume does not change. Follio removes edits that add tools, names, titles, or numbers the resume and the user never stated, turns unstated numbers into a [__] blank, adds at most ${RESUME_EDIT_LIMITS.maxNewBulletsPerRole} bullets per role, and keeps at least ${RESUME_EDIT_LIMITS.minBulletsPerRole} bullets in every role. Show the user each before/after, then call apply_resume_edits once they confirm.`,
+    inputSchema: objectSchema(
+      {
+        request: {
+          type: 'string',
+          description: 'What the user asked for, in their words.',
+        },
+        userFacts: {
+          type: 'string',
+          description:
+            'Facts the user told you in this conversation that the resume does not show yet (numbers, tools, results). Only what they actually said.',
+        },
+        jobDescription: {
+          type: 'string',
+          description: 'Job posting to tailor to, if any. Used for emphasis, never as facts.',
+        },
+        changes: {
+          type: 'array',
+          items: objectSchema(
+            {
+              ref: {
+                type: 'string',
+                description: 'A ref from get_resume_lines. End it with + to add a bullet after it.',
+              },
+              text: {
+                type: 'string',
+                description: 'The full new text for that line. Omit when removing.',
+              },
+              remove: { type: 'boolean', description: 'true to remove this bullet' },
+              reason: { type: 'string', description: 'One short line on why' },
+            },
+            ['ref']
+          ),
+        },
+      },
+      ['request', 'changes']
+    ),
+    requiredScope: 'follio.draft',
+  },
+  {
+    name: 'apply_resume_edits',
+    description:
+      "Write suggested line edits to the user's live resume. ONLY call this after the user confirms in this conversation. Omit changeIds to apply every open suggestion in the session. Lines with a [__] blank are not applied. Every applied change can be undone.",
+    inputSchema: objectSchema(
+      {
+        sessionId: { type: 'string' },
+        changeIds: { type: 'array', items: { type: 'string' } },
+      },
+      ['sessionId']
+    ),
+    requiredScope: 'follio.apply',
+  },
+  {
+    name: 'undo_resume_edits',
+    description:
+      'Undo applied line edits. Omit changeIds to undo everything applied from the session. Lines the user has edited since are kept as they are.',
+    inputSchema: objectSchema(
+      {
+        sessionId: { type: 'string' },
+        changeIds: { type: 'array', items: { type: 'string' } },
+      },
+      ['sessionId']
+    ),
+    requiredScope: 'follio.apply',
+  },
+  {
+    name: 'list_resume_edits',
+    description:
+      'List recent suggestion sets for the active resume, from this chat and from Follio, with each change and its status.',
+    inputSchema: objectSchema({}),
+    requiredScope: 'follio.read',
+  },
 ];
 
 export const toolInputSchemas = {
@@ -119,4 +205,9 @@ export const toolInputSchemas = {
   propose_project: ProposeProjectSchema,
   apply_draft: ApplyDraftSchema,
   discard_draft: ApplyDraftSchema,
+  get_resume_lines: z.object({}).passthrough(),
+  suggest_resume_edits: SuggestResumeEditsSchema,
+  apply_resume_edits: ResumeEditSelectionSchema,
+  undo_resume_edits: ResumeEditSelectionSchema,
+  list_resume_edits: z.object({}).passthrough(),
 } as const;

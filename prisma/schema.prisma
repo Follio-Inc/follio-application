@@ -27,6 +27,7 @@ model User {
   aiConnectorAuthCodes AiConnectorAuthCode[]
   aiConnectorTokens    AiConnectorToken[]
   aiEditDrafts         AiEditDraft[]
+  resumeEditSessions   ResumeEditSession[]
 
   @@index([clerkId])
   @@index([email])
@@ -83,6 +84,10 @@ model Profile {
   avatarUrlSource           DataSource             @default(MANUAL)
   resumeShowPhoto           Boolean                @default(false)
   resumeDesign              Json?
+  /// Recruiter glance written by the highlights prompt. Opening Highlights only reads this.
+  resumeGlance              Json?
+  /// Skills the model read from each resume line, with the line text it read. Rewritten after saves.
+  resumeSkillProfile        Json?
   location                  String?
   locationSource            DataSource             @default(MANUAL)
   unlistedKey               String?                @unique @default(cuid())
@@ -113,6 +118,7 @@ model Profile {
   agentRuns                 AgentRun[]
   linkedCoverLetters        CoverLetter[]
   aiEditDrafts              AiEditDraft[]
+  resumeEditSessions        ResumeEditSession[]
 
   @@index([handle])
   @@index([status])
@@ -911,6 +917,27 @@ model AiEditDraft {
   @@index([userId, status])
   @@index([profileId])
   @@index([expiresAt])
+}
+
+/// One AI edit request from the builder ("tailor to this job", "add numbers")
+/// and the changes it proposed. Applied changes keep what they replaced so
+/// they can be undone. Shapes live in lib/resume-edit/types.ts.
+model ResumeEditSession {
+  id             String    @id @default(cuid())
+  userId         String
+  profileId      String
+  brief          Json
+  changes        Json
+  droppedCount   Int       @default(0)
+  failedSections String[]
+  appliedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profile        Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([profileId, createdAt])
 }
 
 /// Cached Chromium print of a resume or cover letter. One row per document+layout.

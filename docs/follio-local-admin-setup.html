@@ -1,0 +1,756 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Follio local setup — Carissa and Padmaja</title>
+    <meta
+      name="description"
+      content="Complete setup so Carissa and Padmaja can install the tools, run Follio locally, and sign in to the admin platform."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --ink: #14151a;
+        --muted: #5b5e68;
+        --line: #e6e4de;
+        --paper: #f7f6f2;
+        --card: #ffffff;
+        --accent: hsl(235 64% 52%);
+        --accent-soft: hsl(235 64% 52% / 0.08);
+        --ok: #1f7a4d;
+        --ok-soft: #e8f6ee;
+        --warn: #8a4b08;
+        --warn-soft: #fff4e5;
+        --code: #1c1d22;
+        --shadow: 0 1px 2px hsl(220 20% 10% / 0.04), 0 12px 32px -16px hsl(220 20% 10% / 0.18);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top, hsl(235 64% 52% / 0.07), transparent 28rem),
+          linear-gradient(to bottom, #fbfaf7, var(--paper));
+        font-family:
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          sans-serif;
+        font-size: 16.5px;
+        line-height: 1.55;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      main {
+        width: min(800px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 40px 0 80px;
+      }
+
+      header {
+        margin-bottom: 28px;
+      }
+
+      .eyebrow {
+        margin: 0 0 8px;
+        color: var(--accent);
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 0 0 10px;
+        font-size: 34px;
+        line-height: 1.15;
+        letter-spacing: -0.03em;
+      }
+
+      .lede {
+        margin: 0;
+        color: var(--muted);
+        font-size: 18px;
+      }
+
+      nav {
+        margin: 22px 0;
+        padding: 16px 18px;
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+      }
+
+      nav ol {
+        margin: 8px 0 0;
+        padding-left: 1.2rem;
+      }
+
+      nav a {
+        text-decoration: none;
+      }
+
+      nav a:hover {
+        text-decoration: underline;
+      }
+
+      .card,
+      ol.steps > li {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        box-shadow: var(--shadow);
+      }
+
+      .card {
+        padding: 22px 22px 8px;
+        margin: 18px 0;
+      }
+
+      h2 {
+        margin: 0 0 8px;
+        font-size: 22px;
+        letter-spacing: -0.02em;
+      }
+
+      h3 {
+        margin: 16px 0 8px;
+        font-size: 16px;
+      }
+
+      p {
+        margin: 0 0 14px;
+      }
+
+      ol.steps {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        counter-reset: step;
+      }
+
+      ol.steps > li {
+        counter-increment: step;
+        margin: 0 0 16px;
+        padding: 18px 18px 6px;
+      }
+
+      ol.steps > li > h2::before {
+        content: counter(step);
+        display: inline-grid;
+        place-items: center;
+        width: 28px;
+        height: 28px;
+        margin-right: 10px;
+        border-radius: 999px;
+        background: var(--accent);
+        color: white;
+        font-size: 14px;
+        vertical-align: middle;
+      }
+
+      ul,
+      ol.plain {
+        margin: 0 0 14px;
+        padding-left: 1.2rem;
+      }
+
+      li {
+        margin: 0 0 6px;
+      }
+
+      a {
+        color: var(--accent);
+      }
+
+      code,
+      pre {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 13.5px;
+      }
+
+      code {
+        padding: 0.1em 0.35em;
+        border-radius: 6px;
+        background: #f1efe9;
+      }
+
+      pre {
+        margin: 0 0 14px;
+        padding: 14px 16px;
+        overflow-x: auto;
+        border-radius: 12px;
+        background: var(--code);
+        color: #f4f1ea;
+        line-height: 1.55;
+      }
+
+      .label {
+        margin: 14px 0 6px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .ok,
+      .warn {
+        margin: 0 0 14px;
+        padding: 12px 14px;
+        border-radius: 12px;
+      }
+
+      .ok {
+        background: var(--ok-soft);
+        color: var(--ok);
+      }
+
+      .warn {
+        background: var(--warn-soft);
+        color: var(--warn);
+      }
+
+      .tree {
+        margin: 0 0 14px;
+        padding: 14px 16px;
+        border-radius: 12px;
+        background: #f6f5f1;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 13.5px;
+        line-height: 1.6;
+        white-space: pre;
+        overflow-x: auto;
+      }
+
+      .emails {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin: 0 0 14px;
+      }
+
+      .emails div {
+        padding: 12px 14px;
+        border-radius: 12px;
+        background: var(--accent-soft);
+      }
+
+      .emails strong {
+        display: block;
+        margin-bottom: 2px;
+      }
+
+      table {
+        width: 100%;
+        margin: 0 0 14px;
+        border-collapse: collapse;
+        font-size: 15px;
+      }
+
+      th,
+      td {
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        color: var(--muted);
+        font-size: 12px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      @media (max-width: 640px) {
+        h1 {
+          font-size: 28px;
+        }
+
+        .emails {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <p class="eyebrow">Follio · local admin access</p>
+        <h1>Set up the app and sign in</h1>
+        <p class="lede">
+          Carissa and Padmaja: do these steps once on your own computer. At the end, the admin
+          platform opens at <code>http://localhost:3000/admin</code>.
+        </p>
+      </header>
+
+      <nav>
+        <strong>Steps</strong>
+        <ol>
+          <li><a href="#receive">What was sent to you</a></li>
+          <li><a href="#terminal">Open a terminal</a></li>
+          <li><a href="#git">Install Git</a></li>
+          <li><a href="#node">Install Node.js 20</a></li>
+          <li><a href="#github">Confirm GitHub access</a></li>
+          <li><a href="#clone">Download the code</a></li>
+          <li><a href="#branch">Switch to the develop branch</a></li>
+          <li><a href="#env">Add the environment file</a></li>
+          <li><a href="#start">Install and start the app</a></li>
+          <li><a href="#signin">Sign in</a></li>
+          <li><a href="#daily">Each day after that</a></li>
+          <li><a href="#problems">If something fails</a></li>
+        </ol>
+      </nav>
+
+      <ol class="steps">
+        <li id="receive">
+          <h2>What was sent to you</h2>
+          <p>This page comes with two other private items. You need both.</p>
+          <ul>
+            <li>
+              A file named <code>.env.local</code>. Save it. Do not rename it, edit it, commit it,
+              or forward it.
+            </li>
+            <li>An email and a password, in a separate message.</li>
+          </ul>
+          <div class="emails">
+            <div>
+              <strong>Carissa</strong>
+              carissa.c@follio.me
+            </div>
+            <div>
+              <strong>Padmaja</strong>
+              padmaja.m@follio.me
+            </div>
+          </div>
+          <p>
+            Use that exact email. The password is the one sent to you, including any capital
+            letters and symbols.
+          </p>
+          <p class="warn">
+            These logins work only in the local app on your computer. They do not work on
+            follio.me.
+          </p>
+        </li>
+
+        <li id="terminal">
+          <h2>Open a terminal</h2>
+          <p>
+            A terminal is the window where you type the commands in this guide. Leave it open
+            while the app is running.
+          </p>
+          <h3>Mac</h3>
+          <ol class="plain">
+            <li>Press <code>Command + Space</code>.</li>
+            <li>Type <code>Terminal</code>.</li>
+            <li>Press Return. A window with a blinking cursor opens.</li>
+          </ol>
+          <h3>Windows</h3>
+          <ol class="plain">
+            <li>Click the Start button.</li>
+            <li>Type <code>PowerShell</code>.</li>
+            <li>Open <strong>Windows PowerShell</strong>. Do not open Command Prompt.</li>
+          </ol>
+          <p class="ok">You are ready when you see a blinking cursor and can type.</p>
+        </li>
+
+        <li id="git">
+          <h2>Install Git</h2>
+          <p>Git downloads the project. Check whether it is already installed:</p>
+          <pre>git --version</pre>
+          <p class="ok">
+            If you see a version, such as <code>git version 2.39.0</code>, Git is installed. Go to
+            the next step.
+          </p>
+
+          <h3>Mac, if the command is not found</h3>
+          <ol class="plain">
+            <li>
+              In Terminal, run:
+              <pre>xcode-select --install</pre>
+            </li>
+            <li>A window appears. Click <strong>Install</strong>, then <strong>Agree</strong>.</li>
+            <li>Wait until it finishes. This can take several minutes.</li>
+            <li>
+              Close Terminal, open it again, and run <code>git --version</code>.
+            </li>
+          </ol>
+          <p>
+            If that command does nothing, download the Mac installer from
+            <a href="https://git-scm.com/download/mac">https://git-scm.com/download/mac</a>, open
+            the downloaded file, and click through the installer. Then open a new Terminal and run
+            <code>git --version</code> again.
+          </p>
+
+          <h3>Windows, if the command is not found</h3>
+          <ol class="plain">
+            <li>
+              Open <a href="https://git-scm.com/download/win">https://git-scm.com/download/win</a>.
+              The download of <strong>64-bit Git for Windows Setup</strong> starts on its own.
+            </li>
+            <li>Open the downloaded <code>.exe</code> file.</li>
+            <li>
+              Click <strong>Next</strong> through the installer. Keep the default options. On the
+              screen about adjusting your PATH, leave
+              <strong>Git from the command line and also from 3rd-party software</strong> selected.
+            </li>
+            <li>Close PowerShell, open it again, and run <code>git --version</code>.</li>
+          </ol>
+        </li>
+
+        <li id="node">
+          <h2>Install Node.js 20</h2>
+          <p>
+            Node.js runs the app. The installer also installs <code>npm</code>, which downloads
+            the project’s libraries. You do not install npm by itself.
+          </p>
+          <p>
+            The large download button on the Node.js homepage often installs a newer version. This
+            project needs <strong>version 20</strong>. Use the version 20 folder below, not the
+            homepage button.
+          </p>
+          <p>
+            Open this page:
+            <a href="https://nodejs.org/dist/latest-v20.x/">https://nodejs.org/dist/latest-v20.x/</a>
+          </p>
+
+          <h3>Mac</h3>
+          <ol class="plain">
+            <li>Click the Apple menu, then <strong>About This Mac</strong>.</li>
+            <li>
+              Read the chip line.
+              <ul>
+                <li>
+                  If it says Apple M1, M2, M3, or M4, download the file whose name ends in
+                  <code>darwin-arm64.pkg</code>.
+                </li>
+                <li>
+                  If it says Intel, download the file whose name ends in
+                  <code>darwin-x64.pkg</code>.
+                </li>
+              </ul>
+            </li>
+            <li>Open the downloaded <code>.pkg</code> file.</li>
+            <li>Click <strong>Continue</strong>, then <strong>Install</strong>. Enter your Mac password if asked.</li>
+            <li>When it says the installation was successful, click <strong>Close</strong>.</li>
+            <li>Quit Terminal completely, then open a new Terminal window.</li>
+          </ol>
+
+          <h3>Windows</h3>
+          <ol class="plain">
+            <li>
+              On the same page, download the file whose name ends in <code>x64.msi</code>.
+            </li>
+            <li>Open the downloaded file.</li>
+            <li>
+              Click <strong>Next</strong>. Accept the license. Leave the default install location
+              and the default features, including <strong>Add to PATH</strong>.
+            </li>
+            <li>Click <strong>Install</strong>, then <strong>Finish</strong>.</li>
+            <li>Close PowerShell completely, then open a new PowerShell window.</li>
+          </ol>
+
+          <p class="label">Check, in the new terminal window</p>
+          <pre>node -v
+npm -v</pre>
+          <p class="ok">
+            <code>node -v</code> must print <code>v20</code> followed by more numbers, for example
+            <code>v20.19.0</code>. <code>npm -v</code> must print <code>10</code> or higher, for
+            example <code>10.8.2</code>.
+          </p>
+          <p class="warn">
+            If <code>node -v</code> prints v18, v22, v24, or any version that does not start with
+            v20, the wrong installer was used. Download the version 20 installer from the link
+            above and run it again. Then close the terminal, open a new one, and run
+            <code>node -v</code> again.
+          </p>
+        </li>
+
+        <li id="github">
+          <h2>Confirm GitHub access</h2>
+          <ol class="plain">
+            <li>
+              Open <a href="https://github.com/">https://github.com/</a> and sign in. Create a free
+              account first if you do not have one.
+            </li>
+            <li>
+              Open the invitation email for the repository
+              <code>Follio-Inc/follio-application</code> and click <strong>Accept invitation</strong>.
+            </li>
+            <li>
+              Confirm you can open
+              <a href="https://github.com/Follio-Inc/follio-application">https://github.com/Follio-Inc/follio-application</a>.
+              You should see the code, not a 404 page.
+            </li>
+          </ol>
+          <p class="ok">If that page loads, your GitHub account can download the project.</p>
+        </li>
+
+        <li id="clone">
+          <h2>Download the code</h2>
+          <p>
+            This puts a folder named <code>follio-application</code> inside Documents. Skip this
+            step if that folder is already on your computer, and continue at the next step.
+          </p>
+          <p class="label">Mac</p>
+          <pre>cd ~/Documents
+git clone https://github.com/Follio-Inc/follio-application.git
+cd follio-application</pre>
+          <p class="label">Windows PowerShell</p>
+          <pre>cd $HOME\Documents
+git clone https://github.com/Follio-Inc/follio-application.git
+cd follio-application</pre>
+          <p>
+            The first time, a browser window or a GitHub sign-in window opens. Sign in with the
+            GitHub account that accepted the invitation. Approve access if asked.
+          </p>
+          <p class="ok">
+            The command finishes when the terminal shows a new prompt and no error. In Documents
+            you can see a folder named <code>follio-application</code>.
+          </p>
+        </li>
+
+        <li id="branch">
+          <h2>Switch to the develop branch</h2>
+          <p>
+            The branch name is <code>develop</code>. Every command from here on is typed while you
+            are inside the <code>follio-application</code> folder.
+          </p>
+          <p class="label">Mac</p>
+          <pre>cd ~/Documents/follio-application
+git checkout develop
+git pull origin develop
+git branch</pre>
+          <p class="label">Windows PowerShell</p>
+          <pre>cd $HOME\Documents\follio-application
+git checkout develop
+git pull origin develop
+git branch</pre>
+          <p class="ok">
+            The last command prints a list of branches. A star must sit next to
+            <code>develop</code>, like this: <code>* develop</code>.
+          </p>
+        </li>
+
+        <li id="env">
+          <h2>Add the environment file</h2>
+          <p>
+            The app will not recognize your login until this file is in the project folder. The
+            file is the <code>.env.local</code> that was sent with this page.
+          </p>
+          <p>When this step is done, the folder looks like this:</p>
+          <div class="tree">follio-application/
+  package.json
+  .env.local     ← the file you were sent
+  .env           ← a copy of that same file</div>
+          <p>
+            Both files sit next to <code>package.json</code>. They must contain the same text. Do
+            not fill them in from <code>.env.example</code>.
+          </p>
+
+          <h3>If the download lost the leading dot</h3>
+          <p>
+            Some chat apps save the file as <code>env.local</code> instead of
+            <code>.env.local</code>. Rename it so the name starts with a dot before you continue.
+          </p>
+
+          <h3>Mac</h3>
+          <ol class="plain">
+            <li>
+              Move the received file into the project folder. If it is in Downloads, run:
+              <pre>mv ~/Downloads/.env.local ~/Documents/follio-application/.env.local</pre>
+              If the downloaded name has no leading dot, use
+              <code>~/Downloads/env.local</code> in that command instead.
+            </li>
+            <li>
+              Make the second copy:
+              <pre>cd ~/Documents/follio-application
+cp .env.local .env
+ls -a</pre>
+            </li>
+          </ol>
+          <p>
+            Files that start with a dot are hidden in Finder. In Finder, press
+            <code>Command + Shift + .</code> to show them.
+          </p>
+
+          <h3>Windows</h3>
+          <ol class="plain">
+            <li>
+              If the file is in Downloads, run this in PowerShell:
+              <pre>copy $HOME\Downloads\.env.local $HOME\Documents\follio-application\.env.local</pre>
+              If the downloaded name has no leading dot, use
+              <code>$HOME\Downloads\env.local</code> instead.
+            </li>
+            <li>
+              Make the second copy:
+              <pre>cd $HOME\Documents\follio-application
+copy .env.local .env
+Get-ChildItem -Force</pre>
+            </li>
+          </ol>
+
+          <p class="ok">
+            <code>ls -a</code> on Mac, or <code>Get-ChildItem -Force</code> on Windows, lists both
+            <code>.env</code> and <code>.env.local</code>.
+          </p>
+          <p class="warn">
+            Do not run Docker. Do not run <code>npm run db:migrate</code> or
+            <code>npm run db:seed</code>. Those create a separate empty database, and this login
+            will not be in it.
+          </p>
+        </li>
+
+        <li id="start">
+          <h2>Install and start the app</h2>
+          <p>From inside <code>follio-application</code>:</p>
+          <pre>npm install
+npx prisma generate
+npm run dev</pre>
+          <p>What each command does:</p>
+          <ul>
+            <li><code>npm install</code> downloads the libraries. The first run can take a few minutes.</li>
+            <li>
+              <code>npx prisma generate</code> prepares database code on your computer. It does not
+              change the shared database.
+            </li>
+            <li><code>npm run dev</code> starts the app and keeps running.</li>
+          </ul>
+          <p class="ok">
+            Leave this terminal open. The app is ready when the terminal prints a local address:
+            <code>http://localhost:3000</code>.
+          </p>
+          <p>
+            To stop the app later, click the terminal and press <code>Ctrl + C</code>.
+          </p>
+        </li>
+
+        <li id="signin">
+          <h2>Sign in</h2>
+          <ol class="plain">
+            <li>Open a browser.</li>
+            <li>
+              Go to
+              <a href="http://localhost:3000/admin/sign-in">http://localhost:3000/admin/sign-in</a>.
+              Type that address. Do not open follio.me.
+            </li>
+            <li>Enter your email: <code>carissa.c@follio.me</code> or <code>padmaja.m@follio.me</code>.</li>
+            <li>Enter the password from the separate message.</li>
+            <li>Continue until the page changes.</li>
+          </ol>
+          <p class="ok">
+            You are signed in when the address is <code>http://localhost:3000/admin</code> and the
+            left sidebar shows <strong>Overview</strong>, <strong>Developer</strong>, and
+            <strong>Users</strong>.
+          </p>
+          <p>
+            Open <strong>Developer</strong> for the engineering tools, or go directly to
+            <a href="http://localhost:3000/admin/developer">http://localhost:3000/admin/developer</a>.
+          </p>
+        </li>
+
+        <li id="daily">
+          <h2>Each day after that</h2>
+          <p class="label">Mac</p>
+          <pre>cd ~/Documents/follio-application
+git checkout develop
+git pull origin develop
+npm run dev</pre>
+          <p class="label">Windows PowerShell</p>
+          <pre>cd $HOME\Documents\follio-application
+git checkout develop
+git pull origin develop
+npm run dev</pre>
+          <p>
+            When the terminal shows <code>http://localhost:3000</code>, open
+            <a href="http://localhost:3000/admin/sign-in">http://localhost:3000/admin/sign-in</a>.
+          </p>
+          <p>
+            After a pull, if the terminal says packages changed, run <code>npm install</code> once
+            before <code>npm run dev</code>.
+          </p>
+        </li>
+      </ol>
+
+      <section class="card" id="problems">
+        <h2>If something fails</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>What you see</th>
+              <th>What to do</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>node -v</code> is not v20</td>
+              <td>
+                Install the version 20 package from
+                <a href="https://nodejs.org/dist/latest-v20.x/">nodejs.org/dist/latest-v20.x</a>,
+                then close the terminal and open a new one.
+              </td>
+            </tr>
+            <tr>
+              <td><code>git</code> or <code>node</code> is not recognized</td>
+              <td>The install finished in an old window. Close the terminal and open a new one.</td>
+            </tr>
+            <tr>
+              <td>GitHub asks you to sign in, or clone says authentication failed</td>
+              <td>
+                Sign in with the GitHub account that accepted the repository invitation, then run
+                the clone command again.
+              </td>
+            </tr>
+            <tr>
+              <td>Repository page is a 404</td>
+              <td>The invitation has not been accepted yet, or a different GitHub account is signed in.</td>
+            </tr>
+            <tr>
+              <td>Sign-in says the account was not found</td>
+              <td>
+                The address must be <code>http://localhost:3000/admin/sign-in</code>. The email
+                must match exactly. <code>.env</code> and <code>.env.local</code> must both be the
+                file you were sent. Press <code>Ctrl + C</code>, run <code>npm run dev</code>
+                again, and retry.
+              </td>
+            </tr>
+            <tr>
+              <td>Password is rejected</td>
+              <td>
+                Retype the password from the message. Include capitals and symbols. The email and
+                password are a pair; another person’s password will not work.
+              </td>
+            </tr>
+            <tr>
+              <td>Port 3000 is already in use</td>
+              <td>
+                Another copy of the app is running. Find that terminal and press
+                <code>Ctrl + C</code>, then run <code>npm run dev</code> again.
+              </td>
+            </tr>
+            <tr>
+              <td>The browser cannot connect to localhost:3000</td>
+              <td>
+                <code>npm run dev</code> is not running, or the terminal was closed. Start it
+                again from the project folder.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </main>
+  </body>
+</html>

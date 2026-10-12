@@ -748,6 +748,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Source resume not found' }, { status: 404 });
     }
 
+    const { refreshResumeGlance } = await import('@/services/resume-glance.service');
+    await refreshResumeGlance(result.id);
+
     resumeLogger.info('Created resume', {
       strategy: body.strategy,
       profileId: result.id,

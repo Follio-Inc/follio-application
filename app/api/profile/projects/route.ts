@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
+import { scheduleResumeRefresh } from '@/lib/resume/schedule-refresh';
 import { normalizeCurrentDates, ProjectSchema } from '@/lib/validations';
 
 /**
@@ -77,6 +78,8 @@ export async function POST(request: NextRequest) {
         source: 'MANUAL',
       },
     });
+
+    scheduleResumeRefresh(profileId);
 
     return NextResponse.json({ success: true, project }, { status: 201 });
   } catch (error) {

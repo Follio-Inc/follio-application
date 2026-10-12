@@ -162,6 +162,7 @@ describe('oauth redirect URIs', () => {
 describe('MCP protocol', () => {
   const ctx: McpAuthContext = {
     userId: 'user_1',
+    clerkId: 'clerk_1',
     scopes: ['follio.read', 'follio.draft', 'follio.apply'],
     clientLabel: 'Claude',
   };
@@ -174,9 +175,24 @@ describe('MCP protocol', () => {
     proposeProject: async () => ({ draftId: 'd1' }),
     applyDraft: async () => ({ status: 'APPLIED' }),
     discardDraft: async () => ({ status: 'DISCARDED' }),
+    getResumeLines: async () => ({ headline: { ref: 'H', text: 'Designer' } }),
+    suggestResumeEdits: async (_ctx, input) => ({ saved: true, input }),
+    applyResumeEdits: async () => ({ message: 'Applied 1 change' }),
+    undoResumeEdits: async () => ({ message: 'Undid 1 change' }),
+    listResumeEdits: async () => ({ sessions: [] }),
   };
 
-  it('lists the core Follio tools', () => {
+  async function callTool(name: string, args: unknown, context = ctx) {
+    const response = await handleMcpMessage(
+      { jsonrpc: '2.0', id: 9, method: 'tools/call', params: { name, arguments: args } },
+      context,
+      handlers
+    );
+    if (!response || !('result' in response)) throw new Error('Expected a tool result');
+    return response.result as { isError?: boolean; content: Array<{ text: string }> };
+  }
+
+  it('lists the Follio tools', () => {
     expect(MCP_TOOLS.map((tool) => tool.name)).toEqual([
       'get_profile',
       'list_drafts',
@@ -185,7 +201,39 @@ describe('MCP protocol', () => {
       'propose_project',
       'apply_draft',
       'discard_draft',
+      'get_resume_lines',
+      'suggest_resume_edits',
+      'apply_resume_edits',
+      'undo_resume_edits',
+      'list_resume_edits',
     ]);
+  });
+
+  it('passes valid line edits through to the handler', async () => {
+    const result = await callTool('suggest_resume_edits', {
+      request: 'Tighten my bullets',
+      changes: [{ ref: 'E1.2', text: 'Cut deploy time 40% with CI caching' }],
+    });
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain('E1.2');
+  });
+
+  it('rejects line edits that do not point at a resume line', async () => {
+    const result = await callTool('suggest_resume_edits', {
+      request: 'Tighten my bullets',
+      changes: [{ ref: 'experience 1', text: 'Something' }],
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('get_resume_lines');
+  });
+
+  it('needs the apply permission to write or undo line edits', async () => {
+    const limited = { ...ctx, scopes: ['follio.read', 'follio.draft'] };
+    for (const name of ['apply_resume_edits', 'undo_resume_edits']) {
+      const result = await callTool(name, { sessionId: 's1' }, limited);
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('follio.apply');
+    }
   });
 
   it('handles initialize', async () => {

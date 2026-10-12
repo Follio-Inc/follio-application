@@ -16,11 +16,30 @@ import {
   type ProposeSummaryInput,
 } from '@/lib/ai-connector/operations';
 import { toConnectorProfileView } from '@/lib/ai-connector/profile-view';
+import {
+  applyMessage,
+  selectForApply,
+  suggestionMessage,
+  toAssistantSession,
+  toResumeLinesView,
+  undoMessage,
+  type ResumeEditSelectionInput,
+  type SuggestResumeEditsInput,
+} from '@/lib/ai-connector/resume-edits';
 import { db } from '@/lib/db';
 import { interactiveTransactionOptions } from '@/lib/db-transaction';
 import { Errors } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { hasPlaceholder } from '@/lib/resume-edit/types';
 import { normalizeCurrentDates } from '@/lib/validations';
+import {
+  applyResumeEdits,
+  createAssistantResumeEditSession,
+  getEditableResume,
+  getResumeEditSession,
+  listResumeEditSessions,
+  revertResumeEdits,
+} from '@/services/resume-edit-session.service';
 
 const connectorLogger = logger.child({ source: 'ai-connector' });
 
@@ -433,6 +452,82 @@ export async function applyDraft(userId: string, draftId: string) {
   };
 }
 
+// ── Resume line edits ────────────────────────────────────
+
+type AssistantContext = { clerkId: string; userId: string; clientLabel: string | null };
+
+async function getResumeLines(ctx: AssistantContext) {
+  return toResumeLinesView(await getEditableResume(ctx.clerkId));
+}
+
+async function suggestResumeEdits(ctx: AssistantContext, input: SuggestResumeEditsInput) {
+  const result = await createAssistantResumeEditSession(
+    ctx.clerkId,
+    input,
+    ctx.clientLabel || 'AI assistant'
+  );
+  const changes = result.session?.changes ?? [];
+  const message = suggestionMessage({
+    saved: changes.length,
+    needsInput: changes.filter((change) => hasPlaceholder(change.after)).length,
+    dropped: result.dropped,
+    ignored: result.ignored,
+  });
+  if (!result.session) return { saved: false, message };
+  return { saved: true, message, ...toAssistantSession(result.session) };
+}
+
+async function applyResumeEditsForAssistant(
+  ctx: AssistantContext,
+  input: ResumeEditSelectionInput
+) {
+  const session = await getResumeEditSession(ctx.clerkId, input.sessionId);
+  const selection = selectForApply(session.changes, input.changeIds);
+  const counts = {
+    needsInput: selection.needsInput.length,
+    unavailable: selection.unavailable.length,
+  };
+  if (selection.ready.length === 0) {
+    return {
+      message: applyMessage({ applied: 0, conflicted: 0, ...counts }),
+      ...toAssistantSession(session),
+    };
+  }
+
+  const result = await applyResumeEdits(ctx.clerkId, session.id, {
+    apply: selection.ready.map((change) => ({ id: change.id, text: change.after })),
+    reject: [],
+  });
+  const outcomes = Object.values(result.outcomes);
+  const applied = outcomes.filter((outcome) => outcome === 'applied').length;
+  connectorLogger.info('Assistant applied resume edits', {
+    userId: ctx.userId,
+    sessionId: session.id,
+    applied,
+  });
+  return {
+    message: applyMessage({ applied, conflicted: outcomes.length - applied, ...counts }),
+    ...toAssistantSession(result.session),
+  };
+}
+
+async function undoResumeEditsForAssistant(ctx: AssistantContext, input: ResumeEditSelectionInput) {
+  const result = await revertResumeEdits(ctx.clerkId, input.sessionId, input.changeIds ?? null);
+  const outcomes = Object.values(result.outcomes);
+  return {
+    message: undoMessage({
+      reverted: outcomes.filter((outcome) => outcome === 'reverted').length,
+      kept: outcomes.filter((outcome) => outcome === 'kept').length,
+    }),
+    ...toAssistantSession(result.session),
+  };
+}
+
+async function listResumeEditsForAssistant(ctx: AssistantContext) {
+  const sessions = await listResumeEditSessions(ctx.clerkId);
+  return { sessions: sessions.map(toAssistantSession) };
+}
+
 export const aiConnectorHandlers = {
   getProfile: (ctx: { userId: string }) => getConnectorProfile(ctx.userId),
   listDrafts: (ctx: { userId: string }) => listDrafts(ctx.userId),
@@ -446,4 +541,12 @@ export const aiConnectorHandlers = {
     applyDraft(ctx.userId, (input as { draftId: string }).draftId),
   discardDraft: (ctx: { userId: string }, input: unknown) =>
     discardDraft(ctx.userId, (input as { draftId: string }).draftId),
+  getResumeLines,
+  suggestResumeEdits: (ctx: AssistantContext, input: unknown) =>
+    suggestResumeEdits(ctx, input as SuggestResumeEditsInput),
+  applyResumeEdits: (ctx: AssistantContext, input: unknown) =>
+    applyResumeEditsForAssistant(ctx, input as ResumeEditSelectionInput),
+  undoResumeEdits: (ctx: AssistantContext, input: unknown) =>
+    undoResumeEditsForAssistant(ctx, input as ResumeEditSelectionInput),
+  listResumeEdits: listResumeEditsForAssistant,
 };

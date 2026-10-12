@@ -135,7 +135,14 @@ export function AiAssistantsSection() {
             <li>In Claude, open Customize → Connectors → Add custom connector.</li>
             <li>Paste the Follio connector URL below.</li>
             <li>Sign in to Follio when Claude asks, then allow access.</li>
-            <li>Ask Claude to update your Follio. Review the draft, then confirm.</li>
+            <li>
+              Ask Claude to improve your resume, like “tighten my bullets for this job.” It shows
+              each change and applies only what you confirm.
+            </li>
+            <li>
+              Every change also appears in the builder under Edit with AI, where you can review or
+              undo it.
+            </li>
           </ol>
 
           <div>

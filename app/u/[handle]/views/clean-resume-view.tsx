@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { createContext, useContext, useMemo, useRef, useState } from 'react';
 
 import { useResolvedResumeColorTheme } from '@/lib/hooks/use-resume-color-theme';
 import {
@@ -21,7 +21,20 @@ import {
   getResumeFullName,
   shouldShowResumePhoto,
 } from '@/lib/resume/contact';
+import type { ResumeGlance } from '@/lib/resume/glance';
+import {
+  highlightsByEntry,
+  markPhrasesInHtml,
+  type EntryHighlights,
+  type GlanceInsert,
+} from '@/lib/resume/glance-marks';
 import { resolveHeaderComposition, isPhotoBeforeText } from '@/lib/resume/header-layout';
+import {
+  redlineDataProps,
+  redlineListHtml,
+  type ResumeRedline,
+  type RoleRedline,
+} from '@/lib/resume-edit/redline';
 import { getResumeTemplateId, isResumeAtelierRailSectionType } from '@/lib/resume/templates';
 import {
   buildResumeDesignStyles,
@@ -49,6 +62,8 @@ import type {
 import { HEADER_SECTION_TYPES, type ResumeDesign } from '@/types';
 
 import { ResumePagedStack } from '@/components/resume-paged-stack';
+import { FileText } from 'lucide-react';
+
 import { ViewHighlightsButton } from '@/components/resume-presentation/view-highlights-button';
 
 import { PublicResumeActions } from './public-resume-actions';
@@ -70,6 +85,21 @@ interface CleanResumeViewProps {
    * and print preview — those surfaces mount their own control or none.
    */
   viewHighlightsHref?: string;
+  /** Toggle the stored glance on this same resume. Takes precedence over href. */
+  onViewHighlights?: () => void;
+  highlightsOpen?: boolean;
+  /**
+   * Stored highlights to draw into the resume: marker phrases in the bullets,
+   * and an impact box plus skill tags under each company heading. Omit or pass
+   * null to show the resume unchanged.
+   */
+  highlights?: ResumeGlance | null;
+  /**
+   * Suggested edits to draw into the resume while they are reviewed: rewritten
+   * lines in a marker with added words in green, new bullets in green, and
+   * removed bullets struck in red. Builder preview only.
+   */
+  redline?: ResumeRedline | null;
 }
 
 // ============================================================================
@@ -148,8 +178,29 @@ function formatDateRange(
 }
 
 // ============================================================================
+// SUGGESTED EDITS
+// ============================================================================
+
+/** Suggested edits drawn into the resume while the owner reviews them in the builder. */
+const RedlineContext = createContext<ResumeRedline | null>(null);
+
+// ============================================================================
 // HEADER SECTION
 // ============================================================================
+
+function ResumeHeadline({ headline }: { headline?: string | null }) {
+  const mark = useContext(RedlineContext)?.headline;
+  if (mark) {
+    return (
+      <p
+        className="resume-headline"
+        {...redlineDataProps(mark)}
+        dangerouslySetInnerHTML={{ __html: mark.html }}
+      />
+    );
+  }
+  return headline ? <p className="resume-headline">{headline}</p> : null;
+}
 
 function ResumeHeaderIdentityText({
   fullName,
@@ -163,7 +214,7 @@ function ResumeHeaderIdentityText({
   return (
     <div className="resume-header-text min-w-0">
       <h1 className="resume-name">{fullName}</h1>
-      {headline ? <p className="resume-headline">{headline}</p> : null}
+      <ResumeHeadline headline={headline} />
       {contactItems.length > 0 ? (
         <p className="resume-contact-line">
           {contactItems.map((item, index) => (
@@ -247,7 +298,7 @@ function SleekHeader({ profile }: { profile: FilteredProfile }) {
   const text = (
     <div className="resume-header-text min-w-0">
       <h1 className="resume-name">{fullName}</h1>
-      {profile.headline ? <p className="resume-headline">{profile.headline}</p> : null}
+      <ResumeHeadline headline={profile.headline} />
     </div>
   );
 
@@ -296,7 +347,7 @@ function StudioHeader({ profile }: { profile: FilteredProfile }) {
   const text = (
     <div className="resume-studio-identity-text resume-header-text">
       <h1 className="resume-name">{fullName}</h1>
-      {profile.headline ? <p className="resume-headline">{profile.headline}</p> : null}
+      <ResumeHeadline headline={profile.headline} />
     </div>
   );
 
@@ -338,7 +389,7 @@ function AtelierHeader({ profile }: { profile: FilteredProfile }) {
     <header className="resume-header resume-atelier-header">
       <div className="resume-atelier-identity">
         <h1 className="resume-name">{fullName}</h1>
-        {profile.headline ? <p className="resume-headline">{profile.headline}</p> : null}
+        <ResumeHeadline headline={profile.headline} />
       </div>
       {contactFields.length > 0 ? (
         <ul className="resume-atelier-contact">
@@ -382,10 +433,45 @@ function RichHtml({
 }
 
 /** Experience highlights and education notes share this body renderer. */
-function ResumeEntryBody({ html, bullets }: { html?: string | null; bullets?: string[] | null }) {
-  const markup = resumeEntryBodyHtml({ html, bullets });
+function ResumeEntryBody({
+  html,
+  bullets,
+  phrases,
+  redline,
+}: {
+  html?: string | null;
+  bullets?: string[] | null;
+  /** Words already in the body to draw with a marker. */
+  phrases?: readonly string[];
+  /** Suggested bullet edits for this entry. */
+  redline?: RoleRedline;
+}) {
+  const sanitized = resumeEntryBodyHtml({ html, bullets });
+  const markup = redline ? redlineListHtml(sanitized, redline) : sanitized;
   if (!markup) return null;
-  return <div dangerouslySetInnerHTML={{ __html: markup }} />;
+  const marked = phrases?.length ? markPhrasesInHtml(markup, phrases) : markup;
+  return <div dangerouslySetInnerHTML={{ __html: marked }} />;
+}
+
+/** Impact summary, then skill tags. In the flow, so everything below moves down. */
+function GlanceInserts({ insert }: { insert: GlanceInsert }) {
+  return (
+    <div className="glance-inserts" data-copy-exclude>
+      {insert.summary ? (
+        <p className="glance-summary">
+          <span className="sr-only">Impact: </span>
+          {insert.summary}
+        </p>
+      ) : null}
+      {insert.skills.length > 0 ? (
+        <ul className="glance-skills" aria-label="Top skills">
+          {insert.skills.map((skill) => (
+            <li key={skill}>{skill}</li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
 }
 
 // ============================================================================
@@ -393,10 +479,19 @@ function ResumeEntryBody({ html, bullets }: { html?: string | null; bullets?: st
 // ============================================================================
 
 function SummarySection({ summary, title = 'SUMMARY' }: { summary: string; title?: string }) {
+  const mark = useContext(RedlineContext)?.summary;
   return (
     <section className="resume-section">
       <SectionDivider title={title} />
-      <RichHtml html={summary} className="resume-summary resume-rich-html" />
+      {mark ? (
+        <div
+          className="resume-summary resume-rich-html"
+          {...redlineDataProps(mark)}
+          dangerouslySetInnerHTML={{ __html: mark.html }}
+        />
+      ) : (
+        <RichHtml html={summary} className="resume-summary resume-rich-html" />
+      )}
     </section>
   );
 }
@@ -427,13 +522,27 @@ function ExperienceEntry({
   bullets,
   bulletsHtml,
   variant = 'default',
-}: ExperienceEntryProps & { variant?: 'default' | 'atelier' }) {
+  highlight,
+  redline,
+}: ExperienceEntryProps & {
+  variant?: 'default' | 'atelier';
+  highlight?: EntryHighlights;
+  redline?: RoleRedline;
+}) {
   const dateRange =
     variant === 'atelier'
       ? formatAtelierYearRange(startDate, endDate, isCurrent)
       : formatDateRange(startDate, endDate, isCurrent);
   const companyLine = [company, location].filter(Boolean).join(', ');
-  const bulletsBlock = <ResumeEntryBody html={bulletsHtml} bullets={bullets} />;
+  const bulletsBlock = (
+    <ResumeEntryBody
+      html={bulletsHtml}
+      bullets={bullets}
+      phrases={highlight?.phrases}
+      redline={redline}
+    />
+  );
+  const inserts = highlight?.insert ? <GlanceInserts insert={highlight.insert} /> : null;
 
   if (variant === 'atelier') {
     return (
@@ -443,6 +552,7 @@ function ExperienceEntry({
           <div className="resume-atelier-exp-body">
             <h3 className="resume-entry-title">{company}</h3>
             <p className="resume-entry-subtitle">{role}</p>
+            {inserts}
             {bulletsBlock}
           </div>
         </div>
@@ -459,6 +569,7 @@ function ExperienceEntry({
         </div>
         {dateRange ? <span className="resume-entry-date">{dateRange}</span> : null}
       </div>
+      {inserts}
       {bulletsBlock}
     </div>
   );
@@ -471,6 +582,7 @@ function ExperienceSection({
   totalExperienceShowYears,
   totalExperienceShowMonths,
   variant = 'default',
+  highlights,
 }: {
   experiences: PublicProfile['workExperiences'];
   totalExperience?: string | null;
@@ -478,13 +590,16 @@ function ExperienceSection({
   totalExperienceShowYears?: boolean | null;
   totalExperienceShowMonths?: boolean | null;
   variant?: 'default' | 'atelier';
+  highlights?: ResumeGlance | null;
 }) {
+  const redline = useContext(RedlineContext);
   if (!experiences || experiences.length === 0) return null;
 
   const tag = displayTotalExperience(totalExperience, experiences, totalExperienceVisible, {
     showYears: totalExperienceShowYears,
     showMonths: totalExperienceShowMonths,
   });
+  const byEntry = highlightsByEntry(experiences, highlights);
 
   return (
     <section className="resume-section">
@@ -502,6 +617,8 @@ function ExperienceSection({
             bullets={exp.bullets}
             bulletsHtml={exp.bulletsHtml}
             variant={variant}
+            highlight={byEntry.get(exp.id)}
+            redline={redline?.roles.get(exp.id)}
           />
         ))}
       </div>
@@ -1002,6 +1119,10 @@ export function CleanResumeView({
   profile: rawProfile,
   authState,
   viewHighlightsHref,
+  onViewHighlights,
+  highlightsOpen = false,
+  highlights = null,
+  redline = null,
 }: CleanResumeViewProps) {
   const resumeRef = useRef<HTMLDivElement>(null);
 
@@ -1054,10 +1175,10 @@ export function CleanResumeView({
   const renderSection = (section: ProfileSection) => {
     switch (section.type) {
       case 'SUMMARY':
-        return profile.summary && !isHtmlEmpty(profile.summary) ? (
+        return (profile.summary && !isHtmlEmpty(profile.summary)) || redline?.summary ? (
           <SummarySection
             key={section.id}
-            summary={profile.summary}
+            summary={profile.summary ?? ''}
             title={isAtelier ? 'PROFILE' : 'SUMMARY'}
           />
         ) : null;
@@ -1071,6 +1192,7 @@ export function CleanResumeView({
             totalExperienceShowYears={profile.totalExperienceShowYears}
             totalExperienceShowMonths={profile.totalExperienceShowMonths}
             variant={isAtelier ? 'atelier' : 'default'}
+            highlights={highlights}
           />
         );
       case 'EDUCATION':
@@ -1165,10 +1287,15 @@ export function CleanResumeView({
         data-resume-theme={resolvedColorTheme}
         data-page-layout={pageLayout}
       >
-        {viewHighlightsHref ? (
+        {viewHighlightsHref || onViewHighlights ? (
           <div className="pointer-events-none sticky top-6 z-30 h-0 w-full print:hidden">
             <div className="absolute right-6 top-6">
-              <ViewHighlightsButton href={viewHighlightsHref} />
+              <ViewHighlightsButton
+                href={onViewHighlights ? undefined : viewHighlightsHref}
+                onClick={onViewHighlights}
+                label={highlightsOpen ? 'View resume' : 'View Highlights'}
+                icon={highlightsOpen ? <FileText className="h-[18px] w-[18px]" /> : undefined}
+              />
             </div>
           </div>
         ) : null}
@@ -1187,47 +1314,49 @@ export function CleanResumeView({
           />
         ) : null}
 
-        <ResumePagedStack
-          enabled={isPagedPageLayout(pageLayout)}
-          pageLayout={pageLayout === 'a4' ? 'a4' : 'letter'}
-          contentRef={resumeRef}
-        >
-          <article
-            className={[
-              'resume-paper',
-              isSleek && 'resume-paper--sleek',
-              isStudio && 'resume-paper--studio',
-              isAtelier && 'resume-paper--atelier',
-              isLumen && 'resume-paper--lumen',
-            ]
-              .filter(Boolean)
-              .join(' ')}
-            data-resume-template={templateId}
-            style={designStyles}
+        <RedlineContext.Provider value={redline}>
+          <ResumePagedStack
+            enabled={isPagedPageLayout(pageLayout)}
+            pageLayout={pageLayout === 'a4' ? 'a4' : 'letter'}
+            contentRef={resumeRef}
           >
-            {isAtelier ? (
-              <>
-                <AtelierHeader profile={profile} />
-                <div className="resume-atelier-layout">
-                  <div className="resume-atelier-main">{mainSections.map(renderSection)}</div>
-                  <aside className="resume-atelier-rail">
-                    {sidebarSections.map(renderSection)}
-                  </aside>
-                </div>
-              </>
-            ) : isStudio ? (
-              <>
-                <StudioHeader profile={profile} />
-                <div className="resume-studio-body">{mainSections.map(renderSection)}</div>
-              </>
-            ) : (
-              <>
-                {isSleek ? <SleekHeader profile={profile} /> : <ResumeHeader profile={profile} />}
-                {mainSections.map(renderSection)}
-              </>
-            )}
-          </article>
-        </ResumePagedStack>
+            <article
+              className={[
+                'resume-paper',
+                isSleek && 'resume-paper--sleek',
+                isStudio && 'resume-paper--studio',
+                isAtelier && 'resume-paper--atelier',
+                isLumen && 'resume-paper--lumen',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              data-resume-template={templateId}
+              style={designStyles}
+            >
+              {isAtelier ? (
+                <>
+                  <AtelierHeader profile={profile} />
+                  <div className="resume-atelier-layout">
+                    <div className="resume-atelier-main">{mainSections.map(renderSection)}</div>
+                    <aside className="resume-atelier-rail">
+                      {sidebarSections.map(renderSection)}
+                    </aside>
+                  </div>
+                </>
+              ) : isStudio ? (
+                <>
+                  <StudioHeader profile={profile} />
+                  <div className="resume-studio-body">{mainSections.map(renderSection)}</div>
+                </>
+              ) : (
+                <>
+                  {isSleek ? <SleekHeader profile={profile} /> : <ResumeHeader profile={profile} />}
+                  {mainSections.map(renderSection)}
+                </>
+              )}
+            </article>
+          </ResumePagedStack>
+        </RedlineContext.Provider>
       </div>
     </>
   );

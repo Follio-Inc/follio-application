@@ -33,7 +33,11 @@ export function useCopyElementText(
   const copy = useCallback(async () => {
     const el = ref.current;
     if (!el) return;
+    // `[data-copying] [data-copy-exclude]` is hidden in CSS, so drawn-on
+    // highlights never end up in the copied resume text.
+    el.setAttribute('data-copying', '');
     const text = el.innerText;
+    el.removeAttribute('data-copying');
 
     try {
       if (navigator.clipboard?.writeText) {

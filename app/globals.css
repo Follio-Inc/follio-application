@@ -2139,6 +2139,198 @@
   --highlight-mark: #f5d84a;
 }
 
+/*
+ * Highlights drawn into the resume. A light-green marker over words already
+ * on the page, and two boxes under each company heading: the impact summary,
+ * then skill tags. The boxes sit in the document flow, so everything below
+ * moves down by their height. The marker keeps the paper's ink colour.
+ */
+.resume-paper mark.glance-mark {
+  --glance-marker: rgb(134 239 172 / 0.55);
+  color: inherit;
+  font: inherit;
+  background: linear-gradient(
+    180deg,
+    transparent 0.18em,
+    var(--glance-marker) 0.18em,
+    var(--glance-marker) calc(100% - 0.06em),
+    transparent calc(100% - 0.06em)
+  );
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  padding: 0 0.14em;
+  margin: 0 -0.04em;
+  border-radius: 0.2em 0.12em 0.24em 0.1em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  /* The pen sweeps left to right. Only the ink moves; the words never fade. */
+  animation: glance-swipe 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes glance-swipe {
+  from {
+    background-size: 0% 100%;
+  }
+  to {
+    background-size: 100% 100%;
+  }
+}
+
+.resume-paper-wrapper[data-resume-theme='dark'] .resume-paper mark.glance-mark {
+  --glance-marker: rgb(74 222 128 / 0.26);
+}
+
+.resume-paper .glance-inserts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 5px 0 6px;
+  animation: glance-paint 0.3s ease-out;
+}
+
+/* Quieter than the job title above it: same family, smaller, regular weight. */
+.resume-paper .glance-summary {
+  margin: 0;
+  padding: 5px 10px 5px 9px;
+  border-radius: 4px;
+  border-left: 2px solid #22c55e;
+  background: #f0fdf4;
+  color: #14532d;
+  font-size: 0.86em;
+  font-weight: 500;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+.resume-paper .glance-skills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 4px 6px;
+  list-style: none;
+  border-radius: 4px;
+  background: #f0f9ff;
+}
+
+.resume-paper .glance-skills li {
+  margin: 0;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px rgb(2 132 199 / 0.18);
+  color: #075985;
+  font-size: 0.76em;
+  font-weight: 500;
+  line-height: 1.75;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.resume-paper .glance-skills li::marker {
+  content: none;
+}
+
+.resume-paper-wrapper[data-resume-theme='dark'] .resume-paper .glance-summary {
+  border-left-color: rgb(74 222 128 / 0.7);
+  background: rgb(34 197 94 / 0.1);
+  color: #bbf7d0;
+}
+
+.resume-paper-wrapper[data-resume-theme='dark'] .resume-paper .glance-skills {
+  background: rgb(56 189 248 / 0.08);
+}
+
+.resume-paper-wrapper[data-resume-theme='dark'] .resume-paper .glance-skills li {
+  background: rgb(255 255 255 / 0.05);
+  box-shadow: inset 0 0 0 1px rgb(125 211 252 / 0.22);
+  color: #bae6fd;
+}
+
+/*
+ * AI suggestions drawn into the resume while the user reviews them.
+ * A rewritten line wears a neutral marker with its new words in green; a new
+ * line is green as a whole; a removed line is light red and struck through.
+ * Same marker band as the highlights, so the two read as one family.
+ */
+.resume-paper .redline {
+  --redline-neutral: rgb(120 113 108 / 0.16);
+  --redline-green: rgb(74 222 128 / 0.42);
+  --redline-red: rgb(248 113 113 / 0.2);
+  color: inherit;
+  font: inherit;
+  text-decoration: none;
+  padding: 0 0.12em;
+  margin: 0 -0.04em;
+  border-radius: 0.2em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.resume-paper .redline--modified {
+  background: var(--redline-neutral);
+}
+
+.resume-paper .redline--modified .redline-ins,
+.resume-paper .redline--added {
+  background: var(--redline-green);
+  color: inherit;
+  text-decoration: none;
+  border-radius: 0.16em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.resume-paper .redline--removed {
+  background: var(--redline-red);
+  text-decoration: line-through;
+  text-decoration-color: rgb(220 38 38 / 0.75);
+  text-decoration-thickness: 0.08em;
+}
+
+.resume-paper .redline-blank {
+  padding: 0 0.15em;
+  border-radius: 0.16em;
+  background: rgb(251 191 36 / 0.45);
+  font-weight: 600;
+}
+
+.resume-paper [data-edit-id] {
+  border-radius: 3px;
+  cursor: pointer;
+  transition: box-shadow 0.15s ease;
+}
+
+.resume-paper [data-edit-id][data-redline-active] {
+  box-shadow: 0 0 0 2px hsl(var(--primary) / 0.45);
+}
+
+.resume-paper-wrapper[data-resume-theme='dark'] .resume-paper .redline {
+  --redline-neutral: rgb(255 255 255 / 0.1);
+  --redline-green: rgb(74 222 128 / 0.28);
+  --redline-red: rgb(248 113 113 / 0.18);
+}
+
+[data-copying] [data-copy-exclude] {
+  display: none !important;
+}
+
+@keyframes glance-paint {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .resume-paper mark.glance-mark,
+  .resume-paper .glance-inserts {
+    animation: none;
+  }
+}
+
 /* Print styles for clean resume */
 @media print {
   /* Hide everything except the resume */
@@ -2146,11 +2338,21 @@
   .resume-actions,
   .resume-justify-button,
   .view-highlights,
+  .glance-inserts,
   .resume-lens-ui,
   header,
   footer,
   nav {
     display: none !important;
+  }
+
+  /* A printed resume is the resume, never the highlights drawn on it. */
+  .resume-paper mark.glance-mark,
+  .resume-paper .redline,
+  .resume-paper .redline-ins {
+    background: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
   }
 
   /* Reset the paper styling for print */

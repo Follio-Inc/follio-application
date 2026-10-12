@@ -54,6 +54,7 @@ export async function POST(request: NextRequest) {
   const sessionId = request.headers.get('mcp-session-id') || generateOpaqueToken(16);
   const ctx = {
     userId: auth.userId,
+    clerkId: auth.clerkId,
     scopes: auth.scopes,
     clientLabel: auth.clientLabel,
   };

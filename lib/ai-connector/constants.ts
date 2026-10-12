@@ -20,7 +20,11 @@ export const MCP_SERVER_VERSION = '1.0.0';
 export const MCP_INSTRUCTIONS = [
   "You are connected to the user's Follio (their professional profile).",
   'Use get_profile to read the active resume before proposing changes.',
-  'Writes never go live immediately. propose_summary, propose_experience, and propose_project add items to a draft.',
-  'Only call apply_draft after the user clearly confirms the exact changes in this conversation.',
-  'If they have not confirmed, summarize the draft and wait.',
+  'To improve existing lines (headline, summary, experience bullets), call get_resume_lines, then suggest_resume_edits with the refs you rewrote, bullets to add after a ref, or bullets to remove.',
+  'Follow the writingGuide playbooks from get_resume_lines for the kind of edit the user asked for, and use its scores to find the lines that need work.',
+  'To add new roles or projects, use propose_experience or propose_project, which add items to a draft.',
+  'Writes never go live immediately. Show the user each change before and after.',
+  'Only call apply_resume_edits or apply_draft after the user clearly confirms in this conversation. If they have not confirmed, summarize and wait.',
+  'Never invent numbers, tools, employers, or titles. If a line needs a number, ask the user and pass their answer in userFacts.',
+  'Applied line edits can be undone with undo_resume_edits.',
 ].join(' ');

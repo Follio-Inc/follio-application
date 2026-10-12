@@ -22,10 +22,11 @@ function createPrismaClient(): PrismaClient {
       ?.fields.map((field) => field.name) ?? [];
   if (
     !profileFields.includes('totalExperienceVisible') ||
-    !profileFields.includes('totalExperienceShowYears')
+    !profileFields.includes('totalExperienceShowYears') ||
+    !profileFields.includes('resumeGlance')
   ) {
     throw new Error(
-      'Prisma client is missing Profile total-experience fields. Run `npx prisma generate` and restart Next.js with a clean `.next` cache.'
+      'Prisma client is missing Profile total-experience or resumeGlance fields. Run `npx prisma generate` and restart Next.js with a clean `.next` cache.'
     );
   }
 
@@ -44,8 +45,9 @@ function createPrismaClient(): PrismaClient {
  * DocumentPdfCache → generation 5.
  * Profile.totalExperience / totalExperienceVisible → generation 6.
  * Profile.totalExperienceShowYears / ShowMonths → generation 7.
+ * Profile.resumeGlance → generation 8.
  */
-const PRISMA_CLIENT_GENERATION = 7;
+const PRISMA_CLIENT_GENERATION = 8;
 
 function schemaFieldFingerprint(): string {
   const modelNames = [

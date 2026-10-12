@@ -376,6 +376,9 @@ export async function PATCH(request: NextRequest) {
 
     const vanityUsername = await getVanityUsernameForUser(context.userId);
 
+    const { scheduleResumeRefresh } = await import('@/lib/resume/schedule-refresh');
+    scheduleResumeRefresh(existingProfile.id);
+
     return NextResponse.json({
       success: true,
       profile,

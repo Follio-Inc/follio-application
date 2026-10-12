@@ -11,11 +11,11 @@
  * chrome. Builder preview does not use this shell.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { PublicProfileChrome, useEffectiveAuthState } from '@/components/public-profile-chrome';
 import { ResumeLens } from '@/components/resume-lens/ResumeLens';
-import { resumeHighlightsHref } from '@/lib/resume/presentation';
+import { parseResumeGlance } from '@/lib/resume/glance';
 
 import { CleanResumeView } from './views/clean-resume-view';
 
@@ -28,16 +28,37 @@ interface ResumeShellProps {
   resumeVisibility: ContentVisibility;
   /** `token` / `key` query so unlisted access survives the view switch. */
   accessQuery?: string;
+  /** Deep link: highlights are already drawn. The resume is the same view. */
+  initialHighlightsOpen?: boolean;
 }
 
 function ResumeShellBody({
   profile,
   authState,
   profileHandle,
-  accessQuery,
-}: Pick<ResumeShellProps, 'profile' | 'authState' | 'profileHandle' | 'accessQuery'>) {
+  initialHighlightsOpen = false,
+}: Pick<ResumeShellProps, 'profile' | 'authState' | 'profileHandle' | 'initialHighlightsOpen'>) {
   const effectiveAuthState = useEffectiveAuthState(authState);
   const [host, setHost] = useState<HTMLDivElement | null>(null);
+  const [highlightsOpen, setHighlightsOpen] = useState(initialHighlightsOpen);
+  const glance = useMemo(() => parseResumeGlance(profile.resumeGlance), [profile.resumeGlance]);
+
+  useEffect(() => {
+    if (!highlightsOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setHighlightsOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [highlightsOpen]);
+
+  useEffect(() => {
+    const fullName = [profile.firstName, profile.middleName, profile.lastName]
+      .filter(Boolean)
+      .join(' ');
+    const view = highlightsOpen ? 'Highlights' : 'Resume';
+    document.title = `${fullName || profileHandle} — ${view} | Follio`;
+  }, [highlightsOpen, profile.firstName, profile.middleName, profile.lastName, profileHandle]);
 
   return (
     <main>
@@ -48,7 +69,9 @@ function ResumeShellBody({
               profile={profile}
               profileHandle={profileHandle}
               authState={effectiveAuthState}
-              viewHighlightsHref={resumeHighlightsHref(profileHandle, accessQuery)}
+              highlights={highlightsOpen ? glance : null}
+              highlightsOpen={highlightsOpen}
+              onViewHighlights={() => setHighlightsOpen((open) => !open)}
             />
           </ResumeLens>
         </div>
@@ -61,23 +84,15 @@ export function ResumeShell({
   profile,
   authState,
   profileHandle,
-  accessQuery = '',
+  initialHighlightsOpen = false,
 }: ResumeShellProps) {
-  useEffect(() => {
-    if (typeof document === 'undefined') return;
-    const fullName = [profile.firstName, profile.middleName, profile.lastName]
-      .filter(Boolean)
-      .join(' ');
-    document.title = `${fullName} — Resume | Follio`;
-  }, [profile.firstName, profile.middleName, profile.lastName]);
-
   return (
     <PublicProfileChrome authState={authState} profileHandle={profileHandle}>
       <ResumeShellBody
         profile={profile}
         authState={authState}
         profileHandle={profileHandle}
-        accessQuery={accessQuery}
+        initialHighlightsOpen={initialHighlightsOpen}
       />
     </PublicProfileChrome>
   );

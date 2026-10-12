@@ -1,16 +1,17 @@
 'use client';
 
-import { AlignLeft, FileText } from 'lucide-react';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { AlignLeft, FileText, Loader2 } from 'lucide-react';
 import dynamic from 'next/dynamic';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useRef, useState } from 'react';
 
 import { CleanResumeView } from '@/app/u/[handle]/views/clean-resume-view';
-import { HighlightView } from '@/components/resume-highlights/highlight-view';
+import { useBuilderPane } from '@/components/document-builder/document-builder-shell';
 import { ResumeColorThemeSwitch } from '@/components/resume-color-theme-switch';
 import { ResumePageLayoutSwitch } from '@/components/resume-page-layout-switch';
 import { ViewHighlightsButton } from '@/components/resume-presentation/view-highlights-button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { closeBuilderSide } from '@/lib/document-builder';
+import { glanceHasNotes, parseResumeGlance, type ResumeGlance } from '@/lib/resume/glance';
 import { cn } from '@/lib/utils';
 import { getResumeSheetWidthPx, resolveResumePageLayout } from '@/lib/resume/page-layout';
 import {
@@ -21,6 +22,8 @@ import {
 } from '@/types';
 
 import { useJustifyAll } from '../lib/use-justify-all';
+import { useAiEditReview } from './ai-edit/ai-edit-review';
+import { REDLINE_GUTTER_PX, RedlineControls, RedlineReviewBar } from './ai-edit/redline-review';
 import { useBuilderStore } from './builder-store-provider';
 import { PreviewFloatingActions } from './preview-floating-actions';
 import { ResumeConstructionOverlay, useResumeConstruction } from './resume-construction-overlay';
@@ -33,13 +36,16 @@ const ResumeZoomModal = dynamic(
 );
 
 const HORIZONTAL_PADDING_PX = 48;
+const STAGE_RIGHT_PADDING_PX = 56;
 
-const viewSwap = {
-  initial: { opacity: 0, y: 8 },
-  animate: { opacity: 1, y: 0 },
-  exit: { opacity: 0, y: -6 },
-  transition: { duration: 0.18, ease: [0.22, 1, 0.36, 1] as const },
-};
+/** About half a minute: long enough for the highlights prompt to finish after a save. */
+const GLANCE_POLL_MS = 2500;
+const GLANCE_POLL_ATTEMPTS = 12;
+
+const GLANCE_STATUS_COPY = {
+  writing: 'Writing highlights for this resume…',
+  empty: 'No highlights yet. Add results to your experience bullets, then open Highlights again.',
+} as const;
 
 /**
  * ResumePreviewPanel
@@ -48,18 +54,26 @@ const viewSwap = {
  * as the user edits fields — no API round-trip needed.
  *
  * Overlays:
- * - View Highlights, pinned to the resume's top-right, swaps this preview
- *   for the highlight reading. Editing, a template change, or a click outside
- *   the preview brings the resume back.
+ * - View Highlights, pinned to the resume's top-right, draws the stored
+ *   highlights into this resume (marker phrases, plus an impact box and
+ *   skill tags under each company) and closes Content and Design.
+ *   Editing, a template change, or a click outside returns the plain resume.
  * - Floating action cluster (Zoom / Download / View / Share) anchored to the
  *   bottom center of the panel; stays in place when the user scrolls.
  * - Click-to-zoom region: clicking the resume opens a centered zoom modal.
+ * - AI suggestions, while the AI panel is open: drawn into the resume with
+ *   Keep and Skip beside each one and Keep all above. Zoom, Download, and
+ *   Highlights step aside meanwhile, so no export ever carries the marks.
  */
 export function ResumePreviewPanel() {
   const profile = useBuilderStore((s) => s.draftProfile);
-  const reduceMotion = useReducedMotion();
+  const pane = useBuilderPane();
   const panelRef = useRef<HTMLDivElement>(null);
   const [showHighlights, setShowHighlights] = useState(false);
+  const [glance, setGlance] = useState<ResumeGlance | null>(() =>
+    parseResumeGlance(profile.resumeGlance)
+  );
+  const [glanceStatus, setGlanceStatus] = useState<'ready' | 'writing' | 'empty'>('ready');
   const highlightsDraftRef = useRef(profile);
   const commitInlineChange = useBuilderStore((s) => s.commitInlineChange);
   const colorTheme = profile.resumeDesign?.colorTheme ?? RESUME_DESIGN_DEFAULTS.colorTheme;
@@ -68,8 +82,12 @@ export function ResumePreviewPanel() {
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const containerRef = useRef<HTMLDivElement>(null);
   const resumeContentRef = useRef<HTMLDivElement>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0.5);
   const [zoomOpen, setZoomOpen] = useState(false);
+  // Deferred so typing in a suggestion's card does not hold up the keystroke.
+  const redline = useDeferredValue(useAiEditReview().redline);
+  const reviewing = redline !== null;
   // Anchor element for the kebab menu — sits at the resume sheet's
   // top-right. Stored in state (not a ref) so the action component
   // re-renders once the DOM node is available and can portal into it.
@@ -135,8 +153,7 @@ export function ResumePreviewPanel() {
     }
   }, [showHighlights, profile]);
 
-  // A click outside the preview — the editor, the designer, the page — returns
-  // to the resume. Escape does the same.
+  // A click outside the preview returns the plain resume. Escape does the same.
   useEffect(() => {
     if (!showHighlights) return;
 
@@ -144,9 +161,8 @@ export function ResumePreviewPanel() {
 
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target;
-      if (!(target instanceof Node) || !panelRef.current?.contains(target)) {
-        dismiss();
-      }
+      if (!(target instanceof Node)) return;
+      if (!panelRef.current?.contains(target)) dismiss();
     };
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -161,24 +177,72 @@ export function ResumePreviewPanel() {
     };
   }, [showHighlights]);
 
-  const openHighlights = useCallback(() => {
-    setZoomOpen(false);
-    setShowHighlights(true);
+  const readStoredGlance = useCallback(async (): Promise<ResumeGlance | null> => {
+    try {
+      const response = await fetch('/api/profile/glance');
+      if (!response.ok) return null;
+      const body = (await response.json()) as { glance?: unknown };
+      const next = parseResumeGlance(body.glance);
+      setGlance(next);
+      return next;
+    } catch {
+      return null;
+    }
   }, []);
 
-  const swapMotion = reduceMotion
-    ? {
-        initial: false as const,
-        animate: { opacity: 1 },
-        exit: { opacity: 0 },
-        transition: { duration: 0 },
+  // Highlights are written after a save or an import. Opening them while the
+  // prompt is still running keeps asking for a short while, then says so.
+  useEffect(() => {
+    if (!showHighlights) {
+      setGlanceStatus('ready');
+      return;
+    }
+    let cancelled = false;
+    let attempts = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const check = async () => {
+      const next = await readStoredGlance();
+      if (cancelled) return;
+      if (glanceHasNotes(next)) {
+        setGlanceStatus('ready');
+        return;
       }
-    : viewSwap;
+      attempts += 1;
+      if (attempts >= GLANCE_POLL_ATTEMPTS) {
+        setGlanceStatus('empty');
+        return;
+      }
+      setGlanceStatus('writing');
+      timer = setTimeout(check, GLANCE_POLL_MS);
+    };
+    void check();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [showHighlights, readStoredGlance]);
+
+  const openHighlights = useCallback(() => {
+    setZoomOpen(false);
+    pane?.setMode((mode) => closeBuilderSide(mode));
+    setShowHighlights(true);
+  }, [pane]);
+
+  const closeHighlights = useCallback(() => setShowHighlights(false), []);
+
+  // Suggestions and highlights both draw on the resume; suggestions win.
+  useEffect(() => {
+    if (!reviewing) return;
+    setShowHighlights(false);
+    setZoomOpen(false);
+  }, [reviewing]);
+
+  const gutter = reviewing ? REDLINE_GUTTER_PX : 0;
 
   useEffect(() => {
     const updateScale = () => {
       if (!containerRef.current) return;
-      const containerWidth = containerRef.current.clientWidth - HORIZONTAL_PADDING_PX;
+      const containerWidth = containerRef.current.clientWidth - HORIZONTAL_PADDING_PX - gutter;
       const next = Math.min(containerWidth / nativeWidthPx, 1);
       setScale(next);
     };
@@ -188,7 +252,7 @@ export function ResumePreviewPanel() {
     const observer = new ResizeObserver(updateScale);
     if (containerRef.current) observer.observe(containerRef.current);
     return () => observer.disconnect();
-  }, [nativeWidthPx]);
+  }, [gutter, nativeWidthPx]);
 
   // Visible width of the scaled resume sheet (px)
   const sheetWidth = nativeWidthPx * scale;
@@ -198,7 +262,13 @@ export function ResumePreviewPanel() {
       {/* ── Slim panel header — labels the column, keeps the surface calm ── */}
       <div className="builder-panel flex h-12 shrink-0 items-center justify-between border-b border-border/30 px-6">
         <span className="text-eyebrow">
-          {construction.active ? 'Building resume' : showHighlights ? 'Highlights' : 'Preview'}
+          {construction.active
+            ? 'Building resume'
+            : reviewing
+              ? 'Suggestions'
+              : showHighlights
+                ? 'Highlights'
+                : 'Preview'}
         </span>
         <div className="flex items-center gap-2">
           <ResumePageLayoutSwitch
@@ -214,6 +284,8 @@ export function ResumePreviewPanel() {
         </div>
       </div>
 
+      {reviewing && <RedlineReviewBar />}
+
       <ResumeConstructionOverlay
         active={construction.active}
         progress={construction.progress}
@@ -221,131 +293,103 @@ export function ResumePreviewPanel() {
         showRefreshHint={construction.showRefreshHint}
       />
 
-      {/* Soft stage under the resume — lighter than base chrome, darker than paper */}
+      {/* Soft stage under the resume — lighter than base chrome, darker than paper.
+          The resume stays mounted. Highlights are drawn into it. */}
       <div ref={containerRef} className="builder-stage relative min-h-0 flex-1 overflow-hidden">
-        <AnimatePresence mode="wait" initial={false}>
-          {showHighlights ? (
-            <motion.div
-              key="highlights"
-              className="absolute inset-0 overflow-y-auto"
-              {...swapMotion}
+        <div
+          className="scrollbar-thin absolute inset-0 overflow-y-auto overflow-x-hidden px-6 pb-6 pt-6"
+          style={{ paddingRight: STAGE_RIGHT_PADDING_PX + gutter }}
+        >
+          <div ref={sheetRef} className="relative mx-auto" style={{ width: sheetWidth }}>
+            <div
+              className={cn(
+                'builder-paper group block w-full overflow-hidden rounded-md',
+                'focus-within:ring-2 focus-within:ring-primary/40'
+              )}
             >
-              <div className="mx-auto min-h-full max-w-xl pb-16 pl-6 pr-16 pt-8">
-                <HighlightView profile={profile as unknown as PublicProfile} />
-              </div>
-            </motion.div>
-          ) : (
-            <motion.div
-              key="resume"
-              className="scrollbar-thin absolute inset-0 overflow-y-auto overflow-x-hidden px-6 pb-6 pr-14 pt-6"
-              {...swapMotion}
-            >
-              {/* Centered sheet wrapper */}
-              <div className="relative mx-auto" style={{ width: sheetWidth }}>
-                {/* Resume content. We intentionally do NOT wrap this in a <button>
-              because the resume itself renders interactive controls
-              (e.g. ResumeActions copy/print buttons), and nesting buttons
-              is invalid HTML and causes a React hydration error. The
-              click-to-zoom affordance is provided by the absolutely
-              positioned overlay button below.
-              Construction overlay is a status chip only — resume stays fully
-              visible so the handoff feels instant. */}
-                <div
-                  className={cn(
-                    'builder-paper group block w-full overflow-hidden rounded-md',
-                    'focus-within:ring-2 focus-within:ring-primary/40'
-                  )}
-                >
-                  <div className="overflow-hidden" style={{ zoom: scale }}>
-                    {/* Hide ResumeActions (print/copy buttons) in preview mode.
-                  No top padding here — the scrollable parent already
-                  provides spacing, and removing it lets the kebab
-                  anchor (`top-0` on the sheet wrapper) line up exactly
-                  with the resume's top edge. */}
-                    <div ref={resumeContentRef} className="[&>.resume-actions]:hidden">
-                      <CleanResumeView profile={profile as unknown as PublicProfile} />
-                    </div>
-                  </div>
+              <div className="overflow-hidden" style={{ zoom: scale }}>
+                <div ref={resumeContentRef} className="[&>.resume-actions]:hidden">
+                  <CleanResumeView
+                    profile={profile as unknown as PublicProfile}
+                    highlights={showHighlights ? glance : null}
+                    redline={redline}
+                  />
                 </div>
-
-                {/* Click-to-zoom overlay. Sits above the resume content and
-              captures clicks for opening the large preview. Inner
-              interactive controls (floating actions, justify button) are
-              rendered with a higher z-index so they remain clickable. */}
-                <button
-                  type="button"
-                  onClick={() => setZoomOpen(true)}
-                  aria-label="Open large preview"
-                  className={cn(
-                    'absolute inset-0 z-10 h-full w-full cursor-zoom-in rounded-md',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40'
-                  )}
-                />
-
-                {/* (Floating action cluster moved out of the sheet wrapper
-                so it can anchor to the panel rather than the resume's
-                top-right corner — see below.) */}
-
-                {/* Kebab anchor — sits at the top-right of the sheet. The
-              actual menu is portalled in by `<PreviewFloatingActions>`
-              so it shares state with the bottom cluster. Sits above
-              the click-to-zoom overlay (`z-20` > `z-10`) so the kebab
-              trigger remains interactive. */}
-                <div
-                  ref={setKebabAnchor}
-                  className="absolute left-full top-0 z-20 ml-2"
-                  aria-hidden="true"
-                />
-
-                {/* ── Justify-all overlay (top-left of resume). Only visible when
-                some content is not yet justified — disappears once all
-                paragraphs are justified. Mirrors the right-side cluster. ── */}
-                {!allJustified && (
-                  <div className="absolute left-3 top-8 z-20">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          type="button"
-                          onClick={handleJustifyAll}
-                          aria-label="Justify all text"
-                          className={cn(
-                            'flex h-9 w-9 items-center justify-center rounded-full',
-                            'border border-destructive/40 bg-destructive/10 text-destructive shadow-sm backdrop-blur-md',
-                            'opacity-80 transition-all duration-200',
-                            'hover:bg-destructive/20 hover:opacity-100 hover:shadow-md',
-                            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40'
-                          )}
-                        >
-                          <AlignLeft className="h-[18px] w-[18px]" />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom" className="text-xs">
-                        Justify all text
-                      </TooltipContent>
-                    </Tooltip>
-                  </div>
-                )}
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            </div>
 
-        {/* Flying control — outside the scroller, so the resume moves under it.
-            Resume: top-right of the sheet. Highlights: top-right of this view.
-            Same 1.5rem inset as the bottom cluster. */}
-        {showHighlights ? (
-          <div className="pointer-events-none absolute right-6 top-12 z-30">
-            <ViewHighlightsButton
-              label="View resume"
-              icon={<FileText className="h-[18px] w-[18px]" />}
-              onClick={() => setShowHighlights(false)}
+            {redline && <RedlineControls rootRef={sheetRef} redline={redline} />}
+
+            {showHighlights || reviewing ? null : (
+              <button
+                type="button"
+                onClick={() => setZoomOpen(true)}
+                aria-label="Open large preview"
+                className={cn(
+                  'absolute inset-0 z-10 h-full w-full cursor-zoom-in rounded-md',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40'
+                )}
+              />
+            )}
+
+            <div
+              ref={setKebabAnchor}
+              className="absolute left-full top-0 z-20 ml-2"
+              aria-hidden="true"
             />
+
+            {!allJustified && !showHighlights && !reviewing && (
+              <div className="absolute left-3 top-8 z-20">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={handleJustifyAll}
+                      aria-label="Justify all text"
+                      className={cn(
+                        'flex h-9 w-9 items-center justify-center rounded-full',
+                        'border border-destructive/40 bg-destructive/10 text-destructive shadow-sm backdrop-blur-md',
+                        'opacity-80 transition-all duration-200',
+                        'hover:bg-destructive/20 hover:opacity-100 hover:shadow-md',
+                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40'
+                      )}
+                    >
+                      <AlignLeft className="h-[18px] w-[18px]" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs">
+                    Justify all text
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            )}
           </div>
-        ) : (
+        </div>
+
+        <div
+          role="status"
+          aria-live="polite"
+          className="pointer-events-none absolute inset-x-0 bottom-6 z-30 flex justify-center px-6"
+        >
+          {showHighlights && glanceStatus !== 'ready' ? (
+            <p className="flex max-w-md items-center gap-2 rounded-full border border-border/60 bg-background/95 px-4 py-2 text-center text-xs text-muted-foreground shadow-sm backdrop-blur">
+              {glanceStatus === 'writing' ? (
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden="true" />
+              ) : null}
+              {GLANCE_STATUS_COPY[glanceStatus]}
+            </p>
+          ) : null}
+        </div>
+
+        {reviewing ? null : (
           <div className="pointer-events-none absolute inset-x-0 top-6 z-30 px-6 pr-14">
             <div className="relative mx-auto h-0" style={{ width: sheetWidth }}>
               <div className="absolute right-6 top-6">
-                <ViewHighlightsButton onClick={() => setShowHighlights(true)} />
+                <ViewHighlightsButton
+                  label={showHighlights ? 'View resume' : 'View Highlights'}
+                  icon={showHighlights ? <FileText className="h-[18px] w-[18px]" /> : undefined}
+                  onClick={showHighlights ? closeHighlights : openHighlights}
+                />
               </div>
             </div>
           </div>
@@ -356,8 +400,8 @@ export function ResumePreviewPanel() {
             the preview panel so it mirrors the public resume view's
             placement. Sits outside the scrollable area so it stays put
             as the user scrolls the resume. Hidden while highlights
-            fills this preview. ── */}
-      {showHighlights ? null : (
+            are drawn, so Download never exports them. ── */}
+      {showHighlights || reviewing ? null : (
         <div className="pointer-events-none absolute bottom-6 left-1/2 z-30 -translate-x-1/2">
           <PreviewFloatingActions
             onZoom={() => setZoomOpen(true)}

@@ -1,10 +1,12 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { Suspense, useEffect, useRef } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 
 import { DocumentBuilderShell } from '@/components/document-builder/document-builder-shell';
+import { cn } from '@/lib/utils';
 
+import { AiEditReviewProvider } from './components/ai-edit/ai-edit-review';
 import { AllSectionsEditor } from './components/all-sections-editor';
 import { BuilderContentHeader } from './components/builder-content-header';
 import { BuilderMobileBar } from './components/builder-mobile-bar';
@@ -17,6 +19,12 @@ import type { FullProfile, ProfileSection } from '@/types';
 // load it on demand so the initial editor bundle stays small.
 const DesignerPanel = dynamic(
   () => import('./components/designer-panel').then((m) => ({ default: m.DesignerPanel })),
+  { ssr: false }
+);
+
+// AI edit panel only opens from the content header — load it on demand.
+const AiEditPanel = dynamic(
+  () => import('./components/ai-edit/ai-edit-panel').then((m) => ({ default: m.AiEditPanel })),
   { ssr: false }
 );
 
@@ -66,6 +74,11 @@ interface BuilderLayoutInnerProps {
 function BuilderLayoutInner({ sections }: BuilderLayoutInnerProps) {
   const commitInlineChange = useBuilderStore((s) => s.commitInlineChange);
   const storeSections = useBuilderStore((s) => s.draftProfile.sections);
+  const profileId = useBuilderStore((s) => s.draftProfile.id);
+  const [aiOpen, setAiOpen] = useState(false);
+  // Section editors copy values into local state; remount them after AI edits change the resume.
+  const [editorVersion, setEditorVersion] = useState(0);
+  const reloadEditors = useCallback(() => setEditorVersion((version) => version + 1), []);
 
   // Keep sections in sync with the zustand store so the preview stays up-to-date.
   // Only sync from props → store on initial mount or when sections prop identity
@@ -94,20 +107,28 @@ function BuilderLayoutInner({ sections }: BuilderLayoutInnerProps) {
   }, [sections]);
 
   return (
-    <DocumentBuilderShell
-      content={
-        <>
-          <BuilderContentHeader />
-          <div className="min-h-[60vh] flex-1 pb-20 xl:pb-8">
-            <div className="flat-cards mx-auto max-w-3xl px-6 py-8">
-              <AllSectionsEditor />
+    <AiEditReviewProvider active={aiOpen} onResumeChanged={reloadEditors}>
+      <DocumentBuilderShell
+        content={
+          <>
+            <BuilderContentHeader aiOpen={aiOpen} onToggleAi={() => setAiOpen((open) => !open)} />
+            <div className="min-h-[60vh] flex-1 pb-20 xl:pb-8">
+              {/* The editor stays mounted while AI edit is open so inline state survives. */}
+              <div className={cn('flat-cards mx-auto max-w-3xl px-6 py-8', aiOpen && 'hidden')}>
+                <AllSectionsEditor key={editorVersion} />
+              </div>
+              {aiOpen && (
+                <div className="mx-auto max-w-3xl px-6 py-8">
+                  <AiEditPanel key={profileId} onClose={() => setAiOpen(false)} />
+                </div>
+              )}
             </div>
-          </div>
-        </>
-      }
-      preview={<ResumePreviewPanel />}
-      designer={<DesignerPanel />}
-      mobileBar={<BuilderMobileBar />}
-    />
+          </>
+        }
+        preview={<ResumePreviewPanel />}
+        designer={<DesignerPanel />}
+        mobileBar={<BuilderMobileBar />}
+      />
+    </AiEditReviewProvider>
   );
 }

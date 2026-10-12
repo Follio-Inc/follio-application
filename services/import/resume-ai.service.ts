@@ -1139,6 +1139,9 @@ export async function saveAIResumeToProfile(
 
     console.log('[AI Resume Save] Successfully saved to profile');
 
+    const { refreshResumeGlance } = await import('@/services/resume-glance.service');
+    await refreshResumeGlance(profileId);
+
     return { success: true };
   } catch (error) {
     console.error('[AI Resume Save] Error:', error);

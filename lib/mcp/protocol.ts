@@ -22,6 +22,7 @@ import { MCP_TOOLS, toolInputSchemas } from './tools';
 
 export interface McpAuthContext {
   userId: string;
+  clerkId: string;
   scopes: string[];
   clientLabel: string | null;
 }
@@ -34,6 +35,11 @@ export interface McpToolHandlers {
   proposeProject: (ctx: McpAuthContext, input: unknown) => Promise<unknown>;
   applyDraft: (ctx: McpAuthContext, input: unknown) => Promise<unknown>;
   discardDraft: (ctx: McpAuthContext, input: unknown) => Promise<unknown>;
+  getResumeLines: (ctx: McpAuthContext) => Promise<unknown>;
+  suggestResumeEdits: (ctx: McpAuthContext, input: unknown) => Promise<unknown>;
+  applyResumeEdits: (ctx: McpAuthContext, input: unknown) => Promise<unknown>;
+  undoResumeEdits: (ctx: McpAuthContext, input: unknown) => Promise<unknown>;
+  listResumeEdits: (ctx: McpAuthContext) => Promise<unknown>;
 }
 
 function toolResult(payload: unknown, isError = false) {
@@ -105,6 +111,16 @@ async function callTool(
       return toolResult(await handlers.applyDraft(ctx, parsed.data));
     case 'discard_draft':
       return toolResult(await handlers.discardDraft(ctx, parsed.data));
+    case 'get_resume_lines':
+      return toolResult(await handlers.getResumeLines(ctx));
+    case 'suggest_resume_edits':
+      return toolResult(await handlers.suggestResumeEdits(ctx, parsed.data));
+    case 'apply_resume_edits':
+      return toolResult(await handlers.applyResumeEdits(ctx, parsed.data));
+    case 'undo_resume_edits':
+      return toolResult(await handlers.undoResumeEdits(ctx, parsed.data));
+    case 'list_resume_edits':
+      return toolResult(await handlers.listResumeEdits(ctx));
     default:
       return toolResult(`Unknown tool: ${name}`, true);
   }

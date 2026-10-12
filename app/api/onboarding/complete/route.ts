@@ -562,6 +562,7 @@ export async function POST(request: NextRequest) {
       : 'MANUAL';
 
     // Create or update profile
+    let onboardingProfileId: string | undefined = user.profile?.id;
     if (!user.profile) {
       // Create new profile
       const resumeTitle = await generateUniqueResumeTitle(db, user.id);
@@ -590,6 +591,7 @@ export async function POST(request: NextRequest) {
           avatarUrlSource: finalAvatarSource,
         },
       });
+      onboardingProfileId = profile.id;
 
       await db.user.update({
         where: { id: user.id },
@@ -867,7 +869,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate AI-enriched portfolio (fire and forget - don't block the response)
-    const profileId = user.profile?.id;
+    const profileId = onboardingProfileId;
+    if (profileId) {
+      try {
+        const { refreshResumeGlance } = await import('@/services/resume-glance.service');
+        await refreshResumeGlance(profileId);
+      } catch (err) {
+        console.error('[Onboarding Complete] Failed to write highlights:', err);
+      }
+    }
     if (profileId && isPortfolioEnabled()) {
       const startingTemplateId = typeof templateId === 'string' ? templateId : undefined;
       import('@/services/portfolio/enhanced-generation.service')
@@ -1668,6 +1678,15 @@ async function handleReviewedData(
     } catch (err) {
       // Don't fail onboarding if portfolio generation fails — user can regenerate later
       console.error('[handleReviewedData] Failed to generate portfolio:', err);
+    }
+  }
+
+  if (profileId) {
+    try {
+      const { refreshResumeGlance } = await import('@/services/resume-glance.service');
+      await refreshResumeGlance(profileId);
+    } catch (err) {
+      console.error('[handleReviewedData] Failed to write highlights:', err);
     }
   }
 
