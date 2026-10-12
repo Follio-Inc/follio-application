@@ -13,10 +13,16 @@ import type {
  * only, so the module that walks `__tests__` cannot follow it into a browser
  * bundle; the route shim builds the data and passes it down.
  *
- * Everything on this page is either a path, a name or a count of the rows
- * beside it. There is no result, no duration, no last run and no pass rate,
- * because nothing has been run — item 12 adds that. There are no controls for
- * the same reason: a disabled run button would imply the feature exists.
+ * Everything this component renders is either a path, a name or a count of the
+ * rows beside it. It holds no result and no control of its own, and it never
+ * runs anything.
+ *
+ * Running things arrives through slots: `runPanel` for item 12's Vitest runner,
+ * `liveQaPanel` for item 14's Live QA runner, and `historyPanel` for item 16's
+ * run history. The route builds those and passes them in. Keeping them slots
+ * rather than imports is what lets this stay a server component with no client
+ * bundle, and lets the item-11 tests still render the inventory on its own and
+ * assert it carries no controls.
  */
 
 const REASON_HEADINGS: Record<UnattributedReason, { title: string; note: string }> = {
@@ -176,7 +182,20 @@ function UnattributedGroup({
   );
 }
 
-export function TestConsole({ inventory }: { inventory: TestInventory }) {
+export function TestConsole({
+  inventory,
+  runPanel,
+  liveQaPanel,
+  historyPanel,
+}: {
+  inventory: TestInventory;
+  /** Item 12's Vitest run panel, when the route supplies one. */
+  runPanel?: React.ReactNode;
+  /** Item 14's Live QA panel, when the route supplies one. */
+  liveQaPanel?: React.ReactNode;
+  /** Item 16's history view, when the route supplies one. */
+  historyPanel?: React.ReactNode;
+}) {
   const { summary } = inventory;
   const reasons: UnattributedReason[] = ['covers-unreachable-code', 'no-feature-listed'];
   const grouped = reasons
@@ -191,15 +210,19 @@ export function TestConsole({ inventory }: { inventory: TestInventory }) {
       <header>
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-base font-semibold">Tests</h2>
-          <Pill>Read-only</Pill>
+          <Pill>Inventory</Pill>
         </div>
         <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
           Every test file in the repository and every Live QA pathway in the catalog, grouped by the
           feature the coverage map says it covers. Categories and ownership come from the map, so
-          this list cannot disagree with what the drift scan checks. Nothing here has been run —
-          running a category arrives in PLATFORM_TODO item 12.
+          this list cannot disagree with what the drift scan checks. The inventory below is a list,
+          not a set of results: nothing in it has been run.
         </p>
       </header>
+
+      {runPanel}
+      {liveQaPanel}
+      {historyPanel}
 
       <section>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">

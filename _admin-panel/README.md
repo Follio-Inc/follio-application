@@ -43,3 +43,13 @@ On production (follio.me), only signed-in admins can reach `/admin/*`. The publi
 
 Do not put real panel logic under `app/` or `components/`. Inside `platform/`, `scan/` is
 server-only and `ui/` must never import it.
+
+## Local state the platform writes
+
+| What                 | Where                                         | Notes                               |
+| -------------------- | --------------------------------------------- | ----------------------------------- |
+| Live QA artifacts    | `modules/developer/live-qa/.artifacts/<run>/` | Screenshots and traces, gitignored  |
+| Test Console history | `platform/.runs/<runner>/<target>/<run>.json` | Last 10 runs per target, gitignored |
+
+Both are local operator state. Neither is in git, neither is in the database, and neither holds
+secrets — the history record carries the run's outcome, times, commit and one row per test.

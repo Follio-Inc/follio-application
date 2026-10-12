@@ -95,7 +95,10 @@ export const PLATFORM_SECTIONS: PlatformSection[] = [
     href: `${PLATFORM_ROOT}/drift`,
     label: 'Drift',
     description: 'Where the coverage map and the repository disagree.',
-    status: 'planned',
+    // Item 17 landed the read-only view of all nine signals. Proposing map
+    // entries and quarantining dead code are items 18 and 19, and the page
+    // says so rather than offering a control that does nothing.
+    status: 'available',
     plan: [
       'The nine signals `npm run platform:scan` already reports, in the browser',
       'Proposed map entries and draft tests, for review and never auto-merged',

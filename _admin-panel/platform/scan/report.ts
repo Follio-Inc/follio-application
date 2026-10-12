@@ -175,16 +175,29 @@ export function runDriftScan(options: DriftScanOptions = {}): DriftReport {
     // graph disproves, and a `codeLocations` path that is not on disk are all
     // contradictions.
     //
+    // So are all three of signal 3's: a feature claiming a pathway id the
+    // catalog does not define, a catalogued pathway whose spec file is not on
+    // disk, and a spec file under `pathways/` the catalog never names — the
+    // last one can never run through the catalog, so it is invisible rather
+    // than merely unowned. Items 6 and 8 both said these fail the scan and the
+    // expression did not include them, which is the bug PLATFORM_TODO item 17a
+    // fixes. Keeping them here rather than in the Drift page is what lets the
+    // page pass this flag straight through.
+    //
     // Everything else the signals report is a gap, tracked without failing: an
     // unclaimed model, an unused stage, a partially gated feature, a module
-    // that has gone dead, a feature owning dead code, and a category with no
-    // pathway or lab. Category health never fails the scan — a product gap is
-    // not a defect, and failing on it would reward writing a pathway to quiet
-    // a number rather than to test something.
+    // that has gone dead, a feature owning dead code, a catalogued pathway
+    // nobody owns, a feature with no pathway, and a category with no pathway
+    // or lab. Category health never fails the scan — a product gap is not a
+    // defect, and failing on it would reward writing a pathway to quiet a
+    // number rather than to test something.
     ok:
       surface.unmapped.length === 0 &&
       tests.stale.length === 0 &&
       tests.misattributed.length === 0 &&
+      pathways.stale.length === 0 &&
+      pathways.missingSpec.length === 0 &&
+      pathways.orphanSpecs.length === 0 &&
       aiStages.stale.length === 0 &&
       flags.stale.length === 0 &&
       prismaModels.stale.length === 0 &&

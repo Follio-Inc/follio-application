@@ -35,6 +35,7 @@ Rules while both exist:
 - `modules/developer/` — health, suites, Live QA, resume reader (AI lab), smoke
 - `modules/users/` — placeholder for future user monitoring
 - `platform/` — the rebuild: `coverage-map/` (inventory), `scan/` (drift signals),
+  `tests/` (the Test Console's inventory, runners, execution lock and run history),
   `nav.ts` + `ui/` (shell)
 
 Do **not** import developer ↔ users ↔ platform. The shell only composes them via
@@ -47,6 +48,14 @@ Do **not** import developer ↔ users ↔ platform. The shell only composes them
   TypeScript compiler.
 - `platform/ui/` must never import `platform/scan/` or a `node:` module. `PlatformShell` is a
   client component; server data belongs in a route shim that passes it down as props.
+- `platform/tests/` is mixed on purpose, and the split is by file: `inventory.ts`, `runner.ts`,
+  `live-qa.ts`, `execution.ts` and `history.ts` are **server-only** (they spawn processes and
+  touch the filesystem), while `types.ts`, `run-types.ts`, `live-qa-types.ts`,
+  `execution-types.ts` and `history-types.ts` are client-safe. A view imports the types, never
+  the module.
+- Run history lives in `platform/.runs/` as local JSON and is **gitignored**. It is operator
+  state, not product data: no Prisma, no secrets, and nothing in it is served to a browser
+  except through a server component.
 
 ## When shipping features
 

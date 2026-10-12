@@ -280,25 +280,204 @@ describe('drift report integration', { timeout: 30_000 }, () => {
     expect(surface).toEqual(scanProductSurface());
     expect(tests).toEqual(scanTestAttribution());
   });
+});
 
-  it('does not fail the scan for unmapped pathways or features without one', () => {
-    const report = runDriftScan({
-      pathways: [pathway({ id: 'nobody.claims-me' })],
-      specFiles: [],
-    });
+/**
+ * Whether a pathway contradiction fails the scan (PLATFORM_TODO item 17a).
+ *
+ * Every other signal is given nothing to complain about, so `report.ok` can
+ * only be answering the question this block asks. The previous two tests here
+ * did not do that: they overrode `pathways` and left the real coverage map in
+ * place, so the real features' nine pathway claims became stale against a
+ * one-entry synthetic catalog, and `ok` was decided by something other than the
+ * case under test. One of them passed for that reason while
+ * `pathways.stale`, `pathways.missingSpec` and `pathways.orphanSpecs` were
+ * missing from the `ok` expression altogether — which is the bug item 17a
+ * fixed.
+ */
+describe('pathway contradictions and the overall verdict', { timeout: 30_000 }, () => {
+  /** Every signal but this one, given nothing to report. */
+  const NEUTRAL: NonNullable<Parameters<typeof runDriftScan>[0]> = {
+    surfaces: [],
+    testFiles: [],
+    features: [],
+    excluded: [],
+    sources: {},
+    files: [],
+    records: [],
+  };
+
+  const scan = (options: Parameters<typeof runDriftScan>[0]) =>
+    runDriftScan({ ...NEUTRAL, ...options });
+
+  const pathwaySignal = (report: ReturnType<typeof runDriftScan>) => {
     const signal = report.signals.find((entry) => entry.signal === 'live-qa-pathways');
+    if (signal?.signal !== 'live-qa-pathways') throw new Error('no pathway signal in the report');
+    return signal;
+  };
 
-    expect(signal?.signal === 'live-qa-pathways' && signal.unmapped.length).toBe(1);
-    // Gaps are reported, not treated as drift.
+  /**
+   * The lists that decide `report.ok`, by signal.
+   *
+   * Written out so each test can say not only that the verdict flipped but
+   * which finding flipped it — the thing the old test could not distinguish.
+   * The inventory lists beside them (`stages`, `references`, `pathways`) are
+   * full catalogues and are populated in any scan, neutral or not.
+   */
+  const CONTRADICTION_FIELDS: Record<string, string[]> = {
+    'product-surface': ['unmapped'],
+    'test-attribution': ['stale', 'misattributed'],
+    'live-qa-pathways': ['stale', 'missingSpec', 'orphanSpecs'],
+    'ai-stages': ['stale'],
+    'feature-flags': ['stale'],
+    'prisma-models': ['stale'],
+    reachability: ['disagreements'],
+    'map-references': ['missing'],
+    'category-health': [],
+  };
+
+  /** Every populated contradiction list in a report, as `signal.field: count`. */
+  const contradictionsIn = (report: ReturnType<typeof runDriftScan>) => {
+    const found: Record<string, number> = {};
+
+    for (const signal of report.signals) {
+      for (const field of CONTRADICTION_FIELDS[signal.signal] ?? []) {
+        const list = (signal as unknown as Record<string, unknown>)[field];
+        if (Array.isArray(list) && list.length > 0) {
+          found[`${signal.signal}.${field}`] = list.length;
+        }
+      }
+    }
+
+    return found;
+  };
+
+  /** The spec every synthetic catalog entry points at, which is really there. */
+  const REAL_SPEC = specPathFor(pathway({}).spec);
+
+  it('is really the only signal with anything to say', () => {
+    // The isolation itself, asserted — so a later change that breaks it fails
+    // here rather than making every test below pass for the wrong reason.
+    const report = scan({ pathways: [], specFiles: [] });
+
+    expect(contradictionsIn(report)).toEqual({});
+    expect(report.ok).toBe(true);
+    // All nine signals really did run; they simply have nothing to report.
+    expect(report.signals).toHaveLength(Object.keys(CONTRADICTION_FIELDS).length);
+  });
+
+  it('stays healthy when the pathway signal is clean', () => {
+    const report = scan({
+      pathways: [pathway({ id: 'zebra.one' })],
+      specFiles: [REAL_SPEC],
+      features: [feature({ id: 'owner', pathways: ['zebra.one'] })],
+    });
+    const signal = pathwaySignal(report);
+
+    expect(signal.summary).toMatchObject({ total: 1, mapped: 1, missingSpec: 0, orphanSpecs: 0 });
+    expect(contradictionsIn(report)).toEqual({});
     expect(report.ok).toBe(true);
   });
 
-  it('fails the scan for a stale pathway reference', () => {
-    const report = runDriftScan({
+  it('fails the scan for a stale pathway reference, and for that reason', () => {
+    const report = scan({
+      pathways: [],
+      specFiles: [],
       features: [feature({ id: 'owner', pathways: ['gone.missing'] })],
+    });
+    const signal = pathwaySignal(report);
+
+    // The finding is still reported in its own field, unchanged.
+    expect(signal.stale).toEqual([
+      { featureId: 'owner', pathwayId: 'gone.missing', reason: 'unknown-pathway' },
+    ]);
+    // Nothing else in the whole report is complaining, so the verdict can only
+    // be answering for this one list.
+    expect(contradictionsIn(report)).toEqual({ 'live-qa-pathways.stale': 1 });
+    expect(report.ok).toBe(false);
+  });
+
+  it('fails the scan for a catalogued pathway with no spec file, and for that reason', () => {
+    const report = scan({
+      pathways: [pathway({ id: 'zebra.one', spec: 'pathways/not-on-disk.spec.ts' })],
       specFiles: [],
     });
+    const signal = pathwaySignal(report);
 
+    expect(signal.missingSpec.map((finding) => finding.id)).toEqual(['zebra.one']);
+    expect(signal.missingSpec[0].specPath).toBeNull();
+    expect(contradictionsIn(report)).toEqual({ 'live-qa-pathways.missingSpec': 1 });
     expect(report.ok).toBe(false);
+  });
+
+  it('fails the scan for a spec file the catalog does not name, and for that reason', () => {
+    const stray = `${path.posix.dirname(REAL_SPEC)}/stray.spec.ts`;
+    const report = scan({ pathways: [], specFiles: [stray] });
+    const signal = pathwaySignal(report);
+
+    expect(signal.orphanSpecs).toEqual([stray]);
+    expect(contradictionsIn(report)).toEqual({ 'live-qa-pathways.orphanSpecs': 1 });
+    expect(report.ok).toBe(false);
+  });
+
+  it('stays healthy for a catalogued pathway nobody claims', () => {
+    const report = scan({ pathways: [pathway({ id: 'zebra.one' })], specFiles: [REAL_SPEC] });
+    const signal = pathwaySignal(report);
+
+    // A gap: the pathway runs, and no feature has written down that it owns it.
+    expect(signal.unmapped.map((finding) => finding.id)).toEqual(['zebra.one']);
+    expect(contradictionsIn(report)).toEqual({});
+    expect(report.ok).toBe(true);
+  });
+
+  it('stays healthy for features with no pathway at all', () => {
+    const report = scan({
+      pathways: [],
+      specFiles: [],
+      features: [feature({ id: 'one' }), feature({ id: 'two' })],
+    });
+    const signal = pathwaySignal(report);
+
+    expect(signal.featuresWithoutPathway).toEqual(['one', 'two']);
+    expect(signal.summary.featuresWithoutPathway).toBe(2);
+    expect(contradictionsIn(report)).toEqual({});
+    expect(report.ok).toBe(true);
+  });
+
+  it('fails once for each contradiction, and not for the gaps beside them', () => {
+    const stray = `${path.posix.dirname(REAL_SPEC)}/stray.spec.ts`;
+    const report = scan({
+      pathways: [pathway({ id: 'zebra.one', spec: 'pathways/not-on-disk.spec.ts' })],
+      specFiles: [stray],
+      features: [feature({ id: 'owner', pathways: ['gone.missing'] })],
+    });
+    const signal = pathwaySignal(report);
+
+    expect(contradictionsIn(report)).toEqual({
+      'live-qa-pathways.stale': 1,
+      'live-qa-pathways.missingSpec': 1,
+      'live-qa-pathways.orphanSpecs': 1,
+    });
+    // The gap beside them is still reported, and still not a contradiction.
+    expect(signal.unmapped).toHaveLength(1);
+    expect(report.ok).toBe(false);
+  });
+
+  // The `ok` expression is not read as text here. Each contradiction above
+  // proves its own term decides the verdict — remove one from the expression
+  // and that test fails — which is better evidence than a string match, and it
+  // keeps this file asserting on behaviour rather than on source. The literal
+  // expression is cross-checked once, in `platform-drift-page.test.tsx`, where
+  // the Drift page's severities are pinned to it.
+
+  it('leaves the real repository scanning clean', () => {
+    const report = runDriftScan();
+    const signal = pathwaySignal(report);
+
+    expect(signal.stale).toEqual([]);
+    expect(signal.missingSpec).toEqual([]);
+    expect(signal.orphanSpecs).toEqual([]);
+    expect(contradictionsIn(report)).toEqual({});
+    expect(report.ok).toBe(true);
   });
 });

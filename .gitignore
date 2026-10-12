@@ -12,6 +12,9 @@ _admin-panel/modules/developer/live-qa/.artifacts/
 _admin-panel/modules/developer/live-qa/.auth/
 _admin-panel/modules/developer/live-qa/fixtures/resumes/uploads/
 
+# Developer Platform local run history (PLATFORM_TODO item 16)
+_admin-panel/platform/.runs/
+
 # Next.js
 .next/
 out/

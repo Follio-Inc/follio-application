@@ -2,6 +2,8 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { killProcessTree, treeKillableSpawnOptions } from '../process-tree';
+import type { ProcessControl } from '../process-tree';
 import { getLiveQaPathway, listLiveQaPathways } from './catalog';
 import {
   getLiveQaRoot,
@@ -28,6 +30,39 @@ function trimOutput(text: string): string {
 function artifactsDirForRun(): string {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   return path.join(getLiveQaRoot(), '.artifacts', stamp);
+}
+
+/**
+ * Turns a spec path into a filter Playwright can actually match.
+ *
+ * Playwright's positional arguments are **regular expressions** matched against
+ * test file paths, and an absolute Windows path fails as one for two reasons:
+ * its separators are backslashes, which a regex reads as escapes (`\f`, `\m`,
+ * `\p` …), and the checkout directory's own name ends up inside the pattern,
+ * where a character like `(` would change its meaning. Passing one made every
+ * run on Windows end in `Error: No tests found` with an empty report
+ * (PLATFORM_TODO item 14a).
+ *
+ * So the filter is made repository-relative, normalised to forward slashes, and
+ * its regex metacharacters escaped. Verified against the installed Playwright
+ * CLI with `--list`: the absolute backslash form matches nothing, and the
+ * relative forward-slash form — plain or escaped — matches exactly one test.
+ * Forward slashes work on Windows too, so there is one code path, not two.
+ *
+ * `impl` is the path flavour to use, so a test can exercise Windows and POSIX
+ * behaviour from either host.
+ */
+export function toSpecFilter(
+  absoluteSpec: string,
+  cwd: string,
+  impl: Pick<typeof path, 'relative'> = path
+): string {
+  const relative = impl.relative(cwd, absoluteSpec);
+  // A spec outside the working directory keeps its absolute form. It is still
+  // normalised and escaped, which is what the matching needs.
+  const chosen = relative && !relative.startsWith('..') ? relative : absoluteSpec;
+
+  return chosen.replace(/\\/g, '/').replace(/[.*+?^${}()|[\]]/g, '\\$&');
 }
 
 function parsePathwayResults(
@@ -80,10 +115,33 @@ function collectScreenshots(dir: string): string[] {
 }
 
 /**
+ * Optional observers for a run in flight (PLATFORM_TODO item 15).
+ *
+ * Deliberately not part of `LiveQaRunRequest`: that type is parsed from an HTTP
+ * body, and a callback has no business being expressible there. A caller that
+ * wants to stop a run passes these as a second argument instead, so the
+ * request still carries nothing but ids and fixture choices.
+ *
+ * Both are observations. `onStarted` fires on Node's `spawn` event, so it means
+ * the process exists; `onProcess` hands over the only way to stop it, with no
+ * pid or command attached. `/admin/developer` passes neither and behaves
+ * exactly as it did.
+ */
+export type LiveQaRunHooks = {
+  /** Called once, with a way to terminate Playwright and its browsers. */
+  onProcess?: (control: ProcessControl) => void;
+  /** Called when the Playwright process has started. */
+  onStarted?: () => void;
+};
+
+/**
  * Spawns Playwright against selected Live QA pathways.
  * Local-only — caller must gate with assertCanRunDeveloperSuites.
  */
-export async function runLiveQa(request: LiveQaRunRequest): Promise<LiveQaRunResult> {
+export async function runLiveQa(
+  request: LiveQaRunRequest,
+  hooks: LiveQaRunHooks = {}
+): Promise<LiveQaRunResult> {
   const pathways = listLiveQaPathways(request.pathwayIds);
   if (!pathways.length) {
     const now = new Date().toISOString();
@@ -121,7 +179,9 @@ export async function runLiveQa(request: LiveQaRunRequest): Promise<LiveQaRunRes
   const personaPath = resolvePersonaPath(request.personaFixtureId || 'jordan-park');
   const storageState = process.env.LIVE_QA_STORAGE_STATE || '';
 
-  const specArgs = pathways.map((pathway) => path.join(liveQaRoot, pathway.spec));
+  const specArgs = pathways.map((pathway) =>
+    toSpecFilter(path.join(liveQaRoot, pathway.spec), cwd)
+  );
   const configPath = path.join(liveQaRoot, 'playwright.config.ts');
   const playwrightCli = path.join(cwd, 'node_modules', '@playwright', 'test', 'cli.js');
 
@@ -146,7 +206,15 @@ export async function runLiveQa(request: LiveQaRunRequest): Promise<LiveQaRunRes
         ...(storageState ? { LIVE_QA_STORAGE_STATE: storageState } : {}),
       },
       stdio: ['ignore', 'pipe', 'pipe'],
+      // Playwright launches browsers, so stopping a run means stopping a tree.
+      // On POSIX that needs its own process group; on Windows `taskkill /T`
+      // walks it. Nothing else about the spawn changed.
+      ...treeKillableSpawnOptions(),
     });
+
+    // The only way to stop this run, for a caller that asked for one.
+    hooks.onProcess?.({ stop: () => killProcessTree(child) });
+    child.on('spawn', () => hooks.onStarted?.());
 
     let out = '';
     let err = '';

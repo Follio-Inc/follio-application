@@ -11,7 +11,16 @@
  * `__tests__/platform-shell.test.tsx` enforces the rule.
  */
 
+export { DriftReportView } from './drift-report';
+export { LiveQaPanel } from './live-qa-panel';
+export { LiveQaRunResult } from './live-qa-result';
 export { PlatformOverview } from './platform-overview';
 export { PlatformSectionPlaceholder } from './platform-section';
 export { PlatformShell } from './platform-shell';
+export { RunProgress } from './run-progress';
 export { TestConsole } from './test-console';
+export { TestHistory } from './test-history';
+export { TestRunPanel } from './test-run-panel';
+export { TestRunResult } from './test-run-result';
+export { useRunExecution } from './use-run-execution';
+export type { RunExecution, RunPhase } from './use-run-execution';
