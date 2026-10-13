@@ -56,6 +56,17 @@ Do **not** import developer ↔ users ↔ platform. The shell only composes them
 - Run history lives in `platform/.runs/` as local JSON and is **gitignored**. It is operator
   state, not product data: no Prisma, no secrets, and nothing in it is served to a browser
   except through a server component.
+- `platform/drift/` splits the same way. `view.ts` projects the scanner's report and
+  `proposals.ts` is **review-only — it imports no `node:` module and cannot write anything**;
+  `quarantine.ts` and `audit.ts` are the **only** code in the whole platform that moves or
+  removes a repository file. `view-types.ts`, `proposal-types.ts` and `quarantine-types.ts` are
+  client-safe.
+- Quarantined payloads live in `platform/.quarantine/` and the append-only trail in
+  `platform/.audit/`, both **gitignored** local operator state.
+- A destructive action is never one step: quarantine moves the file out of the tree, and deleting
+  it is a separate request carrying the artifact's original path as approval, checked on the
+  server. Only files the scan **proves** unreachable are eligible —
+  `module-reachable-call-unused` never qualifies, because something still imports it.
 
 ## When shipping features
 

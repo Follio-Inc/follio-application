@@ -200,8 +200,13 @@ describe('scanTestAttribution on the real tree', () => {
       '__tests__/onboarding-no-review.test.ts',
       '__tests__/onboarding-resume-start-choice.test.ts',
       '__tests__/onboarding-summary-overwrite.test.ts',
+      // Item 19's. The label is right: that file names the coverage map and
+      // the quarantine store directly, to assert neither was touched, and it
+      // reads the engine's own source to prove it cannot shell out. Left
+      // labelled rather than routed through a variable to hide it.
+      '__tests__/platform-drift-quarantine.test.tsx',
     ]);
-    expect(report.summary.sourceText).toBe(6);
+    expect(report.summary.sourceText).toBe(7);
   });
 
   it('classifies every test exactly once', () => {
