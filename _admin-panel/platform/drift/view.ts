@@ -1,3 +1,5 @@
+import { COVERAGE_MAP } from '../coverage-map';
+import type { PlatformFeature } from '../coverage-map';
 import { runDriftScan } from '../scan';
 import type { DriftScanOptions } from '../scan';
 import type {
@@ -21,6 +23,16 @@ import type {
   TestFinding,
   TestScanReport,
 } from '../scan/types';
+import type { MapEntryProposal, TestDraftProposal } from './proposal-types';
+import {
+  proposeForMisattributedTest,
+  proposeForMissingReference,
+  proposeForStaleReference,
+  proposeForUnlistedTest,
+  proposeForUnmappedSurface,
+  proposeTestDrafts,
+  summarizeProposals,
+} from './proposals';
 import type {
   DriftCategoryRow,
   DriftCount,
@@ -355,6 +367,99 @@ const GROUP_META: Record<string, GroupMeta> = {
   },
 };
 
+/**
+ * The lists item 18 proposes an edit for.
+ *
+ * The rule is evidence, not ambition: a list is here when the report names the
+ * target of the fix, or when the fix is a removal, which needs no target. The
+ * one exception is `product-surface.unmapped`, which is here because the shape
+ * of the edit is worth showing even though the owner has to be chosen by a
+ * person — the proposal says so rather than guessing.
+ */
+const ACTIONABLE_GROUPS = new Set([
+  'product-surface.unmapped',
+  'test-attribution.stale',
+  'test-attribution.misattributed',
+  'test-attribution.unlisted',
+  'live-qa-pathways.stale',
+  'ai-stages.stale',
+  'feature-flags.stale',
+  'prisma-models.stale',
+  'map-references.missing',
+]);
+
+/**
+ * Why every other list gets no proposal.
+ *
+ * Written out per list rather than left as an absence. "No action here" is a
+ * judgement about the signal and the reader deserves the reason — and several
+ * of these are reasons the map already states for itself. A test asserts every
+ * registered group is in exactly one of these two tables, so a new list cannot
+ * arrive without someone deciding which it is.
+ */
+const NOT_ACTIONABLE: Record<string, string> = {
+  'test-attribution.uncategorized':
+    'These cover shared utilities and the platform’s own tooling. Giving them an owner they do not have is precisely what the map refuses to do.',
+  'test-attribution.deadCode':
+    'The code they cover is unreachable. Mapping it as live product behaviour would be the wrong fix, and retiring it is item 19.',
+  'live-qa-pathways.missingSpec':
+    'The fix is a Playwright spec or a catalog edit, not a coverage-map entry.',
+  'live-qa-pathways.orphanSpecs':
+    'The fix is a catalog entry for the spec. Item 18 drafts unit tests, not pathways.',
+  'live-qa-pathways.unmapped':
+    'Nothing in the report names which feature should claim it — a pathway’s `area` is not ownership.',
+  'live-qa-pathways.featuresWithoutPathway':
+    'A browser pathway is a Playwright spec against a running instance, which item 18 does not draft.',
+  'ai-stages.unbudgetedStages':
+    'The fix is a key in the AI client’s token budget, which is product code.',
+  'ai-stages.unused': 'An unused budget key is decided in product code, not in the map.',
+  'ai-stages.unclaimed':
+    'The call site sits in no feature’s code, so nothing here names an owner. It is the same open question an unmapped surface asks.',
+  'ai-stages.undeclared':
+    'Declaring every stage a feature’s code happens to call would record ownership the map deliberately leaves out.',
+  'ai-stages.aiFeaturesWithoutStage':
+    'No call site names a budgeted key for these, so there is no stage to propose.',
+  'ai-stages.aiFeaturesWithoutClient':
+    'Nothing to fix: these are deterministic features that sit in the AI category.',
+  'feature-flags.unenforced':
+    'A flag nothing reads is removed from the flag module or wired up in product code.',
+  'feature-flags.unclaimed':
+    'The enforcement site sits in no feature’s code, so nothing here names an owner.',
+  'feature-flags.partiallyGated':
+    '`flag` means the whole feature is gated. Declaring it where one door is gated is the lie the map avoids.',
+  'prisma-models.unused': 'An unqueried model is a schema decision, not a map entry.',
+  'prisma-models.unclaimed':
+    'Every query site sits outside every feature’s code, so nothing here names an owner.',
+  'prisma-models.undeclared':
+    'Expected for the shared tables, which the map declines on purpose: `Profile` is queried from seventeen features and `User` from fourteen.',
+  'reachability.disagreements':
+    'A record the graph disproves is corrected by re-recording it or by retiring the code, and item 19 owns the retiring.',
+  'reachability.unrecordedOrphans':
+    'Unreachable code must not be mapped as live product behaviour. Recording or retiring it is item 19.',
+  'reachability.unrecordedCallUnused':
+    'Nothing calls what the module exports, which is a question about the code rather than about the map.',
+  'reachability.deadEnds':
+    'Transitively dead code. Proposing ownership for it would claim the product runs it.',
+  'map-references.orphaned':
+    'The feature really does own that code and the code has gone dead. Item 19 owns quarantine.',
+  'map-references.labsDeclared':
+    'Nothing defines where a lab module lives until item 20, so there is no path to propose.',
+  'category-health.withoutPathway':
+    'A product gap in browser coverage, and item 18 drafts unit tests rather than pathways.',
+  'category-health.withoutLab': 'No labs exist before item 20.',
+  'category-health.withoutTests':
+    'Per-category context. The draft tests below are proposed per feature, which is where a test is actually written.',
+};
+
+/**
+ * What a mapper returns: an entry without its proposals.
+ *
+ * `DriftEntry.proposals` is required for whoever renders the view, and
+ * optional here, so a mapper with nothing to propose stays three lines long
+ * and `group` fills the empty list in.
+ */
+type EntryDraft = Omit<DriftEntry, 'proposals'> & { proposals?: MapEntryProposal[] };
+
 /** One evidence line: a label and its values, capped and counted. */
 function line(label: string, values: readonly string[], cap = INLINE_CAP): string | null {
   if (values.length === 0) return null;
@@ -380,35 +485,39 @@ function group<T>(
   signal: string,
   id: string,
   items: readonly T[],
-  toEntry: (item: T) => DriftEntry
+  toEntry: (item: T) => EntryDraft
 ): DriftFindingGroup | null {
   if (items.length === 0) return null;
 
   const key = `${signal}.${id}`;
   const meta = GROUP_META[key];
+  // An entry carries no proposal unless its mapper attached one, so a list
+  // nobody has decided about cannot acquire an action by accident.
+  const entries: DriftEntry[] = items.slice(0, ENTRY_CAP).map((item) => {
+    const draft = toEntry(item);
+    return { ...draft, proposals: draft.proposals ?? [] };
+  });
+  const common = {
+    id,
+    failsScan: FAILS_SCAN.has(key),
+    actionable: ACTIONABLE_GROUPS.has(key),
+    notActionable: ACTIONABLE_GROUPS.has(key) ? null : (NOT_ACTIONABLE[key] ?? null),
+    entries,
+    omitted: Math.max(0, items.length - ENTRY_CAP),
+  };
+
   if (meta === undefined) {
     // Unreachable while every list below is in the table; handled rather than
     // asserted so a future list renders as itself instead of crashing a page.
     return {
-      id,
+      ...common,
       title: id,
       severity: 'gap',
       note: 'No description is registered for this list.',
-      failsScan: FAILS_SCAN.has(key),
-      entries: items.slice(0, ENTRY_CAP).map(toEntry),
-      omitted: Math.max(0, items.length - ENTRY_CAP),
     };
   }
 
-  return {
-    id,
-    title: meta.title,
-    severity: meta.severity,
-    note: meta.note,
-    failsScan: FAILS_SCAN.has(key),
-    entries: items.slice(0, ENTRY_CAP).map(toEntry),
-    omitted: Math.max(0, items.length - ENTRY_CAP),
-  };
+  return { ...common, title: meta.title, severity: meta.severity, note: meta.note };
 }
 
 const SEVERITY_ORDER: DriftSeverity[] = ['contradiction', 'inconsistency', 'gap'];
@@ -438,7 +547,7 @@ function assemble(
  * One builder per signal. Each reads that signal's own typed fields.  *
  * ------------------------------------------------------------------ */
 
-function surfaceEntry(finding: SurfaceFinding): DriftEntry {
+function surfaceEntry(finding: SurfaceFinding): EntryDraft {
   return {
     label: finding.path,
     detail: finding.kind === 'page' ? 'page' : 'route handler',
@@ -459,11 +568,16 @@ function surfaceView(report: SurfaceScanReport): DriftSignalView {
       { label: 'Excluded', value: summary.excluded, hint: 'an EXCLUDED entry covers it' },
       { label: 'Unmapped', value: summary.unmapped, hint: 'neither — this is drift' },
     ],
-    [group(report.signal, 'unmapped', report.unmapped, surfaceEntry)]
+    [
+      group(report.signal, 'unmapped', report.unmapped, (finding) => ({
+        ...surfaceEntry(finding),
+        proposals: proposeForUnmappedSurface(finding),
+      })),
+    ]
   );
 }
 
-function testEntry(finding: TestFinding): DriftEntry {
+function testEntry(finding: TestFinding): EntryDraft {
   return {
     label: finding.path,
     detail: `${finding.classification} · asserts on ${finding.assertion === 'source-text' ? 'source text' : 'behaviour'}`,
@@ -477,8 +591,10 @@ function testEntry(finding: TestFinding): DriftEntry {
   };
 }
 
-function testView(report: TestScanReport): DriftSignalView {
+function testView(report: TestScanReport, features: PlatformFeature[]): DriftSignalView {
   const { summary } = report;
+  const inferredFor = (testPath: string) =>
+    report.tests.find((finding) => finding.path === testPath)?.inferredFeatures;
 
   return assemble(
     report.signal,
@@ -501,16 +617,34 @@ function testView(report: TestScanReport): DriftSignalView {
         label: entry.testPath,
         detail: `listed by ${entry.featureId} · ${entry.reason}`,
         evidence: [],
+        proposals: proposeForStaleReference({
+          signal: report.signal,
+          field: 'unitTests',
+          featureId: entry.featureId,
+          reference: entry.testPath,
+          reason: entry.reason,
+          explain:
+            entry.reason === 'missing-file'
+              ? 'the file is not on disk.'
+              : 'the import graph reaches none of its code.',
+          inferredFeatures: inferredFor(entry.testPath),
+        }),
       })),
-      group(report.signal, 'misattributed', report.misattributed, testEntry),
-      group(report.signal, 'unlisted', report.unlisted, testEntry),
+      group(report.signal, 'misattributed', report.misattributed, (finding) => ({
+        ...testEntry(finding),
+        proposals: proposeForMisattributedTest(finding, features),
+      })),
+      group(report.signal, 'unlisted', report.unlisted, (finding) => ({
+        ...testEntry(finding),
+        proposals: proposeForUnlistedTest(finding, features),
+      })),
       group(report.signal, 'deadCode', report.deadCode, testEntry),
       group(report.signal, 'uncategorized', report.uncategorized, testEntry),
     ]
   );
 }
 
-function pathwayEntry(finding: PathwayFinding): DriftEntry {
+function pathwayEntry(finding: PathwayFinding): EntryDraft {
   return {
     label: finding.id,
     detail: `${finding.area} · ${finding.stability}${finding.requiresAuth ? ' · signs in first' : ''}`,
@@ -542,6 +676,16 @@ function pathwayView(report: PathwayScanReport): DriftSignalView {
         label: entry.pathwayId,
         detail: `claimed by ${entry.featureId} · ${entry.reason}`,
         evidence: [],
+        // No move target by construction: the id the feature claims is one the
+        // catalog does not define, so there is nowhere for it to belong.
+        proposals: proposeForStaleReference({
+          signal: report.signal,
+          field: 'pathways',
+          featureId: entry.featureId,
+          reference: entry.pathwayId,
+          reason: entry.reason,
+          explain: 'the Live QA catalog defines no pathway with that id.',
+        }),
       })),
       group(report.signal, 'missingSpec', report.missingSpec, pathwayEntry),
       group(report.signal, 'orphanSpecs', report.orphanSpecs, (specPath) => ({
@@ -564,7 +708,7 @@ function pathwayView(report: PathwayScanReport): DriftSignalView {
   );
 }
 
-function stageEntry(finding: AiStageFinding): DriftEntry {
+function stageEntry(finding: AiStageFinding): EntryDraft {
   return {
     label: finding.stage,
     detail: `${finding.classification} · called from ${finding.usedBy.length} ${finding.usedBy.length === 1 ? 'file' : 'files'}`,
@@ -595,6 +739,19 @@ function aiStageView(report: AiStageScanReport): DriftSignalView {
         label: entry.stage,
         detail: `declared by ${entry.featureId} · ${entry.reason}`,
         evidence: [],
+        proposals: proposeForStaleReference({
+          signal: report.signal,
+          field: 'aiStages',
+          featureId: entry.featureId,
+          reference: entry.stage,
+          reason: entry.reason,
+          explain:
+            entry.reason === 'unknown-stage'
+              ? 'the token budget defines no such key.'
+              : 'no call site for it sits in that feature’s code.',
+          inferredFeatures: report.stages.find((finding) => finding.stage === entry.stage)
+            ?.inferredFeatures,
+        }),
       })),
       group(report.signal, 'unbudgetedStages', report.unbudgetedStages, (stage) => ({
         label: stage,
@@ -618,7 +775,7 @@ function aiStageView(report: AiStageScanReport): DriftSignalView {
   );
 }
 
-function flagEntry(finding: FlagFinding): DriftEntry {
+function flagEntry(finding: FlagFinding): EntryDraft {
   return {
     label: finding.flag,
     detail: `${finding.classification} · enforced in ${finding.enforcedIn.length} ${finding.enforcedIn.length === 1 ? 'file' : 'files'}`,
@@ -649,6 +806,19 @@ function flagView(report: FlagScanReport): DriftSignalView {
         label: entry.flag,
         detail: `declared by ${entry.featureId} · ${entry.reason}`,
         evidence: [],
+        proposals: proposeForStaleReference({
+          signal: report.signal,
+          field: 'flag',
+          featureId: entry.featureId,
+          reference: entry.flag,
+          reason: entry.reason,
+          explain:
+            entry.reason === 'unknown-flag'
+              ? 'the flag module declares no such flag.'
+              : 'nothing in that feature’s code gates on it.',
+          inferredFeatures: report.flags.find((finding) => finding.flag === entry.flag)
+            ?.inferredFeatures,
+        }),
       })),
       group(report.signal, 'unenforced', report.unenforced, flagEntry),
       group(report.signal, 'unclaimed', report.unclaimed, flagEntry),
@@ -661,7 +831,7 @@ function flagView(report: FlagScanReport): DriftSignalView {
   );
 }
 
-function modelEntry(finding: PrismaModelFinding): DriftEntry {
+function modelEntry(finding: PrismaModelFinding): EntryDraft {
   return {
     label: finding.model,
     detail: `${finding.classification} · queried via \`${finding.delegate}\` in ${finding.usedBy.length} ${finding.usedBy.length === 1 ? 'file' : 'files'}`,
@@ -690,6 +860,19 @@ function prismaView(report: PrismaScanReport): DriftSignalView {
         label: entry.model,
         detail: `declared by ${entry.featureId} · ${entry.reason}`,
         evidence: [],
+        proposals: proposeForStaleReference({
+          signal: report.signal,
+          field: 'prismaModels',
+          featureId: entry.featureId,
+          reference: entry.model,
+          reason: entry.reason,
+          explain:
+            entry.reason === 'unknown-model'
+              ? 'the schema declares no such model.'
+              : 'no query for it sits in that feature’s code.',
+          inferredFeatures: report.models.find((finding) => finding.model === entry.model)
+            ?.inferredFeatures,
+        }),
       })),
       group(report.signal, 'unused', report.unused, modelEntry),
       group(report.signal, 'unclaimed', report.unclaimed, modelEntry),
@@ -698,7 +881,7 @@ function prismaView(report: PrismaScanReport): DriftSignalView {
   );
 }
 
-function reachabilityEntry(finding: ReachabilityRecordFinding): DriftEntry {
+function reachabilityEntry(finding: ReachabilityRecordFinding): EntryDraft {
   return {
     label: finding.path,
     detail: `recorded ${finding.recordedClass} · computed ${
@@ -755,7 +938,7 @@ function reachabilityView(report: ReachabilityScanReport): DriftSignalView {
   );
 }
 
-function referenceEntry(finding: MapReferenceFinding): DriftEntry {
+function referenceEntry(finding: MapReferenceFinding): EntryDraft {
   return {
     label: finding.path,
     detail: `${finding.kind === 'excluded' ? 'EXCLUDED entry' : `codeLocation of ${finding.featureId}`} · ${finding.moduleCount} ${finding.moduleCount === 1 ? 'module' : 'modules'}`,
@@ -790,7 +973,10 @@ function mapReferenceView(report: MapReferenceScanReport): DriftSignalView {
       { label: 'Move candidates', value: summary.moveCandidates, hint: 'advisory name matches' },
     ],
     [
-      group(report.signal, 'missing', report.missing, referenceEntry),
+      group(report.signal, 'missing', report.missing, (finding) => ({
+        ...referenceEntry(finding),
+        proposals: proposeForMissingReference(finding),
+      })),
       group(report.signal, 'orphaned', report.orphaned, referenceEntry),
       group(report.signal, 'labsDeclared', report.labsDeclared, (declared) => ({
         label: declared,
@@ -842,12 +1028,12 @@ function categoryView(report: CategoryHealthReport): DriftSignalView {
  * The switch is exhaustive over `DriftSignalReport`, so a tenth signal is a
  * type error here rather than a section silently missing from the page.
  */
-function viewForSignal(signal: DriftSignalReport): DriftSignalView {
+function viewForSignal(signal: DriftSignalReport, features: PlatformFeature[]): DriftSignalView {
   switch (signal.signal) {
     case 'product-surface':
       return surfaceView(signal);
     case 'test-attribution':
-      return testView(signal);
+      return testView(signal, features);
     case 'live-qa-pathways':
       return pathwayView(signal);
     case 'ai-stages':
@@ -909,9 +1095,21 @@ function summarize(signals: DriftSignalView[]): DriftSummary {
 /** Projects a report onto the view. Pure: no scan, no clock, no filesystem. */
 export function toDriftView(
   report: DriftReport,
-  measured: { scannedAt: string; durationMs: number }
+  measured: { scannedAt: string; durationMs: number; features?: PlatformFeature[] }
 ): DriftView {
-  const signals = report.signals.map(viewForSignal);
+  const features = measured.features ?? COVERAGE_MAP;
+  const signals = report.signals.map((signal) => viewForSignal(signal, features));
+
+  // Test files the report already walked, so the draft can say when the path
+  // it suggests is taken without this module reading a directory.
+  const knownTestPaths = (
+    report.signals.find((signal): signal is TestScanReport => signal.signal === 'test-attribution')
+      ?.tests ?? []
+  ).map((finding) => finding.path);
+  const testDrafts: TestDraftProposal[] = proposeTestDrafts(features, knownTestPaths);
+  const mapEntries = signals.flatMap((signal) =>
+    signal.groups.flatMap((group) => group.entries.flatMap((entry) => entry.proposals))
+  );
 
   return {
     // The scanner's own verdict, passed through. Never recomputed here.
@@ -922,6 +1120,8 @@ export function toDriftView(
     summary: summarize(signals),
     categories: categoryRows(report),
     categoryCounts: signals.find((signal) => signal.signal === 'category-health')?.counts ?? [],
+    testDrafts,
+    proposals: summarizeProposals(mapEntries, testDrafts),
     entryCap: ENTRY_CAP,
   };
 }
@@ -951,6 +1151,9 @@ export function buildDriftView(options: DriftViewOptions = {}): DriftView {
   return toDriftView(report, {
     scannedAt: startedAt.toISOString(),
     durationMs: Date.now() - started,
+    // The same map the scan was run against, so a proposal cannot be about a
+    // feature the report never saw.
+    features: scanOptions.features,
   });
 }
 
@@ -959,3 +1162,9 @@ export const FAILING_GROUPS: readonly string[] = [...FAILS_SCAN].sort();
 
 /** Exported so a test can assert every registered list is reachable. */
 export const REGISTERED_GROUPS: readonly string[] = Object.keys(GROUP_META).sort();
+
+/** Exported so a test can pin which lists item 18 proposes an edit for. */
+export const PROPOSAL_GROUPS: readonly string[] = [...ACTIONABLE_GROUPS].sort();
+
+/** Exported so a test can assert every other list has a stated reason. */
+export const NOT_ACTIONABLE_GROUPS: readonly string[] = Object.keys(NOT_ACTIONABLE).sort();

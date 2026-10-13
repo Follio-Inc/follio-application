@@ -247,11 +247,14 @@ describe('client safety', () => {
     `${PLATFORM_UI}/use-run-execution.ts`,
     `${PLATFORM_UI}/test-history.tsx`,
     `${PLATFORM_UI}/drift-report.tsx`,
+    `${PLATFORM_UI}/drift-quarantine-panel.tsx`,
     '_admin-panel/platform/nav.ts',
     '_admin-panel/platform/tests/types.ts',
     '_admin-panel/platform/tests/execution-types.ts',
     '_admin-panel/platform/tests/history-types.ts',
     '_admin-panel/platform/drift/view-types.ts',
+    '_admin-panel/platform/drift/proposal-types.ts',
+    '_admin-panel/platform/drift/quarantine-types.ts',
   ];
 
   it('keeps the scanner out of the shell', () => {

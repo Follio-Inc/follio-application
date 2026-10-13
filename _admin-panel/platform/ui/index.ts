@@ -11,6 +11,7 @@
  * `__tests__/platform-shell.test.tsx` enforces the rule.
  */
 
+export { DriftQuarantinePanel } from './drift-quarantine-panel';
 export { DriftReportView } from './drift-report';
 export { LiveQaPanel } from './live-qa-panel';
 export { LiveQaRunResult } from './live-qa-result';

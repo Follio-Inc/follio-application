@@ -15,7 +15,12 @@
  * plus named groups of findings, so one component renders them all and a tenth
  * signal needs no new component. Category health keeps its own table, because
  * it is a table of columns rather than a list of findings.
+ *
+ * Item 18 added the proposals: review-only drafts hanging off the findings they
+ * belong to. They carry no apply path — see `proposal-types.ts`.
  */
+
+import type { MapEntryProposal, ProposalSummary, TestDraftProposal } from './proposal-types';
 
 /**
  * How seriously to read a group of findings.
@@ -38,6 +43,14 @@ export type DriftEntry = {
   detail: string | null;
   /** Further evidence the report carried, one line each. */
   evidence: string[];
+  /**
+   * Review-only proposals for this finding (item 18). Empty for a finding the
+   * report carries no evidence to act on, and for every informational list.
+   *
+   * Nothing here is applied. The proposals describe an edit a person makes by
+   * hand in the coverage map.
+   */
+  proposals: MapEntryProposal[];
 };
 
 /** One of a signal's lists, with how to read it. */
@@ -50,6 +63,15 @@ export type DriftFindingGroup = {
   note: string;
   /** Whether this list is a term in `DriftReport.ok`. */
   failsScan: boolean;
+  /** Whether item 18 proposes an edit for findings in this list. */
+  actionable: boolean;
+  /**
+   * Why this list gets no proposal. Null when it is actionable.
+   *
+   * Said out loud rather than left as an absence: "no action here" is a
+   * judgement about the signal, and the reader deserves the reason.
+   */
+  notActionable: string | null;
   entries: DriftEntry[];
   /** Entries beyond the render cap, so a long list is never silently cut. */
   omitted: number;
@@ -133,6 +155,15 @@ export type DriftView = {
   /** Signal 9's table. Separate because nothing in it fails the scan. */
   categories: DriftCategoryRow[];
   categoryCounts: DriftCount[];
+  /**
+   * Draft unit tests for features the map lists no test for (item 18).
+   *
+   * Their own list rather than a signal's finding: the scan reports test
+   * coverage per category, and the question "which feature has no test at all"
+   * is answered by the coverage map directly.
+   */
+  testDrafts: TestDraftProposal[];
+  proposals: ProposalSummary;
   /** Per-group render cap, so the page can say it applied one. */
   entryCap: number;
 };

@@ -27,8 +27,9 @@ import type { ExcludedPath, PlatformFeature } from './types';
  *   `platform-scan-pathways`, `platform-scan-source-facts`,
  *   `platform-scan-reachability`, `platform-shell`, `platform-test-console`,
  *   `platform-test-runner`, `platform-test-detail`, `platform-live-qa`,
- *   `platform-test-execution`, `platform-test-history`, `platform-drift-page`.
- *   They cover `_admin-panel/`, which is operator tooling, not product.
+ *   `platform-test-execution`, `platform-test-history`, `platform-drift-page`,
+ *   `platform-drift-proposals`, `platform-drift-quarantine`. They cover
+ *   `_admin-panel/`, which is operator tooling, not product.
  * - Shared infrastructure no single feature owns: `errors`, `html-utils`,
  *   `logger`, `prisma-connection`, `url`, `utils`, `validations`. Attributing
  *   `lib/utils.ts` to one feature would be a fiction every other feature pays

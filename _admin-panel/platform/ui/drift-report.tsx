@@ -1,6 +1,11 @@
 import { cn } from '@/lib/utils';
 
 import type {
+  MapEntryProposal,
+  ProposalCertainty,
+  TestDraftProposal,
+} from '../drift/proposal-types';
+import type {
   DriftCategoryRow,
   DriftCount,
   DriftEntry,
@@ -22,6 +27,19 @@ import type {
  * suggestion, edits the coverage map, quarantines or deletes. Those are items
  * 18 and 19. A browser refresh re-runs the scan, which is the only "action"
  * this page has.
+ *
+ * Item 19's destructive panel arrives through a slot, as the Test Console's
+ * runners do: it is a client component and this stays a server one, and a
+ * control that removes a file has no business being rendered by the same
+ * function that lists informational gaps.
+ *
+ * Item 18 added the proposals: review-only drafts of the edit a person might
+ * make, hanging off the finding they belong to, plus draft unit tests for
+ * features the map lists no test for. There is still no button. A proposal is
+ * text — the exact field, the exact reference, the evidence, and what is still
+ * open — and the page says on every one of them that nothing has been applied.
+ * Applying anything is a person's job in an editor; quarantine and delete are
+ * item 19.
  *
  * Three tiers, because conflating them is what makes a drift report useless:
  * a **contradiction** is a term in the scanner's own `ok` and is why the scan
@@ -65,6 +83,145 @@ function Count({ count, tone }: { count: DriftCount; tone?: 'bad' | 'warn' }) {
   );
 }
 
+const CERTAINTY_LABELS: Record<ProposalCertainty, string> = {
+  certain: 'evidence names the target',
+  ambiguous: 'several targets fit',
+  unresolved: 'no target in the report',
+};
+
+const ACTION_LABELS: Record<MapEntryProposal['action'], string> = {
+  add: 'Add',
+  move: 'Move',
+  remove: 'Remove',
+};
+
+/** Lines a person would read and then type themselves. Never executed. */
+function Preview({ lines }: { lines: string[] }) {
+  return (
+    <pre className="mt-2 overflow-x-auto whitespace-pre rounded bg-muted p-2 font-mono text-[11px] leading-relaxed text-muted-foreground">
+      {lines.join('\n')}
+    </pre>
+  );
+}
+
+function Evidence({ title, lines }: { title: string; lines: string[] }) {
+  if (lines.length === 0) return null;
+
+  return (
+    <div className="mt-2">
+      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+        {title}
+      </p>
+      <ul className="mt-0.5 space-y-0.5">
+        {lines.map((line) => (
+          <li key={line} className="text-[11px] leading-relaxed text-muted-foreground">
+            {line}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function MapEntryProposalBlock({ proposal }: { proposal: MapEntryProposal }) {
+  return (
+    <details className="rounded-lg border border-sky-500/30 bg-sky-500/5">
+      <summary className="cursor-pointer px-3 py-2">
+        <span className="flex flex-wrap items-baseline gap-2">
+          <span className="rounded bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-400">
+            Proposed map entry
+          </span>
+          <span className="text-xs font-semibold">
+            {ACTION_LABELS[proposal.action]} <code className="font-mono">{proposal.field}</code>
+            {proposal.featureId !== null && (
+              <>
+                {' '}
+                on <code className="font-mono">{proposal.featureId}</code>
+              </>
+            )}
+            {proposal.action !== 'add' && proposal.fromFeatureId !== null && (
+              <>
+                {' '}
+                from <code className="font-mono">{proposal.fromFeatureId}</code>
+              </>
+            )}
+          </span>
+          <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+            {proposal.certainty} — {CERTAINTY_LABELS[proposal.certainty]}
+          </span>
+          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            not applied
+          </span>
+        </span>
+      </summary>
+
+      <div className="border-t px-3 py-2">
+        <Evidence title="Why" lines={proposal.evidence} />
+
+        {proposal.candidates.length > 0 && (
+          <div className="mt-2">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              Candidates — pick one by hand
+            </p>
+            <ul className="mt-0.5 space-y-1">
+              {proposal.candidates.map((candidate) => (
+                <li key={candidate.target} className="text-[11px] text-muted-foreground">
+                  <code className="font-mono text-foreground">{candidate.target}</code>
+                  {candidate.evidence.length > 0 && <> — {candidate.evidence.join('; ')}</>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <p className="mt-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          Suggested edit to <code className="font-mono">{proposal.editFile}</code>
+        </p>
+        <Preview lines={proposal.preview} />
+
+        {proposal.needsDecision !== null && (
+          <p className="mt-2 text-[11px] text-amber-700 dark:text-amber-500">
+            Still open: {proposal.needsDecision}
+          </p>
+        )}
+      </div>
+    </details>
+  );
+}
+
+function TestDraftBlock({ draft }: { draft: TestDraftProposal }) {
+  return (
+    <details className="rounded-lg border border-sky-500/30 bg-sky-500/5">
+      <summary className="cursor-pointer px-3 py-2">
+        <span className="flex flex-wrap items-baseline gap-2">
+          <span className="rounded bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-400">
+            Draft test
+          </span>
+          <code className="font-mono text-xs font-semibold">{draft.featureId}</code>
+          <span className="text-xs text-muted-foreground">
+            {draft.featureName} · {draft.category}
+          </span>
+          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            not written
+          </span>
+        </span>
+      </summary>
+
+      <div className="border-t px-3 py-2">
+        <Evidence title="Why" lines={draft.evidence} />
+        <Evidence title="Left for a person" lines={draft.placeholders} />
+
+        <p className="mt-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          Suggested path <code className="font-mono">{draft.suggestedPath}</code>
+        </p>
+        <pre className="mt-1 max-h-96 overflow-auto whitespace-pre rounded bg-muted p-2 font-mono text-[11px] leading-relaxed text-muted-foreground">
+          {draft.draft}
+        </pre>
+      </div>
+    </details>
+  );
+}
+
 function EntryRow({ entry }: { entry: DriftEntry }) {
   return (
     <li className="border-t px-4 py-2 first:border-t-0">
@@ -82,6 +239,14 @@ function EntryRow({ entry }: { entry: DriftEntry }) {
             </li>
           ))}
         </ul>
+      )}
+
+      {entry.proposals.length > 0 && (
+        <div className="mt-2 space-y-1.5">
+          {entry.proposals.map((proposal) => (
+            <MapEntryProposalBlock key={proposal.id} proposal={proposal} />
+          ))}
+        </div>
       )}
     </li>
   );
@@ -120,6 +285,11 @@ function FindingGroup({ group }: { group: DriftFindingGroup }) {
           </span>
         </span>
         <span className="mt-1 block max-w-3xl text-xs text-muted-foreground">{group.note}</span>
+        {group.notActionable !== null && (
+          <span className="mt-1 block max-w-3xl text-[11px] text-muted-foreground">
+            No proposal: {group.notActionable}
+          </span>
+        )}
       </summary>
 
       <ul className="border-t">
@@ -297,7 +467,14 @@ function SignalSection({
   );
 }
 
-export function DriftReportView({ view }: { view: DriftView }) {
+export function DriftReportView({
+  view,
+  quarantinePanel,
+}: {
+  view: DriftView;
+  /** Item 19's destructive panel, when the route supplies one. */
+  quarantinePanel?: React.ReactNode;
+}) {
   const { summary } = view;
 
   return (
@@ -380,6 +557,49 @@ export function DriftReportView({ view }: { view: DriftView }) {
         </p>
       </section>
 
+      <section className="rounded-xl border bg-card p-5 shadow-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="text-sm font-semibold">Proposals</h3>
+          <Pill>Review only</Pill>
+        </div>
+        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+          {view.proposals.total === 0
+            ? 'Nothing to propose. A proposal appears under a finding when the report carries evidence to act on, and beside a feature the map lists no test for.'
+            : 'Each one describes an edit a person would make by hand. Nothing here has been applied: the coverage map is not written to, no file is created, and there is no button that would do either. Proposing is as far as this page goes — quarantine and delete are item 19.'}
+        </p>
+
+        {view.proposals.total > 0 && (
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+            <Count count={{ label: 'Proposals', value: view.proposals.total }} />
+            <Count count={{ label: 'Map entries', value: view.proposals.mapEntries }} />
+            <Count count={{ label: 'Draft tests', value: view.proposals.testDrafts }} />
+            <Count
+              count={{
+                label: 'Target named',
+                value: view.proposals.certain,
+                hint: 'evidence names it',
+              }}
+            />
+            <Count
+              count={{
+                label: 'Ambiguous',
+                value: view.proposals.ambiguous,
+                hint: 'candidates listed',
+              }}
+              tone="warn"
+            />
+            <Count
+              count={{
+                label: 'Needs a decision',
+                value: view.proposals.needingDecision,
+                hint: 'not a finished fix',
+              }}
+              tone="warn"
+            />
+          </div>
+        )}
+      </section>
+
       <div className="space-y-4">
         {view.signals.map((signal) => (
           <SignalSection
@@ -390,6 +610,33 @@ export function DriftReportView({ view }: { view: DriftView }) {
           />
         ))}
       </div>
+
+      {quarantinePanel}
+
+      {view.testDrafts.length > 0 && (
+        <section className="rounded-xl border bg-card p-5 shadow-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-sm font-semibold">Draft tests</h3>
+            <span className="text-sm tabular-nums text-muted-foreground">
+              ({view.testDrafts.length})
+            </span>
+          </div>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            One per feature the coverage map lists no unit test for. Every case in a draft is{' '}
+            <code className="rounded bg-muted px-1 py-0.5 text-xs">it.todo</code>, so it reports as
+            a todo and never as a pass — a draft that asserted something plausible would claim
+            coverage nobody has written. Nothing is written to{' '}
+            <code className="rounded bg-muted px-1 py-0.5 text-xs">__tests__/</code>: copy it there
+            yourself if it is a useful start.
+          </p>
+
+          <div className="mt-3 space-y-1.5">
+            {view.testDrafts.map((draft) => (
+              <TestDraftBlock key={draft.id} draft={draft} />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

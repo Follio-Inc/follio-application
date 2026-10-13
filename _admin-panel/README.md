@@ -46,10 +46,18 @@ server-only and `ui/` must never import it.
 
 ## Local state the platform writes
 
-| What                 | Where                                         | Notes                               |
-| -------------------- | --------------------------------------------- | ----------------------------------- |
-| Live QA artifacts    | `modules/developer/live-qa/.artifacts/<run>/` | Screenshots and traces, gitignored  |
-| Test Console history | `platform/.runs/<runner>/<target>/<run>.json` | Last 10 runs per target, gitignored |
+| What                     | Where                                               | Notes                                   |
+| ------------------------ | --------------------------------------------------- | --------------------------------------- |
+| Live QA artifacts        | `modules/developer/live-qa/.artifacts/<run>/`       | Screenshots and traces, gitignored      |
+| Test Console history     | `platform/.runs/<runner>/<target>/<run>.json`       | Last 10 runs per target, gitignored     |
+| Drift quarantine         | `platform/.quarantine/<id>/payload/<original path>` | Files moved out of the tree, gitignored |
+| Destructive-action audit | `platform/.audit/audit-v1.jsonl`                    | Append-only, never pruned, gitignored   |
 
-Both are local operator state. Neither is in git, neither is in the database, and neither holds
-secrets — the history record carries the run's outcome, times, commit and one row per test.
+All of these are local operator state. None is in git, none is in the database, and none holds
+secrets — the history record carries the run's outcome, times, commit and one row per test, and an
+audit line carries the path, the finding, a hash and the acting admin's row id.
+
+**Quarantine is the only thing in the platform that moves or removes a repository file**, and only
+through `platform/drift/quarantine.ts`: behind the local-only gate, limited to files the drift scan
+proves nothing reaches, and with a deletion that needs the artifact's original path sent back as
+approval. Nothing is ever deleted straight from a finding.
