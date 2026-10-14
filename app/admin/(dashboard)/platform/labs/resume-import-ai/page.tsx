@@ -1,3 +1,4 @@
+import { buildCostStatus } from '@/_admin-panel/platform/cost';
 import { buildResumeLabView } from '@/_admin-panel/platform/labs/resume-import-ai';
 import { getPlatformRole, hasPlatformPermission } from '@/_admin-panel/platform/auth';
 import { ResumeLab } from '@/_admin-panel/platform/ui';
@@ -24,9 +25,12 @@ export default async function AdminResumeImportLabPage() {
   const mayRun = role !== null && hasPlatformPermission(role, 'labs:run');
 
   const view = buildResumeLabView();
+  // Item 29. Read for every role: a viewer may see what the day has cost.
+  const cost = buildCostStatus();
 
   return (
     <ResumeLab
+      cost={cost}
       view={
         mayRun
           ? view

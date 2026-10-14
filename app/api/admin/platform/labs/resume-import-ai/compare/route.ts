@@ -17,6 +17,7 @@ import { runResumeComparison } from '@/_admin-panel/platform/labs/resume-import-
 import { MAX_UPLOAD_BYTES } from '@/_admin-panel/platform/labs/resume-import-ai/runner';
 import { observeComparison, recordObservations } from '@/_admin-panel/platform/perf';
 import type { ResumeComparisonResult } from '@/_admin-panel/platform/labs/resume-import-ai';
+import { admitLabRun, reconcileLabRun, releaseLabRun } from '@/_admin-panel/platform/cost';
 import { requireAdmin } from '@/lib/admin';
 import { handleApiError } from '@/lib/errors';
 
@@ -52,6 +53,37 @@ function withPerf(result: ResumeComparisonResult): ResumeComparisonResult {
   return { ...result, perf: recordObservations(observeComparison(result)) };
 }
 
+/**
+ * Settles the comparison's provider cost (item 29).
+ *
+ * Only the AI side can have cost, and only if it reached the provider. The
+ * OpenResume side's outcome is irrelevant here: a comparison where that side
+ * failed and the AI side ran still spent what the AI side spent.
+ */
+function settleCost(
+  result: ResumeComparisonResult,
+  admission: { reservationId: string | null; projectedMaxUsd: number | null },
+  actor: { adminId: string; role: string }
+): void {
+  const ai = result.ai;
+  const reachedProvider = ai !== null && (ai.outcome === 'parsed' || ai.ai !== null);
+
+  if (!reachedProvider) {
+    releaseLabRun(admission.reservationId);
+    return;
+  }
+
+  reconcileLabRun({
+    runId: `compare:${actor.adminId}:${result.comparison?.summary.sourceSha256.slice(0, 16) ?? Date.now()}`,
+    reservationId: admission.reservationId,
+    kind: 'lab-compare',
+    ai: ai.ai,
+    projectedMaxUsd: admission.projectedMaxUsd,
+    actorId: actor.adminId,
+    actorRole: actor.role,
+  });
+}
+
 export async function POST(request: Request) {
   try {
     const admin = await requireAdmin();
@@ -68,6 +100,31 @@ export async function POST(request: Request) {
     if (!authz.allowed) return NextResponse.json(deniedBody(authz), { status: authz.status });
 
     assertCanRunDeveloperSuites();
+
+    // Item 29: a comparison runs the AI pipeline as one of its two sides, so
+    // that side costs exactly what a single run costs and is reserved the
+    // same way. The OpenResume side makes **no provider call** — item 23's
+    // distinction — so nothing is reserved for it and it is never recorded
+    // as `$0 AI`.
+    const admission = admitLabRun({
+      kind: 'lab-compare',
+      actorId: admin.adminId,
+      actorRole: authz.role,
+    });
+    if (!admission.allowed) {
+      auditPlatformAction({
+        adminId: admin.adminId,
+        role: authz.role,
+        action: 'labs:compare',
+        target: `cost:${admission.status}`,
+        result: 'refused',
+        reason: admission.status,
+      });
+      return NextResponse.json(
+        { error: admission.detail, reason: admission.status, cost: admission.spend },
+        { status: 429 }
+      );
+    }
 
     const form = await request.formData().catch(() => null);
     if (form === null) {
@@ -89,6 +146,7 @@ export async function POST(request: Request) {
         { source: 'fixture', fixtureId },
         { userId: admin.adminId }
       );
+      settleCost(result, admission, { adminId: admin.adminId, role: authz.role });
       return NextResponse.json(withPerf(result), {
         status: result.outcome === 'compared' ? 200 : 409,
       });
@@ -96,6 +154,7 @@ export async function POST(request: Request) {
 
     if (file instanceof File) {
       if (file.size > MAX_UPLOAD_BYTES) {
+        releaseLabRun(admission.reservationId);
         return NextResponse.json({ error: 'File size must be less than 5MB' }, { status: 413 });
       }
 
@@ -109,11 +168,13 @@ export async function POST(request: Request) {
         },
         { userId: admin.adminId }
       );
+      settleCost(result, admission, { adminId: admin.adminId, role: authz.role });
       return NextResponse.json(withPerf(result), {
         status: result.outcome === 'compared' ? 200 : 409,
       });
     }
 
+    releaseLabRun(admission.reservationId);
     return NextResponse.json({ error: 'Send either a fixtureId or a PDF file' }, { status: 400 });
   } catch (error) {
     if (error instanceof DeveloperSuitesDisabledError) {

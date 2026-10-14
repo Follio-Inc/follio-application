@@ -103,6 +103,12 @@ Do **not** import developer ↔ users ↔ platform. The shell only composes them
   privileged route checks again. The last maintainer cannot be demoted.
 - Audit: item 19's append-only trail now covers nine actions and carries `actorRole`. Denied
   attempts are audited; reads are not. Pre-item-28 records still parse.
+- AI cost: `platform/cost/` caps **lab AI runs only** — $5 warning, $20 hard cap, per **UTC** day,
+  ledger at `platform/.cost/`. Pricing and usage are item 22's; unknown cost is never $0. Admission
+  runs before any PDF or provider work and reserves the run's conservative maximum from each
+  stage's own `MAX_TOKENS`; the Resume Lab has no item-15 lock, so the check and the reservation
+  are one locked step. Unpriceable runs keep their hold. **No role bypasses the cap** and there is
+  no force-run. Never apply it to product traffic.
 - Performance: `platform/perf/` compares every duration the runners already report against the
   **median** of its own last 10 samples. A regression needs ≥ 2× **and** > 50 ms (thresholds
   measured, not guessed — see `perf/types.ts`), and 3 samples before comparing at all. Failed,

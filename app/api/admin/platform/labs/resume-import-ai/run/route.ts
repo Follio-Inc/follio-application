@@ -12,6 +12,7 @@ import {
 import { MAX_UPLOAD_BYTES, runResumeLab } from '@/_admin-panel/platform/labs/resume-import-ai';
 import { observeResumeLab, recordObservations } from '@/_admin-panel/platform/perf';
 import type { ResumeLabRunResult } from '@/_admin-panel/platform/labs/resume-import-ai';
+import { admitLabRun, reconcileLabRun, releaseLabRun } from '@/_admin-panel/platform/cost';
 import { requireAdmin } from '@/lib/admin';
 import { handleApiError } from '@/lib/errors';
 
@@ -46,6 +47,37 @@ function withPerf(result: ResumeLabRunResult): ResumeLabRunResult {
   return { ...result, perf: recordObservations(observeResumeLab(result)) };
 }
 
+/**
+ * Settles the run's provider cost against the reservation (item 29).
+ *
+ * A run that never reached the provider releases its hold; one that did keeps
+ * whatever part of it the telemetry could not price. Either way the ledger
+ * stops holding budget for a run that has finished.
+ */
+function settleCost(
+  result: ResumeLabRunResult,
+  admission: { reservationId: string | null; projectedMaxUsd: number | null },
+  actor: { adminId: string; role: string }
+): void {
+  // The outcomes that stop before `runResumeParseAgent` spend nothing.
+  const reachedProvider = result.outcome === 'parsed' || result.outcome === 'agent-failed';
+
+  if (!reachedProvider) {
+    releaseLabRun(admission.reservationId);
+    return;
+  }
+
+  reconcileLabRun({
+    runId: result.agentRunId ?? `${actor.adminId}:${Date.now()}`,
+    reservationId: admission.reservationId,
+    kind: 'lab-run',
+    ai: result.ai,
+    projectedMaxUsd: admission.projectedMaxUsd,
+    actorId: actor.adminId,
+    actorRole: actor.role,
+  });
+}
+
 export async function POST(request: Request) {
   try {
     const admin = await requireAdmin();
@@ -62,6 +94,31 @@ export async function POST(request: Request) {
     if (!authz.allowed) return NextResponse.json(deniedBody(authz), { status: authz.status });
 
     assertCanRunDeveloperSuites();
+
+    // Item 29: reserve this run's conservative maximum before the multipart
+    // body is touched, so a day at the cap costs nothing to refuse — no PDF
+    // parsed, no provider call, and no budget held by a run that will not
+    // happen. A viewer and a blocked deployment were already refused above,
+    // so neither reaches a reservation.
+    const admission = admitLabRun({
+      kind: 'lab-run',
+      actorId: admin.adminId,
+      actorRole: authz.role,
+    });
+    if (!admission.allowed) {
+      auditPlatformAction({
+        adminId: admin.adminId,
+        role: authz.role,
+        action: 'labs:run',
+        target: `cost:${admission.status}`,
+        result: 'refused',
+        reason: admission.status,
+      });
+      return NextResponse.json(
+        { error: admission.detail, reason: admission.status, cost: admission.spend },
+        { status: 429 }
+      );
+    }
 
     const form = await request.formData().catch(() => null);
     if (form === null) {
@@ -83,6 +140,7 @@ export async function POST(request: Request) {
         { source: 'fixture', fixtureId },
         { userId: admin.adminId }
       );
+      settleCost(result, admission, { adminId: admin.adminId, role: authz.role });
       return NextResponse.json(withPerf(result), {
         status: result.outcome === 'parsed' ? 200 : 409,
       });
@@ -92,6 +150,8 @@ export async function POST(request: Request) {
       // Read once, in memory. Refused before that if it is obviously too big,
       // so a large upload is not buffered only to be rejected.
       if (file.size > MAX_UPLOAD_BYTES) {
+        // Refused before the provider: nothing was spent.
+        releaseLabRun(admission.reservationId);
         return NextResponse.json({ error: 'File size must be less than 5MB' }, { status: 413 });
       }
 
@@ -105,11 +165,13 @@ export async function POST(request: Request) {
         },
         { userId: admin.adminId }
       );
+      settleCost(result, admission, { adminId: admin.adminId, role: authz.role });
       return NextResponse.json(withPerf(result), {
         status: result.outcome === 'parsed' ? 200 : 409,
       });
     }
 
+    releaseLabRun(admission.reservationId);
     return NextResponse.json({ error: 'Send either a fixtureId or a PDF file' }, { status: 400 });
   } catch (error) {
     if (error instanceof DeveloperSuitesDisabledError) {

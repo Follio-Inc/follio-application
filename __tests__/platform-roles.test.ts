@@ -963,7 +963,16 @@ describe('guards run before any payload is parsed', () => {
       const handler = handlerOf(route);
 
       expect(handler, route).toContain('auditPlatformAction({');
-      expect(handler.indexOf('auditPlatformAction'), route).toBeGreaterThan(parseIndex(handler));
+
+      // The **permitted-attempt** call, which is the one with no `result:`.
+      // Item 29 added a second call ahead of the parse — a cost refusal,
+      // which is audited before any PDF work precisely so none happens — so
+      // taking the first index would now find that one.
+      const permitted = [...handler.matchAll(/auditPlatformAction\(\{[\s\S]*?\}\)/g)].find(
+        (match) => !match[0].includes('result:')
+      );
+      expect(permitted, route).toBeDefined();
+      expect(permitted!.index, route).toBeGreaterThan(parseIndex(handler));
     }
   });
 });

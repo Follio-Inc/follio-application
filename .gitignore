@@ -79,3 +79,4 @@ logs
 # Item 26: the CI failure baseline, when the watch CLI is run locally.
 _admin-panel/platform/.watch/
 _admin-panel/platform/.perf/
+_admin-panel/platform/.cost/

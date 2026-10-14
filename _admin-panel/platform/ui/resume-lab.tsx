@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { cn } from '@/lib/utils';
 
 import { PERF_MIN_SAMPLES } from '../perf/types';
+import type { CostStatusView } from '../cost/types';
 import type { PerfFlag } from '../perf/types';
 import type {
   EntityComparison,
@@ -751,7 +752,110 @@ function Comparison({ result }: { result: ResumeComparisonResult }) {
   );
 }
 
-export function ResumeLab({ view }: { view: ResumeLabView }) {
+/**
+ * Today's AI lab spend against the warning threshold and the hard cap
+ * (item 29).
+ *
+ * Read-only, and shown to every role including a viewer: knowing what the day
+ * has cost is not an execution privilege. The numbers are the server's — this
+ * renders them and computes nothing.
+ */
+function CostStatus({ cost }: { cost: CostStatusView }) {
+  const { spend } = cost;
+  const pct = Math.min(100, Math.round((spend.committedUsd / cost.capUsd) * 100));
+
+  return (
+    <section className="rounded-lg border bg-background">
+      <header className="flex flex-wrap items-baseline gap-2 px-4 py-2">
+        <p className="text-xs font-medium">AI spend today</p>
+        <span className="text-xs tabular-nums">
+          ${spend.committedUsd.toFixed(4)} of ${cost.capUsd.toFixed(2)}
+        </span>
+        {cost.warning && (
+          <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-400">
+            over the ${cost.warnUsd.toFixed(2)} warning
+          </span>
+        )}
+        {!cost.canRun && (
+          <span className="rounded bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-red-700 dark:text-red-400">
+            runs blocked
+          </span>
+        )}
+        <span className="text-[11px] text-muted-foreground">
+          {cost.day} ({cost.timezone})
+        </span>
+      </header>
+
+      <div className="grid grid-cols-2 gap-2 border-t p-3 sm:grid-cols-4">
+        <Count
+          label="Settled"
+          value={`$${spend.settledUsd.toFixed(4)}`}
+          hint={`${spend.runs} runs`}
+        />
+        <Count label="Held" value={`$${spend.heldUsd.toFixed(4)}`} hint="reserved or unpriced" />
+        <Count label="Remaining" value={`$${spend.remainingUsd.toFixed(4)}`} />
+        <Count
+          label="Next run, at most"
+          value={
+            cost.projectedRunMaxUsd === null ? 'unknown' : `$${cost.projectedRunMaxUsd.toFixed(4)}`
+          }
+        />
+      </div>
+
+      <div className="px-4 pb-2">
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted" aria-hidden>
+          <div
+            className={cn(
+              'h-full rounded-full',
+              !cost.canRun
+                ? 'bg-red-500/60'
+                : cost.warning
+                  ? 'bg-amber-500/60'
+                  : 'bg-emerald-500/60'
+            )}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      </div>
+
+      {cost.blockedReason !== null && (
+        <p className="border-t px-4 py-2 text-[11px] text-red-700 dark:text-red-400">
+          {cost.blockedReason} No role bypasses this — a maintainer is as capped as anyone.
+        </p>
+      )}
+
+      <div className="border-t px-4 py-2">
+        <p className="text-[11px] leading-snug text-muted-foreground">
+          A run is admitted against the most it could cost, from each stage&rsquo;s own{' '}
+          <code className="font-mono">MAX_TOKENS</code> ceiling:{' '}
+          {cost.stages
+            .map(
+              (stage) =>
+                `${stage.stage} ${stage.model} ≤${stage.maxOutputTokens} out` +
+                (stage.maxUsd === null ? ' (unpriced)' : ` ≈ $${stage.maxUsd.toFixed(4)}`)
+            )
+            .join(' · ')}
+          . Reserved before the run, replaced by the real figure afterwards; a run whose cost cannot
+          be priced keeps its reservation rather than reading as free.
+        </p>
+        {spend.unpricedRuns > 0 && (
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            {spend.unpricedRuns} run{spend.unpricedRuns === 1 ? '' : 's'} today could not be priced,
+            so {spend.unpricedRuns === 1 ? 'its' : 'their'} reservation is still held.
+          </p>
+        )}
+        {spend.staleReservations > 0 && (
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            {spend.staleReservations} reservation{spend.staleReservations === 1 ? '' : 's'} went
+            stale and {spend.staleReservations === 1 ? 'is' : 'are'} no longer counted.
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+export function ResumeLab({ view, cost }: { view: ResumeLabView; cost?: CostStatusView }) {
   const [fixtureId, setFixtureId] = useState(view.fixtures[0]?.id ?? '');
   const [file, setFile] = useState<File | null>(null);
   const [phase, setPhase] = useState<Phase>({ state: 'idle' });
@@ -872,6 +976,8 @@ export function ResumeLab({ view }: { view: ResumeLabView }) {
           </p>
         </section>
       )}
+
+      {cost !== undefined && <CostStatus cost={cost} />}
 
       {view.canRun && (
         <section className="space-y-4 rounded-xl border bg-card p-5 shadow-sm">

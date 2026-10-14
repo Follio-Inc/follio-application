@@ -200,6 +200,9 @@ describe('scanTestAttribution on the real tree', () => {
       '__tests__/onboarding-no-review.test.ts',
       '__tests__/onboarding-resume-start-choice.test.ts',
       '__tests__/onboarding-summary-overwrite.test.ts',
+      // Item 29's: the cap is only real if admission precedes the provider
+      // call, and ordering inside a handler is a fact about source text.
+      '__tests__/platform-cost.test.ts',
       // Item 19's. The label is right: that file names the coverage map and
       // the quarantine store directly, to assert neither was touched, and it
       // reads the engine's own source to prove it cannot shell out. Left
@@ -224,7 +227,7 @@ describe('scanTestAttribution on the real tree', () => {
       // about module source. Both can only be checked by reading them.
       '__tests__/platform-watch.test.ts',
     ]);
-    expect(report.summary.sourceText).toBe(12);
+    expect(report.summary.sourceText).toBe(13);
   });
 
   it('classifies every test exactly once', () => {

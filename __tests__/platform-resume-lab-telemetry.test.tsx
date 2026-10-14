@@ -919,9 +919,29 @@ describe('the page', () => {
 
     // `usd(null)` is the only path for a missing figure, and it is a word.
     expect(source).toContain("if (value === null) return 'unknown';");
-    expect(executableOf(source)).not.toMatch(/\$0\.00|toFixed\(2\)/);
+    // The rule is about **cost amounts**: two decimals would print `$0.00`
+    // for a real sub-cent charge. Item 29 added threshold labels — $5.00 and
+    // $20.00 — which are whole dollars by definition, so `toFixed(2)` is
+    // correct there and wrong for a cost. Pinned per field rather than per
+    // file.
+    expect(executableOf(source)).not.toMatch(/\$0\.00/);
+    for (const amount of [
+      'cost.totalUsd',
+      'flag.currentMs',
+      'spend.settledUsd',
+      'spend.heldUsd',
+      'spend.committedUsd',
+      'spend.remainingUsd',
+      'projectedRunMaxUsd',
+    ]) {
+      expect(source, `${amount} must not be printed to two decimals`).not.toContain(
+        `${amount}.toFixed(2)`
+      );
+    }
     // Four decimals, because a real resume parse costs fractions of a cent.
     expect(source).toContain('toFixed(4)');
+    // And the thresholds, which really are whole dollars.
+    expect(source).toContain('cost.capUsd.toFixed(2)');
   });
 
   it('shows the AgentRun zero as its own labelled line', () => {

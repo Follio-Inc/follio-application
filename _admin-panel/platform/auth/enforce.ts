@@ -124,6 +124,16 @@ export type AuditAttemptInput = {
   action: AuditAction;
   /** The concrete target, now that it is safely known. */
   target: string;
+  /**
+   * Defaults to `ok` — a permitted attempt.
+   *
+   * Item 29 passes `refused` when a run clears the role gate and the local
+   * guard but is turned away by the daily cost cap. That is a refusal of the
+   * action, not of the actor, so it is not `denied-role`.
+   */
+  result?: AuditResult;
+  /** Why, when it was not `ok`. */
+  reason?: string | null;
   audit?: AuditOptions;
 };
 
@@ -135,7 +145,14 @@ export type AuditAttemptInput = {
  */
 export function auditPlatformAction(input: AuditAttemptInput): void {
   appendAuditEvent(
-    draftFor(input.action, 'ok', input.target, input.adminId, input.role, null),
+    draftFor(
+      input.action,
+      input.result ?? 'ok',
+      input.target,
+      input.adminId,
+      input.role,
+      input.reason ?? null
+    ),
     input.audit ?? {}
   );
 }

@@ -114,6 +114,48 @@ admin asking for something they cannot have is the event worth keeping. Reads ar
 Records written before item 28 have no `actorRole` and still parse; it reads as `null`, meaning
 "not recorded", never "no role".
 
+## AI cost and the daily cap
+
+Lab AI runs cost money, so they are accounted for and capped. **Scope is lab AI only** — nothing
+here touches product traffic, public routes, Vitest, Live QA, drift scanning, performance baselines
+or role management. Today exactly one lab can incur provider cost, and a comparison counts only its
+AI side: the OpenResume parser makes no provider call, which is not the same as a cost of `$0`.
+
+| Decision        | Value                                                                 |
+| --------------- | --------------------------------------------------------------------- |
+| Accounting day  | **UTC**, so the same instant is the same day for everyone             |
+| Warning         | **$5.00** committed — surfaced, never blocking                        |
+| Hard cap        | **$20.00** committed — no new cost-bearing run is admitted            |
+| Per-run ceiling | each stage's own `MAX_TOKENS` (`resumeParse` 4096, `follioVoice` 800) |
+| Projected run   | **$0.0131**, against an observed **$0.00316**                         |
+| Ledger          | `platform/.cost/ledger-v1.json`, versioned, last 2000 runs            |
+
+**Pricing and usage are item 22's**, reused rather than duplicated, and its four states stay apart:
+`observed`, `partial`, `pricing-unavailable`, `unavailable`. A cost that is not known is recorded as
+not known — never as zero.
+
+**Admission happens before any provider work and before any PDF is parsed.** A run is admitted
+against the most it could cost: each stage's `MAX_TOKENS` output ceiling, plus the same ceiling
+again as an input allowance, since `MAX_TOKENS` caps completions and nothing in the repository
+bounds prompts. That convention is stated rather than hidden, and it is generous — about four times
+a real run. The residual is also stated: a 5 MB PDF of dense text could send more prompt tokens
+than the allowance, so the projection is a well-padded estimate, not a proof. The **actual** cost is
+always recorded, so an underestimate lands in the day's settled spend and the next admission sees
+it; the cap can be overshot once by one run's margin, never repeatedly.
+
+**Reservation, because the Resume Lab does not take item 15's execution lock** and two lab runs can
+overlap. Admission reads the ledger, decides and writes the reservation in **one** locked critical
+section — an exclusive `wx` file create, which works across processes. A run then reconciles its
+real cost, or releases the hold if it never reached the provider. A run whose cost cannot be priced
+**keeps** its hold, so an unmeasurable run cannot buy further runs. A reservation whose process died
+is ignored after 30 minutes and counted as stale rather than deleted.
+
+**Everything fails closed.** An unreadable ledger, an unwritable ledger, an untakeable lock and a
+model with no price all refuse the run. Broken accounting never buys unlimited provider calls.
+
+**No role bypasses the cap** — admission consults no role at all, and a maintainer is as capped as
+anyone. There is no force-run.
+
 ## Performance baselines
 
 Every duration the platform shows is also compared with its own past. Nothing is benchmarked —
@@ -187,6 +229,7 @@ server-only and `ui/` must never import it.
 | Destructive-action audit | `platform/.audit/audit-v1.jsonl`                    | Append-only, never pruned, gitignored   |
 | CI failure baseline      | `platform/.watch/baseline.json`                     | Last 5 statuses per test, gitignored    |
 | Performance baseline     | `platform/.perf/baseline.json`                      | Last 10 durations per item, gitignored  |
+| AI cost ledger           | `platform/.cost/ledger-v1.json`                     | Last 2000 runs, gitignored              |
 
 All of these are local operator state. None is in git, none is in the database, and none holds
 secrets — the history record carries the run's outcome, times, commit and one row per test, and an
