@@ -34,6 +34,8 @@
  * to prove the output does not either.
  */
 
+import { PERF_FLOOR_MS, PERF_MIN_SAMPLES, PERF_RELATIVE, PERF_WINDOW } from '../perf/baseline';
+import type { PerfFlag } from '../perf/types';
 import type { ClassifiedFailure, WatchReport } from './baseline-types';
 
 /** `::error` and friends treat these as delimiters. */
@@ -80,6 +82,47 @@ const TABLE_HEAD = [
   '| Target | Test | File | Classification | Baseline says |',
   '| --- | --- | --- | --- | --- |',
 ];
+
+const PERF_HEAD = [
+  '| Source | What | Now | Baseline | Delta | Ratio | Samples |',
+  '| --- | --- | --- | --- | --- | --- | --- |',
+];
+
+function perfRow(flag: PerfFlag): string {
+  const sign = flag.deltaMs !== null && flag.deltaMs > 0 ? '+' : '';
+  return `| \`${flag.source}\` | ${flag.label} | ${flag.currentMs} ms | ${flag.baselineMs} ms | ${sign}${flag.deltaMs} ms | ${flag.ratio}× | ${flag.samples} |`;
+}
+
+/**
+ * Performance flags (item 27), in their own section and never annotated.
+ *
+ * A regression here is not a functional failure — the test passed. Giving it
+ * an `::error` would change what that annotation means on this job, and the
+ * first time someone ignores a performance alert they start ignoring the
+ * failure alerts beside it.
+ */
+function perfSection(report: WatchReport): string[] {
+  const { perf } = report;
+
+  if (perf.regressions.length === 0 && perf.improvements.length === 0) {
+    return perf.pending.length === 0
+      ? []
+      : section('Performance', [
+          `No regressions. ${perf.pending.length} item${perf.pending.length === 1 ? '' : 's'} still building a baseline — a comparison needs ${PERF_MIN_SAMPLES} samples.`,
+        ]);
+  }
+
+  return section(
+    `Performance (${perf.regressions.length} regression${perf.regressions.length === 1 ? '' : 's'}, ${perf.improvements.length} improved)`,
+    [
+      `Each item against its own median over up to ${PERF_WINDOW} samples. A regression needs **both** at least ${PERF_RELATIVE}× the baseline and more than ${PERF_FLOOR_MS} ms — either alone flags ordinary variance. **These are not failures and raise no annotation.**`,
+      '',
+      ...PERF_HEAD,
+      ...perf.regressions.map(perfRow),
+      ...perf.improvements.map(perfRow),
+    ]
+  );
+}
 
 /**
  * The job summary.
@@ -159,6 +202,8 @@ export function summaryFor(report: WatchReport): string {
       ])
     );
   }
+
+  lines.push(...perfSection(report));
 
   lines.push(
     '',

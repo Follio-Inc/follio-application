@@ -19,6 +19,8 @@
  * history has nothing here either.
  */
 
+import type { PerfFlag } from '../perf/types';
+
 /**
  * What happened, with the distinction that matters most kept explicit: a suite
  * whose tests failed **ran**, and a runner that could not start did not.
@@ -155,6 +157,12 @@ export type CategoryRunResult = {
   exitCode: number | null;
   /** One sentence an operator can act on. Always present. */
   detail: string;
+  /**
+   * Per-test performance flags (item 27). Optional, and kept apart from
+   * `status`: a test can pass and still have regressed, and the two verdicts
+   * must never be read as one.
+   */
+  perf?: PerfFlag[];
   /** Tail of the runner's stderr, when it failed. Null otherwise. */
   runnerOutput: string | null;
 };

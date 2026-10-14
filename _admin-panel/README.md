@@ -73,6 +73,41 @@ lab page and the single-run endpoint keep working under Turbopack. `next build` 
 unaffected — webpack builds the route fine. If the parser is ever retired, or Turbopack learns to
 leave `spawn` arguments alone, this script stops being needed.
 
+## Performance baselines
+
+Every duration the platform shows is also compared with its own past. Nothing is benchmarked —
+these are the timings the runners already produce: per test from Vitest and Live QA, per stage from
+the Resume Lab, per parser from the AI-vs-OpenResume comparison.
+
+| Decision         | Value                                                                 |
+| ---------------- | --------------------------------------------------------------------- |
+| Statistic        | **Median** of the window, never a mean                                |
+| Window           | Last **10** samples per item                                          |
+| Minimum samples  | **3** before any comparison; fewer reads "baseline pending: n/3"      |
+| Regression needs | **both** ≥ **2.0×** the baseline **and** > **50 ms** difference       |
+| Improvement      | the same rule in the other direction                                  |
+| Storage          | `platform/.perf/baseline.json` locally; a second file in the CI cache |
+
+**Why those numbers.** Two real categories were run repeatedly with nothing changed between runs,
+so every difference was noise: 97 comparable tests over 7 runs. Most unit tests report **0 ms**
+(51 of 97), which is why a relative rule alone cannot work; the first sample of a test is
+systematically its slowest, which is why the statistic is a median and not a mean. Of the candidate
+rules, `×1.5 / 25 ms` would have produced 3 false positives and `×2.0 / 50 ms` produced **none**.
+
+**Not comparable, and never flagged**: a failed test (its duration describes how long it took to
+throw), a skipped or todo test, a cancelled run, a broken or timed-out runner, a Live QA pathway
+with no auth state or no browser, and a flaky pass whose timing belongs to the retry. These are
+reported with a reason rather than dropped, so an entry with no flag says why.
+
+**The flags appear where results already do** — beside each test in the Test Console and beside
+each stage in the Resume Lab — and always carry their numbers: "slower: 420 ms vs 250 ms (+170 ms,
+1.68×)". A performance regression is **not** a functional failure: the test passed, both verdicts
+are shown, and a regression raises no CI annotation and blocks nothing.
+
+**AI and OpenResume each have their own baseline.** Their series are keyed by side and never meet.
+"Slower than the other parser" is not a regression — they do different work, and item 23 declined
+to name a winner.
+
 ## Scheduled runs
 
 `.github/workflows/platform-watch.yml` runs the Test Console's own Vitest categories on a daily
@@ -110,6 +145,7 @@ server-only and `ui/` must never import it.
 | Drift quarantine         | `platform/.quarantine/<id>/payload/<original path>` | Files moved out of the tree, gitignored |
 | Destructive-action audit | `platform/.audit/audit-v1.jsonl`                    | Append-only, never pruned, gitignored   |
 | CI failure baseline      | `platform/.watch/baseline.json`                     | Last 5 statuses per test, gitignored    |
+| Performance baseline     | `platform/.perf/baseline.json`                      | Last 10 durations per item, gitignored  |
 
 All of these are local operator state. None is in git, none is in the database, and none holds
 secrets — the history record carries the run's outcome, times, commit and one row per test, and an

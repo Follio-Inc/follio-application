@@ -5,6 +5,8 @@ import {
   DeveloperSuitesDisabledError,
 } from '@/_admin-panel/modules/developer/guard';
 import { MAX_UPLOAD_BYTES, runResumeLab } from '@/_admin-panel/platform/labs/resume-import-ai';
+import { observeResumeLab, recordObservations } from '@/_admin-panel/platform/perf';
+import type { ResumeLabRunResult } from '@/_admin-panel/platform/labs/resume-import-ai';
 import { requireAdmin } from '@/lib/admin';
 import { handleApiError } from '@/lib/errors';
 
@@ -28,6 +30,17 @@ export const maxDuration = 300;
  * It saves nothing. `saveToProfile` is never passed to the agent, so the
  * agent's save step is a no-op and no product table is touched.
  */
+/**
+ * Per-stage performance flags (item 27).
+ *
+ * The lab already measured every stage; this compares each one with its own
+ * median and attaches the verdict. It cannot fail the run — `recordObservations`
+ * swallows a broken store and returns no flags.
+ */
+function withPerf(result: ResumeLabRunResult): ResumeLabRunResult {
+  return { ...result, perf: recordObservations(observeResumeLab(result)) };
+}
+
 export async function POST(request: Request) {
   try {
     const admin = await requireAdmin();
@@ -46,7 +59,9 @@ export async function POST(request: Request) {
         { source: 'fixture', fixtureId },
         { userId: admin.adminId }
       );
-      return NextResponse.json(result, { status: result.outcome === 'parsed' ? 200 : 409 });
+      return NextResponse.json(withPerf(result), {
+        status: result.outcome === 'parsed' ? 200 : 409,
+      });
     }
 
     if (file instanceof File) {
@@ -66,7 +81,9 @@ export async function POST(request: Request) {
         },
         { userId: admin.adminId }
       );
-      return NextResponse.json(result, { status: result.outcome === 'parsed' ? 200 : 409 });
+      return NextResponse.json(withPerf(result), {
+        status: result.outcome === 'parsed' ? 200 : 409,
+      });
     }
 
     return NextResponse.json({ error: 'Send either a fixtureId or a PDF file' }, { status: 400 });

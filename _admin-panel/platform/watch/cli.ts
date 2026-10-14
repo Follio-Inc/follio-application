@@ -21,6 +21,7 @@
 import { appendFileSync } from 'node:fs';
 import path from 'node:path';
 
+import { readPerfBaseline, writePerfBaseline } from '../perf';
 import { readBaseline, writeBaseline } from './baseline';
 import { annotationsFor, summaryFor, WATCH_EXIT_CODE } from './notify';
 import { runWatch } from './run';
@@ -31,14 +32,32 @@ function baselineFile(): string {
   return path.join(process.cwd(), '_admin-panel', 'platform', '.watch', 'baseline.json');
 }
 
+/**
+ * The performance store (item 27).
+ *
+ * Beside the verdict baseline, in the same directory, so one restored cache
+ * carries both and no second cache is needed. A separate *file* rather than
+ * a wider format: see `perf/types.ts` for why item 26's file is left alone.
+ */
+function perfFile(): string {
+  return path.join(path.dirname(baselineFile()), 'perf-baseline.json');
+}
+
 async function main(): Promise<void> {
   const file = baselineFile();
   const baseline = readBaseline(file);
+  const perfPath = perfFile();
+  const perfBaseline = readPerfBaseline(perfPath);
 
-  const { report, baseline: next } = await runWatch({
+  const {
+    report,
+    baseline: next,
+    perfBaseline: nextPerf,
+  } = await runWatch({
     trigger: process.env.PLATFORM_WATCH_TRIGGER ?? 'manual',
     branch: process.env.GITHUB_REF_NAME ?? null,
     baseline,
+    perfBaseline,
   });
 
   // Annotations first: they are the part that reaches a person.
@@ -57,6 +76,7 @@ async function main(): Promise<void> {
   // Written last, so a crash mid-run leaves the previous baseline intact
   // rather than a half-updated one that would mis-classify the next run.
   writeBaseline(file, next);
+  writePerfBaseline(perfPath, nextPerf);
 
   process.exit(WATCH_EXIT_CODE);
 }

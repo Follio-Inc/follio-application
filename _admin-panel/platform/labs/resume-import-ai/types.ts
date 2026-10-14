@@ -10,6 +10,8 @@
  * carries no file bytes back to the browser.
  */
 
+import type { PerfFlag } from '../../perf/types';
+
 /** Where the PDF came from. */
 export type ResumeLabSource = 'fixture' | 'upload';
 
@@ -173,6 +175,12 @@ export type ResumeLabRunResult = {
   detail: string;
   /** The failure's own message, trimmed. Never a stack and never a key. */
   error: string | null;
+  /**
+   * Per-stage performance flags (item 27). Optional: a run computes them
+   * only where a baseline store is available, and item 21's own shape does
+   * not depend on them.
+   */
+  perf?: PerfFlag[];
 };
 
 /** One fixture the lab offers. */

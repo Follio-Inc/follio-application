@@ -28,6 +28,8 @@
  * a planted canary.
  */
 
+import type { PerfReport } from '../perf/types';
+
 /** Item 16's vocabulary, so both stores speak one language. */
 export type BaselineStatus = 'passed' | 'failed' | 'skipped' | 'todo' | 'unknown';
 
@@ -148,4 +150,12 @@ export type WatchReport = {
   knownFailures: ClassifiedFailure[];
   /** Targets that produced nothing to compare, and why. */
   nonComparable: NonComparableTarget[];
+  /**
+   * Performance flags (item 27), kept apart from the failure lists above.
+   *
+   * A performance regression is **not** a new failure and must never be
+   * counted as one: item 26's `newFailures` decides what gets an `::error`
+   * annotation, and a slow test that still passes does not belong there.
+   */
+  perf: PerfReport;
 };

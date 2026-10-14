@@ -5,6 +5,7 @@ import {
   DeveloperSuitesDisabledError,
 } from '@/_admin-panel/modules/developer/guard';
 import { isKnownCategory, runCategory } from '@/_admin-panel/platform/tests';
+import { observeVitest, recordObservations } from '@/_admin-panel/platform/perf';
 import { requireAdmin } from '@/lib/admin';
 import { handleApiError } from '@/lib/errors';
 
@@ -49,7 +50,14 @@ export async function POST(request: Request) {
     // refusal carries the status code that says so as well as the outcome
     // (PLATFORM_TODO item 15). The lock lives in the runner, so a second
     // caller that skips this route is refused just the same.
-    return NextResponse.json(result, { status: result.outcome === 'busy' ? 409 : 200 });
+    // Item 27: compare each test's duration with its own median. Cannot
+    // fail the run — a broken store yields no flags rather than an error.
+    const perf = recordObservations(observeVitest(result));
+
+    return NextResponse.json(
+      { ...result, perf },
+      { status: result.outcome === 'busy' ? 409 : 200 }
+    );
   } catch (error) {
     if (error instanceof DeveloperSuitesDisabledError) {
       return NextResponse.json({ error: error.message }, { status: 403 });

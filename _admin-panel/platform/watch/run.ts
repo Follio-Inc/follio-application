@@ -35,6 +35,8 @@
 import { performance } from 'node:perf_hooks';
 
 import { listLiveQaPathways } from '../../modules/developer/live-qa/catalog';
+import { applyObservations, observeVitest, summarizeFlags } from '../perf';
+import type { PerfBaseline, PerfFlag } from '../perf';
 import { readCommit } from '../tests/history';
 import { listRunnableCategories, runCategory } from '../tests/runner';
 import type { CategoryRunResult } from '../tests/run-types';
@@ -111,6 +113,11 @@ export type WatchRunOptions = {
   commit?: string | null;
   /** The prior baseline. Null means none was found. */
   baseline?: Baseline | null;
+  /**
+   * The prior **performance** baseline (item 27). A separate store from the
+   * verdict baseline above, deliberately: see `perf/types.ts`.
+   */
+  perfBaseline?: PerfBaseline | null;
   /** Categories to run. Defaults to every runnable one in the map. */
   categoryIds?: string[];
   /** The runner seam, so a test never spawns Vitest inside Vitest. */
@@ -122,6 +129,8 @@ export type WatchRunOutcome = {
   report: WatchReport;
   /** The baseline to persist. Unchanged targets keep their records. */
   baseline: Baseline;
+  /** The performance baseline to persist (item 27). */
+  perfBaseline: PerfBaseline;
 };
 
 /**
@@ -143,6 +152,8 @@ export async function runWatch(options: WatchRunOptions = {}): Promise<WatchRunO
   const execute = options.run ?? ((categoryId: string) => runCategory(categoryId));
 
   let baseline: Baseline | null = options.baseline ?? null;
+  let perfBaseline: PerfBaseline | null = options.perfBaseline ?? null;
+  const perfFlags: PerfFlag[] = [];
   const newFailures: ClassifiedFailure[] = [];
   const knownFailures: ClassifiedFailure[] = [];
   const nonComparable: NonComparableTarget[] = [];
@@ -151,6 +162,13 @@ export async function runWatch(options: WatchRunOptions = {}): Promise<WatchRunO
   for (const categoryId of categoryIds) {
     const result = await execute(categoryId);
     const reason = nonComparableReason(result.outcome);
+
+    // Item 27, on every run: `observeVitest` decides what is a timing sample
+    // and emits a reason for everything else, so a cancelled or broken run
+    // contributes no durations but still explains itself.
+    const perf = applyObservations(perfBaseline, observeVitest(result), now(), commit);
+    perfFlags.push(...perf.flags);
+    perfBaseline = perf.baseline;
 
     // A run that produced no report tells us nothing about any test. It is
     // reported as its own kind of event and the baseline is left alone.
@@ -208,7 +226,9 @@ export async function runWatch(options: WatchRunOptions = {}): Promise<WatchRunO
       newFailures,
       knownFailures,
       nonComparable,
+      perf: summarizeFlags(perfFlags),
     },
     baseline: baseline ?? updateBaseline(null, 'vitest', '', 'none', [], now(), commit),
+    perfBaseline: perfBaseline ?? { version: 1, updatedAt: now(), series: [] },
   };
 }

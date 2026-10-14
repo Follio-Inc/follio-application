@@ -137,10 +137,17 @@ export function readCommit(repoRoot: string = process.cwd()): HistoryCommit {
   return { sha, dirty };
 }
 
-/** `file > suite > … > name`. Stable, and never an array position. */
-export function testIdentity(test: { file: string | null; suite: string[]; name: string }): string {
-  return [test.file ?? '', ...test.suite, test.name].filter((part) => part !== '').join(' > ');
-}
+/**
+ * `file > suite > … > name`. Stable, and never an array position.
+ *
+ * Defined in `identity.ts` and re-exported here. Items 26 and 27 both share
+ * this rule, and item 27 renders in a client component — so the rule cannot
+ * live in a module that reads the filesystem.
+ */
+export { testIdentity } from './identity';
+
+// Also imported, because this module's own trend builder uses it.
+import { testIdentity } from './identity';
 
 /** Vitest's own status words, in one vocabulary. */
 export function normalizeVitestStatus(status: string): HistoryTestStatus {

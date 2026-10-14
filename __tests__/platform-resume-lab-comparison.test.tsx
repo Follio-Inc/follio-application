@@ -1093,8 +1093,12 @@ describe('the page', () => {
     expect(source).toContain('function EntityTable(');
     expect(source).toContain('function FieldTable(');
     expect(source).toContain('function Comparison(');
-    // No arithmetic in the view.
-    expect(source).not.toMatch(/overlap \+|aiOnly \+|\.filter\(.*includes/);
+    // No arithmetic in the view: the comparison numbers are the server's.
+    // Item 27 added a `.filter(...includes(side))` that *selects* which
+    // performance flags belong to a card, which is not a computation of any
+    // figure shown — so the rule is stated as the sums it was about.
+    expect(source).not.toMatch(/overlap \+|aiOnly \+|openResumeOnly \+|aiCount \+/);
+    expect(source).not.toMatch(/currentMs -|baselineMs \*|deltaMs =|ratio =/);
     // And no winner.
     expect(source).toContain('No winner and no score');
   });

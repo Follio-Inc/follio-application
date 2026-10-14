@@ -151,8 +151,14 @@ describe('the execution model reuses what already exists', () => {
       const source = codeOf(read(`${WATCH_DIR}/${file}`));
 
       expect(source, `${file} must not spawn`).not.toMatch(/child_process|spawn\(|execSync|exec\(/);
-      expect(source, `${file} must not invoke a test tool`).not.toMatch(
-        /vitest|playwright|--reporter/i
+      // Invocation, not the word: item 27 added `observeVitest`, which reads
+      // a result the runner already produced. What must stay absent is a
+      // package import or a command line.
+      expect(source, `${file} must not import a test tool`).not.toMatch(
+        /from 'vitest'|from '@playwright|require\('vitest|vitest\.mjs/i
+      );
+      expect(source, `${file} must not build a command line`).not.toMatch(
+        /--reporter|--outputFile|--config=/
       );
     }
   });
@@ -550,6 +556,9 @@ describe('notifications', () => {
       newFailures: [],
       knownFailures: [],
       nonComparable: [],
+      // Item 27 added this. Empty here: these tests are about the failure
+      // lists, and a perf flag must never reach them.
+      perf: { flags: [], regressions: [], improvements: [], pending: [], notComparable: [] },
       ...overrides,
     };
   }

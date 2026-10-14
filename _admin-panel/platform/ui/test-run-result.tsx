@@ -1,3 +1,6 @@
+import { perfTestId } from '../perf/identity';
+import { PERF_MIN_SAMPLES } from '../perf/types';
+import type { PerfFlag } from '../perf/types';
 import { cn } from '@/lib/utils';
 
 import type {
@@ -116,7 +119,43 @@ function FailureDetail({
   );
 }
 
-function CaseRow({ test }: { test: TestCaseResult }) {
+/**
+ * A performance verdict for one test (item 27).
+ *
+ * Beside the status pill, never instead of it: a test that passed and got
+ * slower shows both, because they are two different findings. Carries its
+ * numbers so the badge is evidence rather than decoration.
+ */
+function PerfBadge({ flag }: { flag: PerfFlag }) {
+  if (flag.classification === 'not-comparable' || flag.classification === 'within-baseline') {
+    return null;
+  }
+
+  const tone =
+    flag.classification === 'regression'
+      ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
+      : flag.classification === 'improved'
+        ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+        : 'bg-muted text-muted-foreground';
+
+  const label =
+    flag.classification === 'regression'
+      ? `slower: ${flag.currentMs} ms vs ${flag.baselineMs} ms (+${flag.deltaMs} ms, ${flag.ratio}×)`
+      : flag.classification === 'improved'
+        ? `faster: ${flag.currentMs} ms vs ${flag.baselineMs} ms (${flag.deltaMs} ms, ${flag.ratio}×)`
+        : `baseline pending: ${flag.samples}/${PERF_MIN_SAMPLES} samples`;
+
+  return (
+    <span
+      className={cn('rounded px-1.5 py-0.5 text-[10px] font-medium tabular-nums', tone)}
+      title={flag.evidence}
+    >
+      {label}
+    </span>
+  );
+}
+
+function CaseRow({ test, flag }: { test: TestCaseResult; flag?: PerfFlag }) {
   return (
     <li className="border-t px-4 py-2 first:border-t-0">
       <div className="flex flex-wrap items-baseline gap-2">
@@ -128,6 +167,7 @@ function CaseRow({ test }: { test: TestCaseResult }) {
         {test.durationMs !== null && (
           <span className="text-xs tabular-nums text-muted-foreground">{test.durationMs} ms</span>
         )}
+        {flag !== undefined && <PerfBadge flag={flag} />}
       </div>
 
       {test.failures.map((failure, index) => (
@@ -142,7 +182,7 @@ function CaseRow({ test }: { test: TestCaseResult }) {
   );
 }
 
-function FileBlock({ file }: { file: TestFileResult }) {
+function FileBlock({ file, perf = [] }: { file: TestFileResult; perf?: PerfFlag[] }) {
   return (
     <section className="rounded-lg border bg-card">
       <header className="flex flex-wrap items-baseline justify-between gap-2 px-4 py-2">
@@ -174,7 +214,15 @@ function FileBlock({ file }: { file: TestFileResult }) {
       ) : (
         <ul className="border-t">
           {file.tests.map((test) => (
-            <CaseRow key={`${test.suite.join('›')}›${test.name}`} test={test} />
+            <CaseRow
+              key={`${test.suite.join('›')}›${test.name}`}
+              test={test}
+              flag={perf.find(
+                (entry) =>
+                  entry.id ===
+                  perfTestId('vitest', { file: file.path, suite: test.suite, name: test.name })
+              )}
+            />
           ))}
         </ul>
       )}
@@ -360,7 +408,7 @@ export function TestRunResult({ result }: { result: CategoryRunResult }) {
       )}
 
       {result.files.map((file) => (
-        <FileBlock key={file.path} file={file} />
+        <FileBlock key={file.path} file={file} perf={result.perf} />
       ))}
 
       <p className="text-xs text-muted-foreground">

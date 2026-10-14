@@ -360,6 +360,9 @@ describe('client safety', () => {
     '_admin-panel/platform/labs/resume-import-ai/types.ts',
     '_admin-panel/platform/labs/resume-import-ai/pricing.ts',
     '_admin-panel/platform/labs/resume-import-ai/comparison-types.ts',
+    '_admin-panel/platform/perf/types.ts',
+    '_admin-panel/platform/perf/identity.ts',
+    '_admin-panel/platform/tests/identity.ts',
   ];
 
   it('keeps the scanner out of the shell', () => {
@@ -378,6 +381,50 @@ describe('client safety', () => {
       expect(source, `${file} must not read the filesystem`).not.toMatch(
         /readFileSync\(|readdirSync\(/
       );
+    }
+  });
+
+  it('keeps `node:` out of the whole import chain, not just the first hop', () => {
+    // Item 27 imported a threshold from a module that reads the filesystem,
+    // and the direct check above passed because the specifier was relative.
+    // This follows the chain, which is what would have caught it.
+    const resolve = (fromFile: string, specifier: string): string | null => {
+      if (!specifier.startsWith('.')) return null;
+      const base = path.join(path.dirname(path.join(process.cwd(), fromFile)), specifier);
+      for (const candidate of [`${base}.ts`, `${base}.tsx`, path.join(base, 'index.ts')]) {
+        if (existsSync(candidate))
+          return candidate
+            .slice(process.cwd().length + 1)
+            .split(path.sep)
+            .join('/');
+      }
+      return null;
+    };
+
+    for (const entry of uiFiles) {
+      const seen = new Set<string>();
+      const queue = [entry];
+      const chain: string[] = [];
+
+      while (queue.length > 0) {
+        const file = queue.shift()!;
+        if (seen.has(file)) continue;
+        seen.add(file);
+        chain.push(file);
+
+        const source = read(file);
+        expect(source, `${file} (reached from ${entry}) imports a node module`).not.toMatch(
+          /from 'node:/
+        );
+
+        for (const match of source.matchAll(/from '(\.[^']*)'/g)) {
+          const next = resolve(file, match[1]);
+          if (next !== null) queue.push(next);
+        }
+      }
+
+      // The walk has to actually walk, or it proves nothing.
+      expect(chain.length, `${entry} resolved no imports`).toBeGreaterThan(0);
     }
   });
 

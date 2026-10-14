@@ -10,6 +10,8 @@ import {
 // too. This endpoint is the only thing that needs it.
 import { runResumeComparison } from '@/_admin-panel/platform/labs/resume-import-ai/compare-runner';
 import { MAX_UPLOAD_BYTES } from '@/_admin-panel/platform/labs/resume-import-ai/runner';
+import { observeComparison, recordObservations } from '@/_admin-panel/platform/perf';
+import type { ResumeComparisonResult } from '@/_admin-panel/platform/labs/resume-import-ai';
 import { requireAdmin } from '@/lib/admin';
 import { handleApiError } from '@/lib/errors';
 
@@ -34,6 +36,17 @@ export const maxDuration = 300;
  * the openresume side is entered through its pure boundary rather than
  * `importResumeFromPdf`, which would create a `RawImportPayload` row.
  */
+/**
+ * Per-stage performance flags (item 27).
+ *
+ * Each parser is keyed by its own side, so the AI and OpenResume series are
+ * separate baselines. Neither is compared with the other: item 23 declined to
+ * name a winner, and "slower than the other parser" is not a regression.
+ */
+function withPerf(result: ResumeComparisonResult): ResumeComparisonResult {
+  return { ...result, perf: recordObservations(observeComparison(result)) };
+}
+
 export async function POST(request: Request) {
   try {
     const admin = await requireAdmin();
@@ -52,7 +65,9 @@ export async function POST(request: Request) {
         { source: 'fixture', fixtureId },
         { userId: admin.adminId }
       );
-      return NextResponse.json(result, { status: result.outcome === 'compared' ? 200 : 409 });
+      return NextResponse.json(withPerf(result), {
+        status: result.outcome === 'compared' ? 200 : 409,
+      });
     }
 
     if (file instanceof File) {
@@ -70,7 +85,9 @@ export async function POST(request: Request) {
         },
         { userId: admin.adminId }
       );
-      return NextResponse.json(result, { status: result.outcome === 'compared' ? 200 : 409 });
+      return NextResponse.json(withPerf(result), {
+        status: result.outcome === 'compared' ? 200 : 409,
+      });
     }
 
     return NextResponse.json({ error: 'Send either a fixtureId or a PDF file' }, { status: 400 });

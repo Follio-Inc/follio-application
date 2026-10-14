@@ -12,6 +12,7 @@
  * ships. The lab is its only caller, and that does not make it product code.
  */
 
+import type { PerfFlag } from '../../perf/types';
 import type { ResumeLabAi, ResumeLabEntities, ResumeLabWarning } from './types';
 
 /** Which of the two sides a value came from. */
@@ -145,4 +146,10 @@ export type ResumeComparisonResult = {
   openResume: ParserRun | null;
   comparison: ResumeComparison | null;
   warnings: ResumeLabWarning[];
+  /**
+   * Per-stage performance flags (item 27), each parser against **its own**
+   * baseline. Never against the other one: item 23 declined to name a
+   * winner and a timing comparison would reintroduce one by the back door.
+   */
+  perf?: PerfFlag[];
 };

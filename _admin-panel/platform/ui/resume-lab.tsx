@@ -4,6 +4,8 @@ import { useState } from 'react';
 
 import { cn } from '@/lib/utils';
 
+import { PERF_MIN_SAMPLES } from '../perf/types';
+import type { PerfFlag } from '../perf/types';
 import type {
   EntityComparison,
   FieldDifference,
@@ -60,7 +62,43 @@ function Count({ label, value, hint }: { label: string; value: string; hint?: st
   );
 }
 
-function StageRow({ stage }: { stage: ResumeLabStage }) {
+/**
+ * A performance verdict for one stage (item 27).
+ *
+ * Always carries its numbers. A red badge with no figures is not a finding,
+ * and "Baseline pending: 1/3 samples" tells an operator more than silence.
+ * Nothing here is computed — the server classified it.
+ */
+function PerfBadge({ flag }: { flag: PerfFlag }) {
+  if (flag.classification === 'not-comparable' || flag.classification === 'within-baseline') {
+    return null;
+  }
+
+  const tone =
+    flag.classification === 'regression'
+      ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
+      : flag.classification === 'improved'
+        ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+        : 'bg-muted text-muted-foreground';
+
+  const label =
+    flag.classification === 'regression'
+      ? `slower: ${flag.currentMs} ms vs ${flag.baselineMs} ms (+${flag.deltaMs} ms, ${flag.ratio}×)`
+      : flag.classification === 'improved'
+        ? `faster: ${flag.currentMs} ms vs ${flag.baselineMs} ms (${flag.deltaMs} ms, ${flag.ratio}×)`
+        : `baseline pending: ${flag.samples}/${PERF_MIN_SAMPLES} samples`;
+
+  return (
+    <span
+      className={cn('rounded px-1.5 py-0.5 text-[10px] font-medium tabular-nums', tone)}
+      title={flag.evidence}
+    >
+      {label}
+    </span>
+  );
+}
+
+function StageRow({ stage, flag }: { stage: ResumeLabStage; flag?: PerfFlag }) {
   const nested = stage.id.startsWith('agent:');
 
   return (
@@ -69,6 +107,7 @@ function StageRow({ stage }: { stage: ResumeLabStage }) {
         {stage.label.trim()}
       </span>
       <span className="text-xs tabular-nums text-muted-foreground">{stage.ms} ms</span>
+      {flag !== undefined && <PerfBadge flag={flag} />}
       <span className="text-[11px] text-muted-foreground">{stage.detail}</span>
     </li>
   );
@@ -401,7 +440,11 @@ function Result({ result }: { result: ResumeLabRunResult }) {
         </header>
         <ul className="border-t">
           {result.timing.stages.map((stage) => (
-            <StageRow key={stage.id} stage={stage} />
+            <StageRow
+              key={stage.id}
+              stage={stage}
+              flag={(result.perf ?? []).find((entry) => entry.id.endsWith(`:${stage.id}`))}
+            />
           ))}
         </ul>
       </section>
@@ -446,8 +489,11 @@ function Result({ result }: { result: ResumeLabRunResult }) {
 }
 
 /** One side of a comparison, on its own terms (item 23). */
-function ParserCard({ run }: { run: ParserRun }) {
+function ParserCard({ run, perf = [] }: { run: ParserRun; perf?: PerfFlag[] }) {
   const ok = run.outcome === 'parsed';
+  // This side's series only. The ids carry the side, so the AI and
+  // OpenResume baselines cannot be read into one another here either.
+  const mine = perf.filter((flag) => flag.id.includes(`:${run.side}:`));
 
   return (
     <section className="rounded-lg border bg-background">
@@ -515,6 +561,10 @@ function ParserCard({ run }: { run: ParserRun }) {
             >
               <span className="text-[11px]">{stage.label}</span>
               <span className="text-[11px] tabular-nums text-muted-foreground">{stage.ms} ms</span>
+              {(() => {
+                const flag = mine.find((entry) => entry.id.endsWith(`:${stage.id}`));
+                return flag === undefined ? null : <PerfBadge flag={flag} />;
+              })()}
               <span className="text-[10px] text-muted-foreground">{stage.detail}</span>
             </li>
           ))}
@@ -668,8 +718,8 @@ function Comparison({ result }: { result: ResumeComparisonResult }) {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {result.ai !== null && <ParserCard run={result.ai} />}
-        {result.openResume !== null && <ParserCard run={result.openResume} />}
+        {result.ai !== null && <ParserCard run={result.ai} perf={result.perf} />}
+        {result.openResume !== null && <ParserCard run={result.openResume} perf={result.perf} />}
       </div>
 
       {comparison !== null && <EntityTable entities={comparison.entities} />}

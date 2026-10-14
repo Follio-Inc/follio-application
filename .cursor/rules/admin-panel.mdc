@@ -95,3 +95,8 @@ Do **not** import developer ↔ users ↔ platform. The shell only composes them
 - Scheduled runs: `platform-watch.yml` runs Vitest categories daily and post-merge via
   `npm run platform:watch`, annotating only **new** failures against a cached baseline. Advisory,
   never on `pull_request`, and it reuses the Test Console's runner rather than adding one.
+- Performance: `platform/perf/` compares every duration the runners already report against the
+  **median** of its own last 10 samples. A regression needs ≥ 2× **and** > 50 ms (thresholds
+  measured, not guessed — see `perf/types.ts`), and 3 samples before comparing at all. Failed,
+  skipped, cancelled and prerequisite-missing observations are not samples. Flags render beside
+  existing results, never as a failure, and block nothing.
