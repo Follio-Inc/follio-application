@@ -1,0 +1,82 @@
+import { NextResponse } from 'next/server';
+
+import {
+  assertCanRunDeveloperSuites,
+  DeveloperSuitesDisabledError,
+} from '@/_admin-panel/modules/developer/guard';
+import { MAX_UPLOAD_BYTES, runResumeLab } from '@/_admin-panel/platform/labs/resume-import-ai';
+import { requireAdmin } from '@/lib/admin';
+import { handleApiError } from '@/lib/errors';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const maxDuration = 300;
+
+/**
+ * Runs the shipped resume-import pipeline once, as a diagnostic
+ * (PLATFORM_TODO item 21).
+ *
+ * Thin shim: admin auth, then the same local-only gate every other executing
+ * surface uses, then one of two inputs.
+ *
+ * The body is multipart, and the only things read from it are a **fixture id**
+ * or an uploaded **file**. No path, no destination and no option is taken from
+ * the caller: the fixture is resolved against the committed pool by id, and an
+ * upload is held in memory for the length of the request and never written
+ * anywhere. The uploaded bytes do not come back in the response.
+ *
+ * It saves nothing. `saveToProfile` is never passed to the agent, so the
+ * agent's save step is a no-op and no product table is touched.
+ */
+export async function POST(request: Request) {
+  try {
+    const admin = await requireAdmin();
+    assertCanRunDeveloperSuites();
+
+    const form = await request.formData().catch(() => null);
+    if (form === null) {
+      return NextResponse.json({ error: 'Expected a multipart form' }, { status: 400 });
+    }
+
+    const fixtureId = form.get('fixtureId');
+    const file = form.get('file');
+
+    if (typeof fixtureId === 'string' && fixtureId.length > 0) {
+      const result = await runResumeLab(
+        { source: 'fixture', fixtureId },
+        { userId: admin.adminId }
+      );
+      return NextResponse.json(result, { status: result.outcome === 'parsed' ? 200 : 409 });
+    }
+
+    if (file instanceof File) {
+      // Read once, in memory. Refused before that if it is obviously too big,
+      // so a large upload is not buffered only to be rejected.
+      if (file.size > MAX_UPLOAD_BYTES) {
+        return NextResponse.json({ error: 'File size must be less than 5MB' }, { status: 413 });
+      }
+
+      const result = await runResumeLab(
+        {
+          source: 'upload',
+          bytes: Buffer.from(await file.arrayBuffer()),
+          // Used as a label only. Never joined to a path.
+          filename: file.name,
+          declaredType: file.type,
+        },
+        { userId: admin.adminId }
+      );
+      return NextResponse.json(result, { status: result.outcome === 'parsed' ? 200 : 409 });
+    }
+
+    return NextResponse.json({ error: 'Send either a fixtureId or a PDF file' }, { status: 400 });
+  } catch (error) {
+    if (error instanceof DeveloperSuitesDisabledError) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
+    return handleApiError(error, {
+      path: '/api/admin/platform/labs/resume-import-ai/run',
+      method: 'POST',
+    });
+  }
+}

@@ -205,8 +205,15 @@ describe('scanTestAttribution on the real tree', () => {
       // reads the engine's own source to prove it cannot shell out. Left
       // labelled rather than routed through a variable to hide it.
       '__tests__/platform-drift-quarantine.test.tsx',
+      // Item 20's, for the same reason: it reads the labs modules' own source
+      // to prove they touch no filesystem and build no second catalogue.
+      '__tests__/platform-labs-home.test.tsx',
+      // Item 21's, and here the label is the point: the lab's done condition
+      // is that it never calls the save path, which is a claim about source
+      // text and can only be checked by reading it.
+      '__tests__/platform-resume-lab.test.tsx',
     ]);
-    expect(report.summary.sourceText).toBe(7);
+    expect(report.summary.sourceText).toBe(9);
   });
 
   it('classifies every test exactly once', () => {

@@ -17,8 +17,9 @@ import type { ExcludedPath, PlatformFeature } from './types';
  * - `pathways` must resolve to a real `LIVE_QA_PATHWAYS` id.
  * - `userDescription` describes what a person does, not how the code works.
  * - Record a known gap in `notes` rather than leaving it implied.
- * - `lab` names an *intended* lab. No labs exist before item 20, so only the
- *   feature whose lab is already planned carries one.
+ * - `lab` names a lab id. One feature carries one today: `resume-import-ai`,
+ *   built in item 21. The id is a declaration of intent — whether the lab
+ *   exists is `IMPLEMENTED_LABS`' business, not this file's.
  *
  * Why some tests stay `uncategorized` (item 5a). These are not gaps to close by
  * inventing ownership — they belong to no owner-facing feature:
@@ -28,8 +29,9 @@ import type { ExcludedPath, PlatformFeature } from './types';
  *   `platform-scan-reachability`, `platform-shell`, `platform-test-console`,
  *   `platform-test-runner`, `platform-test-detail`, `platform-live-qa`,
  *   `platform-test-execution`, `platform-test-history`, `platform-drift-page`,
- *   `platform-drift-proposals`, `platform-drift-quarantine`. They cover
- *   `_admin-panel/`, which is operator tooling, not product.
+ *   `platform-drift-proposals`, `platform-drift-quarantine`, `platform-labs-home`,
+ *   `platform-resume-lab`.
+ *   They cover `_admin-panel/`, which is operator tooling, not product.
  * - Shared infrastructure no single feature owns: `errors`, `html-utils`,
  *   `logger`, `prisma-connection`, `url`, `utils`, `validations`. Attributing
  *   `lib/utils.ts` to one feature would be a fiction every other feature pays

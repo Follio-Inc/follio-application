@@ -583,7 +583,7 @@ function formatMapReferenceSignal(report: MapReferenceScanReport): string[] {
     `  present        ${summary.present}`,
     `  orphaned       ${summary.orphaned}   (on disk, every module unreachable)`,
     `  missing        ${summary.missing}   (not on disk)`,
-    `  labs declared  ${summary.labsDeclared}   (no lab surface exists before item 20)`,
+    `  labs declared  ${summary.labsDeclared}   (ids only; whether a lab is built is the Labs page's answer)`,
   ];
 
   if (report.missing.length > 0) {

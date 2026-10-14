@@ -861,14 +861,15 @@ describe('drift report integration', { timeout: 30_000 }, () => {
     expect(surface?.signal === 'product-surface' && surface.summary).toEqual({
       // Item 8a widened route discovery from `app/api` to all of `app/`,
       // which added the three `.well-known` OAuth handlers. Items 10, 12, 14,
-      // 15 and 19 added the four Developer Platform pages and eight admin API
-      // routes, all excluded by the `app/admin` and `app/api/admin` entries.
-      total: 161,
+      // 15, 19 and 21 added the five Developer Platform pages and nine admin
+      // API routes, all excluded by the `app/admin` and `app/api/admin`
+      // entries. The Resume Lab is the fifth page and the ninth route.
+      total: 163,
       mapped: 130,
-      excluded: 31,
+      excluded: 33,
       unmapped: 0,
-      pages: 48,
-      routes: 113,
+      pages: 49,
+      routes: 114,
     });
     expect(pathways?.signal === 'live-qa-pathways' && pathways.summary).toMatchObject({
       total: 9,

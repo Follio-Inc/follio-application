@@ -64,7 +64,10 @@ export const PLATFORM_SECTIONS: PlatformSection[] = [
     href: `${PLATFORM_ROOT}/labs`,
     label: 'Labs',
     description: 'Per-feature workbenches that run a real pipeline without writing to a profile.',
-    status: 'planned',
+    // Item 20 landed the read-only index: every feature, and whether its lab
+    // exists yet. The labs themselves are items 21-24, and the index says so
+    // per feature rather than claiming a workbench the map only intends.
+    status: 'available',
     plan: [
       'A lab per feature, listed from the coverage map',
       'Resume import: bytes, pages, characters kept vs dropped, per-stage timing',

@@ -98,8 +98,9 @@ describe('platform section registry', () => {
     expect(overview?.plan).toEqual([]);
 
     // Item 10 shipped the shell with Labs, Tests and Drift routed and empty;
-    // item 11 filled Tests in. The planned set shrinks as later items land, so
-    // this asserts the invariant rather than today's membership.
+    // items 11, 17 and 20 filled them in, and as of item 20 none is planned.
+    // The invariant is asserted rather than today's membership, so a section
+    // added later still has to be honest about itself.
     for (const section of listPlatformTools()) {
       expect(['available', 'planned'], section.id).toContain(section.status);
     }
@@ -109,8 +110,14 @@ describe('platform section registry', () => {
       expect(section.plan.length, section.id).toBeGreaterThan(0);
       expect(section.deliveredBy.length, section.id).toBeGreaterThan(0);
     }
-    // At least one is still empty, or the placeholder has become dead code.
-    expect(listPlannedSections().length).toBeGreaterThan(0);
+    // Every section now reads the repository, so none may claim otherwise.
+    // `PlatformSectionPlaceholder` is kept for the next section to be routed
+    // before it is built; its own rendering is asserted below.
+    expect(listPlannedSections()).toEqual([]);
+    for (const section of listPlatformTools()) {
+      expect(section.status, `${section.id} should be built by now`).toBe('available');
+      expect(section.plan.length, section.id).toBeGreaterThan(0);
+    }
   });
 
   it('highlights the owning section for a nested path', () => {
@@ -248,6 +255,8 @@ describe('client safety', () => {
     `${PLATFORM_UI}/test-history.tsx`,
     `${PLATFORM_UI}/drift-report.tsx`,
     `${PLATFORM_UI}/drift-quarantine-panel.tsx`,
+    `${PLATFORM_UI}/labs-home.tsx`,
+    `${PLATFORM_UI}/resume-lab.tsx`,
     '_admin-panel/platform/nav.ts',
     '_admin-panel/platform/tests/types.ts',
     '_admin-panel/platform/tests/execution-types.ts',
@@ -255,6 +264,10 @@ describe('client safety', () => {
     '_admin-panel/platform/drift/view-types.ts',
     '_admin-panel/platform/drift/proposal-types.ts',
     '_admin-panel/platform/drift/quarantine-types.ts',
+    '_admin-panel/platform/labs/types.ts',
+    '_admin-panel/platform/labs/registry.ts',
+    '_admin-panel/platform/labs/view.ts',
+    '_admin-panel/platform/labs/resume-import-ai/types.ts',
   ];
 
   it('keeps the scanner out of the shell', () => {
@@ -395,9 +408,11 @@ describe('an unbuilt section renders honestly', () => {
           <PlatformOverview />
         </PlatformShell>
       ),
-      ...listPlannedSections().map((section) =>
-        renderToStaticMarkup(<PlatformSectionPlaceholder id={section.id} />)
-      ),
+      // Rendered for a real section rather than for the planned set, which is
+      // empty as of item 20: the rule is about the placeholder's own copy, and
+      // it still has to hold for whichever section is routed before it is
+      // built next.
+      renderToStaticMarkup(<PlatformSectionPlaceholder id="labs" />),
     ]
       .join('\n')
       .replace(/<[^>]*>/g, ' ');

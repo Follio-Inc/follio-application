@@ -23,11 +23,13 @@ export function PlatformOverview() {
       <section className="rounded-xl border bg-card p-5 shadow-sm">
         <h2 className="text-sm font-semibold">Where this is going</h2>
         <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-          The coverage map and the drift scan behind this platform already run from the command line
-          — <code className="rounded bg-muted px-1 py-0.5 text-xs">npm run platform:scan</code>{' '}
-          reports nine signals over the repository. This surface is the shell those tools will be
-          rendered into. The sections below are routed and reachable so the structure can be
-          reviewed now; none of them reads the repository yet.
+          The coverage map and the drift scan behind this platform also run from the command line —{' '}
+          <code className="rounded bg-muted px-1 py-0.5 text-xs">npm run platform:scan</code>{' '}
+          reports the same nine signals the Drift section renders. Every section below reads the
+          repository when you open it: Tests walks{' '}
+          <code className="rounded bg-muted px-1 py-0.5 text-xs">__tests__</code> and can run a
+          category, Drift runs the scan, and Labs lists every feature and whether its workbench
+          exists yet. What a section cannot show, it says so in place rather than leaving a blank.
         </p>
       </section>
 

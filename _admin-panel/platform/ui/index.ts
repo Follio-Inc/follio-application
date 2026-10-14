@@ -13,11 +13,13 @@
 
 export { DriftQuarantinePanel } from './drift-quarantine-panel';
 export { DriftReportView } from './drift-report';
+export { LabsHome } from './labs-home';
 export { LiveQaPanel } from './live-qa-panel';
 export { LiveQaRunResult } from './live-qa-result';
 export { PlatformOverview } from './platform-overview';
 export { PlatformSectionPlaceholder } from './platform-section';
 export { PlatformShell } from './platform-shell';
+export { ResumeLab } from './resume-lab';
 export { RunProgress } from './run-progress';
 export { TestConsole } from './test-console';
 export { TestHistory } from './test-history';

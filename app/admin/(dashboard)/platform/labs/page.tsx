@@ -1,4 +1,5 @@
-import { PlatformSectionPlaceholder } from '@/_admin-panel/platform/ui';
+import { buildLabsView } from '@/_admin-panel/platform/labs';
+import { LabsHome } from '@/_admin-panel/platform/ui';
 import { requireAdmin } from '@/lib/admin';
 
 export const dynamic = 'force-dynamic';
@@ -9,10 +10,10 @@ export const metadata = {
 };
 
 /**
- * Thin shim. Routed and reachable, with no implementation yet — see
- * `_admin-panel/platform/nav.ts` for the milestone that fills it.
+ * Thin shim. The view is derived in `_admin-panel/platform/labs`; the markup
+ * lives in `_admin-panel/platform/ui`.
  */
 export default async function AdminPlatformLabsPage() {
   await requireAdmin();
-  return <PlatformSectionPlaceholder id="labs" />;
+  return <LabsHome view={buildLabsView()} />;
 }

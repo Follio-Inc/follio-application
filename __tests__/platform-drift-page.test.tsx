@@ -1244,12 +1244,12 @@ describe('long lists and determinism', () => {
 });
 
 describe('the rest of the platform is untouched', () => {
-  it('marks Drift as a built section and keeps the placeholder for what is not', () => {
+  it('marks Drift as a built section that still names what finishes it', () => {
     const nav = read(NAV);
 
     expect(nav).toMatch(/id: 'drift'[\s\S]*?status: 'available'/);
-    expect(nav).toMatch(/id: 'labs'[\s\S]*?status: 'planned'/);
-    // The section still names the items that finish it.
+    // Item 20 built the Labs index, so no section is planned any more; the
+    // Drift entry still lists the items that complete it.
     expect(nav).toContain('items 17–19');
   });
 
