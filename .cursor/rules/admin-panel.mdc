@@ -78,7 +78,10 @@ Do **not** import developer ↔ users ↔ platform. The shell only composes them
 1. Update `modules/developer/smoke.ts` / `links.ts` / `live-qa/catalog.ts` / `ai/` as needed
    (the suite registry is gone — the Test Console derives its inventory from the repository)
 2. Keep the coverage map current when a feature is added, changed or removed — `npm run platform:scan`
-   fails the map, not the repository
+   fails the map, not the repository, and **CI blocks on it**: the `drift` job runs
+   `npm run platform:scan -- --strict`, which exits 1 on a contradiction between the map and the
+   tree. Recorded gaps (unclaimed model, unused stage, no pathway, no lab) stay green. Record a
+   feature change in `platform/coverage-map/map.ts` in the same commit that makes it.
 3. Thin shims only: `app/admin/(dashboard)/developer/page.tsx`,
    `app/admin/(dashboard)/platform/**/page.tsx` + `layout.tsx`, `app/api/admin/developer/*`
 

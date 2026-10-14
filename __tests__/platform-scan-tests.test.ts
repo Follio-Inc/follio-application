@@ -219,6 +219,11 @@ describe('scanTestAttribution on the real tree', () => {
       // is that it never calls the save path, which is a claim about source
       // text and can only be checked by reading it.
       '__tests__/platform-resume-lab.test.tsx',
+      // Item 30's: whether CI blocks on drift is a fact about ci.yml, and what
+      // counts as blocking is the shape of the `ok` expression and the CLI's
+      // exit line. All three are source text and nothing else can check them.
+      // Sorts between the item-21 file above and the item-25 one below.
+      '__tests__/platform-scan.test.ts',
       // Item 25's: proving `/admin/developer` no longer renders the retired
       // panel means reading that page's source, so the label is right.
       '__tests__/platform-test-console.test.tsx',
@@ -227,7 +232,7 @@ describe('scanTestAttribution on the real tree', () => {
       // about module source. Both can only be checked by reading them.
       '__tests__/platform-watch.test.ts',
     ]);
-    expect(report.summary.sourceText).toBe(13);
+    expect(report.summary.sourceText).toBe(14);
   });
 
   it('classifies every test exactly once', () => {

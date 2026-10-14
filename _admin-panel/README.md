@@ -26,8 +26,26 @@ to `/admin/platform` so old bookmarks keep working — and it is no longer a sid
 | **Drift** | `/admin/platform/drift` | Nine scan signals, map proposals, quarantine and deletion         |
 | **Labs**  | `/admin/platform/labs`  | Lab status per feature, and the Resume import lab                 |
 
-`npm run platform:scan` runs the same nine drift signals from the command line, and CI runs it as a
-warning-only job.
+`npm run platform:scan` runs the same nine drift signals from the command line, and **CI blocks a
+build on them**. The `drift` job in `.github/workflows/ci.yml` runs
+`npm run platform:scan -- --strict`, which exits 1 when the scan is not `ok`.
+
+Only a contradiction makes it not `ok` — the coverage map disagreeing with the repository: unmapped
+surface, a `unitTests` or `codeLocations` entry the tree cannot support, a pathway the catalog does
+not define or a spec it never names, a stale stage, flag or model, or a reachability record the
+import graph disproves. Recorded gaps leave the build green: an unclaimed model, an unused stage, a
+partially gated feature, dead code a test still covers, a feature with no pathway, a category with
+no lab. Category health never fails the scan at all. Failing on a gap would reward writing a
+pathway to quiet a number rather than to test something.
+
+The job decides nothing itself. It does not read the report to reach a verdict; the scanner's exit
+code is the verdict, and the report goes to the step summary either way. A non-zero exit therefore
+means the scan found a contradiction **or** could not run, and both block the build — the report
+says which.
+
+To fix a red drift job: either correct the contradiction, or record the change in the coverage map
+(`platform/coverage-map/map.ts`) in the same commit that caused it. `npm run platform:scan` without
+the flag still exits 0 on drift, which is what the Drift page, the watch job and a local run use.
 
 **What `modules/developer/` still holds.** Retiring the panel did not retire the directory. The
 Platform runs on the shared code that lives there: the local-only execution guard (`guard.ts`),

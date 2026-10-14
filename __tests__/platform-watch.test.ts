@@ -718,12 +718,17 @@ describe('the workflow', () => {
     for (const job of ['  lint:', '  test:', '  build:', '  security:', '  drift:']) {
       expect(ci, `${job} must still exist`).toContain(job);
     }
-    // Three advisory markers, counted from the file rather than guessed:
-    // the test job's coverage upload, the security job's npm audit, and the
-    // drift job itself. Item 26 added none of them and changed none.
-    expect(ci.match(/continue-on-error: true/g)).toHaveLength(3);
-    // Only one of the three is a whole job, at job indentation.
-    expect(ci.match(/^ {4}continue-on-error: true$/gm)).toHaveLength(1);
+    // Two advisory markers, counted from the file rather than guessed: the
+    // test job's coverage upload and the security job's npm audit. Both are
+    // steps, both predate the Developer Platform, and item 26 added neither.
+    //
+    // There were three when item 26 landed. The drift job was the third, and
+    // PLATFORM_TODO item 30 removed it to make the scan blocking — so no job
+    // in this file is advisory as a whole any more. Item 26 still changed
+    // nothing here, which is what this test is for; the drift job's own
+    // settings are pinned in platform-scan.test.ts, where item 30 lives.
+    expect(ci.match(/continue-on-error: true/g)).toHaveLength(2);
+    expect(ci.match(/^ {4}continue-on-error: true$/gm)).toBeNull();
   });
 
   it('serializes overlapping runs without cancelling a half-written baseline', () => {
@@ -737,7 +742,10 @@ describe('the workflow', () => {
     expect(workflow).not.toMatch(/contents: write|packages: write|id-token:/);
   });
 
-  it('does not make the drift scan blocking — that is item 30', () => {
+  it('runs no drift scan of its own — ci.yml is where the gate lives', () => {
+    // Item 30 has since made the scan blocking, in ci.yml. This workflow is
+    // still not where that happens: it watches tests, and a second caller of
+    // the scanner here would be a second place for the gate to disagree.
     expect(workflow).not.toContain('platform:scan');
     expect(workflow).not.toContain('--strict');
   });
