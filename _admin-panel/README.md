@@ -73,6 +73,24 @@ lab page and the single-run endpoint keep working under Turbopack. `next build` 
 unaffected — webpack builds the route fine. If the parser is ever retired, or Turbopack learns to
 leave `spawn` arguments alone, this script stops being needed.
 
+## Scheduled runs
+
+`.github/workflows/platform-watch.yml` runs the Test Console's own Vitest categories on a daily
+schedule, on a push to `main` / `develop` / `staging` (which is what a merge looks like here), and
+on demand. It calls `npm run platform:watch` — the same runner the console uses, with targets read
+from the coverage map — and **annotates only failures that are new**.
+
+New means one of two things, measured against a baseline carried between runs in the Actions cache:
+the test has never been seen before, or it passed last time. A test that was already failing, one
+that is known to flap, a cancelled run, a broken runner and a missing prerequisite are all reported
+in the job summary and none of them raises an annotation. There is no Slack or e-mail integration
+in this repository, so the workflow's annotations and summary are the notification.
+
+The job is advisory — `continue-on-error: true`, no `pull_request` trigger, and `contents: read`.
+It cannot affect whether a pull request merges. Live QA is **not** run on a schedule: it needs a
+Playwright browser download and a captured auth state, so the summary names the pathways and the
+prerequisite instead of fabricating results.
+
 ## App touch points (thin shims only)
 
 - `app/admin/(dashboard)/developer/page.tsx`
@@ -91,6 +109,7 @@ server-only and `ui/` must never import it.
 | Test Console history     | `platform/.runs/<runner>/<target>/<run>.json`       | Last 10 runs per target, gitignored     |
 | Drift quarantine         | `platform/.quarantine/<id>/payload/<original path>` | Files moved out of the tree, gitignored |
 | Destructive-action audit | `platform/.audit/audit-v1.jsonl`                    | Append-only, never pruned, gitignored   |
+| CI failure baseline      | `platform/.watch/baseline.json`                     | Last 5 statuses per test, gitignored    |
 
 All of these are local operator state. None is in git, none is in the database, and none holds
 secrets — the history record carries the run's outcome, times, commit and one row per test, and an

@@ -75,3 +75,6 @@ logs
 
 # Legacy Chromium pack (no longer downloaded; worker prints PDFs)
 /public/chromium-*-pack.*
+
+# Item 26: the CI failure baseline, when the watch CLI is run locally.
+_admin-panel/platform/.watch/

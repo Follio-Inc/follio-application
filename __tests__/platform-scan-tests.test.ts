@@ -219,8 +219,12 @@ describe('scanTestAttribution on the real tree', () => {
       // Item 25's: proving `/admin/developer` no longer renders the retired
       // panel means reading that page's source, so the label is right.
       '__tests__/platform-test-console.test.tsx',
+      // Item 26's: the workflow's triggers, concurrency and permissions are
+      // facts about a file, and the no-second-runner guarantee is a fact
+      // about module source. Both can only be checked by reading them.
+      '__tests__/platform-watch.test.ts',
     ]);
-    expect(report.summary.sourceText).toBe(11);
+    expect(report.summary.sourceText).toBe(12);
   });
 
   it('classifies every test exactly once', () => {

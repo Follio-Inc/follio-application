@@ -92,3 +92,6 @@ Do **not** import developer ↔ users ↔ platform. The shell only composes them
   comparison; that endpoint needs `npm run dev:webpack`. Turbopack cannot resolve the `spawn`
   target in `lib/resume-parser/read-pdf.ts`. Build and production are unaffected — see
   `_admin-panel/README.md`.
+- Scheduled runs: `platform-watch.yml` runs Vitest categories daily and post-merge via
+  `npm run platform:watch`, annotating only **new** failures against a cached baseline. Advisory,
+  never on `pull_request`, and it reuses the Test Console's runner rather than adding one.
