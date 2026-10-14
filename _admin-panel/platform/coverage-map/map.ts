@@ -30,7 +30,8 @@ import type { ExcludedPath, PlatformFeature } from './types';
  *   `platform-test-runner`, `platform-test-detail`, `platform-live-qa`,
  *   `platform-test-execution`, `platform-test-history`, `platform-drift-page`,
  *   `platform-drift-proposals`, `platform-drift-quarantine`, `platform-labs-home`,
- *   `platform-resume-lab`.
+ *   `platform-resume-lab`, `platform-resume-lab-telemetry`,
+ *   `platform-resume-lab-comparison`.
  *   They cover `_admin-panel/`, which is operator tooling, not product.
  * - Shared infrastructure no single feature owns: `errors`, `html-utils`,
  *   `logger`, `prisma-connection`, `url`, `utils`, `validations`. Attributing

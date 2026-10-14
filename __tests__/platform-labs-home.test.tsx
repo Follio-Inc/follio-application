@@ -403,7 +403,6 @@ describe('item 20 builds no lab and touches nothing else', () => {
       'app/admin/(dashboard)/platform/tests/page.tsx',
       'app/admin/(dashboard)/platform/drift/page.tsx',
       'app/admin/(dashboard)/developer/page.tsx',
-      '_admin-panel/modules/developer/ui/DevtoolsPanel.tsx',
     ]) {
       expect(existsSync(path.join(process.cwd(), file)), file).toBe(true);
       expect(read(file), `${file} must not know about labs`).not.toMatch(/platform\/labs|LabsHome/);

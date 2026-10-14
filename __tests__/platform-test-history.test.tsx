@@ -1218,20 +1218,12 @@ describe('the boundary holds', () => {
     expect(read(RUNNER)).toContain('withRun(');
     expect(read(LIVE_QA_MODULE)).toContain('withRun(');
 
-    for (const modulePath of [
-      'app/api/admin/developer/test/route.ts',
-      'app/api/admin/developer/live-qa/run/route.ts',
-      '_admin-panel/modules/developer/suites.ts',
-      '_admin-panel/modules/developer/ui/DevtoolsPanel.tsx',
-    ]) {
+    for (const modulePath of ['app/api/admin/developer/live-qa/run/route.ts']) {
       expect(existsSync(path.join(process.cwd(), modulePath)), modulePath).toBe(true);
       expect(read(modulePath), `${modulePath} must not know about history`).not.toMatch(
         /platform\/tests|\.runs/
       );
     }
-
-    // And the old runner still writes no history of its own.
-    expect(read('_admin-panel/modules/developer/suites.ts')).not.toMatch(/history/i);
   });
 
   it('adds no dependency and no database', () => {

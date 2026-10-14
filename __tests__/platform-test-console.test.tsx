@@ -471,20 +471,18 @@ describe('the console renders the whole inventory', () => {
   });
 });
 
-describe('the old developer panel is still untouched', () => {
-  it('keeps its own route and modules', () => {
-    for (const modulePath of [
-      'app/admin/(dashboard)/developer/page.tsx',
-      '_admin-panel/modules/developer/ui/DevtoolsPanel.tsx',
-      '_admin-panel/modules/developer/suites.ts',
-      '_admin-panel/modules/developer/suites-catalog.ts',
-    ]) {
-      expect(existsSync(path.join(process.cwd(), modulePath)), modulePath).toBe(true);
-    }
+describe('the old developer route is a redirect now (item 25)', () => {
+  it('keeps the route, without the panel', () => {
+    // The file survives so old bookmarks resolve; what it renders does not.
+    expect(existsSync(path.join(process.cwd(), 'app/admin/(dashboard)/developer/page.tsx'))).toBe(
+      true
+    );
 
     const developer = read('app/admin/(dashboard)/developer/page.tsx');
-    expect(developer).toContain('DevtoolsPanel');
-    // Item 11 did not reach into the old surface to build the new console.
+    expect(developer).toContain("redirect('/admin/platform')");
+    expect(developer).not.toContain('DevtoolsPanel');
+    // Item 11 did not reach into the old surface to build the new console,
+    // and retiring it did not drag the console in either.
     expect(developer).not.toContain('TestConsole');
     expect(developer).not.toContain('buildTestInventory');
   });

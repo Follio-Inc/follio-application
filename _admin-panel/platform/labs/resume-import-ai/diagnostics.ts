@@ -13,7 +13,7 @@
 import { getStageConfig, type PipelineStage } from '@/lib/ai-client';
 
 import { costForCall, costForRun } from './pricing';
-import { labelCalls, RESUME_PIPELINE_STAGES, type ObservedAiCall } from './telemetry';
+import { labelCalls, type ObservedAiCall } from './telemetry';
 import type {
   ResumeLabAi,
   ResumeLabAiCall,
@@ -493,6 +493,3 @@ export function missingPayloads(): ResumeLabMissingPayload[] {
     },
   ];
 }
-
-/** The stages this pipeline is expected to call, for the UI to name. */
-export const PIPELINE_AI_STAGES = RESUME_PIPELINE_STAGES;

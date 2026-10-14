@@ -1268,11 +1268,7 @@ describe('the rest of the platform is untouched', () => {
   });
 
   it('leaves the old developer surface alone', () => {
-    for (const modulePath of [
-      'app/admin/(dashboard)/developer/page.tsx',
-      '_admin-panel/modules/developer/ui/DevtoolsPanel.tsx',
-      '_admin-panel/modules/developer/suites.ts',
-    ]) {
+    for (const modulePath of ['app/admin/(dashboard)/developer/page.tsx']) {
       expect(existsSync(path.join(process.cwd(), modulePath)), modulePath).toBe(true);
       expect(read(modulePath)).not.toMatch(/platform\/drift/);
     }

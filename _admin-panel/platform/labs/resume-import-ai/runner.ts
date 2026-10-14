@@ -350,6 +350,14 @@ export type ResumeLabRunOptions = {
    * — or none — without reaching the provider.
    */
   observeUsage?: UsageProbe;
+  /**
+   * Bytes already read by the caller (item 23).
+   *
+   * The comparison resolves the source document once and gives the identical
+   * buffer to both parsers; without this the AI side would re-read the
+   * fixture and the two runs would only probably have the same input.
+   */
+  resolvedInput?: { bytes: Buffer; label: string };
 };
 
 /** What `createUsageProbe()` returns, named so a test can substitute one. */
@@ -380,6 +388,20 @@ async function shippedRunAgent(input: { text: string; userId: string }): Promise
 }
 
 /** Reads the PDF a request named, without taking a path from the caller. */
+export type ResolvedInput =
+  | { ok: true; bytes: Buffer; label: string }
+  | { ok: false; result: ResumeLabRunResult };
+
+/**
+ * Resolves a request to bytes, applying the product route's own limits.
+ *
+ * Exported for item 23: a comparison must hand both parsers the same source
+ * document, which means reading it once rather than twice and hoping.
+ */
+export function resolveResumeLabInput(input: ResumeLabInput): ResolvedInput {
+  return readInput(input);
+}
+
 function readInput(
   input: ResumeLabInput
 ): { ok: true; bytes: Buffer; label: string } | { ok: false; result: ResumeLabRunResult } {
@@ -460,7 +482,8 @@ export async function runResumeLab(
   }
 
   const readClock = stopwatch();
-  const read = readInput(input);
+  const read: ResolvedInput =
+    options.resolvedInput === undefined ? readInput(input) : { ok: true, ...options.resolvedInput };
   if (!read.ok) return read.result;
   stage.add({
     id: 'input',

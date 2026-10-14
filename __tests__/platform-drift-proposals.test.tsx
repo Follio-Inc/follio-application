@@ -940,7 +940,6 @@ describe('the real repository, through the page’s own path', () => {
       '_admin-panel/platform/scan/report.ts',
       '_admin-panel/platform/tests/runner.ts',
       'app/admin/(dashboard)/developer/page.tsx',
-      '_admin-panel/modules/developer/ui/DevtoolsPanel.tsx',
     ]) {
       expect(existsSync(path.join(process.cwd(), file)), file).toBe(true);
       expect(read(file), `${file} must not know about proposals`).not.toMatch(

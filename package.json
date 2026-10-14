@@ -9,6 +9,7 @@
   "packageManager": "npm@10.8.2",
   "scripts": {
     "dev": "next dev --turbo",
+    "dev:webpack": "next dev",
     "build": "prisma generate && prisma migrate deploy && next build",
     "build:ci": "prisma generate && next build",
     "start": "next start",

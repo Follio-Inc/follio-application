@@ -674,15 +674,18 @@ describe('drift report integration', { timeout: 30_000 }, () => {
     expect(surface?.signal === 'product-surface' && surface.summary).toEqual({
       // Item 8a widened route discovery from `app/api` to all of `app/`,
       // which added the three `.well-known` OAuth handlers. Items 10, 12, 14,
-      // 15, 19 and 21 added the five Developer Platform pages and nine admin
-      // API routes, all excluded by the `app/admin` and `app/api/admin`
-      // entries. The Resume Lab is the fifth page and the ninth route.
-      total: 163,
+      // 15, 19, 21 and 23 added five Developer Platform pages and ten admin
+      // API routes; item 25 then retired two of the old panel's endpoints
+      // (`developer/catalog` and `developer/test`), leaving eight. All of
+      // them are excluded by the `app/admin` and `app/api/admin` entries, so
+      // `mapped` has stayed at 130 throughout — none of this is product
+      // surface, and retiring the panel changed no product behaviour.
+      total: 162,
       mapped: 130,
-      excluded: 33,
+      excluded: 32,
       unmapped: 0,
       pages: 49,
-      routes: 114,
+      routes: 113,
     });
   });
 

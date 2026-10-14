@@ -520,11 +520,7 @@ describe('the rest of the console is untouched', () => {
     expect(console_).not.toContain('TestRunResult');
     expect(console_).not.toContain("'use client'");
 
-    for (const modulePath of [
-      'app/admin/(dashboard)/developer/page.tsx',
-      '_admin-panel/modules/developer/suites.ts',
-      '_admin-panel/modules/developer/ui/DevtoolsPanel.tsx',
-    ]) {
+    for (const modulePath of ['app/admin/(dashboard)/developer/page.tsx']) {
       expect(existsSync(path.join(process.cwd(), modulePath)), modulePath).toBe(true);
     }
   });

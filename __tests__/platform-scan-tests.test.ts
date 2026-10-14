@@ -208,12 +208,19 @@ describe('scanTestAttribution on the real tree', () => {
       // Item 20's, for the same reason: it reads the labs modules' own source
       // to prove they touch no filesystem and build no second catalogue.
       '__tests__/platform-labs-home.test.tsx',
+      // Item 23's: it reads the openresume service to prove the lab enters
+      // through the pure half and never the wrapper that writes a
+      // RawImportPayload row. Sorts before the item-21 file below.
+      '__tests__/platform-resume-lab-comparison.test.tsx',
       // Item 21's, and here the label is the point: the lab's done condition
       // is that it never calls the save path, which is a claim about source
       // text and can only be checked by reading it.
       '__tests__/platform-resume-lab.test.tsx',
+      // Item 25's: proving `/admin/developer` no longer renders the retired
+      // panel means reading that page's source, so the label is right.
+      '__tests__/platform-test-console.test.tsx',
     ]);
-    expect(report.summary.sourceText).toBe(9);
+    expect(report.summary.sourceText).toBe(11);
   });
 
   it('classifies every test exactly once', () => {

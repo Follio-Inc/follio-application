@@ -8,10 +8,10 @@ export const SMOKE_ITEMS: SmokeItem[] = [
   {
     id: 'ai-resume-reader',
     area: 'AI',
-    title: 'Resume reader (dev tool)',
-    href: '/admin/developer?tab=resume-reader',
+    title: 'Resume lab (dev tool)',
+    href: '/admin/platform/labs/resume-import-ai',
     verify:
-      'Open Resume reader, run Alex Morgan or upload a PDF. Name / experience / skills look right. savedToProfile stays false.',
+      'Open the Resume lab, run Alex Morgan or upload a PDF. Name / experience / skills look right. Nothing is saved: no profile, no resume row.',
   },
   {
     id: 'dashboard-follio',

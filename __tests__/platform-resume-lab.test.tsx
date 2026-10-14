@@ -551,17 +551,28 @@ describe('the API boundary', () => {
     }
   });
 
-  it('is the only endpoint the lab has', () => {
+  it('has exactly the two endpoints it is supposed to have', () => {
+    // Item 23 added the comparison route beside this one. The list is
+    // enumerated rather than counted, so a third endpoint appearing is a
+    // failure whatever it is called.
     const walk = (dir: string): string[] =>
       readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
         entry.isDirectory() ? walk(path.join(dir, entry.name)) : [path.join(dir, entry.name)]
       );
-    const labRoutes = walk(path.join(process.cwd(), 'app', 'api', 'admin', 'platform')).filter(
-      (file) => file.includes(`labs${path.sep}`)
-    );
+    const labRoutes = walk(path.join(process.cwd(), 'app', 'api', 'admin', 'platform'))
+      .filter((file) => file.includes(`labs${path.sep}`))
+      .map((file) =>
+        file
+          .slice(file.indexOf(`labs${path.sep}`))
+          .split(path.sep)
+          .join('/')
+      )
+      .sort();
 
-    expect(labRoutes).toHaveLength(1);
-    expect(labRoutes[0].endsWith(path.join('resume-import-ai', 'run', 'route.ts'))).toBe(true);
+    expect(labRoutes).toEqual([
+      'labs/resume-import-ai/compare/route.ts',
+      'labs/resume-import-ai/run/route.ts',
+    ]);
   });
 
   it('renders the page behind admin auth, as a thin shim', () => {

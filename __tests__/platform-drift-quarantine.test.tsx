@@ -1041,7 +1041,6 @@ describe('the real repository is read, never written', () => {
     );
     for (const file of [
       'app/admin/(dashboard)/developer/page.tsx',
-      '_admin-panel/modules/developer/ui/DevtoolsPanel.tsx',
       '_admin-panel/platform/tests/runner.ts',
     ]) {
       expect(existsSync(path.join(process.cwd(), file)), file).toBe(true);

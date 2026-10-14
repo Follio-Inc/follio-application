@@ -872,7 +872,6 @@ describe('the rest of the console is untouched', () => {
       'app/api/admin/developer/live-qa/run/route.ts',
       '_admin-panel/modules/developer/live-qa/runner.ts',
       '_admin-panel/modules/developer/live-qa/catalog.ts',
-      '_admin-panel/modules/developer/ui/LiveQaTab.tsx',
     ]) {
       expect(existsSync(path.join(process.cwd(), modulePath)), modulePath).toBe(true);
     }

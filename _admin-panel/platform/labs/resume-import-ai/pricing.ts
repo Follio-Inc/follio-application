@@ -11,14 +11,17 @@ import type { ResumeLabAiCall, ResumeLabCost, ResumeLabUsageStatus } from './typ
  * repository can offer.
  *
  * Provenance and its limits, stated rather than implied:
- * - These are OpenAI's published list prices in USD per 1,000,000 tokens.
- * - They were written down on **2026-10-13** and are not fetched at runtime.
- *   Nothing here notices when a price changes, so an old table produces a
- *   confidently wrong number. The date travels with every figure the lab
- *   shows, so an operator can judge it.
- * - They are list prices. They ignore batch discounts, cached-input rates and
- *   whatever the account actually negotiated. The lab says "estimated" and
- *   means it.
+ * - These are OpenAI's published list prices in USD per 1,000,000 tokens,
+ *   checked against OpenAI's own model and announcement pages on
+ *   **2026-10-14**: gpt-4o-mini $0.15/$0.60, gpt-4o $2.50/$10.00.
+ * - They are not fetched at runtime. Nothing here notices when a price
+ *   changes, so an old table produces a confidently wrong number. The date
+ *   travels with every figure the lab shows, so an operator can judge it.
+ * - They are standard list prices. OpenAI also publishes a cached-input rate
+ *   (half price for gpt-4o-mini) and batch rates, and the usage the lab
+ *   observes does not say whether a call hit the cache. A cached or batched
+ *   call therefore cost *less* than the figure shown. The lab says
+ *   "estimated" and means it.
  * - A model with no row here is not guessed at. It is reported as
  *   `pricing-unavailable`, and a run that used it says which model was
  *   unpriced.
@@ -30,9 +33,9 @@ export type ModelPrice = {
   outputPerMillion: number;
 };
 
-export const PRICING_RECORDED_ON = '2026-10-13';
+export const PRICING_RECORDED_ON = '2026-10-14';
 
-export const PRICING_SOURCE = `OpenAI list prices per 1M tokens, recorded ${PRICING_RECORDED_ON} in _admin-panel/platform/labs/resume-import-ai/pricing.ts. Not fetched at runtime.`;
+export const PRICING_SOURCE = `OpenAI published list prices per 1M tokens, checked ${PRICING_RECORDED_ON} and recorded in _admin-panel/platform/labs/resume-import-ai/pricing.ts. Not fetched at runtime, and standard rates only — a cached or batched call cost less.`;
 
 /**
  * The two models this pipeline can reach.

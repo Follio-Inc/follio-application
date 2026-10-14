@@ -12,27 +12,32 @@ alwaysApply: false
 
 Operator tooling lives in `_admin-panel/`, not in Follio product features.
 
-## Two developer surfaces during the transition
+## One Developer Platform
 
-There are deliberately **two** Developer Platform surfaces right now, and both must keep working:
+`/admin/platform` is the Developer Platform, and the only one. Item 25 retired the original panel:
+`DevtoolsPanel.tsx`, `suites.ts`, `suites-catalog.ts`, the panel's `ui/` tabs and the two endpoints
+that served only it are deleted. `/admin/developer` is a redirect to `/admin/platform` and is not a
+sidebar module.
 
-| Surface                        | Route              | Owns                                                                     | Status                                 |
-| ------------------------------ | ------------------ | ------------------------------------------------------------------------ | -------------------------------------- |
-| First Developer Platform       | `/admin/developer` | `modules/developer/` — health, suites, Live QA, resume reader, smoke      | Live and **unchanged**. Use this today. |
-| Developer Platform (rebuild)   | `/admin/platform`  | `platform/` — coverage map, drift scan, and the Tests / Drift / Labs shell | Shell only; sections fill in over items 11–24. |
+| Section  | Route                   | Owns                                                      |
+| -------- | ----------------------- | --------------------------------------------------------- |
+| Overview | `/admin/platform`       | `platform/coverage-map/` — the feature inventory          |
+| Tests    | `/admin/platform/tests` | Vitest + Live QA runs, progress, cancel, history, flakes  |
+| Drift    | `/admin/platform/drift` | `platform/scan/` nine signals, proposals, quarantine      |
+| Labs     | `/admin/platform/labs`  | Lab status per feature, and the Resume import lab         |
 
-Rules while both exist:
+Rules:
 
-- Do **not** change `/admin/developer`, `modules/developer/ui/DevtoolsPanel.tsx`, `suites.ts` or
-  `suites-catalog.ts` to make the new platform easier to build. The old panel is retired in
-  `PLATFORM_TODO` item 25, not before, and its tests retire with it.
-- Do **not** use `DevtoolsPanel` as the design reference for the new platform.
-- The new platform's sections must say when they are empty. No zeroed counters, no sample data, and
+- `modules/developer/` is **not** retired. It holds the shared runtime the Platform depends on:
+  `guard.ts`, `process-tree.ts`, all of `live-qa/`, plus `health.ts`, `status.ts`, `links.ts`,
+  `smoke.ts` and `ai/`. Do not delete from it because the panel is gone.
+- Nothing may import the retired modules. A test sweeps the repository for them.
+- The platform's sections must say when they are empty. No zeroed counters, no sample data, and
   no number that was not measured — see `platform/nav.ts`'s `status` and `plan` fields.
 
 ## Modules stay separate
 
-- `modules/developer/` — health, suites, Live QA, resume reader (AI lab), smoke
+- `modules/developer/` — shared runtime: guard, process tree, Live QA, health, status, AI lab, smoke
 - `modules/users/` — placeholder for future user monitoring
 - `platform/` — the rebuild: `coverage-map/` (inventory), `scan/` (drift signals),
   `tests/` (the Test Console's inventory, runners, execution lock and run history),
@@ -70,7 +75,8 @@ Do **not** import developer ↔ users ↔ platform. The shell only composes them
 
 ## When shipping features
 
-1. Update `modules/developer/suites-catalog.ts` / `smoke.ts` / `links.ts` / `live-qa/catalog.ts` / `ai/` as needed
+1. Update `modules/developer/smoke.ts` / `links.ts` / `live-qa/catalog.ts` / `ai/` as needed
+   (the suite registry is gone — the Test Console derives its inventory from the repository)
 2. Keep the coverage map current when a feature is added, changed or removed — `npm run platform:scan`
    fails the map, not the repository
 3. Thin shims only: `app/admin/(dashboard)/developer/page.tsx`,
@@ -82,3 +88,7 @@ Do **not** import developer ↔ users ↔ platform. The shell only composes them
   layout checks the `Admin` table and every page calls `requireAdmin()`)
 - Suite + Live QA runs: local only (`DEVTOOLS_ENABLED=true`, never in production)
 - Public must never reach these APIs without admin auth
+- Dev server: `npm run dev` (Turbopack) runs everything except the Resume Lab's OpenResume
+  comparison; that endpoint needs `npm run dev:webpack`. Turbopack cannot resolve the `spawn`
+  target in `lib/resume-parser/read-pdf.ts`. Build and production are unaffected — see
+  `_admin-panel/README.md`.

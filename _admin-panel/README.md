@@ -6,24 +6,34 @@ Operator tooling that sits **beside** the Follio application — not product UI.
 
 | Module        | Path                 | Status                                                                      |
 | ------------- | -------------------- | --------------------------------------------------------------------------- |
-| **Developer** | `modules/developer/` | Health, Vitest suites, Live QA, resume reader, smoke, quick links           |
+| **Developer** | `modules/developer/` | Shared runtime the Platform uses: guard, process tree, Live QA, health, AI  |
 | **Users**     | `modules/users/`     | Placeholder — user monitoring comes later                                   |
 | **Platform**  | `platform/`          | The Developer Platform rebuild: coverage map, drift scan, and the new shell |
 
 These modules must not import each other. The shell only composes them.
 
-## Two developer surfaces, on purpose
+## One Developer Platform
 
-`modules/developer/` is the first Developer Platform and is **live and unchanged**. `platform/` is
-the rebuild beside it. The old one is retired in `PLATFORM_TODO` item 25, not before.
+`/admin/platform` is the Developer Platform. There is nothing else: `PLATFORM_TODO` item 25 retired
+the original panel, deleting `DevtoolsPanel.tsx`, `suites.ts`, `suites-catalog.ts`, the panel's own
+tabs, and the two endpoints that served only it. `/admin/developer` still resolves — it redirects
+to `/admin/platform` so old bookmarks keep working — and it is no longer a sidebar module.
 
-| Surface                      | Route              | Use it for                                                           |
-| ---------------------------- | ------------------ | -------------------------------------------------------------------- |
-| First Developer Platform     | `/admin/developer` | Everything today: health, suites, Live QA, resume reader             |
-| Developer Platform (rebuild) | `/admin/platform`  | The shell for Tests, Drift and Labs — sections land over items 11–24 |
+| Section   | Route                   | What it does                                                      |
+| --------- | ----------------------- | ----------------------------------------------------------------- |
+| Overview  | `/admin/platform`       | The coverage map: features, categories, tests, pathways and labs  |
+| **Tests** | `/admin/platform/tests` | Run Vitest and Live QA, with progress, cancel, history and flakes |
+| **Drift** | `/admin/platform/drift` | Nine scan signals, map proposals, quarantine and deletion         |
+| **Labs**  | `/admin/platform/labs`  | Lab status per feature, and the Resume import lab                 |
 
-The rebuild's command-line half already works: `npm run platform:scan` reports nine drift signals
-over the repository, and CI runs it as a warning-only job.
+`npm run platform:scan` runs the same nine drift signals from the command line, and CI runs it as a
+warning-only job.
+
+**What `modules/developer/` still holds.** Retiring the panel did not retire the directory. The
+Platform runs on the shared code that lives there: the local-only execution guard (`guard.ts`),
+process-tree cancellation (`process-tree.ts`), and all of `live-qa/` — the pathway catalog, specs,
+runner, fixtures, triage and Playwright config. `health.ts`, `status.ts`, `links.ts`, `smoke.ts`
+and `ai/` also survive, with their own endpoints under `app/api/admin/developer/`.
 
 ## How to open
 
@@ -33,6 +43,35 @@ over the repository, and CI runs it as a warning-only job.
    (or use the **Developer** / **Platform** items in the admin sidebar)
 
 On production (follio.me), only signed-in admins can reach `/admin/*`. The public cannot.
+
+### Which dev server to run
+
+`npm run dev` starts Next with Turbopack and runs everything here **except** the Resume Lab's
+OpenResume comparison. For that one endpoint, run:
+
+```
+npm run dev:webpack      # next dev, without --turbo
+```
+
+Why: the comparison calls the legacy OpenResume parser, and
+`lib/resume-parser/read-pdf.ts` reads the PDF by spawning `node scripts/parse-pdf.cjs`.
+Turbopack statically analyses that `spawn` call, treats the script path as a module import and
+cannot resolve it —
+
+```
+Module not found: Can't resolve './ROOT/scripts/parse-pdf.cjs'
+server relative imports are not implemented yet.
+```
+
+— so `POST /api/admin/platform/labs/resume-import-ai/compare` returns 500 under `npm run dev`.
+Webpack resolves it, which is why the fallback script exists.
+
+This is a limitation of dead code, not a product requirement. Nothing the product ships imports
+`lib/resume-parser`; the Developer Platform's comparison lab is its only consumer, and the
+comparison runtime is deliberately kept out of `platform/labs/resume-import-ai/index.ts` so the
+lab page and the single-run endpoint keep working under Turbopack. `next build` and production are
+unaffected — webpack builds the route fine. If the parser is ever retired, or Turbopack learns to
+leave `spawn` arguments alone, this script stops being needed.
 
 ## App touch points (thin shims only)
 

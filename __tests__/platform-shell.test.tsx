@@ -22,7 +22,7 @@
  * nothing about the structure item 10 exists to establish.
  */
 
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -187,19 +187,22 @@ describe('platform routes', () => {
 });
 
 describe('admin sidebar', () => {
-  it('shows both the platform and the old developer panel', () => {
+  it('shows one canonical Developer Platform entry', () => {
     const ids = ADMIN_PANEL_NAV.map((item) => item.id);
 
     expect(ids).toContain('platform');
-    // Item 10's done condition: nav shows both surfaces.
-    expect(ids).toContain('developer');
+    // Item 10 put two surfaces in the sidebar while the new one was built.
+    // Item 25 retired the old panel, so only one is a module now — two
+    // entries would present a retired tool as still supported.
+    expect(ids).not.toContain('developer');
 
     const platform = ADMIN_PANEL_NAV.find((item) => item.id === 'platform');
     expect(platform?.href).toBe(PLATFORM_ROOT);
     expect(platform?.label).toBe('Platform');
+    expect(platform?.description).not.toMatch(/replaces Developer/i);
 
-    const developer = ADMIN_PANEL_NAV.find((item) => item.id === 'developer');
-    expect(developer?.href).toBe(LEGACY_DEVELOPER_ROOT);
+    // The route still resolves, as a redirect — it is just not a module.
+    expect(ADMIN_PANEL_NAV.map((item) => item.href)).not.toContain(LEGACY_DEVELOPER_ROOT);
   });
 
   it('gives every sidebar module an icon', () => {
@@ -222,24 +225,111 @@ describe('admin sidebar', () => {
   });
 });
 
-describe('the old developer panel is untouched', () => {
-  it('still renders DevtoolsPanel from its own shim', () => {
-    const source = read(`${ADMIN_DASHBOARD}/developer/page.tsx`);
+/** Every TypeScript file under a directory. Used by the retirement sweep. */
+function walk(dir: string): string[] {
+  try {
+    return readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+      entry.isDirectory()
+        ? walk(path.join(dir, entry.name))
+        : /\.tsx?$/.test(entry.name)
+          ? [path.join(dir, entry.name)]
+          : []
+    );
+  } catch {
+    return [];
+  }
+}
 
-    expect(source).toContain('DevtoolsPanel');
-    expect(source).toMatch(/await requireAdmin\(\)/);
-    // Item 10 must not have reached into the old surface.
-    expect(source).not.toContain('platform');
+describe('the old developer panel is retired (item 25)', () => {
+  /** Everything item 25 deleted, named one by one rather than by pattern. */
+  const RETIRED = [
+    '_admin-panel/modules/developer/ui/DevtoolsPanel.tsx',
+    '_admin-panel/modules/developer/suites.ts',
+    '_admin-panel/modules/developer/suites-catalog.ts',
+    // The panel's own UI, which nothing else imported.
+    '_admin-panel/modules/developer/ui/LiveQaTab.tsx',
+    '_admin-panel/modules/developer/ui/ResumeReaderTab.tsx',
+    '_admin-panel/modules/developer/ui/styles.ts',
+    '_admin-panel/modules/developer/ui/use-devtools.ts',
+    // The two endpoints that existed only to serve it.
+    'app/api/admin/developer/catalog/route.ts',
+    'app/api/admin/developer/test/route.ts',
+  ];
+
+  it('deleted every retired module', () => {
+    for (const modulePath of RETIRED) {
+      expect(exists(modulePath), `${modulePath} must be gone`).toBe(false);
+    }
+    expect(exists('_admin-panel/modules/developer/ui')).toBe(false);
   });
 
-  it('keeps the modules the old panel is built from', () => {
-    for (const modulePath of [
-      '_admin-panel/modules/developer/ui/DevtoolsPanel.tsx',
-      '_admin-panel/modules/developer/suites.ts',
-      '_admin-panel/modules/developer/suites-catalog.ts',
-    ]) {
-      expect(exists(modulePath), `${modulePath} must survive until item 25`).toBe(true);
+  it('leaves nothing importing them', () => {
+    // The whole repository, not a curated list: a single surviving import
+    // would be a broken build, and a stale one in a test would be a lie.
+    const roots = ['app', '_admin-panel', 'components', 'lib', 'services', '__tests__', 'scripts'];
+    const offenders: string[] = [];
+
+    for (const root of roots) {
+      for (const file of walk(path.join(process.cwd(), root))) {
+        const relative = file
+          .slice(process.cwd().length + 1)
+          .split(path.sep)
+          .join('/');
+        const source = readFileSync(file, 'utf8');
+
+        // Path-qualified specifiers, from anywhere in the repository.
+        const qualified =
+          /from '[^']*(suites-catalog|developer\/suites|DevtoolsPanel|ui\/LiveQaTab|ui\/ResumeReaderTab|ui\/use-devtools)'/.test(
+            source
+          );
+        // Bare relative ones count only inside the module that held them;
+        // plenty of unrelated code has its own `./styles`.
+        const sibling =
+          relative.startsWith('_admin-panel/modules/developer/') &&
+          /from '\.[./]*\/?(suites|suites-catalog|LiveQaTab|ResumeReaderTab|use-devtools|styles)'/.test(
+            source
+          );
+
+        if (qualified || sibling) offenders.push(relative);
+      }
     }
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('redirects /admin/developer to the platform instead of rendering a panel', () => {
+    const source = read(`${ADMIN_DASHBOARD}/developer/page.tsx`);
+
+    expect(source).toContain("redirect('/admin/platform')");
+    expect(source).toContain("from 'next/navigation'");
+    // No legacy UI, and no retired import.
+    expect(source).not.toContain('DevtoolsPanel');
+    expect(source).not.toMatch(/suites|LiveQaTab|ResumeReaderTab/);
+    // Thin: a redirect and its metadata, nothing else.
+    expect(source).not.toMatch(/className=|useState|<div/);
+  });
+
+  it('keeps the shared infrastructure the platform runs on', () => {
+    // Living under `modules/developer/` is not what made the panel legacy.
+    // These are what the Test Console, Live QA and the Resume Lab import.
+    for (const modulePath of [
+      '_admin-panel/modules/developer/guard.ts',
+      '_admin-panel/modules/developer/process-tree.ts',
+      '_admin-panel/modules/developer/live-qa/runner.ts',
+      '_admin-panel/modules/developer/live-qa/catalog.ts',
+      '_admin-panel/modules/developer/live-qa/fixtures.ts',
+      '_admin-panel/modules/developer/live-qa/triage.ts',
+      '_admin-panel/modules/developer/live-qa/playwright.config.ts',
+    ]) {
+      expect(exists(modulePath), `${modulePath} is shared and must survive`).toBe(true);
+    }
+  });
+
+  it('leaves the module barrel exporting only what survives', () => {
+    const barrel = read('_admin-panel/modules/developer/index.ts');
+
+    expect(barrel).not.toMatch(/suites/);
+    expect(barrel).toContain('guard');
   });
 });
 
@@ -268,6 +358,8 @@ describe('client safety', () => {
     '_admin-panel/platform/labs/registry.ts',
     '_admin-panel/platform/labs/view.ts',
     '_admin-panel/platform/labs/resume-import-ai/types.ts',
+    '_admin-panel/platform/labs/resume-import-ai/pricing.ts',
+    '_admin-panel/platform/labs/resume-import-ai/comparison-types.ts',
   ];
 
   it('keeps the scanner out of the shell', () => {

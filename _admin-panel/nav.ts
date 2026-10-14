@@ -5,7 +5,7 @@
  * Modules stay independent — do not couple developer ↔ users.
  */
 
-export type AdminPanelModuleId = 'overview' | 'developer' | 'platform' | 'users';
+export type AdminPanelModuleId = 'overview' | 'platform' | 'users';
 
 export type AdminPanelNavItem = {
   id: AdminPanelModuleId;
@@ -20,9 +20,11 @@ export type AdminPanelNavItem = {
  * Overview stays a thin admin home; Users still uses the existing `/admin/users` shim
  * until `modules/users` is implemented.
  *
- * `developer` and `platform` are two surfaces on purpose (PLATFORM_TODO item 10):
- * the first Developer Platform stays live and unchanged while the new one is
- * built beside it, and only item 25 retires the old one.
+ * `platform` is the Developer Platform. There was a second entry, `developer`,
+ * while the new one was built beside the old panel; item 25 retired the panel
+ * and removed the entry, so there is one canonical surface again.
+ * `/admin/developer` still resolves — it redirects to `/admin/platform` — but
+ * it is not a module, so it is not in the sidebar.
  */
 export const ADMIN_PANEL_NAV: AdminPanelNavItem[] = [
   {
@@ -32,16 +34,10 @@ export const ADMIN_PANEL_NAV: AdminPanelNavItem[] = [
     description: 'High-level platform stats',
   },
   {
-    id: 'developer',
-    href: '/admin/developer',
-    label: 'Developer',
-    description: 'Health, suites, Live QA, resume reader, smoke',
-  },
-  {
     id: 'platform',
     href: '/admin/platform',
     label: 'Platform',
-    description: 'Developer Platform: coverage map, drift, tests, labs (replaces Developer)',
+    description: 'Developer Platform: coverage map, drift, tests, labs',
   },
   {
     id: 'users',

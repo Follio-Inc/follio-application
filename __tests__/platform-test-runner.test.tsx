@@ -611,17 +611,9 @@ describe('the page wires the gate through', () => {
 
 describe('the old developer runner is untouched', () => {
   it('keeps its own route, runner and catalog', () => {
-    for (const modulePath of [
-      'app/api/admin/developer/test/route.ts',
-      '_admin-panel/modules/developer/suites.ts',
-      '_admin-panel/modules/developer/suites-catalog.ts',
-      '_admin-panel/modules/developer/ui/DevtoolsPanel.tsx',
-    ]) {
-      expect(existsSync(path.join(process.cwd(), modulePath)), modulePath).toBe(true);
-    }
-
-    // The old runner still reports stdout; the new one never imports it.
-    expect(read('_admin-panel/modules/developer/suites.ts')).toContain('stdout');
+    // Item 25 retired the old runner. What survives of this assertion is
+    // the part that was ever about the new one: it reaches the shared guard
+    // and nothing in the deleted suite registry.
     expect(read(RUNNER)).not.toContain('modules/developer/suites');
     expect(read(RUNNER)).toContain('modules/developer/guard');
   });
