@@ -4,6 +4,11 @@ import {
   assertCanRunDeveloperSuites,
   DeveloperSuitesDisabledError,
 } from '@/_admin-panel/modules/developer/guard';
+import {
+  auditPlatformAction,
+  deniedBody,
+  enforcePlatformAction,
+} from '@/_admin-panel/platform/auth';
 import { invalidateScannerCaches, quarantineCandidate } from '@/_admin-panel/platform/drift';
 import { requireAdmin } from '@/lib/admin';
 import { handleApiError } from '@/lib/errors';
@@ -34,10 +39,28 @@ type QuarantineBody = {
 export async function POST(request: Request) {
   try {
     const admin = await requireAdmin();
+
+    // Item 28: maintainer only. A runner is refused here, before the guard
+    // and before the body, and the refusal is audited — on top of every
+    // item-19 gate that follows.
+    const authz = await enforcePlatformAction({
+      adminId: admin.adminId,
+      permission: 'drift:quarantine',
+      action: 'quarantine',
+    });
+    if (!authz.allowed) return NextResponse.json(deniedBody(authz), { status: authz.status });
+
     assertCanRunDeveloperSuites();
 
     const body = (await request.json().catch(() => ({}))) as QuarantineBody;
     const candidateId = typeof body.candidateId === 'string' ? body.candidateId : '';
+
+    auditPlatformAction({
+      adminId: admin.adminId,
+      role: authz.role,
+      action: 'quarantine',
+      target: candidateId,
+    });
 
     if (!candidateId) {
       return NextResponse.json({ error: 'Missing candidateId' }, { status: 400 });

@@ -4,6 +4,11 @@ import {
   assertCanRunDeveloperSuites,
   DeveloperSuitesDisabledError,
 } from '@/_admin-panel/modules/developer/guard';
+import {
+  auditPlatformAction,
+  deniedBody,
+  enforcePlatformAction,
+} from '@/_admin-panel/platform/auth';
 // Imported from the module rather than the lab's barrel: the openresume
 // parser cannot be bundled by Turbopack (see the barrel's note), and routing
 // it through the barrel would break the lab page and the single-run route
@@ -50,6 +55,18 @@ function withPerf(result: ResumeComparisonResult): ResumeComparisonResult {
 export async function POST(request: Request) {
   try {
     const admin = await requireAdmin();
+
+    // Item 28: runner or maintainer, and the local-only guard, **both before
+    // the multipart body is touched**. `request.formData()` buffers and
+    // parses up to 5 MB; a refused caller, or a production deployment, must
+    // never pay for that just so the audit line can name a fixture.
+    const authz = await enforcePlatformAction({
+      adminId: admin.adminId,
+      permission: 'labs:compare',
+      action: 'labs:compare',
+    });
+    if (!authz.allowed) return NextResponse.json(deniedBody(authz), { status: authz.status });
+
     assertCanRunDeveloperSuites();
 
     const form = await request.formData().catch(() => null);
@@ -59,6 +76,13 @@ export async function POST(request: Request) {
 
     const fixtureId = form.get('fixtureId');
     const file = form.get('file');
+
+    auditPlatformAction({
+      adminId: admin.adminId,
+      role: authz.role,
+      action: 'labs:compare',
+      target: typeof fixtureId === 'string' && fixtureId.length > 0 ? fixtureId : 'upload',
+    });
 
     if (typeof fixtureId === 'string' && fixtureId.length > 0) {
       const result = await runResumeComparison(

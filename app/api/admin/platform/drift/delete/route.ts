@@ -4,6 +4,11 @@ import {
   assertCanRunDeveloperSuites,
   DeveloperSuitesDisabledError,
 } from '@/_admin-panel/modules/developer/guard';
+import {
+  auditPlatformAction,
+  deniedBody,
+  enforcePlatformAction,
+} from '@/_admin-panel/platform/auth';
 import { deleteQuarantined, invalidateScannerCaches } from '@/_admin-panel/platform/drift';
 import { requireAdmin } from '@/lib/admin';
 import { handleApiError } from '@/lib/errors';
@@ -35,11 +40,29 @@ type DeleteBody = {
 export async function POST(request: Request) {
   try {
     const admin = await requireAdmin();
+
+    // Item 28: maintainer only, before the guard and before the body. The
+    // typed approval below is unchanged — the role is an extra gate, not a
+    // replacement for it.
+    const authz = await enforcePlatformAction({
+      adminId: admin.adminId,
+      permission: 'drift:delete',
+      action: 'delete',
+    });
+    if (!authz.allowed) return NextResponse.json(deniedBody(authz), { status: authz.status });
+
     assertCanRunDeveloperSuites();
 
     const body = (await request.json().catch(() => ({}))) as DeleteBody;
     const quarantineId = typeof body.quarantineId === 'string' ? body.quarantineId : '';
     const confirmation = typeof body.confirmation === 'string' ? body.confirmation : '';
+
+    auditPlatformAction({
+      adminId: admin.adminId,
+      role: authz.role,
+      action: 'delete',
+      target: quarantineId,
+    });
 
     if (!quarantineId) {
       return NextResponse.json({ error: 'Missing quarantineId' }, { status: 400 });

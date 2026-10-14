@@ -792,13 +792,24 @@ describe('the gates', () => {
 
       expect(source).toMatch(/await requireAdmin\(\)/);
       expect(source).toContain('assertCanRunDeveloperSuites()');
-      expect(handler.indexOf('requireAdmin')).toBeLessThan(handler.indexOf(action[1]));
+
+      // Item 28 reordered the handler: the body is now parsed before the
+      // local-only guard, so the role gate can audit the real target and so
+      // a runner is told their role is insufficient rather than that
+      // devtools are disabled. What the ordering has to guarantee is
+      // unchanged — identity, then role, then the local gate, all strictly
+      // before any destructive call.
+      expect(handler.indexOf('requireAdmin')).toBeLessThan(
+        handler.indexOf('enforcePlatformAction')
+      );
+      expect(handler.indexOf('enforcePlatformAction')).toBeLessThan(
+        handler.indexOf('assertCanRunDeveloperSuites')
+      );
       expect(handler.indexOf('assertCanRunDeveloperSuites')).toBeLessThan(
         handler.indexOf(action[1])
       );
-      expect(handler.indexOf('assertCanRunDeveloperSuites')).toBeLessThan(
-        handler.indexOf('request.json')
-      );
+      // And nothing destructive runs before the role has been checked.
+      expect(handler.indexOf('enforcePlatformAction')).toBeLessThan(handler.indexOf(action[1]));
       expect(source).toContain("from '@/_admin-panel/modules/developer/guard'");
       expect(source).toContain('DeveloperSuitesDisabledError');
       expect(source).toContain("runtime = 'nodejs'");
@@ -898,7 +909,8 @@ describe('the panel', () => {
     expect(read(PANEL).startsWith("'use client'")).toBe(true);
     expect(read('_admin-panel/platform/ui/drift-report.tsx')).not.toContain("'use client'");
     expect(read('_admin-panel/platform/ui/drift-report.tsx')).not.toContain('<button');
-    expect(read(DRIFT_PAGE)).toContain('quarantinePanel={<DriftQuarantinePanel');
+    expect(read(DRIFT_PAGE)).toContain('<DriftQuarantinePanel');
+    expect(read(DRIFT_PAGE)).toContain('quarantinePanel={');
   });
 
   it('shows the evidence and one quarantine control per candidate', () => {

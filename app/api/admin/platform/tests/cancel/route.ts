@@ -4,6 +4,11 @@ import {
   assertCanRunDeveloperSuites,
   DeveloperSuitesDisabledError,
 } from '@/_admin-panel/modules/developer/guard';
+import {
+  auditPlatformAction,
+  deniedBody,
+  enforcePlatformAction,
+} from '@/_admin-panel/platform/auth';
 import { requestCancel } from '@/_admin-panel/platform/tests';
 import { requireAdmin } from '@/lib/admin';
 import { handleApiError } from '@/lib/errors';
@@ -33,11 +38,27 @@ type CancelBody = {
  */
 export async function POST(request: Request) {
   try {
-    await requireAdmin();
+    const admin = await requireAdmin();
+
+    // Item 28: runner or maintainer, before the guard and before the body.
+    const authz = await enforcePlatformAction({
+      adminId: admin.adminId,
+      permission: 'tests:cancel',
+      action: 'tests:cancel',
+    });
+    if (!authz.allowed) return NextResponse.json(deniedBody(authz), { status: authz.status });
+
     assertCanRunDeveloperSuites();
 
     const body = (await request.json().catch(() => ({}))) as CancelBody;
     const runId = typeof body.runId === 'string' ? body.runId : '';
+
+    auditPlatformAction({
+      adminId: admin.adminId,
+      role: authz.role,
+      action: 'tests:cancel',
+      target: runId,
+    });
 
     if (!runId) {
       return NextResponse.json({ error: 'Missing runId' }, { status: 400 });

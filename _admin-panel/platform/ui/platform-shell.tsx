@@ -4,6 +4,8 @@ import { ExternalLink, FlaskConical, GitCompare, LayoutDashboard, TestTube } fro
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
+import type { PlatformRole } from '../auth/types';
+
 import { cn } from '@/lib/utils';
 
 import {
@@ -36,7 +38,26 @@ const ICONS: Record<PlatformSectionId, React.ElementType> = {
   drift: GitCompare,
 };
 
-export function PlatformShell({ children }: { children: React.ReactNode }) {
+/**
+ * What each role may do, in one sentence (item 28).
+ *
+ * Shown next to the badge so an operator who cannot see a control knows why,
+ * rather than assuming the platform is broken.
+ */
+const ROLE_SUMMARY: Record<PlatformRole, string> = {
+  viewer: 'read-only — you can inspect everything and run nothing',
+  runner: 'you can run tests, Live QA and the labs, but not quarantine or delete',
+  maintainer: 'full access, including quarantine, delete and role assignment',
+};
+
+export function PlatformShell({
+  children,
+  role,
+}: {
+  children: React.ReactNode;
+  /** The signed-in admin's Platform role. Null when it could not be read. */
+  role?: PlatformRole | null;
+}) {
   const pathname = usePathname();
 
   return (
@@ -47,6 +68,18 @@ export function PlatformShell({ children }: { children: React.ReactNode }) {
           <span className="inline-flex items-center rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
             Internal
           </span>
+          {role !== undefined && (
+            <span
+              className="inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium"
+              title={
+                role === null
+                  ? 'Your Platform role could not be read, so no action will be permitted.'
+                  : ROLE_SUMMARY[role]
+              }
+            >
+              {role ?? 'role unavailable'}
+            </span>
+          )}
         </div>
         <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
           One place to see whether Follio is healthy, what is covered by tests, and where the

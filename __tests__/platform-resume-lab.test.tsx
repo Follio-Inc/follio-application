@@ -536,8 +536,12 @@ describe('the API boundary', () => {
     expect(handler.indexOf('assertCanRunDeveloperSuites')).toBeLessThan(
       handler.indexOf('runResumeLab')
     );
-    expect(handler.indexOf('assertCanRunDeveloperSuites')).toBeLessThan(
-      handler.indexOf('formData')
+    // Item 28 put the role gate between them, and the form is read first so
+    // the audit can name the fixture. Identity still precedes the role check,
+    // which still precedes the local gate, which still precedes the run.
+    expect(handler.indexOf('requireAdmin')).toBeLessThan(handler.indexOf('enforcePlatformAction'));
+    expect(handler.indexOf('enforcePlatformAction')).toBeLessThan(
+      handler.indexOf('assertCanRunDeveloperSuites')
     );
     expect(route).toContain("from '@/_admin-panel/modules/developer/guard'");
     expect(route).toContain("runtime = 'nodejs'");

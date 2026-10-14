@@ -478,8 +478,12 @@ describe('the API boundary', () => {
     expect(handler.indexOf('assertCanRunDeveloperSuites')).toBeLessThan(
       handler.indexOf('runCategory')
     );
-    expect(handler.indexOf('assertCanRunDeveloperSuites')).toBeLessThan(
-      handler.indexOf('request.json')
+    // Item 28: the body is parsed before the local gate so the role check can
+    // audit the category that was asked for. Identity still precedes the role
+    // check, which precedes the gate, which precedes the run.
+    expect(handler.indexOf('requireAdmin')).toBeLessThan(handler.indexOf('enforcePlatformAction'));
+    expect(handler.indexOf('enforcePlatformAction')).toBeLessThan(
+      handler.indexOf('assertCanRunDeveloperSuites')
     );
     // Reuses the existing gate rather than a weaker copy.
     expect(source).toContain("from '@/_admin-panel/modules/developer/guard'");
@@ -600,7 +604,10 @@ describe('the page wires the gate through', () => {
 
   it('evaluates the gate on the server and hands it to the panel', () => {
     expect(source).toContain('canRunDeveloperSuites()');
-    expect(source).toContain('canRun={canRunDeveloperSuites()}');
+    // Item 28 made the gate the conjunction of the local-only guard and the
+    // Platform role, so one closed control has one explanation.
+    expect(source).toContain("canRunDeveloperSuites() && may('tests:run')");
+    expect(source).toContain('getPlatformRole(');
     expect(source).toContain('listRunnableCategories()');
     // Still the item-11 inventory, still a thin shim.
     expect(source).toContain('buildTestInventory()');

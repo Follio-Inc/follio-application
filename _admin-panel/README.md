@@ -73,6 +73,47 @@ lab page and the single-run endpoint keep working under Turbopack. `next build` 
 unaffected — webpack builds the route fine. If the parser is ever retired, or Turbopack learns to
 leave `spawn` arguments alone, this script stops being needed.
 
+## Roles
+
+Admin sign-in gets you in; your **Platform role** decides what you can do once you are.
+
+|                                                                                      | viewer | runner | maintainer |
+| ------------------------------------------------------------------------------------ | :----: | :----: | :--------: |
+| Read every Platform page, inventory, history, drift finding, audit trail, lab result |   ✅   |   ✅   |     ✅     |
+| `tests/active`, `live-qa/artifact`                                                   |   ✅   |   ✅   |     ✅     |
+| Run Vitest, run Live QA, cancel a run                                                |   ❌   |   ✅   |     ✅     |
+| Run the Resume Lab and the comparison                                                |   ❌   |   ✅   |     ✅     |
+| Quarantine, restore, delete                                                          |   ❌   |   ❌   |     ✅     |
+| Assign Platform roles                                                                |   ❌   |   ❌   |     ✅     |
+
+**The source is `Admin.platformRole`** — a non-null Prisma enum, read from the database on the
+server. Never from a request body, a query parameter, a header or an environment variable, and
+never inferred from an email address or domain. A stored value outside the three fails **closed**:
+unrecognised means no, never maintainer.
+
+**Existing admins became `maintainer`** when the column was added, in the same statement, so nobody
+lost access. Roles are therefore opt-in demotion: nothing is restricted until someone is explicitly
+set lower. The three admins on this database all read `maintainer`.
+
+**The last maintainer cannot be demoted.** `roles:assign` is maintainer-only, so demoting the last
+one would leave nobody able to promote anyone — and this platform has no break-glass path. The
+floor is enforced server-side against a live count and the refusal is audited.
+
+**Server-side checks are authoritative.** `_admin-panel/platform/auth/` holds the role union, the
+permission map and the one function that compares them; no route compares a role itself. Controls
+are hidden to match your role, but hiding is courtesy — every privileged route checks again and
+refuses a direct call.
+
+### What is audited
+
+Item 19's append-only trail at `platform/.audit/audit-v1.jsonl`, extended rather than replaced. It
+now records **nine** actions — quarantine, restore, delete, `tests:run`, `live-qa:run`,
+`tests:cancel`, `labs:run`, `labs:compare` and `roles:assign` — each with the actor's admin id and
+their role at the time. **Refused attempts are recorded too**, including role denials, because an
+admin asking for something they cannot have is the event worth keeping. Reads are not audited.
+Records written before item 28 have no `actorRole` and still parse; it reads as `null`, meaning
+"not recorded", never "no role".
+
 ## Performance baselines
 
 Every duration the platform shows is also compared with its own past. Nothing is benchmarked —

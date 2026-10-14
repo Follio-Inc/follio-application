@@ -90,10 +90,36 @@ export type QuarantineRecord = {
   restoredAt?: string;
 };
 
-export type AuditAction = 'quarantine' | 'delete' | 'restore';
+/**
+ * Every privileged Platform action the trail records.
+ *
+ * The first three are item 19's and their records are unchanged. Item 28
+ * added the rest: the execution routes wrote nothing before, so a test run
+ * or a lab run left no trace of who started it.
+ */
+export const AUDIT_ACTIONS = [
+  'quarantine',
+  'delete',
+  'restore',
+  'tests:run',
+  'live-qa:run',
+  'tests:cancel',
+  'labs:run',
+  'labs:compare',
+  'roles:assign',
+] as const;
 
-/** Whether the attempt did what it set out to do. Refusals are recorded too. */
-export type AuditResult = 'ok' | 'refused' | 'failed';
+export type AuditAction = (typeof AUDIT_ACTIONS)[number];
+
+/**
+ * Whether the attempt did what it set out to do. Refusals are recorded too.
+ *
+ * `denied-role` is item 28's: an authenticated admin asked for something
+ * their role does not carry. Its own result rather than a `refused` with a
+ * reason string, because "you may not" and "the thing you named is not
+ * eligible" are different events and only one of them is about a person.
+ */
+export type AuditResult = 'ok' | 'refused' | 'failed' | 'denied-role';
 
 /**
  * One line of the audit trail.
@@ -122,6 +148,14 @@ export type AuditEvent = {
    */
   approval: string | null;
   actorId: string | null;
+  /**
+   * The acting admin's Platform role at the time (item 28).
+   *
+   * Optional, so every record item 19 wrote still parses: those lines have no
+   * `actorRole` and are read as `null` rather than rejected. Null therefore
+   * means "not recorded", never "no role".
+   */
+  actorRole?: string | null;
   /** Why a refusal or failure happened. Null on success. */
   reason: string | null;
 };

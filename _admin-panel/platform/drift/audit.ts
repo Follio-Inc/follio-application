@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
+import { AUDIT_ACTIONS } from './quarantine-types';
 import type { AuditEvent } from './quarantine-types';
 import { QUARANTINE_FORMAT_VERSION } from './quarantine-types';
 
@@ -94,9 +95,10 @@ function parseEvent(line: string): AuditEvent | null {
   if (!isRecord(value)) return null;
   if (value.version !== QUARANTINE_FORMAT_VERSION) return null;
   if (typeof value.id !== 'string' || typeof value.at !== 'string') return null;
-  if (value.action !== 'quarantine' && value.action !== 'delete' && value.action !== 'restore') {
-    return null;
-  }
+  // Against the shared list, not a copy: item 28 added six actions, and a
+  // reader with its own hardcoded three would have silently dropped every
+  // record of them while looking like it worked.
+  if (!(AUDIT_ACTIONS as readonly unknown[]).includes(value.action)) return null;
 
   return value as unknown as AuditEvent;
 }

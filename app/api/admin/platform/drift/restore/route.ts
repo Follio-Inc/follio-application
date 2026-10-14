@@ -4,6 +4,11 @@ import {
   assertCanRunDeveloperSuites,
   DeveloperSuitesDisabledError,
 } from '@/_admin-panel/modules/developer/guard';
+import {
+  auditPlatformAction,
+  deniedBody,
+  enforcePlatformAction,
+} from '@/_admin-panel/platform/auth';
 import { invalidateScannerCaches, restoreQuarantined } from '@/_admin-panel/platform/drift';
 import { requireAdmin } from '@/lib/admin';
 import { handleApiError } from '@/lib/errors';
@@ -27,10 +32,26 @@ type RestoreBody = {
 export async function POST(request: Request) {
   try {
     const admin = await requireAdmin();
+
+    // Item 28: maintainer only, before the guard and before the body.
+    const authz = await enforcePlatformAction({
+      adminId: admin.adminId,
+      permission: 'drift:restore',
+      action: 'restore',
+    });
+    if (!authz.allowed) return NextResponse.json(deniedBody(authz), { status: authz.status });
+
     assertCanRunDeveloperSuites();
 
     const body = (await request.json().catch(() => ({}))) as RestoreBody;
     const quarantineId = typeof body.quarantineId === 'string' ? body.quarantineId : '';
+
+    auditPlatformAction({
+      adminId: admin.adminId,
+      role: authz.role,
+      action: 'restore',
+      target: quarantineId,
+    });
 
     if (!quarantineId) {
       return NextResponse.json({ error: 'Missing quarantineId' }, { status: 400 });

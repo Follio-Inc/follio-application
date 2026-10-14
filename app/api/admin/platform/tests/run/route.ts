@@ -4,6 +4,11 @@ import {
   assertCanRunDeveloperSuites,
   DeveloperSuitesDisabledError,
 } from '@/_admin-panel/modules/developer/guard';
+import {
+  auditPlatformAction,
+  deniedBody,
+  enforcePlatformAction,
+} from '@/_admin-panel/platform/auth';
 import { isKnownCategory, runCategory } from '@/_admin-panel/platform/tests';
 import { observeVitest, recordObservations } from '@/_admin-panel/platform/perf';
 import { requireAdmin } from '@/lib/admin';
@@ -34,11 +39,30 @@ type RunBody = {
  */
 export async function POST(request: Request) {
   try {
-    await requireAdmin();
+    const admin = await requireAdmin();
+
+    // Item 28: runner or maintainer. Before the local-only guard, so a
+    // viewer learns their role is insufficient rather than that devtools are
+    // disabled — and before the body is read, so a refused caller's payload
+    // is never parsed. The refusal is audited against the action.
+    const authz = await enforcePlatformAction({
+      adminId: admin.adminId,
+      permission: 'tests:run',
+      action: 'tests:run',
+    });
+    if (!authz.allowed) return NextResponse.json(deniedBody(authz), { status: authz.status });
+
     assertCanRunDeveloperSuites();
 
     const body = (await request.json()) as RunBody;
     const categoryId = typeof body.categoryId === 'string' ? body.categoryId : '';
+
+    auditPlatformAction({
+      adminId: admin.adminId,
+      role: authz.role,
+      action: 'tests:run',
+      target: categoryId,
+    });
 
     if (!categoryId || !isKnownCategory(categoryId)) {
       return NextResponse.json({ error: 'Unknown categoryId' }, { status: 400 });

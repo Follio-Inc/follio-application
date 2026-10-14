@@ -1,5 +1,6 @@
 import { buildDriftView, buildQuarantineView } from '@/_admin-panel/platform/drift';
 import { DriftQuarantinePanel, DriftReportView } from '@/_admin-panel/platform/ui';
+import { getPlatformRole, hasPlatformPermission } from '@/_admin-panel/platform/auth';
 import { requireAdmin } from '@/lib/admin';
 
 export const dynamic = 'force-dynamic';
@@ -21,12 +22,30 @@ export const metadata = {
  * never what this render happened to see.
  */
 export default async function AdminPlatformDriftPage() {
-  await requireAdmin();
+  const admin = await requireAdmin();
+  const role = await getPlatformRole(admin.adminId);
+  const mayMaintain = role !== null && hasPlatformPermission(role, 'drift:quarantine');
 
   return (
     <DriftReportView
       view={buildDriftView()}
-      quarantinePanel={<DriftQuarantinePanel view={buildQuarantineView()} />}
+      quarantinePanel={
+        <DriftQuarantinePanel
+          view={(() => {
+            const view = buildQuarantineView();
+            // Item 28: maintainer only. A runner sees the findings and the
+            // audit trail and no destructive controls; the three routes
+            // refuse them anyway.
+            return mayMaintain
+              ? view
+              : {
+                  ...view,
+                  canAct: false,
+                  gateReason: `Quarantine, restore and delete are maintainer-only. Your Platform role is ${role ?? 'unavailable'}.`,
+                };
+          })()}
+        />
+      }
     />
   );
 }

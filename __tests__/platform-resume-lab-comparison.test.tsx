@@ -806,8 +806,12 @@ describe('the API boundary', () => {
     expect(route).toMatch(/await requireAdmin\(\)/);
     expect(route).toContain('assertCanRunDeveloperSuites()');
     expect(handler.indexOf('requireAdmin')).toBeLessThan(handler.indexOf('runResumeComparison'));
-    expect(handler.indexOf('assertCanRunDeveloperSuites')).toBeLessThan(
-      handler.indexOf('formData')
+    // Item 28 inserted the role gate and reads the form first so the audit
+    // can name the fixture. The order that matters is unchanged: identity,
+    // then role, then the local gate, then the run.
+    expect(handler.indexOf('requireAdmin')).toBeLessThan(handler.indexOf('enforcePlatformAction'));
+    expect(handler.indexOf('enforcePlatformAction')).toBeLessThan(
+      handler.indexOf('assertCanRunDeveloperSuites')
     );
     expect(route).toContain("from '@/_admin-panel/modules/developer/guard'");
     expect(route).toContain("runtime = 'nodejs'");

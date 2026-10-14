@@ -4,6 +4,11 @@ import {
   assertCanRunDeveloperSuites,
   DeveloperSuitesDisabledError,
 } from '@/_admin-panel/modules/developer/guard';
+import {
+  auditPlatformAction,
+  deniedBody,
+  enforcePlatformAction,
+} from '@/_admin-panel/platform/auth';
 import { getLiveQaPathway } from '@/_admin-panel/modules/developer/live-qa';
 import { runPathway } from '@/_admin-panel/platform/tests';
 import { requireAdmin } from '@/lib/admin';
@@ -34,11 +39,27 @@ type RunBody = {
  */
 export async function POST(request: Request) {
   try {
-    await requireAdmin();
+    const admin = await requireAdmin();
+
+    // Item 28: runner or maintainer, before the guard and before the body.
+    const authz = await enforcePlatformAction({
+      adminId: admin.adminId,
+      permission: 'live-qa:run',
+      action: 'live-qa:run',
+    });
+    if (!authz.allowed) return NextResponse.json(deniedBody(authz), { status: authz.status });
+
     assertCanRunDeveloperSuites();
 
     const body = (await request.json()) as RunBody;
     const pathwayId = typeof body.pathwayId === 'string' ? body.pathwayId : '';
+
+    auditPlatformAction({
+      adminId: admin.adminId,
+      role: authz.role,
+      action: 'live-qa:run',
+      target: pathwayId,
+    });
 
     if (!pathwayId || !getLiveQaPathway(pathwayId)) {
       return NextResponse.json({ error: 'Unknown pathwayId' }, { status: 400 });
