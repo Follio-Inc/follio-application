@@ -2,6 +2,8 @@ import Link from 'next/link';
 
 import { PLATFORM_ROOT, getPlatformSection, type PlatformSectionId } from '../nav';
 
+import { platformAction } from './action-styles';
+
 /**
  * A routed section that has no implementation yet (PLATFORM_TODO item 10).
  *
@@ -72,10 +74,7 @@ export function PlatformSectionPlaceholder({ id }: { id: PlatformSectionId }) {
         )}
       </section>
 
-      <Link
-        href={PLATFORM_ROOT}
-        className="inline-flex text-xs font-medium text-muted-foreground underline underline-offset-2 hover:text-foreground hover:no-underline"
-      >
+      <Link href={PLATFORM_ROOT} className={platformAction({ tone: 'quiet', size: 'compact' })}>
         Back to the platform overview
       </Link>
     </div>

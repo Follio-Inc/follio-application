@@ -87,8 +87,8 @@ export function PlatformShell({
         </p>
       </header>
 
-      <nav aria-label="Developer Platform sections" className="mt-5 border-b">
-        <ul className="-mb-px flex flex-wrap gap-1">
+      <nav aria-label="Developer Platform sections" className="mt-5">
+        <ul className="inline-flex flex-wrap gap-1 rounded-lg border bg-muted/40 p-1">
           {PLATFORM_SECTIONS.map((section) => {
             const Icon = ICONS[section.id];
             const isActive = isSectionActive(section, pathname);
@@ -99,16 +99,24 @@ export function PlatformShell({
                   href={section.href}
                   aria-current={isActive ? 'page' : undefined}
                   className={cn(
-                    'flex items-center gap-2 border-b-2 px-3 py-2 text-sm font-medium transition-colors',
+                    'flex h-9 items-center gap-2 rounded-md px-3 text-sm font-medium transition-colors',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
                     isActive
-                      ? 'border-primary text-primary'
-                      : 'border-transparent text-muted-foreground hover:border-border hover:text-foreground'
+                      ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                      : 'text-muted-foreground hover:bg-background hover:text-foreground'
                   )}
                 >
                   <Icon className="h-4 w-4 shrink-0" />
                   <span>{section.label}</span>
                   {section.status === 'planned' && (
-                    <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    <span
+                      className={cn(
+                        'rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
+                        isActive
+                          ? 'bg-primary-foreground/20 text-primary-foreground'
+                          : 'bg-muted text-muted-foreground'
+                      )}
+                    >
                       Planned
                     </span>
                   )}

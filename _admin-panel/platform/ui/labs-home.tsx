@@ -4,6 +4,8 @@ import { cn } from '@/lib/utils';
 
 import type { LabCategory, LabFeature, LabStatus, LabsView } from '../labs/types';
 
+import { platformAction } from './action-styles';
+
 /**
  * Labs home: every feature, and whether it has a workbench
  * (PLATFORM_TODO item 20).
@@ -71,15 +73,12 @@ function FeatureRow({ feature }: { feature: LabFeature }) {
 
       <p className="mt-1 text-xs text-muted-foreground">
         {feature.status === 'available' && feature.route !== null && (
-          <>
-            <Link
-              href={feature.route}
-              className="font-medium text-foreground underline underline-offset-2 hover:no-underline"
-            >
+          <span className="flex flex-wrap items-center gap-2">
+            <Link href={feature.route} className={platformAction()}>
               Open the {feature.labId} lab
-            </Link>{' '}
-            · <code className="font-mono">{feature.route}</code>
-          </>
+            </Link>
+            <code className="font-mono">{feature.route}</code>
+          </span>
         )}
         {feature.status === 'planned' && (
           <>

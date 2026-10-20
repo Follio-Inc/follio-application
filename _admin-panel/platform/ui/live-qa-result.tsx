@@ -2,6 +2,8 @@ import { cn } from '@/lib/utils';
 
 import type { PathwayArtifact, PathwayCaseResult, PathwayRunResult } from '../tests/live-qa-types';
 
+import { platformAction } from './action-styles';
+
 /**
  * A finished Live QA run, read from `report.json` (PLATFORM_TODO item 14).
  *
@@ -73,7 +75,7 @@ function ArtifactLink({ artifact }: { artifact: PathwayArtifact }) {
       href={`${ARTIFACT_ROUTE}?path=${encodeURIComponent(artifact.path)}`}
       target="_blank"
       rel="noreferrer"
-      className="rounded bg-muted px-1.5 py-0.5 text-[11px] font-medium text-foreground underline underline-offset-2 hover:no-underline"
+      className={platformAction({ tone: 'quiet', size: 'compact' })}
     >
       {artifact.name}
     </a>

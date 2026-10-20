@@ -3,6 +3,8 @@ import Link from 'next/link';
 
 import { LEGACY_DEVELOPER_ROOT, listPlatformTools } from '../nav';
 
+import { platformAction } from './action-styles';
+
 /**
  * The Developer Platform home (PLATFORM_TODO item 10).
  *
@@ -54,7 +56,13 @@ export function PlatformOverview() {
                   Arrives in PLATFORM_TODO {section.deliveredBy}
                 </p>
               )}
-              <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-foreground">
+              <span
+                className={platformAction({
+                  tone: 'quiet',
+                  size: 'compact',
+                  className: 'mt-3 self-start group-hover:bg-muted',
+                })}
+              >
                 Open section
                 <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
               </span>
