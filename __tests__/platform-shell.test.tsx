@@ -348,6 +348,7 @@ describe('client safety', () => {
     `${PLATFORM_UI}/labs-home.tsx`,
     `${PLATFORM_UI}/resume-lab.tsx`,
     `${PLATFORM_UI}/action-styles.ts`,
+    `${PLATFORM_UI}/drift-change-panel.tsx`,
     '_admin-panel/platform/nav.ts',
     '_admin-panel/platform/tests/types.ts',
     '_admin-panel/platform/tests/execution-types.ts',

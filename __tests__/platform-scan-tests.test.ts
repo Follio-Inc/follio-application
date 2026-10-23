@@ -203,6 +203,12 @@ describe('scanTestAttribution on the real tree', () => {
       // Item 29's: the cap is only real if admission precedes the provider
       // call, and ordering inside a handler is a fact about source text.
       '__tests__/platform-cost.test.ts',
+      // Drift intelligence's: it reads `change-analysis.ts` to pin which git
+      // subcommands can run, reads the route to prove it takes no input, and
+      // reads its own source to prove no test can reach the real repository.
+      // All three are facts about source text and nothing else can check them.
+      // Sorts before the item-19 file below ('c' before 'q').
+      '__tests__/platform-drift-change.test.tsx',
       // Item 19's. The label is right: that file names the coverage map and
       // the quarantine store directly, to assert neither was touched, and it
       // reads the engine's own source to prove it cannot shell out. Left
@@ -232,7 +238,7 @@ describe('scanTestAttribution on the real tree', () => {
       // about module source. Both can only be checked by reading them.
       '__tests__/platform-watch.test.ts',
     ]);
-    expect(report.summary.sourceText).toBe(14);
+    expect(report.summary.sourceText).toBe(15);
   });
 
   it('classifies every test exactly once', () => {

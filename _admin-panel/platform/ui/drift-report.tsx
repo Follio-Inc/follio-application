@@ -470,10 +470,19 @@ function SignalSection({
 export function DriftReportView({
   view,
   quarantinePanel,
+  changePanel,
 }: {
   view: DriftView;
   /** Item 19's destructive panel, when the route supplies one. */
   quarantinePanel?: React.ReactNode;
+  /**
+   * The Drift-intelligence change analysis, when the route supplies one.
+   *
+   * A slot, like the quarantine panel: it ships JavaScript and asks the server
+   * a question on click, while everything above it stays server-rendered. The
+   * findings above are unaffected by whether it is passed.
+   */
+  changePanel?: React.ReactNode;
 }) {
   const { summary } = view;
 
@@ -610,6 +619,8 @@ export function DriftReportView({
           />
         ))}
       </div>
+
+      {changePanel}
 
       {quarantinePanel}
 

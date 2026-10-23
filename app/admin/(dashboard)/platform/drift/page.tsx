@@ -1,5 +1,9 @@
 import { buildDriftView, buildQuarantineView } from '@/_admin-panel/platform/drift';
-import { DriftQuarantinePanel, DriftReportView } from '@/_admin-panel/platform/ui';
+import {
+  DriftChangePanel,
+  DriftQuarantinePanel,
+  DriftReportView,
+} from '@/_admin-panel/platform/ui';
 import { getPlatformRole, hasPlatformPermission } from '@/_admin-panel/platform/auth';
 import { requireAdmin } from '@/lib/admin';
 
@@ -29,6 +33,7 @@ export default async function AdminPlatformDriftPage() {
   return (
     <DriftReportView
       view={buildDriftView()}
+      changePanel={<DriftChangePanel />}
       quarantinePanel={
         <DriftQuarantinePanel
           view={(() => {

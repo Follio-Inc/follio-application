@@ -50,6 +50,7 @@ const ROUTES = {
 
 /** Routes a viewer may call. */
 const READ_ROUTES = [
+  'app/api/admin/platform/drift/analyze/route.ts',
   'app/api/admin/platform/tests/active/route.ts',
   'app/api/admin/platform/tests/live-qa/artifact/route.ts',
 ];

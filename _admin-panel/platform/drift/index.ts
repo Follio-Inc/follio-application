@@ -17,6 +17,23 @@
  */
 
 export {
+  analyzeLatestChange,
+  parseNameStatus,
+  readLatestCommit,
+  toChangeStatus,
+} from './change-analysis';
+export type { ChangeAnalysisOptions, GitResult, GitRunner } from './change-analysis';
+export type {
+  AffectedFeature,
+  AffectedPathway,
+  AnalyzedCommit,
+  ChangeAnalysis,
+  ChangeAnalysisError,
+  ChangeAnalysisSummary,
+  ChangedFile,
+  ChangeStatus,
+} from './change-types';
+export {
   buildDriftView,
   toDriftView,
   FAILING_GROUPS,

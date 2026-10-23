@@ -867,12 +867,16 @@ describe('drift report integration', { timeout: 30_000 }, () => {
       // them are excluded by the `app/admin` and `app/api/admin` entries, so
       // `mapped` has stayed at 130 throughout — none of this is product
       // surface, and retiring the panel changed no product behaviour.
-      total: 163,
+      //
+      // Drift intelligence added a ninth: `platform/drift/analyze`. It is
+      // excluded by the same `app/api/admin` entry, so `total` and `excluded`
+      // each moved by one and `mapped` did not move at all.
+      total: 164,
       mapped: 130,
-      excluded: 33,
+      excluded: 34,
       unmapped: 0,
       pages: 49,
-      routes: 114,
+      routes: 115,
     });
     expect(pathways?.signal === 'live-qa-pathways' && pathways.summary).toMatchObject({
       total: 9,
