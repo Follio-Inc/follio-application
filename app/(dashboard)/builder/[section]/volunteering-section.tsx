@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { Switch } from '@/components/ui/switch';
 import { notifyProfileUpdated } from '@/lib/events';
+import { stripHtmlTags } from '@/lib/html-utils';
 import { cn } from '@/lib/utils';
 
 import { SortableCardList } from '../components/sortable-card-list';
@@ -280,7 +281,7 @@ export function VolunteeringSection({ section, embedded }: VolunteeringSectionPr
                 )}
                 {item.description && (
                   <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
-                    {item.description}
+                    {stripHtmlTags(item.description)}
                   </p>
                 )}
                 {item.url && (

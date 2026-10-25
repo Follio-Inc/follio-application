@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { notifyProfileUpdated } from '@/lib/events';
+import { stripHtmlTags } from '@/lib/html-utils';
 import { cn } from '@/lib/utils';
 
 import { SortableCardList } from '../components/sortable-card-list';
@@ -266,7 +267,7 @@ export function PublicationsSection({ section, embedded }: PublicationsSectionPr
                 {item.date && <p className="mt-1 text-xs text-muted-foreground">{item.date}</p>}
                 {item.description && (
                   <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
-                    {item.description}
+                    {stripHtmlTags(item.description)}
                   </p>
                 )}
                 <div className="mt-2 flex flex-wrap gap-2">

@@ -670,3 +670,28 @@ describe('Validation Schemas', () => {
     });
   });
 });
+
+describe('rich text limits', () => {
+  const paragraph = (text: string) => `<p style="text-align: justify">${text}</p>`;
+
+  it('counts the visible text, not the formatting tags', () => {
+    // 10 paragraphs of 45 characters: 450 visible (+ line breaks), ~750 with tags.
+    const html = Array.from({ length: 10 }, () => paragraph('x'.repeat(45))).join('');
+    expect(html.length).toBeGreaterThan(500);
+    expect(() => AwardSchema.parse({ title: 'Award', description: html })).not.toThrow();
+  });
+
+  it('still rejects text over the limit', () => {
+    const result = AwardSchema.safeParse({
+      title: 'Award',
+      description: paragraph('x'.repeat(501)),
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toBe('Must be 500 characters or fewer.');
+  });
+
+  it('caps the HTML at 10× the limit', () => {
+    const html = `<p>${'<strong></strong>'.repeat(1200)}</p>`;
+    expect(ProjectSchema.safeParse({ title: 'Project', description: html }).success).toBe(false);
+  });
+});

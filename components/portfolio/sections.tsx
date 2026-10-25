@@ -40,6 +40,8 @@ import {
 import Image from 'next/image';
 import React from 'react';
 
+import { RichHtml } from '@/components/rich-html';
+
 import type {
   AboutContent,
   AnimationLevel,
@@ -1094,7 +1096,10 @@ export function PortfolioAwardListSection({
                     {award.date && <span>{formatExpDate(award.date, false)}</span>}
                   </div>
                   {award.description && (
-                    <p className="p-body p-text-muted mt-2 text-sm">{award.description}</p>
+                    <RichHtml
+                      html={award.description}
+                      className="p-body p-text-muted mt-2 text-sm"
+                    />
                   )}
                 </div>
               </div>

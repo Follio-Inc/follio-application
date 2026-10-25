@@ -26,6 +26,7 @@ import {
 
 import { useState } from 'react';
 
+import { RichHtml } from '@/components/rich-html';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -897,9 +898,10 @@ export function PortfolioView({
                     <p className="text-xs text-muted-foreground/70">{formatDate(award.date)}</p>
                   )}
                   {award.description && (
-                    <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
-                      {award.description}
-                    </p>
+                    <RichHtml
+                      html={award.description}
+                      className="mt-2 line-clamp-2 text-sm text-muted-foreground"
+                    />
                   )}
                   {award.url && (
                     <a

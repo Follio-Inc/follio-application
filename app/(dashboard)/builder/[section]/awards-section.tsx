@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { notifyProfileUpdated } from '@/lib/events';
+import { stripHtmlTags } from '@/lib/html-utils';
 import { useReorderPersist } from '@/lib/hooks/use-reorder-persist';
 import { cn } from '@/lib/utils';
 
@@ -381,7 +382,7 @@ export function AwardsSection({
                 )}
                 {award.description && (
                   <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
-                    {award.description}
+                    {stripHtmlTags(award.description)}
                   </p>
                 )}
                 {award.url && (

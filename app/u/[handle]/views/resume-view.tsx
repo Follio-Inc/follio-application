@@ -22,6 +22,7 @@ import {
   Users,
 } from 'lucide-react';
 
+import { RichHtml } from '@/components/rich-html';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -475,7 +476,10 @@ export function ResumeView({ profile: rawProfile }: ResumeViewProps) {
                       {award.date && ` · ${formatDate(award.date)}`}
                     </p>
                     {award.description && (
-                      <p className="mt-1 text-sm text-muted-foreground">{award.description}</p>
+                      <RichHtml
+                        html={award.description}
+                        className="mt-1 text-sm text-muted-foreground [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5"
+                      />
                     )}
                   </div>
                 </div>
@@ -512,7 +516,10 @@ export function ResumeView({ profile: rawProfile }: ResumeViewProps) {
                     )}
                     {pub.date && <p className="mt-1 text-xs text-muted-foreground">{pub.date}</p>}
                     {pub.description && (
-                      <p className="mt-2 text-sm text-muted-foreground">{pub.description}</p>
+                      <RichHtml
+                        html={pub.description}
+                        className="mt-2 text-sm text-muted-foreground [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5"
+                      />
                     )}
                     <div className="mt-2 flex flex-wrap gap-2">
                       {pub.url && (
@@ -582,7 +589,10 @@ export function ResumeView({ profile: rawProfile }: ResumeViewProps) {
                       )}
                     </div>
                     {vol.description && (
-                      <p className="mt-2 text-sm text-muted-foreground">{vol.description}</p>
+                      <RichHtml
+                        html={vol.description}
+                        className="mt-2 text-sm text-muted-foreground [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5"
+                      />
                     )}
                     {vol.url && (
                       <a
@@ -735,7 +745,10 @@ export function ResumeView({ profile: rawProfile }: ResumeViewProps) {
                             )}
                           </div>
                           {item.description && (
-                            <p className="mt-2 text-sm text-muted-foreground">{item.description}</p>
+                            <RichHtml
+                              html={item.description}
+                              className="mt-2 text-sm text-muted-foreground [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5"
+                            />
                           )}
                           {item.tags && item.tags.length > 0 && (
                             <div className="mt-3 flex flex-wrap gap-1">

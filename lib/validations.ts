@@ -5,6 +5,8 @@
 
 import { z } from 'zod';
 
+import { stripHtmlTags } from '@/lib/html-utils';
+
 // ===========================================
 // SHARED FIELD HELPERS
 // ===========================================
@@ -219,12 +221,30 @@ export const SkillGroupSchema = z.object({
 });
 
 // ===========================================
+// RICH TEXT LIMITS
+// ===========================================
+
+/**
+ * A rich-text field limited by the text the reader sees, not its HTML. Formatting tags
+ * (`<p style="text-align: justify">`, list markup) don't count toward `maxText`; the whole
+ * HTML is still capped at 10× so a field can't grow without bound.
+ */
+export function richText(maxText: number) {
+  return z
+    .string()
+    .max(maxText * 10, `Too much formatting. Keep it under ${maxText * 10} characters of HTML.`)
+    .refine((html) => stripHtmlTags(html).length <= maxText, {
+      message: `Must be ${maxText} characters or fewer.`,
+    });
+}
+
+// ===========================================
 // PROJECT SCHEMA
 // ===========================================
 
 export const ProjectSchema = z.object({
   title: z.string().min(1, 'Project title is required').max(100),
-  description: z.string().max(2000).optional(),
+  description: richText(2000).optional(),
   shortDesc: z.string().max(200).optional(),
   url: httpUrl().optional().or(z.literal('')),
   repoUrl: httpUrl().optional().or(z.literal('')),
@@ -242,7 +262,7 @@ export const ProjectSchema = z.object({
   showOnResume: z.boolean().optional(),
   showStats: z.boolean().optional(),
   showReadme: z.boolean().optional(),
-  customDescription: z.string().max(2000).optional().nullable(),
+  customDescription: richText(2000).optional().nullable(),
 });
 
 // ===========================================
@@ -253,7 +273,7 @@ export const AwardSchema = z.object({
   title: z.string().min(1, 'Award title is required').max(100),
   issuer: z.string().max(100).optional(),
   date: z.coerce.date().optional().nullable(),
-  description: z.string().max(500).optional(),
+  description: richText(500).optional(),
   url: httpUrl().optional().or(z.literal('')),
   isVisible: z.boolean().optional(),
 });

@@ -4,7 +4,6 @@ import { createContext, useContext, useMemo, useRef, useState } from 'react';
 
 import { useResolvedResumeColorTheme } from '@/lib/hooks/use-resume-color-theme';
 import {
-  containsHtmlFormatting,
   isHtmlEmpty,
   resumeBulletInnerHtml,
   resumeEntryBodyHtml,
@@ -62,6 +61,7 @@ import type {
 import { HEADER_SECTION_TYPES, type ResumeDesign } from '@/types';
 
 import { ResumePagedStack } from '@/components/resume-paged-stack';
+import { RichHtml } from '@/components/rich-html';
 import { FileText } from 'lucide-react';
 
 import { ViewHighlightsButton } from '@/components/resume-presentation/view-highlights-button';
@@ -410,27 +410,6 @@ function AtelierHeader({ profile }: { profile: FilteredProfile }) {
 // ============================================================================
 // RICH HTML HELPER
 // ============================================================================
-
-/**
- * Render a string that may contain HTML formatting from the rich text editor.
- * Falls back to plain text rendering when no HTML is detected.
- */
-function RichHtml({
-  html,
-  className,
-  as: Tag = 'div',
-}: {
-  html: string;
-  className?: string;
-  as?: 'div' | 'p' | 'span';
-}) {
-  if (containsHtmlFormatting(html)) {
-    return (
-      <Tag className={className} dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(html) }} />
-    );
-  }
-  return <Tag className={className}>{html}</Tag>;
-}
 
 /** Experience highlights and education notes share this body renderer. */
 function ResumeEntryBody({
@@ -906,8 +885,11 @@ function AwardsSection({
                 <span className="resume-entry-inline-issuer"> — {award.issuer}</span>
               )}
               {awardDate && <span className="resume-entry-inline-date"> ({awardDate})</span>}
-              {award.description && (
-                <p className="resume-entry-inline-description">{award.description}</p>
+              {award.description && !isHtmlEmpty(award.description) && (
+                <RichHtml
+                  html={award.description}
+                  className="resume-entry-inline-description resume-rich-html"
+                />
               )}
             </div>
           );
@@ -976,7 +958,12 @@ function VolunteeringSection({ items }: { items: VolunteeringItem[] }) {
                 </div>
                 {dateRange && <span className="resume-entry-date">{dateRange}</span>}
               </div>
-              {vol.description && <p className="resume-entry-description">{vol.description}</p>}
+              {vol.description && !isHtmlEmpty(vol.description) && (
+                <RichHtml
+                  html={vol.description}
+                  className="resume-entry-description resume-rich-html"
+                />
+              )}
             </div>
           );
         })}
@@ -1096,7 +1083,12 @@ function CustomSection({ section }: { section: ProfileSection }) {
                   </div>
                   {dateRange && <span className="resume-entry-date">{dateRange}</span>}
                 </div>
-                {item.description && <p className="resume-entry-description">{item.description}</p>}
+                {item.description && !isHtmlEmpty(item.description) && (
+                  <RichHtml
+                    html={item.description}
+                    className="resume-entry-description resume-rich-html"
+                  />
+                )}
                 {item.tags && item.tags.length > 0 && (
                   <p className="resume-entry-tags">{item.tags.join(', ')}</p>
                 )}

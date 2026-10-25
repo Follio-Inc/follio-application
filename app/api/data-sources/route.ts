@@ -19,8 +19,24 @@ export async function GET() {
 
     const profile = await db.profile.findUnique({
       where: { id: profileId },
-      include: {
-        dataSourceConnections: true,
+      select: {
+        // Never return accessToken / refreshToken: OAuth tokens stay on the server.
+        dataSourceConnections: {
+          select: {
+            id: true,
+            source: true,
+            status: true,
+            externalId: true,
+            lastImportedAt: true,
+            itemsImported: true,
+            importError: true,
+            lastSyncAt: true,
+            syncError: true,
+            metadata: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
       },
     });
 
