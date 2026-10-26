@@ -32,9 +32,30 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { SortableSubheadingRow } from '@/components/section-subheadings/section-subheadings-editor';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { notifyProfileUpdated } from '@/lib/events';
 import { useReorderPersist } from '@/lib/hooks/use-reorder-persist';
 import { useSectionReorderPersist } from '@/lib/hooks/use-section-reorder-persist';
+import {
+  addSubHeadingGroup,
+  createDefaultSubHeadings,
+  customContentItemIds,
+  flattenSubheadingSortableIds,
+  fromSubheadingSortableId,
+  isSubheadingSortableId,
+  isSubHeadingsEnabled,
+  MAX_SUBHEADING_GROUPS,
+  moveFlattenedSortableIds,
+  parseSubHeadings,
+  pruneMissingSubHeadingEntries,
+  rebuildSubHeadingsFromSortableIds,
+  removeSubHeadingGroup,
+  reorderItemsByIds,
+  setGroupLabel,
+  SUBHEADING_SECTION_TYPES,
+} from '@/lib/section-subheadings';
 import { type EntryEditGuard, type RegisterEntryEditGuard } from '../lib/entry-edit-guard';
 import {
   hasContactDraftChanges,
@@ -46,6 +67,7 @@ import { cn } from '@/lib/utils';
 import { saveProfileDraft } from '../lib/save-profile-draft';
 import { AddSectionDialog } from './add-section-dialog';
 import { useBuilderStore } from './builder-store-provider';
+import { usePersistSectionSubHeadings } from './connected-section-subheadings';
 import { FormSaveBar } from './form-save-bar';
 
 import { AwardsSection } from '../[section]/awards-section';
@@ -369,6 +391,7 @@ export function AllSectionsEditor() {
   const persistCertificationOrder = useReorderPersist<Certification>('certification', (items) => {
     commitInlineChange({ certifications: items });
   });
+  const persistSubHeadings = usePersistSectionSubHeadings();
 
   type AnyReorderFn = (items: Array<{ id: string }>) => Promise<void>;
 
@@ -568,6 +591,73 @@ export function AllSectionsEditor() {
     [draftProfile]
   );
 
+  const getStoreItems = useCallback(
+    (sectionType: string): Array<{ id: string }> => {
+      switch (sectionType) {
+        case 'EXPERIENCE':
+          return draftProfile.workExperiences;
+        case 'EDUCATION':
+          return draftProfile.educations;
+        case 'PROJECTS':
+          return draftProfile.projects;
+        case 'AWARDS':
+          return draftProfile.awards;
+        case 'CERTIFICATIONS':
+          return draftProfile.certifications;
+        default:
+          return [];
+      }
+    },
+    [draftProfile]
+  );
+
+  const entryIdsForSubheadings = useCallback(
+    (section: ProfileSection): string[] => {
+      if (ENTRY_SECTIONS.has(section.type)) {
+        return getEntries(section.type).map((entry) => entry.id);
+      }
+      return customContentItemIds(section.customContent);
+    },
+    [getEntries]
+  );
+
+  const handleSubHeadingsToggle = useCallback(
+    (section: ProfileSection, enabled: boolean) => {
+      persistSubHeadings(
+        section.id,
+        enabled ? createDefaultSubHeadings(entryIdsForSubheadings(section)) : null
+      );
+    },
+    [entryIdsForSubheadings, persistSubHeadings]
+  );
+
+  const handleAddSubHeading = useCallback(
+    (section: ProfileSection) => {
+      persistSubHeadings(section.id, addSubHeadingGroup(parseSubHeadings(section.subHeadings)));
+    },
+    [persistSubHeadings]
+  );
+
+  const handleDeleteSubHeading = useCallback(
+    (section: ProfileSection, groupId: string) => {
+      persistSubHeadings(
+        section.id,
+        removeSubHeadingGroup(parseSubHeadings(section.subHeadings), groupId)
+      );
+    },
+    [persistSubHeadings]
+  );
+
+  const handleRenameSubHeading = useCallback(
+    (section: ProfileSection, groupId: string, label: string) => {
+      persistSubHeadings(
+        section.id,
+        setGroupLabel(parseSubHeadings(section.subHeadings), groupId, label)
+      );
+    },
+    [persistSubHeadings]
+  );
+
   const handleEditComplete = useCallback(() => {
     setEditingEntry(null);
   }, []);
@@ -680,6 +770,16 @@ export function AllSectionsEditor() {
       if (editingEntry?.sectionType === sectionType && editingEntry.entryId === entryId) {
         setEditingEntry(null);
       }
+      const section = (draftProfile.sections || []).find((item) => item.type === sectionType);
+      if (section && isSubHeadingsEnabled(section.subHeadings)) {
+        persistSubHeadings(
+          section.id,
+          pruneMissingSubHeadingEntries(
+            parseSubHeadings(section.subHeadings),
+            updatedItems.map((item) => item.id)
+          )
+        );
+      }
       notifyProfileUpdated();
       setPendingEntryDelete(null);
     } catch (err) {
@@ -688,47 +788,39 @@ export function AllSectionsEditor() {
     } finally {
       setIsDeletingEntry(false);
     }
-  }, [pendingEntryDelete, draftProfile, commitInlineChange, editingEntry]);
+  }, [pendingEntryDelete, draftProfile, commitInlineChange, editingEntry, persistSubHeadings]);
 
   // ── Entry drag-end handler (generic for any entry section) ──
   const handleEntryDragEnd = useCallback(
-    (sectionType: string, event: DragEndEvent) => {
+    (section: ProfileSection, event: DragEndEvent) => {
       const { active, over } = event;
       if (!over || active.id === over.id) return;
 
-      const entries = getEntries(sectionType);
-      const oldIndex = entries.findIndex((e) => e.id === active.id);
-      const newIndex = entries.findIndex((e) => e.id === over.id);
-      if (oldIndex === -1 || newIndex === -1) return;
-
-      // Get the actual data items for the reorder
-      const persistFn = entryReorderMap[sectionType];
+      const persistFn = entryReorderMap[section.type];
       if (!persistFn) return;
 
-      let items: Array<{ id: string }>;
-      switch (sectionType) {
-        case 'EXPERIENCE':
-          items = arrayMove([...draftProfile.workExperiences], oldIndex, newIndex);
-          break;
-        case 'EDUCATION':
-          items = arrayMove([...draftProfile.educations], oldIndex, newIndex);
-          break;
-        case 'PROJECTS':
-          items = arrayMove([...draftProfile.projects], oldIndex, newIndex);
-          break;
-        case 'AWARDS':
-          items = arrayMove([...draftProfile.awards], oldIndex, newIndex);
-          break;
-        case 'CERTIFICATIONS':
-          items = arrayMove([...draftProfile.certifications], oldIndex, newIndex);
-          break;
-        default:
-          return;
+      const storeItems = getStoreItems(section.type);
+      const parsed = parseSubHeadings(section.subHeadings);
+
+      if (!parsed) {
+        const oldIndex = storeItems.findIndex((item) => item.id === active.id);
+        const newIndex = storeItems.findIndex((item) => item.id === over.id);
+        if (oldIndex === -1 || newIndex === -1) return;
+        persistFn(arrayMove([...storeItems], oldIndex, newIndex));
+        return;
       }
 
-      persistFn(items);
+      const flattened = flattenSubheadingSortableIds(storeItems, parsed);
+      const nextFlat = moveFlattenedSortableIds(flattened, String(active.id), String(over.id));
+      if (nextFlat.join('\0') === flattened.join('\0')) return;
+
+      const rebuilt = rebuildSubHeadingsFromSortableIds(nextFlat, parsed);
+      const nextItems = reorderItemsByIds(storeItems, rebuilt.entryIds);
+      const orderChanged = nextItems.some((item, index) => item.id !== storeItems[index]?.id);
+      if (orderChanged) persistFn(nextItems);
+      persistSubHeadings(section.id, { groups: rebuilt.groups });
     },
-    [draftProfile, getEntries, entryReorderMap]
+    [entryReorderMap, getStoreItems, persistSubHeadings]
   );
 
   /** Render entry cards + "Add" button when a list-based section is expanded */
@@ -736,6 +828,13 @@ export function AllSectionsEditor() {
     (section: ProfileSection) => {
       const entries = getEntries(section.type);
       const singularName = ENTRY_SINGULAR[section.type] || section.title || 'Item';
+      const parsedSubHeadings = parseSubHeadings(section.subHeadings);
+      const sortableIds = parsedSubHeadings
+        ? flattenSubheadingSortableIds(entries, parsedSubHeadings)
+        : entries.map((entry) => entry.id);
+      const entryById = new Map(entries.map((entry) => [entry.id, entry]));
+      const dndId = `entry-dnd-${section.id}`;
+
       const experienceMeta =
         section.type === 'EXPERIENCE' ? (
           <div className="-mt-1 mb-5 pl-5">
@@ -753,8 +852,90 @@ export function AllSectionsEditor() {
           </div>
         ) : null;
 
-      if (entries.length === 0) {
-        const emptyState = (
+      const renderEntryCard = (entry: EntryInfo) => {
+        const entryHidden = entry.isVisible === false;
+        return (
+          <SortableEntryCard key={entry.id} id={entry.id}>
+            <div
+              className={cn(
+                'group/entry flex w-full items-center gap-3 rounded-xl bg-background px-3.5 py-3 text-left transition-colors hover:bg-background/80',
+                entryHidden && 'opacity-50'
+              )}
+            >
+              <button
+                type="button"
+                onClick={() =>
+                  setEditingEntry({
+                    sectionType: section.type,
+                    sectionId: section.id,
+                    entryId: entry.id,
+                  })
+                }
+                className="min-w-0 flex-1 text-left"
+              >
+                <p className="truncate text-sm font-medium">{entry.title}</p>
+                {entry.subtitle ? (
+                  <p className="truncate text-xs text-muted-foreground">{entry.subtitle}</p>
+                ) : null}
+              </button>
+              {entry.meta && (
+                <span className="shrink-0 text-xs text-muted-foreground/70">{entry.meta}</span>
+              )}
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => toggleEntryVisibility(e, section.type, entry.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggleEntryVisibility(e as unknown as React.MouseEvent, section.type, entry.id);
+                  }
+                }}
+                className={cn(
+                  'flex h-6 w-6 shrink-0 items-center justify-center rounded transition-colors',
+                  'opacity-0 focus-visible:opacity-100 group-hover/entry:opacity-100',
+                  entryHidden
+                    ? 'text-muted-foreground opacity-100'
+                    : 'text-muted-foreground/40 hover:text-muted-foreground'
+                )}
+                title={entryHidden ? 'Show on resume' : 'Hide from resume'}
+              >
+                {entryHidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              </span>
+              <button
+                type="button"
+                onClick={(e) => requestEntryDelete(e, section.type, entry)}
+                className={cn(
+                  'flex h-6 w-6 shrink-0 items-center justify-center rounded transition-colors',
+                  'opacity-0 focus-visible:opacity-100 group-hover/entry:opacity-100',
+                  'text-muted-foreground/40 hover:text-destructive'
+                )}
+                title={`Delete ${singularName.toLowerCase()}`}
+                aria-label={`Delete ${entry.title}`}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setEditingEntry({
+                    sectionType: section.type,
+                    sectionId: section.id,
+                    entryId: entry.id,
+                  })
+                }
+                className="shrink-0"
+                aria-label="Edit entry"
+              >
+                <ChevronDown className="h-3.5 w-3.5 -rotate-90 text-muted-foreground/40 transition-colors group-hover/entry:text-muted-foreground" />
+              </button>
+            </div>
+          </SortableEntryCard>
+        );
+      };
+
+      const addButtons = (
+        <div className={cn('flex gap-2', entries.length === 0 && !parsedSubHeadings && 'pt-1')}>
           <button
             type="button"
             onClick={() =>
@@ -764,148 +945,74 @@ export function AllSectionsEditor() {
                 entryId: 'new',
               })
             }
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-background py-8 text-sm text-muted-foreground transition-colors hover:bg-background/80 hover:text-foreground"
+            className={cn(
+              'flex flex-1 items-center justify-center gap-2 rounded-xl bg-background text-muted-foreground transition-colors hover:bg-background/80 hover:text-foreground',
+              entries.length === 0 ? 'py-8 text-sm' : 'py-2.5 text-xs'
+            )}
           >
-            <Plus className="h-4 w-4" />
+            <Plus className={entries.length === 0 ? 'h-4 w-4' : 'h-3.5 w-3.5'} />
             Add {singularName}
           </button>
-        );
-        if (!experienceMeta) return emptyState;
-        return (
-          <div>
-            {experienceMeta}
-            {emptyState}
-          </div>
-        );
-      }
+          {parsedSubHeadings && parsedSubHeadings.groups.length < MAX_SUBHEADING_GROUPS ? (
+            <button
+              type="button"
+              onClick={() => handleAddSubHeading(section)}
+              className={cn(
+                'flex flex-1 items-center justify-center gap-2 rounded-xl bg-background text-muted-foreground transition-colors hover:bg-background/80 hover:text-foreground',
+                entries.length === 0 ? 'py-8 text-sm' : 'py-2.5 text-xs'
+              )}
+            >
+              <Plus className={entries.length === 0 ? 'h-4 w-4' : 'h-3.5 w-3.5'} />
+              Add Sub-heading
+            </button>
+          ) : null}
+        </div>
+      );
 
-      const entryIds = entries.map((e) => e.id);
-      // eslint-disable-next-line react-hooks/rules-of-hooks -- stable section type per render cycle
-      const dndId = `entry-dnd-${section.id}`;
+      const list =
+        sortableIds.length === 0 ? null : (
+          <DndContext
+            id={dndId}
+            sensors={sectionSensors}
+            collisionDetection={closestCenter}
+            onDragEnd={(event) => handleEntryDragEnd(section, event)}
+            modifiers={[restrictToVerticalAxis, restrictToParentElement]}
+          >
+            <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
+              <div className="space-y-2 pl-5">
+                {parsedSubHeadings
+                  ? sortableIds.map((id) => {
+                      if (isSubheadingSortableId(id)) {
+                        const groupId = fromSubheadingSortableId(id);
+                        const group = parsedSubHeadings.groups.find((item) => item.id === groupId);
+                        if (!group) return null;
+                        return (
+                          <SortableSubheadingRow
+                            key={id}
+                            groupId={group.id}
+                            label={group.label}
+                            onLabelCommit={(label) =>
+                              handleRenameSubHeading(section, group.id, label)
+                            }
+                            onDelete={() => handleDeleteSubHeading(section, group.id)}
+                          />
+                        );
+                      }
+                      const entry = entryById.get(id);
+                      return entry ? renderEntryCard(entry) : null;
+                    })
+                  : entries.map((entry) => renderEntryCard(entry))}
+              </div>
+            </SortableContext>
+          </DndContext>
+        );
 
       return (
         <div>
           {experienceMeta}
           <div className="space-y-2">
-            <DndContext
-              id={dndId}
-              sensors={sectionSensors}
-              collisionDetection={closestCenter}
-              onDragEnd={(event) => handleEntryDragEnd(section.type, event)}
-              modifiers={[restrictToVerticalAxis, restrictToParentElement]}
-            >
-              <SortableContext items={entryIds} strategy={verticalListSortingStrategy}>
-                <div className="space-y-2 pl-5">
-                  {entries.map((entry) => {
-                    const entryHidden = entry.isVisible === false;
-                    return (
-                      <SortableEntryCard key={entry.id} id={entry.id}>
-                        <div
-                          className={cn(
-                            'group/entry flex w-full items-center gap-3 rounded-xl bg-background px-3.5 py-3 text-left transition-colors hover:bg-background/80',
-                            entryHidden && 'opacity-50'
-                          )}
-                        >
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setEditingEntry({
-                                sectionType: section.type,
-                                sectionId: section.id,
-                                entryId: entry.id,
-                              })
-                            }
-                            className="min-w-0 flex-1 text-left"
-                          >
-                            <p className="truncate text-sm font-medium">{entry.title}</p>
-                            {entry.subtitle && (
-                              <p className="truncate text-xs text-muted-foreground">
-                                {entry.subtitle}
-                              </p>
-                            )}
-                          </button>
-                          {entry.meta && (
-                            <span className="shrink-0 text-xs text-muted-foreground/70">
-                              {entry.meta}
-                            </span>
-                          )}
-                          <span
-                            role="button"
-                            tabIndex={0}
-                            onClick={(e) => toggleEntryVisibility(e, section.type, entry.id)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
-                                toggleEntryVisibility(
-                                  e as unknown as React.MouseEvent,
-                                  section.type,
-                                  entry.id
-                                );
-                              }
-                            }}
-                            className={cn(
-                              'flex h-6 w-6 shrink-0 items-center justify-center rounded transition-colors',
-                              'opacity-0 focus-visible:opacity-100 group-hover/entry:opacity-100',
-                              entryHidden
-                                ? 'text-muted-foreground opacity-100'
-                                : 'text-muted-foreground/40 hover:text-muted-foreground'
-                            )}
-                            title={entryHidden ? 'Show on resume' : 'Hide from resume'}
-                          >
-                            {entryHidden ? (
-                              <EyeOff className="h-3.5 w-3.5" />
-                            ) : (
-                              <Eye className="h-3.5 w-3.5" />
-                            )}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={(e) => requestEntryDelete(e, section.type, entry)}
-                            className={cn(
-                              'flex h-6 w-6 shrink-0 items-center justify-center rounded transition-colors',
-                              'opacity-0 focus-visible:opacity-100 group-hover/entry:opacity-100',
-                              'text-muted-foreground/40 hover:text-destructive'
-                            )}
-                            title={`Delete ${singularName.toLowerCase()}`}
-                            aria-label={`Delete ${entry.title}`}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setEditingEntry({
-                                sectionType: section.type,
-                                sectionId: section.id,
-                                entryId: entry.id,
-                              })
-                            }
-                            className="shrink-0"
-                            aria-label="Edit entry"
-                          >
-                            <ChevronDown className="h-3.5 w-3.5 -rotate-90 text-muted-foreground/40 transition-colors group-hover/entry:text-muted-foreground" />
-                          </button>
-                        </div>
-                      </SortableEntryCard>
-                    );
-                  })}
-                </div>
-              </SortableContext>
-            </DndContext>
-            <button
-              type="button"
-              onClick={() =>
-                setEditingEntry({
-                  sectionType: section.type,
-                  sectionId: section.id,
-                  entryId: 'new',
-                })
-              }
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-background py-2.5 text-xs text-muted-foreground transition-colors hover:bg-background/80 hover:text-foreground"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Add {singularName}
-            </button>
+            {list}
+            {addButtons}
           </div>
         </div>
       );
@@ -914,6 +1021,9 @@ export function AllSectionsEditor() {
       getEntries,
       sectionSensors,
       handleEntryDragEnd,
+      handleAddSubHeading,
+      handleDeleteSubHeading,
+      handleRenameSubHeading,
       toggleEntryVisibility,
       requestEntryDelete,
       draftProfile.totalExperience,
@@ -1276,6 +1386,12 @@ export function AllSectionsEditor() {
         : SECTION_TITLES[section.type] || section.title;
     const showVisibilityToggle = !PINNED_SECTION_TYPES.has(section.type);
     const entryCount = getSectionEntryCount(section.type, draftProfile);
+    const showSubheadingToggle =
+      isExpanded &&
+      SUBHEADING_SECTION_TYPES.has(section.type) &&
+      (section.type !== 'CUSTOM' || section.contentType !== 'FREEFORM');
+    const subheadingsOn = isSubHeadingsEnabled(section.subHeadings);
+    const subheadingSwitchId = `subheadings-${section.id}`;
 
     return (
       <section
@@ -1292,19 +1408,37 @@ export function AllSectionsEditor() {
           )}
         >
           {/* Section card header */}
-          <button
-            type="button"
-            onClick={() => toggleSection(section.id)}
-            className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors"
-          >
-            <span
-              className={cn(
-                'flex-1 text-sm font-medium transition-colors duration-150',
-                isExpanded ? 'text-foreground' : 'text-foreground/90'
-              )}
+          <div className="flex w-full items-center gap-3 px-4 py-3.5">
+            <button
+              type="button"
+              onClick={() => toggleSection(section.id)}
+              className="min-w-0 flex-1 text-left"
             >
-              {title}
-            </span>
+              <span
+                className={cn(
+                  'block truncate text-sm font-medium transition-colors duration-150',
+                  isExpanded ? 'text-foreground' : 'text-foreground/90'
+                )}
+              >
+                {title}
+              </span>
+            </button>
+            {showSubheadingToggle && (
+              <div className="flex shrink-0 items-center gap-2">
+                <Label
+                  htmlFor={subheadingSwitchId}
+                  className="cursor-pointer whitespace-nowrap text-[11px] font-medium text-muted-foreground"
+                >
+                  Add Sub-headings
+                </Label>
+                <Switch
+                  id={subheadingSwitchId}
+                  checked={subheadingsOn}
+                  onCheckedChange={(checked) => handleSubHeadingsToggle(section, checked)}
+                  aria-label="Add Sub-headings"
+                />
+              </div>
+            )}
             {entryCount !== null && (
               <span
                 className={cn(
@@ -1340,13 +1474,20 @@ export function AllSectionsEditor() {
                 {sectionHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </span>
             )}
-            <ChevronDown
-              className={cn(
-                'h-4 w-4 shrink-0 text-muted-foreground/50 transition-transform duration-200',
-                isExpanded && '-rotate-180 text-primary'
-              )}
-            />
-          </button>
+            <button
+              type="button"
+              onClick={() => toggleSection(section.id)}
+              className="flex h-7 w-7 shrink-0 items-center justify-center"
+              aria-label={isExpanded ? `Collapse ${title}` : `Expand ${title}`}
+            >
+              <ChevronDown
+                className={cn(
+                  'h-4 w-4 text-muted-foreground/50 transition-transform duration-200',
+                  isExpanded && '-rotate-180 text-primary'
+                )}
+              />
+            </button>
+          </div>
 
           {/* Expanded content */}
           <AnimatePresence initial={false}>

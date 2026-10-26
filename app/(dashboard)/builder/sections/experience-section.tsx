@@ -19,12 +19,24 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { notifyProfileUpdated } from '@/lib/events';
 import { useReorderPersist } from '@/lib/hooks/use-reorder-persist';
+import { formatEntryDuration } from '@/lib/entry-duration';
 import { bulletsToHtml, htmlToBullets } from '@/lib/html-utils';
 import { cn, parseMonthInput, toMonthInputValue } from '@/lib/utils';
+
+import { HeadingTagPicker } from '@/components/heading-tags/heading-tag-picker';
+import { ResumeHeadingTags } from '@/components/heading-tags/resume-heading-tags';
+import {
+  EXPERIENCE_HEADING_TAG_GROUPS,
+  EXPERIENCE_HEADING_TAG_PRESETS,
+  employmentTypeFromTags,
+  headingTagsToJson,
+  resolveExperienceHeadingTags,
+} from '@/lib/heading-tags';
 
 import { EntryInlineForm } from '../components/entry-inline-form';
 import { SortableCardList } from '../components/sortable-card-list';
 import { useEntryFormDirty, type RegisterEntryEditGuard } from '../lib/entry-edit-guard';
+import { EntryDurationField } from './entry-duration-field';
 import { TotalExperienceField } from './total-experience-field';
 
 import type { WorkExperience } from '@/types';
@@ -65,6 +77,8 @@ const emptyExperience: Partial<WorkExperience> = {
   location: '',
   locationType: undefined,
   employmentType: undefined,
+  headingTags: [],
+  durationVisible: false,
   startDate: new Date(),
   endDate: null,
   isCurrent: false,
@@ -213,7 +227,9 @@ export function ExperienceSection({
         role: formData.role,
         location: formData.location || undefined,
         locationType: formData.locationType || undefined,
-        employmentType: formData.employmentType || undefined,
+        employmentType: formData.employmentType || null,
+        headingTags: resolveExperienceHeadingTags(formData),
+        durationVisible: formData.durationVisible === true,
         startDate: formData.startDate,
         endDate: formData.isCurrent ? null : formData.endDate,
         isCurrent: formData.isCurrent || false,
@@ -346,6 +362,19 @@ export function ExperienceSection({
         </div>
       </div>
 
+      <HeadingTagPicker
+        value={resolveExperienceHeadingTags(formData)}
+        onChange={(headingTags) =>
+          setFormData((prev) => ({
+            ...prev,
+            headingTags: headingTagsToJson(headingTags),
+            employmentType: employmentTypeFromTags(headingTags),
+          }))
+        }
+        presets={EXPERIENCE_HEADING_TAG_PRESETS}
+        exclusiveGroups={EXPERIENCE_HEADING_TAG_GROUPS}
+      />
+
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label>Location</Label>
@@ -375,34 +404,12 @@ export function ExperienceSection({
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label>Employment Type</Label>
-          <Select
-            value={formData.employmentType || ''}
-            onValueChange={(value) =>
-              updateField('employmentType', value as WorkExperience['employmentType'])
-            }
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="FULL_TIME">Full-time</SelectItem>
-              <SelectItem value="PART_TIME">Part-time</SelectItem>
-              <SelectItem value="CONTRACT">Contract</SelectItem>
-              <SelectItem value="FREELANCE">Freelance</SelectItem>
-              <SelectItem value="INTERNSHIP">Internship</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex items-center gap-2 pt-7">
-          <Switch
-            checked={formData.isCurrent || false}
-            onCheckedChange={(checked) => updateField('isCurrent', checked)}
-          />
-          <Label>Currently working here</Label>
-        </div>
+      <div className="flex items-center gap-2">
+        <Switch
+          checked={formData.isCurrent || false}
+          onCheckedChange={(checked) => updateField('isCurrent', checked)}
+        />
+        <Label>Currently working here</Label>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -432,6 +439,14 @@ export function ExperienceSection({
           </div>
         )}
       </div>
+
+      <EntryDurationField
+        startDate={formData.startDate}
+        endDate={formData.endDate}
+        isCurrent={formData.isCurrent}
+        visible={formData.durationVisible}
+        onVisibleChange={(durationVisible) => setFormData((prev) => ({ ...prev, durationVisible }))}
+      />
 
       <div className="space-y-2">
         <Label>Highlights</Label>
@@ -538,7 +553,12 @@ export function ExperienceSection({
                     const isThisItemEditing = editingId === exp.id;
                     const isAnotherItemEditing = isEditing && !isThisItemEditing;
 
-                    const dateLabel = [
+                    const durationLabel = formatEntryDuration(
+                      exp.startDate,
+                      exp.endDate,
+                      exp.isCurrent
+                    );
+                    const rangeLabel = [
                       new Date(exp.startDate).toLocaleDateString('en-US', {
                         month: 'short',
                         year: 'numeric',
@@ -554,6 +574,9 @@ export function ExperienceSection({
                     ]
                       .filter(Boolean)
                       .join(' – ');
+                    const dateLabel = durationLabel
+                      ? `${rangeLabel} · ${durationLabel}`
+                      : rangeLabel;
 
                     return (
                       <div
@@ -582,7 +605,7 @@ export function ExperienceSection({
                           <Briefcase className="h-4 w-4 shrink-0 text-muted-foreground" />
 
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
+                            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                               <span className="truncate text-sm font-medium">
                                 {exp.role || 'Untitled Role'}
                               </span>
@@ -590,6 +613,7 @@ export function ExperienceSection({
                               <span className="truncate text-xs text-muted-foreground">
                                 {exp.company || 'Company'}
                               </span>
+                              <ResumeHeadingTags tags={resolveExperienceHeadingTags(exp)} />
                             </div>
                           </div>
 

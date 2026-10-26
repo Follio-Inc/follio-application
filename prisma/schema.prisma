@@ -167,6 +167,9 @@ model ProfileSection {
   isVisible     Boolean           @default(true)
   customContent Json?
   contentType   CustomContentType @default(STRUCTURED)
+  /// Optional small-font groups inside the section (Sub-heading 1 / Sub-heading 2 by default).
+  /// Null or empty = off. Groups store entry ids so items can move within or across groups.
+  subHeadings   Json?
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
   profile       Profile           @relation(fields: [profileId], references: [id], onDelete: Cascade)
@@ -215,27 +218,31 @@ model Link {
 }
 
 model WorkExperience {
-  id             String          @id @default(cuid())
-  profileId      String
-  company        String
-  companyUrl     String?
-  companyLogo    String?
-  role           String
-  location       String?
-  locationType   LocationType?
-  employmentType EmploymentType?
-  startDate      DateTime
-  endDate        DateTime?
-  isCurrent      Boolean         @default(false)
-  bullets        String[]
-  bulletsHtml    String? /// Complete rich-text editor HTML for bullets (preserves alignment, bullet style, etc.)
-  metrics        Json?
-  isVisible      Boolean         @default(true)
-  source         DataSource      @default(MANUAL)
-  sortOrder      Int             @default(0)
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  profile        Profile         @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  id              String          @id @default(cuid())
+  profileId       String
+  company         String
+  companyUrl      String?
+  companyLogo     String?
+  role            String
+  location        String?
+  locationType    LocationType?
+  employmentType  EmploymentType?
+  /// Capsule tags beside the role heading (Full Time, Internship, …).
+  headingTags     Json            @default("[]")
+  /// Per-role tenure tag beside the company subheading. Hidden by default.
+  durationVisible Boolean         @default(false)
+  startDate       DateTime
+  endDate         DateTime?
+  isCurrent       Boolean         @default(false)
+  bullets         String[]
+  bulletsHtml     String? /// Complete rich-text editor HTML for bullets (preserves alignment, bullet style, etc.)
+  metrics         Json?
+  isVisible       Boolean         @default(true)
+  source          DataSource      @default(MANUAL)
+  sortOrder       Int             @default(0)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  profile         Profile         @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
   @@index([profileId])
   @@index([startDate])
@@ -250,6 +257,10 @@ model Education {
   degree          String?
   fieldOfStudy    String?
   location        String?
+  /// Capsule tags beside the degree heading (Online, Pursuing, …).
+  headingTags     Json       @default("[]")
+  /// Per-school tenure tag beside the institution subheading. Hidden by default.
+  durationVisible Boolean    @default(false)
   startDate       DateTime?
   endDate         DateTime?
   isCurrent       Boolean    @default(false)
@@ -315,6 +326,8 @@ model Project {
   images            String[]
   techStack         String[]
   highlights        String[]
+  /// Capsule tags beside the project title (Open Source, Team, …).
+  headingTags       Json       @default("[]")
   // GitHub-specific fields
   githubStars       Int?
   githubForks       Int?

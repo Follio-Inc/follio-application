@@ -16,10 +16,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { Switch } from '@/components/ui/switch';
+import { HeadingTagPicker } from '@/components/heading-tags/heading-tag-picker';
+import { ResumeHeadingTags } from '@/components/heading-tags/resume-heading-tags';
+import { VOLUNTEERING_HEADING_TAG_PRESETS, parseHeadingTags } from '@/lib/heading-tags';
 import { notifyProfileUpdated } from '@/lib/events';
+import { isSubHeadingsEnabled } from '@/lib/section-subheadings';
 import { cn } from '@/lib/utils';
 
-import { SortableCardList } from '../components/sortable-card-list';
+import { SubheadingAddButton, SubheadingGroupedCards } from '../components/subheading-grouped-list';
 
 import type { ProfileSection, VolunteeringItem, VolunteeringSectionContent } from '@/types';
 import type { DateExtractor } from '../components/sortable-card-list';
@@ -55,6 +59,7 @@ const emptyItem: Partial<VolunteeringItem> = {
   endDate: '',
   isCurrent: false,
   url: '',
+  tags: [],
 };
 
 export function VolunteeringSection({ section, embedded }: VolunteeringSectionProps) {
@@ -105,7 +110,7 @@ export function VolunteeringSection({ section, embedded }: VolunteeringSectionPr
   const handleOpenDialog = (item?: VolunteeringItem) => {
     if (item) {
       setEditingItem(item);
-      setFormData(item);
+      setFormData({ ...item, tags: parseHeadingTags(item.tags) });
     } else {
       setEditingItem(null);
       setFormData({ ...emptyItem, id: Date.now().toString() });
@@ -144,6 +149,7 @@ export function VolunteeringSection({ section, embedded }: VolunteeringSectionPr
         endDate: formData.isCurrent ? undefined : formData.endDate,
         isCurrent: formData.isCurrent,
         url: formData.url,
+        tags: parseHeadingTags(formData.tags),
       };
 
       let newItems: VolunteeringItem[];
@@ -192,15 +198,22 @@ export function VolunteeringSection({ section, embedded }: VolunteeringSectionPr
   };
 
   const addButton = (
-    <Button onClick={() => handleOpenDialog()} size={embedded ? 'sm' : 'default'} className="gap-2">
-      <Plus className="h-4 w-4" />
-      Add Experience
-    </Button>
+    <div className="flex flex-wrap items-center gap-2">
+      <Button
+        onClick={() => handleOpenDialog()}
+        size={embedded ? 'sm' : 'default'}
+        className="gap-2"
+      >
+        <Plus className="h-4 w-4" />
+        Add Experience
+      </Button>
+      <SubheadingAddButton section={section} disabled={isLoading} />
+    </div>
   );
 
   const volunteeringList = (
     <div className={cn(!embedded && 'rounded-xl bg-muted/40 p-4')}>
-      {items.length === 0 ? (
+      {items.length === 0 && !isSubHeadingsEnabled(section?.subHeadings) ? (
         <div className="rounded-lg border border-dashed p-8 text-center">
           <Heart className="mx-auto h-12 w-12 text-muted-foreground/50" />
           <h3 className="mt-4 font-medium">No volunteering added yet</h3>
@@ -213,7 +226,8 @@ export function VolunteeringSection({ section, embedded }: VolunteeringSectionPr
           </Button>
         </div>
       ) : (
-        <SortableCardList
+        <SubheadingGroupedCards
+          section={section}
           items={items}
           onReorder={handleReorder}
           dateExtractor={volunteeringDateExtractor}
@@ -231,7 +245,10 @@ export function VolunteeringSection({ section, embedded }: VolunteeringSectionPr
               <div className="min-w-0 flex-1">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <h4 className="font-medium">{item.role}</h4>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h4 className="font-medium">{item.role}</h4>
+                      <ResumeHeadingTags tags={parseHeadingTags(item.tags)} />
+                    </div>
                     <p className="text-sm text-muted-foreground">{item.organization}</p>
                     {item.cause && (
                       <p className="text-xs text-muted-foreground">Cause: {item.cause}</p>
@@ -378,6 +395,12 @@ export function VolunteeringSection({ section, embedded }: VolunteeringSectionPr
               minHeight="120px"
             />
           </div>
+
+          <HeadingTagPicker
+            value={parseHeadingTags(formData.tags)}
+            onChange={(tags) => setFormData({ ...formData, tags })}
+            presets={VOLUNTEERING_HEADING_TAG_PRESETS}
+          />
 
           <div className="space-y-2">
             <Label htmlFor="url">Link (optional)</Label>

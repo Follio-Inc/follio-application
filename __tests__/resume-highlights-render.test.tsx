@@ -20,6 +20,8 @@ const profile = {
       startDate: '2021-01-01',
       isCurrent: true,
       isVisible: true,
+      employmentType: 'FULL_TIME',
+      headingTags: [{ label: 'Full Time', color: 'slate' }],
       bullets: ['Cut checkout latency by 40% for 12M users'],
     },
     {
@@ -92,5 +94,63 @@ describe('highlights drawn into the resume', () => {
     // Follio has no skills, so it gets the summary box only.
     expect(html.match(/glance-skills/g)).toHaveLength(1);
     expect(html.match(/glance-summary/g)).toHaveLength(2);
+    expect(html).toContain('resume-heading-tag');
+    expect(html).toContain('Full Time');
+  });
+
+  it('hides per-role duration by default and shows it on the subheading when opted in', () => {
+    const hidden = renderToStaticMarkup(<CleanResumeView profile={profile} />);
+    expect(hidden).not.toContain('resume-entry-subtitle-row');
+    expect(hidden).not.toContain('2 yrs 1 mo');
+
+    const shown = renderToStaticMarkup(
+      <CleanResumeView
+        profile={
+          {
+            ...profile,
+            workExperiences: profile.workExperiences.map((exp) =>
+              exp.id === 'w2' ? { ...exp, durationVisible: true } : exp
+            ),
+          } as PublicProfile
+        }
+      />
+    );
+    expect(shown).toContain('resume-entry-subtitle-row');
+    expect(shown).toContain('2 yrs 1 mo');
+  });
+
+  it('groups out-of-order roles under Most Relevant and Other combined', () => {
+    const html = renderToStaticMarkup(
+      <CleanResumeView
+        profile={
+          {
+            ...profile,
+            sections: [
+              {
+                ...profile.sections[0],
+                subHeadings: {
+                  groups: [
+                    { id: 'featured', label: 'Most Relevant', entryIds: ['w2'] },
+                    { id: 'other', label: 'Other combined', catchAll: true },
+                  ],
+                },
+              },
+            ],
+          } as PublicProfile
+        }
+      />
+    );
+
+    expect(html).toContain('resume-subheading');
+    expect(html).toContain('Most Relevant');
+    expect(html).toContain('Other combined');
+    const positions = order(html, [
+      'Most Relevant',
+      'Founding engineer',
+      'Other combined',
+      'Staff engineer',
+    ]);
+    expect(positions.every((index) => index >= 0)).toBe(true);
+    expect([...positions].sort((a, b) => a - b)).toEqual(positions);
   });
 });

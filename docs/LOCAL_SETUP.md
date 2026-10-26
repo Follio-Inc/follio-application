@@ -39,6 +39,8 @@ Next.js reads `.env.local`. Prisma reads `.env`. Keep the two files the same: wh
 
 Open `.env.local` and set these. The database lines can stay as they are if you use the Docker database below.
 
+Keep those database URLs on localhost. Do not paste the production Neon URL into `.env` or `.env.local`. localhost and follio.me would then share one database, and signing in locally can delete the live profile. Production on follio.me keeps its own Neon URL in the host's environment settings.
+
 ```env
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/follio"
 DIRECT_URL="postgresql://postgres:postgres@localhost:5432/follio"

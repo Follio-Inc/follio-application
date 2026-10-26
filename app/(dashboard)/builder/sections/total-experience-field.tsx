@@ -93,6 +93,7 @@ export function TotalExperienceField({
   const persistSeq = useRef(0);
   const visibilitySeq = useRef(0);
   const unitsSeq = useRef(0);
+  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const visibleRef = useRef(isVisible);
   visibleRef.current = isVisible;
   const unitsRef = useRef(units);
@@ -120,6 +121,9 @@ export function TotalExperienceField({
     if (next === current) {
       setYears(String(normalizedYears));
       setMonths(String(normalizedMonths));
+      // Preview updates draft immediately; keep saved in sync so the header
+      // does not sit on "Unsaved changes" with no save control.
+      onPersisted(current);
       return;
     }
 
@@ -148,6 +152,29 @@ export function TotalExperienceField({
     }
   };
 
+  const flushPersist = (nextYears = years, nextMonths = months) => {
+    if (persistTimerRef.current) {
+      clearTimeout(persistTimerRef.current);
+      persistTimerRef.current = null;
+    }
+    void persistValue(nextYears, nextMonths);
+  };
+
+  const schedulePersist = (nextYears: string, nextMonths: string) => {
+    if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+    persistTimerRef.current = setTimeout(() => {
+      persistTimerRef.current = null;
+      void persistValue(nextYears, nextMonths);
+    }, 400);
+  };
+
+  useEffect(
+    () => () => {
+      if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+    },
+    []
+  );
+
   const updateValue = (kind: 'years' | 'months', value: string) => {
     const numericValue = value.replace(/\D/g, '');
     const nextYears = kind === 'years' ? numericValue : years;
@@ -157,6 +184,7 @@ export function TotalExperienceField({
 
     const raw = formatExperienceParts(toNumber(nextYears), toNumber(nextMonths, 11));
     onPreviewChange(raw);
+    schedulePersist(nextYears, nextMonths);
   };
 
   const persistVisibility = async (next: boolean) => {
@@ -259,7 +287,7 @@ export function TotalExperienceField({
               onChange={(event) => updateValue('years', event.target.value)}
               onBlur={() => {
                 setEditing(false);
-                void persistValue();
+                flushPersist();
               }}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') {
@@ -294,7 +322,7 @@ export function TotalExperienceField({
               onChange={(event) => updateValue('months', event.target.value)}
               onBlur={() => {
                 setEditing(false);
-                void persistValue();
+                flushPersist();
               }}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') {

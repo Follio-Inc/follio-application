@@ -3,7 +3,6 @@
 import { ExternalLink, Eye, EyeOff, LayoutGrid, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useCallback, useState } from 'react';
 
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -17,10 +16,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { Switch } from '@/components/ui/switch';
+import { HeadingTagPicker } from '@/components/heading-tags/heading-tag-picker';
+import { ResumeHeadingTags } from '@/components/heading-tags/resume-heading-tags';
+import { CUSTOM_HEADING_TAG_PRESETS, parseHeadingTags } from '@/lib/heading-tags';
 import { notifyProfileUpdated } from '@/lib/events';
+import { isSubHeadingsEnabled } from '@/lib/section-subheadings';
 import { cn } from '@/lib/utils';
 
-import { SortableCardList } from '../components/sortable-card-list';
+import { SubheadingAddButton, SubheadingGroupedCards } from '../components/subheading-grouped-list';
 
 import type { CustomSectionContent, CustomSectionItem, ProfileSection } from '@/types';
 import type { DateExtractor } from '../components/sortable-card-list';
@@ -56,7 +59,6 @@ export function CustomSection({ section, embedded }: CustomSectionProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<CustomSectionItem | null>(null);
   const [formData, setFormData] = useState<Partial<CustomSectionItem>>(emptyItem);
-  const [tagInput, setTagInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [freeformContent, setFreeformContent] = useState('');
@@ -108,7 +110,7 @@ export function CustomSection({ section, embedded }: CustomSectionProps) {
   const handleOpenDialog = (item?: CustomSectionItem) => {
     if (item) {
       setEditingItem(item);
-      setFormData(item);
+      setFormData({ ...item, tags: parseHeadingTags(item.tags) });
     } else {
       setEditingItem(null);
       setFormData({ ...emptyItem, id: Date.now().toString() });
@@ -146,7 +148,7 @@ export function CustomSection({ section, embedded }: CustomSectionProps) {
         endDate: formData.isCurrent ? undefined : formData.endDate,
         isCurrent: formData.isCurrent,
         url: formData.url,
-        tags: formData.tags || [],
+        tags: parseHeadingTags(formData.tags),
       };
 
       let newItems: CustomSectionItem[];
@@ -210,23 +212,6 @@ export function CustomSection({ section, embedded }: CustomSectionProps) {
     }
   };
 
-  const addTag = () => {
-    if (tagInput.trim() && !formData.tags?.includes(tagInput.trim())) {
-      setFormData({
-        ...formData,
-        tags: [...(formData.tags || []), tagInput.trim()],
-      });
-      setTagInput('');
-    }
-  };
-
-  const removeTag = (tag: string) => {
-    setFormData({
-      ...formData,
-      tags: formData.tags?.filter((t) => t !== tag) || [],
-    });
-  };
-
   // Freeform content editor
   if (contentType === 'FREEFORM') {
     const freeformContent_el = (
@@ -278,15 +263,22 @@ export function CustomSection({ section, embedded }: CustomSectionProps) {
   }
 
   const addButton = (
-    <Button onClick={() => handleOpenDialog()} size={embedded ? 'sm' : 'default'} className="gap-2">
-      <Plus className="h-4 w-4" />
-      Add Item
-    </Button>
+    <div className="flex flex-wrap items-center gap-2">
+      <Button
+        onClick={() => handleOpenDialog()}
+        size={embedded ? 'sm' : 'default'}
+        className="gap-2"
+      >
+        <Plus className="h-4 w-4" />
+        Add Item
+      </Button>
+      <SubheadingAddButton section={section} disabled={isLoading} />
+    </div>
   );
 
   const itemsList = (
     <div className={cn(!embedded && 'rounded-xl bg-muted/40 p-4')}>
-      {items.length === 0 ? (
+      {items.length === 0 && !isSubHeadingsEnabled(section?.subHeadings) ? (
         <div className="rounded-lg border border-dashed p-8 text-center">
           <LayoutGrid className="mx-auto h-12 w-12 text-muted-foreground/50" />
           <h3 className="mt-4 font-medium">No items added yet</h3>
@@ -297,7 +289,8 @@ export function CustomSection({ section, embedded }: CustomSectionProps) {
           </Button>
         </div>
       ) : (
-        <SortableCardList
+        <SubheadingGroupedCards
+          section={section}
           items={items}
           onReorder={handleReorder}
           dateExtractor={customItemDateExtractor}
@@ -312,7 +305,10 @@ export function CustomSection({ section, embedded }: CustomSectionProps) {
               <div className="min-w-0 flex-1">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <h4 className="font-medium">{item.title}</h4>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h4 className="font-medium">{item.title}</h4>
+                      <ResumeHeadingTags tags={parseHeadingTags(item.tags)} />
+                    </div>
                     {item.subtitle && (
                       <p className="text-sm text-muted-foreground">{item.subtitle}</p>
                     )}
@@ -362,15 +358,6 @@ export function CustomSection({ section, embedded }: CustomSectionProps) {
                   <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
                     {item.description}
                   </p>
-                )}
-                {item.tags && item.tags.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {item.tags.map((tag) => (
-                      <Badge key={tag} variant="secondary" className="text-xs">
-                        {tag}
-                      </Badge>
-                    ))}
-                  </div>
                 )}
                 {item.url && (
                   <a
@@ -475,37 +462,11 @@ export function CustomSection({ section, embedded }: CustomSectionProps) {
             />
           </div>
 
-          <div className="space-y-2">
-            <Label>Tags</Label>
-            <div className="flex gap-2">
-              <Input
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    addTag();
-                  }
-                }}
-                placeholder="Add a tag..."
-              />
-              <Button type="button" variant="outline" onClick={addTag}>
-                Add
-              </Button>
-            </div>
-            {formData.tags && formData.tags.length > 0 && (
-              <div className="flex flex-wrap gap-2 pt-2">
-                {formData.tags.map((tag) => (
-                  <Badge key={tag} variant="secondary" className="gap-1">
-                    {tag}
-                    <button onClick={() => removeTag(tag)} className="ml-1 hover:text-destructive">
-                      ×
-                    </button>
-                  </Badge>
-                ))}
-              </div>
-            )}
-          </div>
+          <HeadingTagPicker
+            value={parseHeadingTags(formData.tags)}
+            onChange={(tags) => setFormData({ ...formData, tags })}
+            presets={CUSTOM_HEADING_TAG_PRESETS}
+          />
 
           {error && (
             <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{error}</div>

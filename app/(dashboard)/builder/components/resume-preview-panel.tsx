@@ -2,18 +2,23 @@
 
 import { AlignLeft, FileText, Loader2 } from 'lucide-react';
 import dynamic from 'next/dynamic';
-import { useCallback, useDeferredValue, useEffect, useRef, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 
 import { CleanResumeView } from '@/app/u/[handle]/views/clean-resume-view';
 import { useBuilderPane } from '@/components/document-builder/document-builder-shell';
+import { FollioPage } from '@/components/follio/follio-page';
 import { ResumeColorThemeSwitch } from '@/components/resume-color-theme-switch';
 import { ResumePageLayoutSwitch } from '@/components/resume-page-layout-switch';
+import { ResumePresentationSwitch } from '@/components/resume-presentation/resume-presentation-switch';
 import { ViewHighlightsButton } from '@/components/resume-presentation/view-highlights-button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { closeBuilderSide } from '@/lib/document-builder';
+import { isPortfolioEnabled } from '@/lib/features';
+import { buildFollioIdentity } from '@/lib/follio-identity';
 import { glanceHasNotes, parseResumeGlance, type ResumeGlance } from '@/lib/resume/glance';
-import { cn } from '@/lib/utils';
 import { getResumeSheetWidthPx, resolveResumePageLayout } from '@/lib/resume/page-layout';
+import { resumePresentationHref, type ResumePresentation } from '@/lib/resume/presentation';
+import { cn } from '@/lib/utils';
 import {
   RESUME_DESIGN_DEFAULTS,
   type PublicProfile,
@@ -37,6 +42,8 @@ const ResumeZoomModal = dynamic(
 
 const HORIZONTAL_PADDING_PX = 48;
 const STAGE_RIGHT_PADDING_PX = 56;
+/** Follio reading column (`max-w-2xl`) — scaled to fit the preview stage. */
+const FOLLIO_PREVIEW_WIDTH_PX = 672;
 
 /** About half a minute: long enough for the highlights prompt to finish after a save. */
 const GLANCE_POLL_MS = 2500;
@@ -54,6 +61,9 @@ const GLANCE_STATUS_COPY = {
  * as the user edits fields — no API round-trip needed.
  *
  * Overlays:
+ * - Resume | Follio swaps this preview for the Follio view of the same draft.
+ *   Page size and color stay on the paper resume. Editing updates the Follio
+ *   in place.
  * - View Highlights, pinned to the resume's top-right, draws the stored
  *   highlights into this resume (marker phrases, plus an impact box and
  *   skill tags under each company) and closes Content and Design.
@@ -78,7 +88,17 @@ export function ResumePreviewPanel() {
   const commitInlineChange = useBuilderStore((s) => s.commitInlineChange);
   const colorTheme = profile.resumeDesign?.colorTheme ?? RESUME_DESIGN_DEFAULTS.colorTheme;
   const pageLayout = resolveResumePageLayout(profile.resumeDesign);
-  const nativeWidthPx = getResumeSheetWidthPx(pageLayout);
+  const [presentation, setPresentation] = useState<ResumePresentation>('resume');
+  const isFollio = presentation === 'follio';
+  const nativeWidthPx = isFollio ? FOLLIO_PREVIEW_WIDTH_PX : getResumeSheetWidthPx(pageLayout);
+  const follioIdentity = useMemo(
+    () =>
+      buildFollioIdentity(profile as unknown as PublicProfile, {
+        showResume: true,
+        showWork: isPortfolioEnabled(),
+      }),
+    [profile]
+  );
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const containerRef = useRef<HTMLDivElement>(null);
   const resumeContentRef = useRef<HTMLDivElement>(null);
@@ -222,7 +242,13 @@ export function ResumePreviewPanel() {
     };
   }, [showHighlights, readStoredGlance]);
 
+  const showPresentation = useCallback((next: ResumePresentation) => {
+    setPresentation(next);
+    if (next === 'follio') setShowHighlights(false);
+  }, []);
+
   const openHighlights = useCallback(() => {
+    setPresentation('resume');
     setZoomOpen(false);
     pane?.setMode((mode) => closeBuilderSide(mode));
     setShowHighlights(true);
@@ -233,6 +259,7 @@ export function ResumePreviewPanel() {
   // Suggestions and highlights both draw on the resume; suggestions win.
   useEffect(() => {
     if (!reviewing) return;
+    setPresentation('resume');
     setShowHighlights(false);
     setZoomOpen(false);
   }, [reviewing]);
@@ -266,21 +293,30 @@ export function ResumePreviewPanel() {
             ? 'Building resume'
             : reviewing
               ? 'Suggestions'
-              : showHighlights
-                ? 'Highlights'
-                : 'Preview'}
+              : isFollio
+                ? 'Follio'
+                : showHighlights
+                  ? 'Highlights'
+                  : 'Preview'}
         </span>
         <div className="flex items-center gap-2">
-          <ResumePageLayoutSwitch
-            variant="compact"
-            value={pageLayout}
-            onChange={handlePageLayoutChange}
-          />
-          <ResumeColorThemeSwitch
-            variant="compact"
-            value={colorTheme}
-            onChange={handleColorThemeChange}
-          />
+          {reviewing ? null : (
+            <ResumePresentationSwitch value={presentation} onChange={showPresentation} />
+          )}
+          {isFollio ? null : (
+            <>
+              <ResumePageLayoutSwitch
+                variant="compact"
+                value={pageLayout}
+                onChange={handlePageLayoutChange}
+              />
+              <ResumeColorThemeSwitch
+                variant="compact"
+                value={colorTheme}
+                onChange={handleColorThemeChange}
+              />
+            </>
+          )}
         </div>
       </div>
 
@@ -309,22 +345,26 @@ export function ResumePreviewPanel() {
             >
               <div className="overflow-hidden" style={{ zoom: scale }}>
                 <div ref={resumeContentRef} className="[&>.resume-actions]:hidden">
-                  <CleanResumeView
-                    profile={profile as unknown as PublicProfile}
-                    highlights={showHighlights ? glance : null}
-                    redline={redline}
-                  />
+                  {isFollio ? (
+                    <FollioPage identity={follioIdentity} interactive={false} />
+                  ) : (
+                    <CleanResumeView
+                      profile={profile as unknown as PublicProfile}
+                      highlights={showHighlights ? glance : null}
+                      redline={redline}
+                    />
+                  )}
                 </div>
               </div>
             </div>
 
-            {redline && <RedlineControls rootRef={sheetRef} redline={redline} />}
+            {redline && !isFollio ? <RedlineControls rootRef={sheetRef} redline={redline} /> : null}
 
             {showHighlights || reviewing ? null : (
               <button
                 type="button"
                 onClick={() => setZoomOpen(true)}
-                aria-label="Open large preview"
+                aria-label={isFollio ? 'Open large Follio view' : 'Open large preview'}
                 className={cn(
                   'absolute inset-0 z-10 h-full w-full cursor-zoom-in rounded-md',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40'
@@ -338,7 +378,7 @@ export function ResumePreviewPanel() {
               aria-hidden="true"
             />
 
-            {!allJustified && !showHighlights && !reviewing && (
+            {!isFollio && !allJustified && !showHighlights && !reviewing && (
               <div className="absolute left-3 top-8 z-20">
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -381,7 +421,7 @@ export function ResumePreviewPanel() {
           ) : null}
         </div>
 
-        {reviewing ? null : (
+        {reviewing || isFollio ? null : (
           <div className="pointer-events-none absolute inset-x-0 top-6 z-30 px-6 pr-14">
             <div className="relative mx-auto h-0" style={{ width: sheetWidth }}>
               <div className="absolute right-6 top-6">
@@ -407,6 +447,7 @@ export function ResumePreviewPanel() {
             onZoom={() => setZoomOpen(true)}
             resumeRef={resumeContentRef}
             kebabContainer={kebabAnchor}
+            visitorHref={resumePresentationHref(profile.handle, presentation)}
           />
         </div>
       )}
@@ -416,6 +457,7 @@ export function ResumePreviewPanel() {
         open={zoomOpen}
         onClose={() => setZoomOpen(false)}
         onViewHighlights={openHighlights}
+        presentation={presentation}
         profile={profile as unknown as PublicProfile}
       />
     </div>

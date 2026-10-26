@@ -811,6 +811,32 @@
     gap: 8px;
   }
 
+  .resume-entry-group + .resume-entry-group {
+    margin-top: calc(var(--rd-entry-gap, 16px) + 4px);
+  }
+
+  .resume-subheading {
+    font-family: var(
+      --rd-font-heading,
+      -apple-system,
+      BlinkMacSystemFont,
+      'Segoe UI',
+      Roboto,
+      sans-serif
+    );
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    line-height: 1.3;
+    text-transform: none;
+    color: color-mix(in srgb, currentColor 58%, transparent);
+    margin: 0 0 8px;
+  }
+
+  .resume-paper-wrapper[data-resume-theme='dark'] .resume-subheading {
+    color: color-mix(in srgb, #e5e5e5 62%, transparent);
+  }
+
   .resume-entry {
     break-inside: avoid;
   }
@@ -834,10 +860,68 @@
     color: inherit;
   }
 
+  .resume-entry-title-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 5px 8px;
+  }
+
+  .resume-heading-tags {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .resume-heading-tag {
+    font-family: var(
+      --rd-font-body,
+      -apple-system,
+      BlinkMacSystemFont,
+      'Segoe UI',
+      Roboto,
+      sans-serif
+    );
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1.2;
+    text-transform: none;
+    white-space: nowrap;
+    flex-shrink: 0;
+    padding: 1px 7px;
+    /* Flex centering uses the ascender box, which sits above the heading's visual center. */
+    position: relative;
+    top: 1px;
+    border-radius: 999px;
+    color: var(--tag-fg, currentColor);
+    background: var(--tag-bg, color-mix(in srgb, currentColor 8%, transparent));
+    border: 1px solid var(--tag-border, color-mix(in srgb, currentColor 28%, transparent));
+  }
+
+  .resume-paper-wrapper[data-resume-theme='dark'] .resume-heading-tag {
+    color: var(--tag-fg-dark, var(--tag-fg, #d4d4d8));
+    background: var(--tag-bg-dark, var(--tag-bg, #27272a));
+    border-color: var(--tag-border-dark, var(--tag-border, #52525b));
+  }
+
   .resume-entry-subtitle {
     font-size: 13px;
     color: #555;
     margin: 1px 0 0 0;
+  }
+
+  .resume-entry-subtitle-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 5px 8px;
+    margin: 1px 0 0 0;
+  }
+
+  .resume-entry-subtitle-row .resume-entry-subtitle {
+    margin: 0;
   }
 
   .resume-paper-wrapper[data-resume-theme='dark'] .resume-entry-subtitle {
@@ -1358,6 +1442,12 @@
     color: #525252;
   }
 
+  .resume-paper--lumen .resume-subheading {
+    letter-spacing: 0.14em;
+    font-weight: 600;
+    color: #737373;
+  }
+
   .resume-paper-wrapper[data-resume-theme='dark'] .resume-paper--lumen .resume-entry-subtitle {
     color: #a3a3a3;
   }
@@ -1512,6 +1602,27 @@
 
   .resume-paper--sleek .resume-section > .resume-entries-compact {
     grid-column: 2;
+  }
+
+  .resume-paper--sleek .resume-section > .resume-entry-group {
+    grid-column: 1 / -1;
+  }
+
+  .resume-paper--sleek .resume-section > .resume-entry-group-compact {
+    grid-column: 2;
+  }
+
+  .resume-paper--sleek .resume-subheading {
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-size: 9px;
+    margin: 0 0 10px 204px;
+  }
+
+  .resume-paper--sleek .resume-entry-group-compact .resume-subheading {
+    margin-left: 0;
+    text-transform: none;
+    letter-spacing: 0.08em;
   }
 
   .resume-paper--sleek .resume-entry {
@@ -1757,6 +1868,11 @@
     padding: 2px 8px;
   }
 
+  .resume-paper--studio .resume-subheading {
+    letter-spacing: 0.08em;
+    color: #6b7280;
+  }
+
   /* Skills as a plain vertical list — no proficiency bars */
   .resume-skills-stack {
     list-style: none;
@@ -1958,6 +2074,18 @@
 
   .resume-paper--atelier .resume-section-line {
     display: none;
+  }
+
+  .resume-paper--atelier .resume-subheading {
+    font-family: var(--rd-font-heading, 'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-size: 9px;
+    color: color-mix(
+      in srgb,
+      var(--rd-heading-color, var(--rd-accent-color, #c25b42)) 72%,
+      #8a6a62
+    );
   }
 
   .resume-paper--atelier .resume-summary {

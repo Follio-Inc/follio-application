@@ -38,7 +38,10 @@ import {
   EmailConflictError,
   getOrCreateUserForClerk,
   isClerkUserMissing,
+  RemoteDatabaseProtectedError,
 } from '@/lib/account/resolve-user';
+
+const LOCAL_DATABASE_URL = 'postgresql://postgres:postgres@localhost:5432/follio';
 
 describe('isClerkUserMissing', () => {
   beforeEach(() => {
@@ -104,6 +107,7 @@ describe('getOrCreateUserForClerk', () => {
   });
 
   it('purges an orphaned row and creates a clean user when the old Clerk user is gone', async () => {
+    vi.stubEnv('DATABASE_URL', LOCAL_DATABASE_URL);
     findUniqueMock.mockResolvedValueOnce(null).mockResolvedValueOnce({
       id: 'u_orphan',
       clerkId: 'clerk_old',
@@ -136,6 +140,33 @@ describe('getOrCreateUserForClerk', () => {
     });
     expect(result).toBe(created);
     expect(result.profile).toBeNull();
+    vi.unstubAllEnvs();
+  });
+
+  it('does not purge when this process is pointed at a remote database', async () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    vi.stubEnv('DATABASE_URL', 'postgresql://user:pass@ep-example.us-east-1.aws.neon.tech/neondb');
+    findUniqueMock.mockResolvedValueOnce(null).mockResolvedValueOnce({
+      id: 'u_live',
+      clerkId: 'clerk_live',
+      email: 'a@b.com',
+      profile: { id: 'p1' },
+    });
+    getUserMock.mockRejectedValue({
+      status: 404,
+      errors: [{ code: 'resource_not_found' }],
+    });
+
+    await expect(
+      getOrCreateUserForClerk({
+        clerkId: 'clerk_local',
+        email: 'a@b.com',
+      })
+    ).rejects.toBeInstanceOf(RemoteDatabaseProtectedError);
+
+    expect(deleteLocalAccountDataMock).not.toHaveBeenCalled();
+    expect(createMock).not.toHaveBeenCalled();
+    vi.unstubAllEnvs();
   });
 
   it('throws EmailConflictError when another live Clerk account owns the email', async () => {

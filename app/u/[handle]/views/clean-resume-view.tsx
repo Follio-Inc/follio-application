@@ -48,6 +48,11 @@ import { resolveSkillCategoryLabel, skillGroupsHaveCategoryLabels } from '@/lib/
 import { displayTotalExperience } from '@/lib/total-experience';
 import { formatDate } from '@/lib/utils';
 import { applyVisibilityFilter, type FilteredProfile } from '@/lib/visibility';
+import {
+  parseHeadingTags,
+  resolveExperienceHeadingTags,
+  type HeadingTag,
+} from '@/lib/heading-tags';
 import type {
   CustomSectionContent,
   CustomSectionItem,
@@ -59,6 +64,12 @@ import type {
   ReferenceItem,
   VolunteeringItem,
 } from '@/types';
+import {
+  ResumeEntrySubtitle,
+  ResumeEntryTitle,
+} from '@/components/heading-tags/resume-heading-tags';
+import { displayEntryDurationFrom } from '@/lib/entry-duration';
+import { ResumeEntryGroups } from '@/components/section-subheadings/resume-entry-groups';
 import { HEADER_SECTION_TYPES, type ResumeDesign } from '@/types';
 
 import { ResumePagedStack } from '@/components/resume-paged-stack';
@@ -510,6 +521,8 @@ interface ExperienceEntryProps {
   bullets: string[];
   /** Complete editor HTML — when present, rendered directly for perfect fidelity. */
   bulletsHtml?: string | null;
+  headingTags?: HeadingTag[];
+  duration?: string | null;
 }
 
 function ExperienceEntry({
@@ -521,6 +534,8 @@ function ExperienceEntry({
   isCurrent,
   bullets,
   bulletsHtml,
+  headingTags = [],
+  duration,
   variant = 'default',
   highlight,
   redline,
@@ -550,8 +565,12 @@ function ExperienceEntry({
         <div className="resume-atelier-exp-grid">
           <span className="resume-entry-date">{dateRange}</span>
           <div className="resume-atelier-exp-body">
-            <h3 className="resume-entry-title">{company}</h3>
-            <p className="resume-entry-subtitle">{role}</p>
+            <ResumeEntryTitle tags={headingTags}>
+              <h3 className="resume-entry-title">{company}</h3>
+            </ResumeEntryTitle>
+            <ResumeEntrySubtitle duration={duration}>
+              <p className="resume-entry-subtitle">{role}</p>
+            </ResumeEntrySubtitle>
             {inserts}
             {bulletsBlock}
           </div>
@@ -564,8 +583,12 @@ function ExperienceEntry({
     <div className="resume-entry">
       <div className="resume-entry-header">
         <div className="resume-entry-title-block">
-          <h3 className="resume-entry-title">{role}</h3>
-          <p className="resume-entry-subtitle">{companyLine}</p>
+          <ResumeEntryTitle tags={headingTags}>
+            <h3 className="resume-entry-title">{role}</h3>
+          </ResumeEntryTitle>
+          <ResumeEntrySubtitle duration={duration}>
+            <p className="resume-entry-subtitle">{companyLine}</p>
+          </ResumeEntrySubtitle>
         </div>
         {dateRange ? <span className="resume-entry-date">{dateRange}</span> : null}
       </div>
@@ -583,6 +606,7 @@ function ExperienceSection({
   totalExperienceShowMonths,
   variant = 'default',
   highlights,
+  subHeadings,
 }: {
   experiences: PublicProfile['workExperiences'];
   totalExperience?: string | null;
@@ -591,6 +615,7 @@ function ExperienceSection({
   totalExperienceShowMonths?: boolean | null;
   variant?: 'default' | 'atelier';
   highlights?: ResumeGlance | null;
+  subHeadings?: unknown;
 }) {
   const redline = useContext(RedlineContext);
   if (!experiences || experiences.length === 0) return null;
@@ -604,8 +629,8 @@ function ExperienceSection({
   return (
     <section className="resume-section">
       <SectionDivider title={variant === 'atelier' ? 'WORK EXPERIENCE' : 'EXPERIENCE'} tag={tag} />
-      <div className="resume-entries">
-        {experiences.map((exp) => (
+      <ResumeEntryGroups items={experiences} subHeadings={subHeadings}>
+        {(exp) => (
           <ExperienceEntry
             key={exp.id}
             role={exp.role}
@@ -616,12 +641,14 @@ function ExperienceSection({
             isCurrent={exp.isCurrent}
             bullets={exp.bullets}
             bulletsHtml={exp.bulletsHtml}
+            headingTags={resolveExperienceHeadingTags(exp)}
+            duration={displayEntryDurationFrom(exp)}
             variant={variant}
             highlight={byEntry.get(exp.id)}
             redline={redline?.roles.get(exp.id)}
           />
-        ))}
-      </div>
+        )}
+      </ResumeEntryGroups>
     </section>
   );
 }
@@ -633,17 +660,19 @@ function ExperienceSection({
 function EducationSection({
   educations,
   variant = 'default',
+  subHeadings,
 }: {
   educations: PublicProfile['educations'];
   variant?: 'default' | 'atelier';
+  subHeadings?: unknown;
 }) {
   if (!educations || educations.length === 0) return null;
 
   return (
     <section className="resume-section">
       <SectionDivider title="EDUCATION" />
-      <div className="resume-entries">
-        {educations.map((edu) => {
+      <ResumeEntryGroups items={educations} subHeadings={subHeadings}>
+        {(edu) => {
           const degreeLine = [edu.degree, edu.fieldOfStudy].filter(Boolean).join(' in ');
           const dateRange =
             variant === 'atelier'
@@ -659,11 +688,19 @@ function EducationSection({
               </div>
             ) : null;
 
+          const headingTags = parseHeadingTags(edu.headingTags);
+          const duration = displayEntryDurationFrom(edu);
+          const subtitle = degreeLine ? (
+            <p className="resume-entry-subtitle">{edu.institution}</p>
+          ) : null;
+
           if (variant === 'atelier') {
             return (
               <div key={edu.id} className="resume-entry resume-atelier-edu">
-                <h3 className="resume-entry-title">{degreeLine || edu.institution}</h3>
-                {degreeLine ? <p className="resume-entry-subtitle">{edu.institution}</p> : null}
+                <ResumeEntryTitle tags={headingTags}>
+                  <h3 className="resume-entry-title">{degreeLine || edu.institution}</h3>
+                </ResumeEntryTitle>
+                <ResumeEntrySubtitle duration={duration}>{subtitle}</ResumeEntrySubtitle>
                 {(dateRange || edu.location) && (
                   <p className="resume-atelier-edu-meta">
                     {[dateRange, edu.location].filter(Boolean).join(' · ')}
@@ -679,8 +716,10 @@ function EducationSection({
             <div key={edu.id} className="resume-entry">
               <div className="resume-entry-header">
                 <div className="resume-entry-title-block">
-                  <h3 className="resume-entry-title">{degreeLine || edu.institution}</h3>
-                  {degreeLine && <p className="resume-entry-subtitle">{edu.institution}</p>}
+                  <ResumeEntryTitle tags={headingTags}>
+                    <h3 className="resume-entry-title">{degreeLine || edu.institution}</h3>
+                  </ResumeEntryTitle>
+                  <ResumeEntrySubtitle duration={duration}>{subtitle}</ResumeEntrySubtitle>
                 </div>
                 {dateRange ? <span className="resume-entry-date">{dateRange}</span> : null}
               </div>
@@ -688,8 +727,8 @@ function EducationSection({
               {details}
             </div>
           );
-        })}
-      </div>
+        }}
+      </ResumeEntryGroups>
     </section>
   );
 }
@@ -781,14 +820,20 @@ function SkillsSection({
 // PROJECTS SECTION
 // ============================================================================
 
-function ProjectsSection({ projects }: { projects: PublicProfile['projects'] }) {
+function ProjectsSection({
+  projects,
+  subHeadings,
+}: {
+  projects: PublicProfile['projects'];
+  subHeadings?: unknown;
+}) {
   if (!projects || projects.length === 0) return null;
 
   return (
     <section className="resume-section">
       <SectionDivider title="PROJECTS" />
-      <div className="resume-entries">
-        {projects.map((project) => {
+      <ResumeEntryGroups items={projects} subHeadings={subHeadings}>
+        {(project) => {
           const dateRange = formatDateRange(project.startDate, project.endDate, project.isCurrent);
           const description = project.customDescription || project.shortDesc || project.description;
 
@@ -796,20 +841,22 @@ function ProjectsSection({ projects }: { projects: PublicProfile['projects'] }) 
             <div key={project.id} className="resume-entry">
               <div className="resume-entry-header">
                 <div className="resume-entry-title-block">
-                  <h3 className="resume-entry-title">
-                    {project.title}
-                    {project.url && (
-                      <a
-                        href={project.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="resume-project-link"
-                      >
-                        {' '}
-                        ↗
-                      </a>
-                    )}
-                  </h3>
+                  <ResumeEntryTitle tags={parseHeadingTags(project.headingTags)}>
+                    <h3 className="resume-entry-title">
+                      {project.title}
+                      {project.url && (
+                        <a
+                          href={project.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="resume-project-link"
+                        >
+                          {' '}
+                          ↗
+                        </a>
+                      )}
+                    </h3>
+                  </ResumeEntryTitle>
                   {project.techStack && project.techStack.length > 0 && (
                     <p className="resume-entry-tech">{project.techStack.join(', ')}</p>
                   )}
@@ -835,8 +882,8 @@ function ProjectsSection({ projects }: { projects: PublicProfile['projects'] }) 
               )}
             </div>
           );
-        })}
-      </div>
+        }}
+      </ResumeEntryGroups>
     </section>
   );
 }
@@ -847,16 +894,18 @@ function ProjectsSection({ projects }: { projects: PublicProfile['projects'] }) 
 
 function CertificationsSection({
   certifications,
+  subHeadings,
 }: {
   certifications: PublicProfile['certifications'];
+  subHeadings?: unknown;
 }) {
   if (!certifications || certifications.length === 0) return null;
 
   return (
     <section className="resume-section">
       <SectionDivider title="CERTIFICATIONS" />
-      <div className="resume-entries resume-entries-compact">
-        {certifications.map((cert) => {
+      <ResumeEntryGroups items={certifications} subHeadings={subHeadings} compact>
+        {(cert) => {
           const issuedDate = formatResumeDate(cert.issueDate);
           const expDate = cert.expirationDate ? formatResumeDate(cert.expirationDate) : null;
 
@@ -873,8 +922,8 @@ function CertificationsSection({
               )}
             </div>
           );
-        })}
-      </div>
+        }}
+      </ResumeEntryGroups>
     </section>
   );
 }
@@ -886,17 +935,19 @@ function CertificationsSection({
 function AwardsSection({
   awards,
   title = 'AWARDS & RECOGNITION',
+  subHeadings,
 }: {
   awards: PublicProfile['awards'];
   title?: string;
+  subHeadings?: unknown;
 }) {
   if (!awards || awards.length === 0) return null;
 
   return (
     <section className="resume-section">
       <SectionDivider title={title} />
-      <div className="resume-entries resume-entries-compact">
-        {awards.map((award) => {
+      <ResumeEntryGroups items={awards} subHeadings={subHeadings} compact>
+        {(award) => {
           const awardDate = formatResumeDate(award.date);
 
           return (
@@ -911,8 +962,8 @@ function AwardsSection({
               )}
             </div>
           );
-        })}
-      </div>
+        }}
+      </ResumeEntryGroups>
     </section>
   );
 }
@@ -921,14 +972,20 @@ function AwardsSection({
 // PUBLICATIONS SECTION
 // ============================================================================
 
-function PublicationsSection({ items }: { items: PublicationItem[] }) {
+function PublicationsSection({
+  items,
+  subHeadings,
+}: {
+  items: PublicationItem[];
+  subHeadings?: unknown;
+}) {
   if (!items || items.length === 0) return null;
 
   return (
     <section className="resume-section">
       <SectionDivider title="PUBLICATIONS" />
-      <div className="resume-entries resume-entries-compact">
-        {items.map((pub) => (
+      <ResumeEntryGroups items={items} subHeadings={subHeadings} compact>
+        {(pub) => (
           <div key={pub.id} className="resume-publication">
             <p className="resume-publication-title">
               {pub.url ? (
@@ -944,8 +1001,8 @@ function PublicationsSection({ items }: { items: PublicationItem[] }) {
               {[pub.publisher, pub.date].filter(Boolean).join(', ')}
             </p>
           </div>
-        ))}
-      </div>
+        )}
+      </ResumeEntryGroups>
     </section>
   );
 }
@@ -954,14 +1011,20 @@ function PublicationsSection({ items }: { items: PublicationItem[] }) {
 // VOLUNTEERING SECTION
 // ============================================================================
 
-function VolunteeringSection({ items }: { items: VolunteeringItem[] }) {
+function VolunteeringSection({
+  items,
+  subHeadings,
+}: {
+  items: VolunteeringItem[];
+  subHeadings?: unknown;
+}) {
   if (!items || items.length === 0) return null;
 
   return (
     <section className="resume-section">
       <SectionDivider title="VOLUNTEERING" />
-      <div className="resume-entries">
-        {items.map((vol) => {
+      <ResumeEntryGroups items={items} subHeadings={subHeadings}>
+        {(vol) => {
           const dateRange =
             vol.startDate || vol.endDate || vol.isCurrent
               ? `${vol.startDate || ''} – ${vol.isCurrent ? 'Present' : vol.endDate || ''}`
@@ -971,7 +1034,9 @@ function VolunteeringSection({ items }: { items: VolunteeringItem[] }) {
             <div key={vol.id} className="resume-entry">
               <div className="resume-entry-header">
                 <div className="resume-entry-title-block">
-                  <h3 className="resume-entry-title">{vol.role}</h3>
+                  <ResumeEntryTitle tags={parseHeadingTags(vol.tags)}>
+                    <h3 className="resume-entry-title">{vol.role}</h3>
+                  </ResumeEntryTitle>
                   <p className="resume-entry-subtitle">{vol.organization}</p>
                 </div>
                 {dateRange && <span className="resume-entry-date">{dateRange}</span>}
@@ -979,8 +1044,8 @@ function VolunteeringSection({ items }: { items: VolunteeringItem[] }) {
               {vol.description && <p className="resume-entry-description">{vol.description}</p>}
             </div>
           );
-        })}
-      </div>
+        }}
+      </ResumeEntryGroups>
     </section>
   );
 }
@@ -1080,8 +1145,8 @@ function CustomSection({ section }: { section: ProfileSection }) {
       <SectionDivider title={section.title.toUpperCase()} />
 
       {items.length > 0 && (
-        <div className="resume-entries">
-          {items.map((item: CustomSectionItem) => {
+        <ResumeEntryGroups items={items} subHeadings={section.subHeadings}>
+          {(item: CustomSectionItem) => {
             const dateRange =
               item.startDate || item.endDate || item.isCurrent
                 ? `${item.startDate || ''} – ${item.isCurrent ? 'Present' : item.endDate || ''}`
@@ -1091,19 +1156,18 @@ function CustomSection({ section }: { section: ProfileSection }) {
               <div key={item.id} className="resume-entry">
                 <div className="resume-entry-header">
                   <div className="resume-entry-title-block">
-                    <h3 className="resume-entry-title">{item.title}</h3>
+                    <ResumeEntryTitle tags={parseHeadingTags(item.tags)}>
+                      <h3 className="resume-entry-title">{item.title}</h3>
+                    </ResumeEntryTitle>
                     {item.subtitle && <p className="resume-entry-subtitle">{item.subtitle}</p>}
                   </div>
                   {dateRange && <span className="resume-entry-date">{dateRange}</span>}
                 </div>
                 {item.description && <p className="resume-entry-description">{item.description}</p>}
-                {item.tags && item.tags.length > 0 && (
-                  <p className="resume-entry-tags">{item.tags.join(', ')}</p>
-                )}
               </div>
             );
-          })}
-        </div>
+          }}
+        </ResumeEntryGroups>
       )}
 
       {freeformContent && <p className="resume-freeform">{freeformContent}</p>}
@@ -1193,6 +1257,7 @@ export function CleanResumeView({
             totalExperienceShowMonths={profile.totalExperienceShowMonths}
             variant={isAtelier ? 'atelier' : 'default'}
             highlights={highlights}
+            subHeadings={section.subHeadings}
           />
         );
       case 'EDUCATION':
@@ -1201,20 +1266,34 @@ export function CleanResumeView({
             key={section.id}
             educations={profile.educations}
             variant={isAtelier ? 'atelier' : 'default'}
+            subHeadings={section.subHeadings}
           />
         );
       case 'SKILLS':
         return <SkillsSection key={section.id} profile={profile} stacked={isAtelier} />;
       case 'PROJECTS':
-        return <ProjectsSection key={section.id} projects={profile.projects} />;
+        return (
+          <ProjectsSection
+            key={section.id}
+            projects={profile.projects}
+            subHeadings={section.subHeadings}
+          />
+        );
       case 'CERTIFICATIONS':
-        return <CertificationsSection key={section.id} certifications={profile.certifications} />;
+        return (
+          <CertificationsSection
+            key={section.id}
+            certifications={profile.certifications}
+            subHeadings={section.subHeadings}
+          />
+        );
       case 'AWARDS':
         return (
           <AwardsSection
             key={section.id}
             awards={profile.awards}
             title={isAtelier ? 'AWARDS' : 'AWARDS & RECOGNITION'}
+            subHeadings={section.subHeadings}
           />
         );
       case 'PUBLICATIONS':
@@ -1222,6 +1301,7 @@ export function CleanResumeView({
           <PublicationsSection
             key={section.id}
             items={getCustomContentItems<PublicationItem>(section)}
+            subHeadings={section.subHeadings}
           />
         );
       case 'VOLUNTEERING':
@@ -1229,6 +1309,7 @@ export function CleanResumeView({
           <VolunteeringSection
             key={section.id}
             items={getCustomContentItems<VolunteeringItem>(section)}
+            subHeadings={section.subHeadings}
           />
         );
       case 'LANGUAGES':

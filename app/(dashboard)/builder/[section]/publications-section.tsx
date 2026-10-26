@@ -16,9 +16,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { notifyProfileUpdated } from '@/lib/events';
+import { isSubHeadingsEnabled } from '@/lib/section-subheadings';
 import { cn } from '@/lib/utils';
 
-import { SortableCardList } from '../components/sortable-card-list';
+import { SubheadingAddButton, SubheadingGroupedCards } from '../components/subheading-grouped-list';
 
 import type { ProfileSection, PublicationItem, PublicationsSectionContent } from '@/types';
 import type { DateExtractor } from '../components/sortable-card-list';
@@ -180,15 +181,22 @@ export function PublicationsSection({ section, embedded }: PublicationsSectionPr
   };
 
   const addButton = (
-    <Button onClick={() => handleOpenDialog()} size={embedded ? 'sm' : 'default'} className="gap-2">
-      <Plus className="h-4 w-4" />
-      Add Publication
-    </Button>
+    <div className="flex flex-wrap items-center gap-2">
+      <Button
+        onClick={() => handleOpenDialog()}
+        size={embedded ? 'sm' : 'default'}
+        className="gap-2"
+      >
+        <Plus className="h-4 w-4" />
+        Add Publication
+      </Button>
+      <SubheadingAddButton section={section} disabled={isLoading} />
+    </div>
   );
 
   const publicationsList = (
     <div className={cn(!embedded && 'rounded-xl bg-muted/40 p-4')}>
-      {items.length === 0 ? (
+      {items.length === 0 && !isSubHeadingsEnabled(section?.subHeadings) ? (
         <div className="rounded-lg border border-dashed p-8 text-center">
           <BookOpen className="mx-auto h-12 w-12 text-muted-foreground/50" />
           <h3 className="mt-4 font-medium">No publications added yet</h3>
@@ -201,7 +209,8 @@ export function PublicationsSection({ section, embedded }: PublicationsSectionPr
           </Button>
         </div>
       ) : (
-        <SortableCardList
+        <SubheadingGroupedCards
+          section={section}
           items={items}
           onReorder={handleReorder}
           dateExtractor={publicationDateExtractor}

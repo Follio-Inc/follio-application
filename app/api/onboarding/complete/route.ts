@@ -1,4 +1,8 @@
-import { EmailConflictError, getOrCreateUserForClerk } from '@/lib/account/resolve-user';
+import {
+  EmailConflictError,
+  getOrCreateUserForClerk,
+  RemoteDatabaseProtectedError,
+} from '@/lib/account/resolve-user';
 import { syncAvatarToClerk } from '@/lib/clerk-avatar-sync';
 import { upsertGitHubProfileForProfile } from '@/services/import/github-enhanced.service';
 import { db } from '@/lib/db';
@@ -389,6 +393,16 @@ export async function POST(request: NextRequest) {
             error: 'Email already in use',
             message: error.message,
             code: 'EMAIL_CONFLICT',
+          },
+          { status: 409 }
+        );
+      }
+      if (error instanceof RemoteDatabaseProtectedError) {
+        return NextResponse.json(
+          {
+            error: 'Remote database protected',
+            message: error.message,
+            code: 'REMOTE_DATABASE_PROTECTED',
           },
           { status: 409 }
         );

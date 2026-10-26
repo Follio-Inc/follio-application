@@ -10,6 +10,12 @@
 import { documentGoogleFontLinkTags } from '@/lib/document-design';
 import { Errors } from '@/lib/errors';
 import {
+  headingTagsHtml,
+  parseHeadingTags,
+  resolveExperienceHeadingTags,
+  wrapHeadingTitleHtml,
+} from '@/lib/heading-tags';
+import {
   containsHtmlFormatting,
   escapeHtml,
   htmlToBullets,
@@ -31,7 +37,9 @@ import {
   resolveResumeFonts,
 } from '@/lib/resume-design';
 import { getResumeTemplateId, isResumeAtelierRailSectionType } from '@/lib/resume/templates';
+import { groupEntriesBySubheadings, hasLabeledSubheadingGroups } from '@/lib/section-subheadings';
 import { resolveSkillCategoryLabel, skillGroupsHaveCategoryLabels } from '@/lib/skills/groups';
+import { displayEntryDurationFrom, wrapEntrySubtitleHtml } from '@/lib/entry-duration';
 import { displayTotalExperience, unitsFromProfile } from '@/lib/total-experience';
 import { formatDate } from '@/lib/utils';
 import { generateDocumentPDF } from '@/services/document-pdf.service';
@@ -358,7 +366,8 @@ export function toPlainText(profile: FullProfile): string {
               const dateRange = exp.isCurrent
                 ? `${formatDate(exp.startDate)} - Present`
                 : `${formatDate(exp.startDate)} - ${formatDate(exp.endDate)}`;
-              lines.push(`${exp.role} | ${exp.company}`);
+              const duration = displayEntryDurationFrom(exp);
+              lines.push(`${exp.role} | ${exp.company}${duration ? ` (${duration})` : ''}`);
               lines.push(`${dateRange}${exp.location ? ` | ${exp.location}` : ''}`);
               exp.bullets.forEach((bullet) => {
                 lines.push(`• ${stripHtmlTags(bullet)}`);
@@ -373,8 +382,9 @@ export function toPlainText(profile: FullProfile): string {
             lines.push('EDUCATION');
             lines.push('-'.repeat(50));
             visibleEducations.forEach((edu) => {
+              const duration = displayEntryDurationFrom(edu);
               lines.push(`${edu.degree || ''} ${edu.fieldOfStudy || ''}`);
-              lines.push(edu.institution);
+              lines.push(`${edu.institution}${duration ? ` (${duration})` : ''}`);
               if (edu.startDate || edu.endDate) {
                 const dateRange = edu.isCurrent
                   ? `${formatDate(edu.startDate)} - Present`
@@ -556,6 +566,28 @@ function getOrderedSectionObjects(profile: FullProfile): ProfileSection[] {
 
 // ── Section divider HTML ──────────────────────────────────────────
 
+function groupedEntriesHtml<T extends { id: string }>(
+  items: T[],
+  subHeadings: unknown,
+  renderItem: (item: T) => string,
+  compact = false
+): string {
+  const compactClass = compact ? ' resume-entries-compact' : '';
+  const groups = groupEntriesBySubheadings(items, subHeadings);
+  if (!hasLabeledSubheadingGroups(groups)) {
+    return `<div class="resume-entries${compactClass}">${items.map(renderItem).join('')}</div>`;
+  }
+  return groups
+    .map((group) => {
+      const heading = group.label
+        ? `<p class="resume-subheading">${escapeHtml(group.label)}</p>`
+        : '';
+      const groupClass = compact ? ' resume-entry-group-compact' : '';
+      return `<div class="resume-entry-group${groupClass}">${heading}<div class="resume-entries${compactClass}">${group.entries.map(renderItem).join('')}</div></div>`;
+    })
+    .join('');
+}
+
 function sectionDividerHtml(title: string, tag?: string | null): string {
   const tagHtml = tag ? `<span class="resume-section-tag">${escapeHtml(tag)}</span>` : '';
   return `
@@ -604,48 +636,53 @@ function atelierContactIconSvg(kind: 'phone' | 'email' | 'website' | 'link'): st
   return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`;
 }
 
-function experienceSectionHtml(profile: FullProfile, atelier = false): string {
+function experienceSectionHtml(
+  profile: FullProfile,
+  atelier = false,
+  subHeadings?: unknown
+): string {
   const items = (profile.workExperiences ?? []).filter((e) => e.isVisible !== false);
   if (items.length === 0) return '';
 
-  const entries = items
-    .map((exp) => {
-      const dateRange = atelier
-        ? formatAtelierYearRange(exp.startDate, exp.endDate, exp.isCurrent)
-        : formatDateRange(exp.startDate, exp.endDate, exp.isCurrent);
-      const companyLine = [exp.company, exp.location].filter(Boolean).join(', ');
-      const bulletsHtml = resumeEntryBodyHtml({
-        html: exp.bulletsHtml,
-        bullets: exp.bullets,
-      });
+  const entries = groupedEntriesHtml(items, subHeadings, (exp) => {
+    const dateRange = atelier
+      ? formatAtelierYearRange(exp.startDate, exp.endDate, exp.isCurrent)
+      : formatDateRange(exp.startDate, exp.endDate, exp.isCurrent);
+    const companyLine = [exp.company, exp.location].filter(Boolean).join(', ');
+    const bulletsHtml = resumeEntryBodyHtml({
+      html: exp.bulletsHtml,
+      bullets: exp.bullets,
+    });
 
-      if (atelier) {
-        return `
+    const tagsHtml = headingTagsHtml(resolveExperienceHeadingTags(exp), escapeHtml);
+    const duration = displayEntryDurationFrom(exp);
+
+    if (atelier) {
+      return `
       <div class="resume-entry resume-atelier-exp">
         <div class="resume-atelier-exp-grid">
           <span class="resume-entry-date">${dateRange}</span>
           <div class="resume-atelier-exp-body">
-            <h3 class="resume-entry-title">${escapeHtml(exp.company)}</h3>
-            <p class="resume-entry-subtitle">${escapeHtml(exp.role)}</p>
+            ${wrapHeadingTitleHtml(`<h3 class="resume-entry-title">${escapeHtml(exp.company)}</h3>`, tagsHtml)}
+            ${wrapEntrySubtitleHtml(`<p class="resume-entry-subtitle">${escapeHtml(exp.role)}</p>`, duration, escapeHtml)}
             ${bulletsHtml}
           </div>
         </div>
       </div>`;
-      }
+    }
 
-      return `
+    return `
       <div class="resume-entry">
         <div class="resume-entry-header">
           <div class="resume-entry-title-block">
-            <h3 class="resume-entry-title">${escapeHtml(exp.role)}</h3>
-            <p class="resume-entry-subtitle">${escapeHtml(companyLine)}</p>
+            ${wrapHeadingTitleHtml(`<h3 class="resume-entry-title">${escapeHtml(exp.role)}</h3>`, tagsHtml)}
+            ${wrapEntrySubtitleHtml(`<p class="resume-entry-subtitle">${escapeHtml(companyLine)}</p>`, duration, escapeHtml)}
           </div>
           ${dateRange ? `<span class="resume-entry-date">${dateRange}</span>` : ''}
         </div>
         ${bulletsHtml}
       </div>`;
-    })
-    .join('');
+  });
 
   return `
   <section class="resume-section">
@@ -658,61 +695,75 @@ function experienceSectionHtml(profile: FullProfile, atelier = false): string {
         unitsFromProfile(profile)
       )
     )}
-    <div class="resume-entries">${entries}</div>
+    ${entries}
   </section>`;
 }
 
-function educationSectionHtml(profile: FullProfile, atelier = false): string {
+function educationSectionHtml(
+  profile: FullProfile,
+  atelier = false,
+  subHeadings?: unknown
+): string {
   const items = (profile.educations ?? []).filter((e) => e.isVisible !== false);
   if (items.length === 0) return '';
 
-  const entries = items
-    .map((edu) => {
-      const degreeLine = [edu.degree, edu.fieldOfStudy].filter(Boolean).join(' in ');
-      const dateRange = atelier
-        ? formatAtelierYearRange(edu.startDate, edu.endDate, edu.isCurrent)
-        : formatDateRange(edu.startDate, edu.endDate, edu.isCurrent);
+  const entries = groupedEntriesHtml(items, subHeadings, (edu) => {
+    const degreeLine = [edu.degree, edu.fieldOfStudy].filter(Boolean).join(' in ');
+    const dateRange = atelier
+      ? formatAtelierYearRange(edu.startDate, edu.endDate, edu.isCurrent)
+      : formatDateRange(edu.startDate, edu.endDate, edu.isCurrent);
 
-      const bodyHtml = resumeEntryBodyHtml({ html: edu.description });
-      let detailsHtml = '';
-      if (edu.gpa || edu.activities) {
-        const parts: string[] = [];
-        if (edu.gpa) parts.push(`<p>GPA: ${escapeHtml(edu.gpa)}</p>`);
-        if (edu.activities) parts.push(`<p>${escapeHtml(String(edu.activities))}</p>`);
-        detailsHtml = `<div class="resume-entry-details">${parts.join('')}</div>`;
-      }
+    const bodyHtml = resumeEntryBodyHtml({ html: edu.description });
+    let detailsHtml = '';
+    if (edu.gpa || edu.activities) {
+      const parts: string[] = [];
+      if (edu.gpa) parts.push(`<p>GPA: ${escapeHtml(edu.gpa)}</p>`);
+      if (edu.activities) parts.push(`<p>${escapeHtml(String(edu.activities))}</p>`);
+      detailsHtml = `<div class="resume-entry-details">${parts.join('')}</div>`;
+    }
 
-      if (atelier) {
-        const meta = [dateRange, edu.location].filter(Boolean).join(' · ');
-        return `
+    const tagsHtml = headingTagsHtml(parseHeadingTags(edu.headingTags), escapeHtml);
+    const titleHtml = wrapHeadingTitleHtml(
+      `<h3 class="resume-entry-title">${escapeHtml(degreeLine || edu.institution)}</h3>`,
+      tagsHtml
+    );
+    const duration = displayEntryDurationFrom(edu);
+    const subtitleHtml = wrapEntrySubtitleHtml(
+      degreeLine ? `<p class="resume-entry-subtitle">${escapeHtml(edu.institution)}</p>` : '',
+      duration,
+      escapeHtml
+    );
+
+    if (atelier) {
+      const meta = [dateRange, edu.location].filter(Boolean).join(' · ');
+      return `
       <div class="resume-entry resume-atelier-edu">
-        <h3 class="resume-entry-title">${escapeHtml(degreeLine || edu.institution)}</h3>
-        ${degreeLine ? `<p class="resume-entry-subtitle">${escapeHtml(edu.institution)}</p>` : ''}
+        ${titleHtml}
+        ${subtitleHtml}
         ${meta ? `<p class="resume-atelier-edu-meta">${escapeHtml(meta)}</p>` : ''}
         ${bodyHtml}
         ${detailsHtml}
       </div>`;
-      }
+    }
 
-      return `
+    return `
       <div class="resume-entry">
         <div class="resume-entry-header">
           <div class="resume-entry-title-block">
-            <h3 class="resume-entry-title">${escapeHtml(degreeLine || edu.institution)}</h3>
-            ${degreeLine ? `<p class="resume-entry-subtitle">${escapeHtml(edu.institution)}</p>` : ''}
+            ${titleHtml}
+            ${subtitleHtml}
           </div>
           ${dateRange ? `<span class="resume-entry-date">${dateRange}</span>` : ''}
         </div>
         ${bodyHtml}
         ${detailsHtml}
       </div>`;
-    })
-    .join('');
+  });
 
   return `
   <section class="resume-section">
     ${sectionDividerHtml('EDUCATION')}
-    <div class="resume-entries">${entries}</div>
+    ${entries}
   </section>`;
 }
 
@@ -771,34 +822,33 @@ function skillsSectionHtml(profile: FullProfile, options: { stacked?: boolean } 
   </section>`;
 }
 
-function projectsSectionHtml(profile: FullProfile): string {
+function projectsSectionHtml(profile: FullProfile, subHeadings?: unknown): string {
   const items = (profile.projects ?? []).filter(
     (p) => p.isVisible !== false && p.showOnResume !== false
   );
   if (items.length === 0) return '';
 
-  const entries = items
-    .map((p) => {
-      const dateRange = formatDateRange(p.startDate, p.endDate, p.isCurrent);
-      const description = p.customDescription || p.shortDesc || p.description;
-      const descHtml =
-        description && containsHtmlFormatting(description)
-          ? `<div class="resume-entry-description resume-rich-html">${sanitizeRichHtml(description)}</div>`
-          : description
-            ? `<div class="resume-entry-description resume-rich-html">${escapeHtml(description)}</div>`
-            : '';
+  const entries = groupedEntriesHtml(items, subHeadings, (p) => {
+    const dateRange = formatDateRange(p.startDate, p.endDate, p.isCurrent);
+    const description = p.customDescription || p.shortDesc || p.description;
+    const descHtml =
+      description && containsHtmlFormatting(description)
+        ? `<div class="resume-entry-description resume-rich-html">${sanitizeRichHtml(description)}</div>`
+        : description
+          ? `<div class="resume-entry-description resume-rich-html">${escapeHtml(description)}</div>`
+          : '';
 
-      let highlightsHtml = '';
-      if (p.highlights && p.highlights.length > 0) {
-        const lis = p.highlights.map((h) => resumeBulletListItemHtml(h)).join('');
-        highlightsHtml = `<ul class="resume-bullets">${lis}</ul>`;
-      }
+    let highlightsHtml = '';
+    if (p.highlights && p.highlights.length > 0) {
+      const lis = p.highlights.map((h) => resumeBulletListItemHtml(h)).join('');
+      highlightsHtml = `<ul class="resume-bullets">${lis}</ul>`;
+    }
 
-      return `
+    return `
       <div class="resume-entry">
         <div class="resume-entry-header">
           <div class="resume-entry-title-block">
-            <h3 class="resume-entry-title">${escapeHtml(p.title)}</h3>
+            ${wrapHeadingTitleHtml(`<h3 class="resume-entry-title">${escapeHtml(p.title)}</h3>`, headingTagsHtml(parseHeadingTags(p.headingTags), escapeHtml))}
             ${p.techStack && p.techStack.length > 0 ? `<p class="resume-entry-tech">${p.techStack.map((t) => escapeHtml(t)).join(', ')}</p>` : ''}
           </div>
           ${dateRange ? `<span class="resume-entry-date">${dateRange}</span>` : ''}
@@ -806,22 +856,23 @@ function projectsSectionHtml(profile: FullProfile): string {
         ${descHtml}
         ${highlightsHtml}
       </div>`;
-    })
-    .join('');
+  });
 
   return `
   <section class="resume-section">
     ${sectionDividerHtml('PROJECTS')}
-    <div class="resume-entries">${entries}</div>
+    ${entries}
   </section>`;
 }
 
-function certificationsSectionHtml(profile: FullProfile): string {
+function certificationsSectionHtml(profile: FullProfile, subHeadings?: unknown): string {
   const items = (profile.certifications ?? []).filter((c) => c.isVisible !== false);
   if (items.length === 0) return '';
 
-  const entries = items
-    .map((cert) => {
+  const entries = groupedEntriesHtml(
+    items,
+    subHeadings,
+    (cert) => {
       const issuedDate = formatResumeDate(cert.issueDate);
       const expDate = cert.expirationDate ? formatResumeDate(cert.expirationDate) : null;
       return `
@@ -830,22 +881,29 @@ function certificationsSectionHtml(profile: FullProfile): string {
         <span class="resume-entry-inline-issuer"> — ${escapeHtml(cert.issuer)}</span>
         ${issuedDate ? `<span class="resume-entry-inline-date"> (${issuedDate}${expDate ? `, expires ${expDate}` : ''})</span>` : ''}
       </div>`;
-    })
-    .join('');
+    },
+    true
+  );
 
   return `
   <section class="resume-section">
     ${sectionDividerHtml('CERTIFICATIONS')}
-    <div class="resume-entries resume-entries-compact">${entries}</div>
+    ${entries}
   </section>`;
 }
 
-function awardsSectionHtml(profile: FullProfile, title = 'AWARDS & RECOGNITION'): string {
+function awardsSectionHtml(
+  profile: FullProfile,
+  title = 'AWARDS & RECOGNITION',
+  subHeadings?: unknown
+): string {
   const items = (profile.awards ?? []).filter((a) => a.isVisible !== false);
   if (items.length === 0) return '';
 
-  const entries = items
-    .map((award) => {
+  const entries = groupedEntriesHtml(
+    items,
+    subHeadings,
+    (award) => {
       const awardDate = formatResumeDate(award.date);
       return `
       <div class="resume-entry-inline">
@@ -854,22 +912,25 @@ function awardsSectionHtml(profile: FullProfile, title = 'AWARDS & RECOGNITION')
         ${awardDate ? `<span class="resume-entry-inline-date"> (${awardDate})</span>` : ''}
         ${award.description ? `<p class="resume-entry-inline-description">${escapeHtml(award.description)}</p>` : ''}
       </div>`;
-    })
-    .join('');
+    },
+    true
+  );
 
   return `
   <section class="resume-section">
     ${sectionDividerHtml(title)}
-    <div class="resume-entries resume-entries-compact">${entries}</div>
+    ${entries}
   </section>`;
 }
 
-function publicationsSectionHtml(items: PublicationItem[]): string {
+function publicationsSectionHtml(items: PublicationItem[], subHeadings?: unknown): string {
   if (!items || items.length === 0) return '';
 
-  const entries = items
-    .filter((p) => p.isVisible !== false)
-    .map((pub) => {
+  const visible = items.filter((p) => p.isVisible !== false);
+  const entries = groupedEntriesHtml(
+    visible,
+    subHeadings,
+    (pub) => {
       const safeHref = safeUrl(pub.url);
       const titleHtml = safeHref
         ? `<a href="${safeHref}" target="_blank" rel="noopener noreferrer">${escapeHtml(pub.title)}</a>`
@@ -883,41 +944,40 @@ function publicationsSectionHtml(items: PublicationItem[]): string {
           .map((s) => escapeHtml(s!))
           .join(', ')}</p>
       </div>`;
-    })
-    .join('');
+    },
+    true
+  );
 
   return `
   <section class="resume-section">
     ${sectionDividerHtml('PUBLICATIONS')}
-    <div class="resume-entries resume-entries-compact">${entries}</div>
+    ${entries}
   </section>`;
 }
 
-function volunteeringSectionHtml(items: VolunteeringItem[]): string {
+function volunteeringSectionHtml(items: VolunteeringItem[], subHeadings?: unknown): string {
   if (!items || items.length === 0) return '';
 
-  const entries = items
-    .filter((v) => v.isVisible !== false)
-    .map((vol) => {
-      const dateRange = formatDateRange(vol.startDate, vol.endDate, vol.isCurrent);
-      return `
+  const visible = items.filter((v) => v.isVisible !== false);
+  const entries = groupedEntriesHtml(visible, subHeadings, (vol) => {
+    const dateRange = formatDateRange(vol.startDate, vol.endDate, vol.isCurrent);
+    return `
       <div class="resume-entry">
         <div class="resume-entry-header">
           <div class="resume-entry-title-block">
-            <h3 class="resume-entry-title">${escapeHtml(vol.role)}</h3>
+            ${wrapHeadingTitleHtml(`<h3 class="resume-entry-title">${escapeHtml(vol.role)}</h3>`, headingTagsHtml(parseHeadingTags(vol.tags), escapeHtml))}
             <p class="resume-entry-subtitle">${escapeHtml(vol.organization)}</p>
           </div>
           ${dateRange ? `<span class="resume-entry-date">${dateRange}</span>` : ''}
         </div>
         ${vol.description ? `<p class="resume-entry-description">${escapeHtml(vol.description)}</p>` : ''}
       </div>`;
-    })
-    .join('');
+  });
 
   return `
   <section class="resume-section">
     ${sectionDividerHtml('VOLUNTEERING')}
-    <div class="resume-entries">${entries}</div>
+    ${entries}
   </section>`;
 }
 
@@ -991,9 +1051,11 @@ function customSectionHtml(section: ProfileSection): string {
 
   let entriesHtml = '';
   if (items.length > 0) {
-    entriesHtml = `<div class="resume-entries">${items
-      .filter((item: CustomSectionItem) => item.isVisible !== false)
-      .map((item: CustomSectionItem) => {
+    const visibleItems = items.filter((item: CustomSectionItem) => item.isVisible !== false);
+    entriesHtml = groupedEntriesHtml(
+      visibleItems,
+      section.subHeadings,
+      (item: CustomSectionItem) => {
         const dateRange =
           item.startDate || item.endDate || item.isCurrent
             ? `${item.startDate || ''} – ${item.isCurrent ? 'Present' : item.endDate || ''}`
@@ -1002,16 +1064,15 @@ function customSectionHtml(section: ProfileSection): string {
         <div class="resume-entry">
           <div class="resume-entry-header">
             <div class="resume-entry-title-block">
-              <h3 class="resume-entry-title">${escapeHtml(item.title)}</h3>
+              ${wrapHeadingTitleHtml(`<h3 class="resume-entry-title">${escapeHtml(item.title)}</h3>`, headingTagsHtml(parseHeadingTags(item.tags), escapeHtml))}
               ${item.subtitle ? `<p class="resume-entry-subtitle">${escapeHtml(item.subtitle)}</p>` : ''}
             </div>
             ${dateRange ? `<span class="resume-entry-date">${dateRange}</span>` : ''}
           </div>
           ${item.description ? `<p class="resume-entry-description">${escapeHtml(item.description)}</p>` : ''}
-          ${item.tags && item.tags.length > 0 ? `<p class="resume-entry-tags">${item.tags.map((t) => escapeHtml(t)).join(', ')}</p>` : ''}
         </div>`;
-      })
-      .join('')}</div>`;
+      }
+    );
   }
 
   const freeformHtml = freeformContent
@@ -1042,23 +1103,33 @@ function renderSectionHtml(
     case 'SUMMARY':
       return summarySectionHtml(profile, options.atelier ? 'PROFILE' : 'SUMMARY');
     case 'EXPERIENCE':
-      return experienceSectionHtml(profile, options.atelier === true);
+      return experienceSectionHtml(profile, options.atelier === true, section.subHeadings);
     case 'EDUCATION':
-      return educationSectionHtml(profile, options.atelier === true);
+      return educationSectionHtml(profile, options.atelier === true, section.subHeadings);
     case 'SKILLS':
       return skillsSectionHtml(profile, {
         stacked: options.stackedSkills === true,
       });
     case 'PROJECTS':
-      return projectsSectionHtml(profile);
+      return projectsSectionHtml(profile, section.subHeadings);
     case 'CERTIFICATIONS':
-      return certificationsSectionHtml(profile);
+      return certificationsSectionHtml(profile, section.subHeadings);
     case 'AWARDS':
-      return awardsSectionHtml(profile, options.atelier ? 'AWARDS' : 'AWARDS & RECOGNITION');
+      return awardsSectionHtml(
+        profile,
+        options.atelier ? 'AWARDS' : 'AWARDS & RECOGNITION',
+        section.subHeadings
+      );
     case 'PUBLICATIONS':
-      return publicationsSectionHtml(getCustomContentItems<PublicationItem>(section));
+      return publicationsSectionHtml(
+        getCustomContentItems<PublicationItem>(section),
+        section.subHeadings
+      );
     case 'VOLUNTEERING':
-      return volunteeringSectionHtml(getCustomContentItems<VolunteeringItem>(section));
+      return volunteeringSectionHtml(
+        getCustomContentItems<VolunteeringItem>(section),
+        section.subHeadings
+      );
     case 'LANGUAGES':
       return languagesSectionHtml(getCustomContentItems<LanguageItem>(section));
     case 'INTERESTS':
@@ -1225,6 +1296,12 @@ const RESUME_CSS = `
     gap: var(--rd-entry-gap, 16px);
   }
   .resume-entries-compact { gap: 8px; }
+  .resume-entry-group + .resume-entry-group { margin-top: calc(var(--rd-entry-gap, 16px) + 4px); }
+  .resume-subheading {
+    font-family: var(--rd-font-heading, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+    font-size: 9.5px; font-weight: 600; letter-spacing: 0.1em; line-height: 1.3;
+    text-transform: none; color: color-mix(in srgb, currentColor 58%, transparent); margin: 0 0 8px;
+  }
   .resume-entry { break-inside: avoid; }
   .resume-entry-header {
     display: flex;
@@ -1234,7 +1311,30 @@ const RESUME_CSS = `
   }
   .resume-entry-title-block { flex: 1; min-width: 0; }
   .resume-entry-title { font-size: 14px; font-weight: 600; margin: 0; color: inherit; }
+  .resume-entry-title-row {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 5px 8px;
+  }
+  .resume-heading-tags { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+  .resume-heading-tag {
+    font-family: var(--rd-font-body, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+    font-size: 9.5px; font-weight: 600; letter-spacing: 0.02em; line-height: 1.2;
+    text-transform: none; white-space: nowrap; flex-shrink: 0; padding: 1px 7px;
+    position: relative; top: 1px;
+    border-radius: 999px;
+    color: var(--tag-fg, currentColor);
+    background: var(--tag-bg, color-mix(in srgb, currentColor 8%, transparent));
+    border: 1px solid var(--tag-border, color-mix(in srgb, currentColor 28%, transparent));
+  }
+  [data-resume-theme='dark'] .resume-heading-tag {
+    color: var(--tag-fg-dark, var(--tag-fg, #d4d4d8));
+    background: var(--tag-bg-dark, var(--tag-bg, #27272a));
+    border-color: var(--tag-border-dark, var(--tag-border, #52525b));
+  }
   .resume-entry-subtitle { font-size: 13px; color: #555; margin: 1px 0 0 0; }
+  .resume-entry-subtitle-row {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 5px 8px; margin: 1px 0 0 0;
+  }
+  .resume-entry-subtitle-row .resume-entry-subtitle { margin: 0; }
   .resume-entry-date {
     font-size: 12px;
     color: #666;
@@ -1447,6 +1547,7 @@ const RESUME_CSS = `
     letter-spacing: -0.01em;
   }
   .resume-paper--lumen .resume-entry-subtitle { color: #525252; }
+  .resume-paper--lumen .resume-subheading { letter-spacing: 0.14em; font-weight: 600; color: #737373; }
   [data-resume-theme='dark'] .resume-paper--lumen .resume-entry-subtitle { color: #a3a3a3; }
   .resume-paper.resume-paper--lumen .resume-entry-date {
     color: #737373;
@@ -1511,6 +1612,14 @@ const RESUME_CSS = `
   .resume-paper--sleek .resume-section > :not(.resume-section-header) { grid-column: 2; }
   .resume-paper--sleek .resume-section > .resume-entries { grid-column: 1 / -1; }
   .resume-paper--sleek .resume-section > .resume-entries-compact { grid-column: 2; }
+  .resume-paper--sleek .resume-section > .resume-entry-group { grid-column: 1 / -1; }
+  .resume-paper--sleek .resume-section > .resume-entry-group-compact { grid-column: 2; }
+  .resume-paper--sleek .resume-subheading {
+    letter-spacing: 0.16em; text-transform: uppercase; font-size: 9px; margin: 0 0 10px 204px;
+  }
+  .resume-paper--sleek .resume-entry-group-compact .resume-subheading {
+    margin-left: 0; text-transform: none; letter-spacing: 0.08em;
+  }
   .resume-paper--sleek .resume-entry {
     display: grid; grid-template-columns: 168px 1fr; column-gap: 36px;
   }
@@ -1610,6 +1719,7 @@ const RESUME_CSS = `
   .resume-paper--studio .resume-section-tag {
     border-color: #9ca3af; opacity: 1; font-size: 10.5px; padding: 2px 8px;
   }
+  .resume-paper--studio .resume-subheading { letter-spacing: 0.08em; color: #6b7280; }
   .resume-skills-stack {
     list-style: none; margin: 0; padding: 0;
     display: flex; flex-direction: column; gap: 10px;
@@ -1695,6 +1805,11 @@ const RESUME_CSS = `
     color: var(--rd-heading-color, var(--rd-accent-color, #c25b42)); margin: 0;
   }
   .resume-paper--atelier .resume-section-line { display: none; }
+  .resume-paper--atelier .resume-subheading {
+    font-family: var(--rd-font-heading, 'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif);
+    letter-spacing: 0.14em; text-transform: uppercase; font-size: 9px;
+    color: color-mix(in srgb, var(--rd-heading-color, var(--rd-accent-color, #c25b42)) 72%, #8a6a62);
+  }
   .resume-paper--atelier .resume-summary { font-size: 12.5px; line-height: 1.6; color: #3a3a3a; }
   .resume-atelier-exp { margin-bottom: 18px; }
   .resume-atelier-exp-grid {

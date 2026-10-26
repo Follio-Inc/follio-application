@@ -4,7 +4,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { scheduleResumeRefresh } from '@/lib/resume/schedule-refresh';
-import { normalizeCurrentDates, ProjectSchema } from '@/lib/validations';
+import {
+  firstValidationError,
+  normalizeCurrentDates,
+  PROJECT_FIELD_LABELS,
+  ProjectSchema,
+} from '@/lib/validations';
 
 /**
  * PATCH /api/profile/projects/[id]
@@ -24,7 +29,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     if (!validatedData.success) {
       return NextResponse.json(
-        { error: 'Validation failed', details: validatedData.error.flatten() },
+        {
+          error: firstValidationError(validatedData.error, PROJECT_FIELD_LABELS),
+          details: validatedData.error.flatten(),
+        },
         { status: 400 }
       );
     }

@@ -39,6 +39,7 @@ export function buildResumePreviewSections(profileId: string): PublicProfile['se
     isVisible: true,
     customContent: null,
     contentType: 'STRUCTURED' as const,
+    subHeadings: null,
     createdAt: now,
     updatedAt: now,
   })) as PublicProfile['sections'];
@@ -129,6 +130,11 @@ export const RESUME_TEMPLATE_SAMPLE_PROFILE = {
       companyLogoUrl: null,
       role: 'Lead Product Engineer',
       location: 'San Francisco, CA',
+      employmentType: 'FULL_TIME',
+      headingTags: [
+        { label: 'Full Time', color: 'slate' },
+        { label: 'Hybrid', color: 'amber' },
+      ],
       startDate: new Date('2022-01-01'),
       endDate: null,
       isCurrent: true,
@@ -153,6 +159,11 @@ export const RESUME_TEMPLATE_SAMPLE_PROFILE = {
       companyLogoUrl: null,
       role: 'Software Engineer II',
       location: 'Remote',
+      employmentType: 'FULL_TIME',
+      headingTags: [
+        { label: 'Full Time', color: 'slate' },
+        { label: 'Remote', color: 'zinc' },
+      ],
       startDate: new Date('2019-03-01'),
       endDate: new Date('2021-12-01'),
       isCurrent: false,
@@ -201,6 +212,7 @@ export const RESUME_TEMPLATE_SAMPLE_PROFILE = {
       degree: 'M.S.',
       fieldOfStudy: 'Computer Science',
       location: 'Berkeley, CA',
+      headingTags: [{ label: 'Thesis', color: 'olive' }],
       startDate: new Date('2015-08-01'),
       endDate: new Date('2017-05-01'),
       isCurrent: false,
@@ -602,6 +614,10 @@ export const RESUME_TEMPLATE_SAMPLE_PROFILE = {
       id: 'sample-proj-1',
       profileId: PROFILE_ID,
       title: 'Ledger — Team knowledge base',
+      headingTags: [
+        { label: 'Team', color: 'blue' },
+        { label: 'Open Source', color: 'teal' },
+      ],
       description:
         'Fast, calm wiki for product teams with full-text search and keyboard-first navigation. Used by early design partners.',
       shortDesc: null,

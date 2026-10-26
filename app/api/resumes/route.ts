@@ -17,6 +17,7 @@ import {
   sanitizeResumeDesign,
 } from '@/lib/resume/templates';
 import { generateUniqueResumeTitle, suggestCloneResumeTitle } from '@/lib/resume-title';
+import { remapSubHeadingEntryIds } from '@/lib/section-subheadings';
 import type { ResumeDesign } from '@/types';
 
 /**
@@ -26,6 +27,10 @@ import type { ResumeDesign } from '@/types';
  */
 function nullableJson(value: Prisma.JsonValue): Prisma.InputJsonValue | typeof Prisma.JsonNull {
   return value === null ? Prisma.JsonNull : (value as Prisma.InputJsonValue);
+}
+
+function cloneEntryIdMap(ids: string[]): Map<string, string> {
+  return new Map(ids.map((id) => [id, crypto.randomUUID()]));
 }
 
 const resumeLogger = logger.child({ source: 'api-resumes' });
@@ -318,18 +323,30 @@ async function cloneProfile(
     await tx.contactInfo.create({ data: { profileId: profile.id } });
   }
 
+  const entryIdMap = cloneEntryIdMap([
+    ...source.workExperiences.map((item) => item.id),
+    ...source.educations.map((item) => item.id),
+    ...source.projects.map((item) => item.id),
+    ...source.awards.map((item) => item.id),
+    ...source.certifications.map((item) => item.id),
+  ]);
+
   if (source.sections.length > 0) {
     await tx.profileSection.createMany({
-      data: source.sections.map((section) => ({
-        profileId: profile.id,
-        type: section.type,
-        customName: section.customName,
-        title: section.title,
-        sortOrder: section.sortOrder,
-        isVisible: section.isVisible,
-        customContent: nullableJson(section.customContent),
-        contentType: section.contentType,
-      })),
+      data: source.sections.map((section) => {
+        const remapped = remapSubHeadingEntryIds(section.subHeadings, entryIdMap);
+        return {
+          profileId: profile.id,
+          type: section.type,
+          customName: section.customName,
+          title: section.title,
+          sortOrder: section.sortOrder,
+          isVisible: section.isVisible,
+          customContent: nullableJson(section.customContent),
+          contentType: section.contentType,
+          subHeadings: remapped ? (remapped as unknown as Prisma.InputJsonValue) : Prisma.JsonNull,
+        };
+      }),
     });
   } else {
     await createDefaultSections(tx, profile.id);
@@ -352,6 +369,7 @@ async function cloneProfile(
   if (source.workExperiences.length > 0) {
     await tx.workExperience.createMany({
       data: source.workExperiences.map((item) => ({
+        id: entryIdMap.get(item.id) ?? crypto.randomUUID(),
         profileId: profile.id,
         company: item.company,
         companyUrl: item.companyUrl,
@@ -360,6 +378,8 @@ async function cloneProfile(
         location: item.location,
         locationType: item.locationType,
         employmentType: item.employmentType,
+        headingTags: nullableJson(item.headingTags),
+        durationVisible: item.durationVisible,
         startDate: item.startDate,
         endDate: item.endDate,
         isCurrent: item.isCurrent,
@@ -376,6 +396,7 @@ async function cloneProfile(
   if (source.educations.length > 0) {
     await tx.education.createMany({
       data: source.educations.map((item) => ({
+        id: entryIdMap.get(item.id) ?? crypto.randomUUID(),
         profileId: profile.id,
         institution: item.institution,
         institutionUrl: item.institutionUrl,
@@ -383,6 +404,8 @@ async function cloneProfile(
         degree: item.degree,
         fieldOfStudy: item.fieldOfStudy,
         location: item.location,
+        headingTags: nullableJson(item.headingTags),
+        durationVisible: item.durationVisible,
         startDate: item.startDate,
         endDate: item.endDate,
         isCurrent: item.isCurrent,
@@ -429,6 +452,7 @@ async function cloneProfile(
   if (source.projects.length > 0) {
     await tx.project.createMany({
       data: source.projects.map((project) => ({
+        id: entryIdMap.get(project.id) ?? crypto.randomUUID(),
         profileId: profile.id,
         title: project.title,
         description: project.description,
@@ -439,6 +463,7 @@ async function cloneProfile(
         images: project.images,
         techStack: project.techStack,
         highlights: project.highlights,
+        headingTags: nullableJson(project.headingTags),
         githubStars: project.githubStars,
         githubForks: project.githubForks,
         githubLanguage: project.githubLanguage,
@@ -469,6 +494,7 @@ async function cloneProfile(
   if (source.awards.length > 0) {
     await tx.award.createMany({
       data: source.awards.map((item) => ({
+        id: entryIdMap.get(item.id) ?? crypto.randomUUID(),
         profileId: profile.id,
         title: item.title,
         issuer: item.issuer,
@@ -485,6 +511,7 @@ async function cloneProfile(
   if (source.certifications.length > 0) {
     await tx.certification.createMany({
       data: source.certifications.map((item) => ({
+        id: entryIdMap.get(item.id) ?? crypto.randomUUID(),
         profileId: profile.id,
         name: item.name,
         issuer: item.issuer,

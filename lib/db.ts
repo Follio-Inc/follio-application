@@ -10,12 +10,22 @@
 
 import { Prisma, PrismaClient } from '@prisma/client';
 
+import { remoteDatabaseBlockedReason } from '@/lib/database-target';
 import { buildDatasourceUrl } from '@/lib/prisma-connection';
 
 const LOG_LEVELS =
   process.env.NODE_ENV === 'development' ? (['error', 'warn'] as const) : (['error'] as const);
 
 function createPrismaClient(): PrismaClient {
+  const blocked = remoteDatabaseBlockedReason({
+    nodeEnv: process.env.NODE_ENV,
+    databaseUrl: process.env.DATABASE_URL,
+    allowRemoteDatabase: process.env.ALLOW_REMOTE_DATABASE,
+  });
+  if (blocked) {
+    throw new Error(blocked);
+  }
+
   const profileFields =
     Prisma.dmmf.datamodel.models
       .find((model) => model.name === 'Profile')
@@ -27,6 +37,15 @@ function createPrismaClient(): PrismaClient {
   ) {
     throw new Error(
       'Prisma client is missing Profile total-experience or resumeGlance fields. Run `npx prisma generate` and restart Next.js with a clean `.next` cache.'
+    );
+  }
+  const sectionFields =
+    Prisma.dmmf.datamodel.models
+      .find((model) => model.name === 'ProfileSection')
+      ?.fields.map((field) => field.name) ?? [];
+  if (!sectionFields.includes('subHeadings')) {
+    throw new Error(
+      'Prisma client is missing ProfileSection.subHeadings. Run `npx prisma generate` and restart Next.js with a clean `.next` cache.'
     );
   }
 
@@ -46,13 +65,18 @@ function createPrismaClient(): PrismaClient {
  * Profile.totalExperience / totalExperienceVisible → generation 6.
  * Profile.totalExperienceShowYears / ShowMonths → generation 7.
  * Profile.resumeGlance → generation 8.
+ * WorkExperience / Education.durationVisible → generation 9.
+ * ProfileSection.subHeadings → generation 10.
+ * ProfileSection fingerprint coverage → generation 11.
  */
-const PRISMA_CLIENT_GENERATION = 8;
+const PRISMA_CLIENT_GENERATION = 11;
 
 function schemaFieldFingerprint(): string {
   const modelNames = [
     'Profile',
+    'ProfileSection',
     'WorkExperience',
+    'Education',
     'CoverLetter',
     'AiEditDraft',
     'DocumentPdfCache',

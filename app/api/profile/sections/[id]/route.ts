@@ -1,9 +1,11 @@
 import { auth } from '@clerk/nextjs/server';
+import { Prisma } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { AppError, ErrorCode, handleApiError } from '@/lib/errors';
+import { parseSubHeadings } from '@/lib/section-subheadings';
 import type { SectionType } from '@/types';
 
 interface RouteParams {
@@ -60,7 +62,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     const body = await request.json();
-    const { title, isVisible, sortOrder, customContent, contentType } = body;
+    const { title, isVisible, sortOrder, customContent, contentType, subHeadings } = body;
+    const parsedSubHeadings = subHeadings === undefined ? undefined : parseSubHeadings(subHeadings);
 
     const section = await db.profileSection.update({
       where: {
@@ -73,6 +76,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         ...(sortOrder !== undefined && { sortOrder }),
         ...(customContent !== undefined && { customContent }),
         ...(contentType !== undefined && { contentType }),
+        ...(parsedSubHeadings !== undefined && {
+          subHeadings:
+            parsedSubHeadings === null
+              ? Prisma.JsonNull
+              : (parsedSubHeadings as unknown as Prisma.InputJsonValue),
+        }),
       },
     });
 

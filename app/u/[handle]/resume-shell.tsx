@@ -15,6 +15,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { PublicProfileChrome, useEffectiveAuthState } from '@/components/public-profile-chrome';
 import { ResumeLens } from '@/components/resume-lens/ResumeLens';
+import { ResumePresentationNav } from '@/components/resume-presentation/resume-presentation-nav';
 import { parseResumeGlance } from '@/lib/resume/glance';
 
 import { CleanResumeView } from './views/clean-resume-view';
@@ -36,8 +37,12 @@ function ResumeShellBody({
   profile,
   authState,
   profileHandle,
+  accessQuery = '',
   initialHighlightsOpen = false,
-}: Pick<ResumeShellProps, 'profile' | 'authState' | 'profileHandle' | 'initialHighlightsOpen'>) {
+}: Pick<
+  ResumeShellProps,
+  'profile' | 'authState' | 'profileHandle' | 'accessQuery' | 'initialHighlightsOpen'
+>) {
   const effectiveAuthState = useEffectiveAuthState(authState);
   const [host, setHost] = useState<HTMLDivElement | null>(null);
   const [highlightsOpen, setHighlightsOpen] = useState(initialHighlightsOpen);
@@ -62,7 +67,10 @@ function ResumeShellBody({
 
   return (
     <main>
-      <div className="mx-auto max-w-5xl px-4 pb-24 pt-6 sm:px-6">
+      <div className="flex justify-center px-5 pt-6 sm:pt-8 print:hidden">
+        <ResumePresentationNav handle={profileHandle} current="resume" accessQuery={accessQuery} />
+      </div>
+      <div className="mx-auto max-w-5xl px-4 pb-24 pt-4 sm:px-6">
         <div ref={setHost} className="relative mx-auto w-full max-w-[816px]">
           <ResumeLens profile={profile} host={host}>
             <CleanResumeView
@@ -84,6 +92,7 @@ export function ResumeShell({
   profile,
   authState,
   profileHandle,
+  accessQuery = '',
   initialHighlightsOpen = false,
 }: ResumeShellProps) {
   return (
@@ -92,6 +101,7 @@ export function ResumeShell({
         profile={profile}
         authState={authState}
         profileHandle={profileHandle}
+        accessQuery={accessQuery}
         initialHighlightsOpen={initialHighlightsOpen}
       />
     </PublicProfileChrome>

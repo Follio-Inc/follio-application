@@ -411,6 +411,43 @@ describe('toPlainText', () => {
     ).toContain('EXPERIENCE (5+ years)');
   });
 
+  it('shows per-role duration on the subheading only when opted in', () => {
+    const hidden = toPDFHtml(makeProfile());
+    expect(hidden).not.toContain('class="resume-entry-subtitle-row"');
+    expect(toPlainText(makeProfile())).toContain('Senior Engineer | Acme Corp\n');
+
+    const shown = toPDFHtml(
+      makeProfile({
+        workExperiences: [
+          {
+            ...makeProfile().workExperiences[0],
+            startDate: new Date('2020-01-01'),
+            endDate: new Date('2021-01-01'),
+            isCurrent: false,
+            durationVisible: true,
+          },
+        ],
+      } as unknown as Partial<FullProfile>)
+    );
+    expect(shown).toContain('class="resume-entry-subtitle-row"');
+    expect(shown).toContain('1 yr 1 mo');
+    expect(
+      toPlainText(
+        makeProfile({
+          workExperiences: [
+            {
+              ...makeProfile().workExperiences[0],
+              startDate: new Date('2020-01-01'),
+              endDate: new Date('2021-01-01'),
+              isCurrent: false,
+              durationVisible: true,
+            },
+          ],
+        } as unknown as Partial<FullProfile>)
+      )
+    ).toContain('Senior Engineer | Acme Corp (1 yr 1 mo)');
+  });
+
   it('omits the total experience tag when it is hidden', () => {
     const html = toPDFHtml(
       makeProfile({
@@ -512,6 +549,48 @@ describe('toPDFHtml', () => {
     const html = toPDFHtml(makeProfile());
     expect(html).toContain('Senior Engineer');
     expect(html).toContain('Acme Corp');
+  });
+
+  it('groups experience under Most Relevant and Other combined', () => {
+    const base = makeProfile();
+    const extra = {
+      ...base.workExperiences[0],
+      id: 'w2',
+      role: 'Intern',
+      company: 'Startup',
+      isCurrent: false,
+      startDate: new Date('2018-01-01'),
+      endDate: new Date('2018-08-01'),
+    };
+    const html = toPDFHtml(
+      makeProfile({
+        workExperiences: [base.workExperiences[0], extra],
+        sections: [
+          {
+            id: 's-exp',
+            profileId: 'p1',
+            type: 'EXPERIENCE',
+            title: 'Experience',
+            sortOrder: 0,
+            isVisible: true,
+            customContent: null,
+            contentType: 'STRUCTURED',
+            subHeadings: {
+              groups: [
+                { id: 'featured', label: 'Most Relevant', entryIds: ['w1'] },
+                { id: 'other', label: 'Other combined', catchAll: true },
+              ],
+            },
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ],
+      } as unknown as Partial<FullProfile>)
+    );
+    expect(html).toContain('Most Relevant');
+    expect(html).toContain('Other combined');
+    expect(html.indexOf('Most Relevant')).toBeLessThan(html.indexOf('Senior Engineer'));
+    expect(html.indexOf('Other combined')).toBeLessThan(html.indexOf('Intern'));
   });
 
   it('includes education section', () => {

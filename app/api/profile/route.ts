@@ -1,7 +1,11 @@
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 
-import { EmailConflictError, getOrCreateUserForClerk } from '@/lib/account/resolve-user';
+import {
+  EmailConflictError,
+  getOrCreateUserForClerk,
+  RemoteDatabaseProtectedError,
+} from '@/lib/account/resolve-user';
 import {
   resolveActiveProfileContext,
   resolveActiveProfileContextOrNull,
@@ -111,6 +115,16 @@ export async function POST(request: NextRequest) {
             error: 'Email already in use',
             message: error.message,
             code: 'EMAIL_CONFLICT',
+          },
+          { status: 409 }
+        );
+      }
+      if (error instanceof RemoteDatabaseProtectedError) {
+        return NextResponse.json(
+          {
+            error: 'Remote database protected',
+            message: error.message,
+            code: 'REMOTE_DATABASE_PROTECTED',
           },
           { status: 409 }
         );
