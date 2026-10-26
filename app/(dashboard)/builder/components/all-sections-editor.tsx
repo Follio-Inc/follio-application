@@ -1180,8 +1180,12 @@ export function AllSectionsEditor() {
       });
 
       if (!response.ok) {
-        console.error('Failed to add section:', await response.text());
-        return;
+        const body = (await response.json().catch(() => null)) as {
+          error?: string | { message?: string };
+        } | null;
+        const message = typeof body?.error === 'string' ? body.error : body?.error?.message;
+        // AddSectionDialog shows this and stays open.
+        throw new Error(message || 'Couldn’t add the section. Please try again.');
       }
 
       const newSection = (await response.json()) as ProfileSection;

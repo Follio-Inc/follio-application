@@ -108,6 +108,7 @@ export function AddSectionDialog({ existingSections, onAdd }: AddSectionDialogPr
   const [selectedType, setSelectedType] = useState<SectionType | null>(null);
   const [customName, setCustomName] = useState('');
   const [isAdding, setIsAdding] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
 
   // Filter out sections that already exist (except CUSTOM which can be added multiple times)
   const availableSections = AVAILABLE_SECTIONS.filter((section) => {
@@ -123,6 +124,7 @@ export function AddSectionDialog({ existingSections, onAdd }: AddSectionDialogPr
     }
 
     setIsAdding(true);
+    setAddError(null);
     try {
       await onAdd(
         selectedType,
@@ -132,6 +134,10 @@ export function AddSectionDialog({ existingSections, onAdd }: AddSectionDialogPr
       setOpen(false);
       setSelectedType(null);
       setCustomName('');
+    } catch (err) {
+      setAddError(
+        err instanceof Error ? err.message : 'Couldn’t add the section. Please try again.'
+      );
     } finally {
       setIsAdding(false);
     }
@@ -142,6 +148,7 @@ export function AddSectionDialog({ existingSections, onAdd }: AddSectionDialogPr
     if (!newOpen) {
       setSelectedType(null);
       setCustomName('');
+      setAddError(null);
     }
   };
 
@@ -209,7 +216,10 @@ export function AddSectionDialog({ existingSections, onAdd }: AddSectionDialogPr
                   id="customName"
                   placeholder="e.g., Hobbies, Publications, Speaking..."
                   value={customName}
-                  onChange={(e) => setCustomName(e.target.value)}
+                  onChange={(e) => {
+                    setCustomName(e.target.value);
+                    setAddError(null);
+                  }}
                   autoFocus
                 />
               </div>
@@ -222,6 +232,12 @@ export function AddSectionDialog({ existingSections, onAdd }: AddSectionDialogPr
               </p>
             )}
           </div>
+
+          {addError && (
+            <p role="alert" className="text-sm text-destructive">
+              {addError}
+            </p>
+          )}
 
           {/* Actions */}
           <div className="flex justify-end gap-2">

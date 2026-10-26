@@ -144,6 +144,21 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Custom section names are unique per resume (a database index): say so plainly.
+    const customSectionName = typeof customName === 'string' ? customName.trim() : '';
+    if (type === 'CUSTOM') {
+      if (!customSectionName) {
+        throw new AppError('Give the section a name.', ErrorCode.BAD_REQUEST, 400);
+      }
+      if (existingSections.some((s) => s.type === 'CUSTOM' && s.customName === customSectionName)) {
+        throw new AppError(
+          `You already have a section called "${customSectionName}".`,
+          ErrorCode.CONFLICT,
+          409
+        );
+      }
+    }
+
     // Get max sortOrder
     const maxOrder = existingSections.reduce((max, s) => Math.max(max, s.sortOrder), -1);
 
@@ -151,10 +166,10 @@ export async function POST(request: NextRequest) {
       data: {
         profileId: context.profileId,
         type: type as SectionType,
-        customName: type === 'CUSTOM' ? customName : null,
+        customName: type === 'CUSTOM' ? customSectionName : null,
         title:
           title ||
-          customName ||
+          customSectionName ||
           type
             .replace(/_/g, ' ')
             .toLowerCase()

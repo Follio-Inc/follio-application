@@ -46,6 +46,19 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: 'Skill group not found' }, { status: 404 });
     }
 
+    // Check for duplicate group name (the same check as POST)
+    if (validatedData.data.name && validatedData.data.name !== existingGroup.name) {
+      const sameName = await db.skillGroup.findFirst({
+        where: { profileId, name: validatedData.data.name, NOT: { id } },
+      });
+      if (sameName) {
+        return NextResponse.json(
+          { error: 'A skill group with this name already exists' },
+          { status: 409 }
+        );
+      }
+    }
+
     const skillGroup = await db.skillGroup.update({
       where: { id },
       data: {

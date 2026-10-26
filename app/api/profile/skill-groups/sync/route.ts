@@ -1,4 +1,5 @@
 import { auth } from '@clerk/nextjs/server';
+import { Prisma } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -90,10 +91,25 @@ export async function PUT(request: NextRequest) {
       })
       .filter((group) => group.name.length > 0);
 
+    // Category names are unique per resume (a database index); say which one clashes instead of
+    // failing the whole save with a 500.
+    const seenNames = new Set<string>();
+    for (const group of prepared) {
+      if (seenNames.has(group.name)) {
+        return NextResponse.json(
+          {
+            error: `Two categories are called "${group.name}". Give each category a different name.`,
+          },
+          { status: 400 }
+        );
+      }
+      seenNames.add(group.name);
+    }
+
     const result = await db.$transaction(async (tx) => {
       const existingGroups = await tx.skillGroup.findMany({
         where: { profileId },
-        select: { id: true },
+        select: { id: true, name: true },
       });
       const existingIds = new Set(existingGroups.map((g) => g.id));
 
@@ -110,6 +126,19 @@ export async function PUT(request: NextRequest) {
       }
 
       await tx.skill.deleteMany({ where: { profileId, groupId: null } });
+
+      // Renames are saved one group at a time, so swapping two names ("A"→"B", "B"→"A") or giving
+      // a new group a name another group is leaving would clash midway. Park renamed groups on a
+      // placeholder name first; the loop below gives them their final names.
+      const currentNames = new Map(existingGroups.map((g) => [g.id, g.name]));
+      for (const group of prepared) {
+        if (!group.id || !keepIds.has(group.id)) continue;
+        if (currentNames.get(group.id) === group.name) continue;
+        await tx.skillGroup.update({
+          where: { id: group.id },
+          data: { name: `__renaming_${group.id}` },
+        });
+      }
 
       // One read for the skills that remain. Looking each name up again adds a
       // round trip per skill and can expire this transaction on a full resume.
@@ -205,6 +234,12 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json({ success: true, ...result });
   } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return NextResponse.json(
+        { error: 'Two categories have the same name. Give each category a different name.' },
+        { status: 409 }
+      );
+    }
     console.error('Error syncing skill groups:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
