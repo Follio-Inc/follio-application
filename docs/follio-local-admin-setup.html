@@ -337,20 +337,19 @@
             </div>
           </div>
           <p>
-            Use that exact email. The password is the one sent to you, including any capital
-            letters and symbols.
+            Use that exact email. The password is the one sent to you, including any capital letters
+            and symbols.
           </p>
           <p class="warn">
-            These logins work only in the local app on your computer. They do not work on
-            follio.me.
+            These logins work only in the local app on your computer. They do not work on follio.me.
           </p>
         </li>
 
         <li id="terminal">
           <h2>Open a terminal</h2>
           <p>
-            A terminal is the window where you type the commands in this guide. Leave it open
-            while the app is running.
+            A terminal is the window where you type the commands in this guide. Leave it open while
+            the app is running.
           </p>
           <h3>Mac</h3>
           <ol class="plain">
@@ -384,9 +383,7 @@
             </li>
             <li>A window appears. Click <strong>Install</strong>, then <strong>Agree</strong>.</li>
             <li>Wait until it finishes. This can take several minutes.</li>
-            <li>
-              Close Terminal, open it again, and run <code>git --version</code>.
-            </li>
+            <li>Close Terminal, open it again, and run <code>git --version</code>.</li>
           </ol>
           <p>
             If that command does nothing, download the Mac installer from
@@ -414,8 +411,8 @@
         <li id="node">
           <h2>Install Node.js 20</h2>
           <p>
-            Node.js runs the app. The installer also installs <code>npm</code>, which downloads
-            the project’s libraries. You do not install npm by itself.
+            Node.js runs the app. The installer also installs <code>npm</code>, which downloads the
+            project’s libraries. You do not install npm by itself.
           </p>
           <p>
             The large download button on the Node.js homepage often installs a newer version. This
@@ -424,7 +421,9 @@
           </p>
           <p>
             Open this page:
-            <a href="https://nodejs.org/dist/latest-v20.x/">https://nodejs.org/dist/latest-v20.x/</a>
+            <a href="https://nodejs.org/dist/latest-v20.x/"
+              >https://nodejs.org/dist/latest-v20.x/</a
+            >
           </p>
 
           <h3>Mac</h3>
@@ -444,16 +443,17 @@
               </ul>
             </li>
             <li>Open the downloaded <code>.pkg</code> file.</li>
-            <li>Click <strong>Continue</strong>, then <strong>Install</strong>. Enter your Mac password if asked.</li>
+            <li>
+              Click <strong>Continue</strong>, then <strong>Install</strong>. Enter your Mac
+              password if asked.
+            </li>
             <li>When it says the installation was successful, click <strong>Close</strong>.</li>
             <li>Quit Terminal completely, then open a new Terminal window.</li>
           </ol>
 
           <h3>Windows</h3>
           <ol class="plain">
-            <li>
-              On the same page, download the file whose name ends in <code>x64.msi</code>.
-            </li>
+            <li>On the same page, download the file whose name ends in <code>x64.msi</code>.</li>
             <li>Open the downloaded file.</li>
             <li>
               Click <strong>Next</strong>. Accept the license. Leave the default install location
@@ -464,8 +464,10 @@
           </ol>
 
           <p class="label">Check, in the new terminal window</p>
-          <pre>node -v
-npm -v</pre>
+          <pre>
+node -v
+npm -v</pre
+          >
           <p class="ok">
             <code>node -v</code> must print <code>v20</code> followed by more numbers, for example
             <code>v20.19.0</code>. <code>npm -v</code> must print <code>10</code> or higher, for
@@ -473,8 +475,8 @@ npm -v</pre>
           </p>
           <p class="warn">
             If <code>node -v</code> prints v18, v22, v24, or any version that does not start with
-            v20, the wrong installer was used. Download the version 20 installer from the link
-            above and run it again. Then close the terminal, open a new one, and run
+            v20, the wrong installer was used. Download the version 20 installer from the link above
+            and run it again. Then close the terminal, open a new one, and run
             <code>node -v</code> again.
           </p>
         </li>
@@ -488,12 +490,14 @@ npm -v</pre>
             </li>
             <li>
               Open the invitation email for the repository
-              <code>Follio-Inc/follio-application</code> and click <strong>Accept invitation</strong>.
+              <code>Follio-Inc/follio-application</code> and click
+              <strong>Accept invitation</strong>.
             </li>
             <li>
               Confirm you can open
-              <a href="https://github.com/Follio-Inc/follio-application">https://github.com/Follio-Inc/follio-application</a>.
-              You should see the code, not a 404 page.
+              <a href="https://github.com/Follio-Inc/follio-application"
+                >https://github.com/Follio-Inc/follio-application</a
+              >. You should see the code, not a 404 page.
             </li>
           </ol>
           <p class="ok">If that page loads, your GitHub account can download the project.</p>
@@ -506,20 +510,24 @@ npm -v</pre>
             step if that folder is already on your computer, and continue at the next step.
           </p>
           <p class="label">Mac</p>
-          <pre>cd ~/Documents
+          <pre>
+cd ~/Documents
 git clone https://github.com/Follio-Inc/follio-application.git
-cd follio-application</pre>
+cd follio-application</pre
+          >
           <p class="label">Windows PowerShell</p>
-          <pre>cd $HOME\Documents
+          <pre>
+cd $HOME\Documents
 git clone https://github.com/Follio-Inc/follio-application.git
-cd follio-application</pre>
+cd follio-application</pre
+          >
           <p>
             The first time, a browser window or a GitHub sign-in window opens. Sign in with the
             GitHub account that accepted the invitation. Approve access if asked.
           </p>
           <p class="ok">
-            The command finishes when the terminal shows a new prompt and no error. In Documents
-            you can see a folder named <code>follio-application</code>.
+            The command finishes when the terminal shows a new prompt and no error. In Documents you
+            can see a folder named <code>follio-application</code>.
           </p>
         </li>
 
@@ -530,15 +538,19 @@ cd follio-application</pre>
             are inside the <code>follio-application</code> folder.
           </p>
           <p class="label">Mac</p>
-          <pre>cd ~/Documents/follio-application
+          <pre>
+cd ~/Documents/follio-application
 git checkout develop
 git pull origin develop
-git branch</pre>
+git branch</pre
+          >
           <p class="label">Windows PowerShell</p>
-          <pre>cd $HOME\Documents\follio-application
+          <pre>
+cd $HOME\Documents\follio-application
 git checkout develop
 git pull origin develop
-git branch</pre>
+git branch</pre
+          >
           <p class="ok">
             The last command prints a list of branches. A star must sit next to
             <code>develop</code>, like this: <code>* develop</code>.
@@ -548,14 +560,14 @@ git branch</pre>
         <li id="env">
           <h2>Add the environment file</h2>
           <p>
-            The app will not recognize your login until this file is in the project folder. The
-            file is the <code>.env.local</code> that was sent with this page.
+            The app will not recognize your login until this file is in the project folder. The file
+            is the <code>.env.local</code> that was sent with this page.
           </p>
           <p>When this step is done, the folder looks like this:</p>
-          <div class="tree">follio-application/
-  package.json
-  .env.local     ← the file you were sent
-  .env           ← a copy of that same file</div>
+          <div class="tree">
+            follio-application/ package.json .env.local ← the file you were sent .env ← a copy of
+            that same file
+          </div>
           <p>
             Both files sit next to <code>package.json</code>. They must contain the same text. Do
             not fill them in from <code>.env.example</code>.
@@ -577,9 +589,11 @@ git branch</pre>
             </li>
             <li>
               Make the second copy:
-              <pre>cd ~/Documents/follio-application
+              <pre>
+cd ~/Documents/follio-application
 cp .env.local .env
-ls -a</pre>
+ls -a</pre
+              >
             </li>
           </ol>
           <p>
@@ -591,15 +605,19 @@ ls -a</pre>
           <ol class="plain">
             <li>
               If the file is in Downloads, run this in PowerShell:
-              <pre>copy $HOME\Downloads\.env.local $HOME\Documents\follio-application\.env.local</pre>
+              <pre>
+copy $HOME\Downloads\.env.local $HOME\Documents\follio-application\.env.local</pre
+              >
               If the downloaded name has no leading dot, use
               <code>$HOME\Downloads\env.local</code> instead.
             </li>
             <li>
               Make the second copy:
-              <pre>cd $HOME\Documents\follio-application
+              <pre>
+cd $HOME\Documents\follio-application
 copy .env.local .env
-Get-ChildItem -Force</pre>
+Get-ChildItem -Force</pre
+              >
             </li>
           </ol>
 
@@ -617,12 +635,17 @@ Get-ChildItem -Force</pre>
         <li id="start">
           <h2>Install and start the app</h2>
           <p>From inside <code>follio-application</code>:</p>
-          <pre>npm install
+          <pre>
+npm install
 npx prisma generate
-npm run dev</pre>
+npm run dev</pre
+          >
           <p>What each command does:</p>
           <ul>
-            <li><code>npm install</code> downloads the libraries. The first run can take a few minutes.</li>
+            <li>
+              <code>npm install</code> downloads the libraries. The first run can take a few
+              minutes.
+            </li>
             <li>
               <code>npx prisma generate</code> prepares database code on your computer. It does not
               change the shared database.
@@ -633,9 +656,7 @@ npm run dev</pre>
             Leave this terminal open. The app is ready when the terminal prints a local address:
             <code>http://localhost:3000</code>.
           </p>
-          <p>
-            To stop the app later, click the terminal and press <code>Ctrl + C</code>.
-          </p>
+          <p>To stop the app later, click the terminal and press <code>Ctrl + C</code>.</p>
         </li>
 
         <li id="signin">
@@ -647,7 +668,10 @@ npm run dev</pre>
               <a href="http://localhost:3000/admin/sign-in">http://localhost:3000/admin/sign-in</a>.
               Type that address. Do not open follio.me.
             </li>
-            <li>Enter your email: <code>carissa.c@follio.me</code> or <code>padmaja.m@follio.me</code>.</li>
+            <li>
+              Enter your email: <code>carissa.c@follio.me</code> or
+              <code>padmaja.m@follio.me</code>.
+            </li>
             <li>Enter the password from the separate message.</li>
             <li>Continue until the page changes.</li>
           </ol>
@@ -658,22 +682,27 @@ npm run dev</pre>
           </p>
           <p>
             Open <strong>Developer</strong> for the engineering tools, or go directly to
-            <a href="http://localhost:3000/admin/developer">http://localhost:3000/admin/developer</a>.
+            <a href="http://localhost:3000/admin/developer">http://localhost:3000/admin/developer</a
+            >.
           </p>
         </li>
 
         <li id="daily">
           <h2>Each day after that</h2>
           <p class="label">Mac</p>
-          <pre>cd ~/Documents/follio-application
+          <pre>
+cd ~/Documents/follio-application
 git checkout develop
 git pull origin develop
-npm run dev</pre>
+npm run dev</pre
+          >
           <p class="label">Windows PowerShell</p>
-          <pre>cd $HOME\Documents\follio-application
+          <pre>
+cd $HOME\Documents\follio-application
 git checkout develop
 git pull origin develop
-npm run dev</pre>
+npm run dev</pre
+          >
           <p>
             When the terminal shows <code>http://localhost:3000</code>, open
             <a href="http://localhost:3000/admin/sign-in">http://localhost:3000/admin/sign-in</a>.
@@ -716,14 +745,17 @@ npm run dev</pre>
             </tr>
             <tr>
               <td>Repository page is a 404</td>
-              <td>The invitation has not been accepted yet, or a different GitHub account is signed in.</td>
+              <td>
+                The invitation has not been accepted yet, or a different GitHub account is signed
+                in.
+              </td>
             </tr>
             <tr>
               <td>Sign-in says the account was not found</td>
               <td>
-                The address must be <code>http://localhost:3000/admin/sign-in</code>. The email
-                must match exactly. <code>.env</code> and <code>.env.local</code> must both be the
-                file you were sent. Press <code>Ctrl + C</code>, run <code>npm run dev</code>
+                The address must be <code>http://localhost:3000/admin/sign-in</code>. The email must
+                match exactly. <code>.env</code> and <code>.env.local</code> must both be the file
+                you were sent. Press <code>Ctrl + C</code>, run <code>npm run dev</code>
                 again, and retry.
               </td>
             </tr>
@@ -744,8 +776,8 @@ npm run dev</pre>
             <tr>
               <td>The browser cannot connect to localhost:3000</td>
               <td>
-                <code>npm run dev</code> is not running, or the terminal was closed. Start it
-                again from the project folder.
+                <code>npm run dev</code> is not running, or the terminal was closed. Start it again
+                from the project folder.
               </td>
             </tr>
           </tbody>
