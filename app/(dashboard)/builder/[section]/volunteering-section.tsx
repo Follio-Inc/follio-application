@@ -232,6 +232,7 @@ export function VolunteeringSection({ section, embedded }: VolunteeringSectionPr
           onReorder={handleReorder}
           dateExtractor={volunteeringDateExtractor}
           disabled={isLoading}
+          orgOf={(item) => item.organization}
           renderItem={(item) => (
             <div
               className={cn(

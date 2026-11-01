@@ -153,4 +153,85 @@ describe('highlights drawn into the resume', () => {
     expect(positions.every((index) => index >= 0)).toBe(true);
     expect([...positions].sort((a, b) => a - b)).toEqual(positions);
   });
+
+  it('promotes consecutive same-company roles and leaves singles ungrouped in repeats mode', () => {
+    const html = renderToStaticMarkup(
+      <CleanResumeView
+        profile={
+          {
+            ...profile,
+            workExperiences: [
+              {
+                id: 'w1',
+                role: 'Staff engineer',
+                company: 'Stripe',
+                location: 'NYC',
+                startDate: '2022-01-01',
+                isCurrent: true,
+                isVisible: true,
+                bullets: ['Later role'],
+              },
+              {
+                id: 'w1b',
+                role: 'Senior engineer',
+                company: 'Stripe',
+                location: 'NYC',
+                startDate: '2021-01-01',
+                endDate: '2021-12-01',
+                isCurrent: false,
+                isVisible: true,
+                bullets: ['Earlier role'],
+              },
+              {
+                id: 'w2',
+                role: 'Founding engineer',
+                company: 'Follio',
+                startDate: '2016-01-01',
+                endDate: '2018-01-01',
+                isCurrent: false,
+                isVisible: true,
+                bullets: ['Solo stint'],
+              },
+            ],
+            sections: [
+              {
+                ...profile.sections[0],
+                entryGrouping: 'REPEATS',
+              },
+            ],
+          } as unknown as PublicProfile
+        }
+      />
+    );
+
+    expect(html).toContain('resume-org-group');
+    expect(html).toContain('resume-org-name');
+    expect(html).toContain('Stripe, NYC');
+    expect(html.match(/Stripe, NYC/g)?.length).toBe(1);
+    expect(html).toContain('Staff engineer');
+    expect(html).toContain('Senior engineer');
+    expect(html).toContain('Follio');
+    const follioIndex = html.indexOf('Follio');
+    const foundingIndex = html.indexOf('Founding engineer');
+    expect(foundingIndex).toBeGreaterThan(-1);
+    expect(follioIndex).toBeGreaterThan(foundingIndex);
+  });
+
+  it('uses org-on-top style for every entry in group-all mode', () => {
+    const html = renderToStaticMarkup(
+      <CleanResumeView
+        profile={
+          {
+            ...profile,
+            sections: [{ ...profile.sections[0], entryGrouping: 'ALL' }],
+          } as unknown as PublicProfile
+        }
+      />
+    );
+
+    expect(html).toContain('resume-org-group');
+    expect(html).toContain('Stripe');
+    expect(html).toContain('Follio');
+    expect((html.match(/resume-org-name/g) ?? []).length).toBe(2);
+  });
 });

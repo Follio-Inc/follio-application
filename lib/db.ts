@@ -43,9 +43,9 @@ function createPrismaClient(): PrismaClient {
     Prisma.dmmf.datamodel.models
       .find((model) => model.name === 'ProfileSection')
       ?.fields.map((field) => field.name) ?? [];
-  if (!sectionFields.includes('subHeadings')) {
+  if (!sectionFields.includes('subHeadings') || !sectionFields.includes('entryGrouping')) {
     throw new Error(
-      'Prisma client is missing ProfileSection.subHeadings. Run `npx prisma generate` and restart Next.js with a clean `.next` cache.'
+      'Prisma client is missing ProfileSection.subHeadings or entryGrouping. Run `npx prisma generate` and restart Next.js with a clean `.next` cache.'
     );
   }
 
@@ -68,8 +68,9 @@ function createPrismaClient(): PrismaClient {
  * WorkExperience / Education.durationVisible → generation 9.
  * ProfileSection.subHeadings → generation 10.
  * ProfileSection fingerprint coverage → generation 11.
+ * ProfileSection.entryGrouping → generation 12.
  */
-const PRISMA_CLIENT_GENERATION = 11;
+const PRISMA_CLIENT_GENERATION = 12;
 
 function schemaFieldFingerprint(): string {
   const modelNames = [

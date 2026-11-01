@@ -345,6 +345,7 @@ async function cloneProfile(
           customContent: nullableJson(section.customContent),
           contentType: section.contentType,
           subHeadings: remapped ? (remapped as unknown as Prisma.InputJsonValue) : Prisma.JsonNull,
+          entryGrouping: section.entryGrouping ?? null,
         };
       }),
     });

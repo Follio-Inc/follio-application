@@ -32,12 +32,19 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { ContentOrgGroupFrom } from '@/components/section-entry-grouping/content-org-group';
+import { EntryGroupingControl } from '@/components/section-entry-grouping/entry-grouping-control';
 import { SortableSubheadingRow } from '@/components/section-subheadings/section-subheadings-editor';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { notifyProfileUpdated } from '@/lib/events';
 import { useReorderPersist } from '@/lib/hooks/use-reorder-persist';
 import { useSectionReorderPersist } from '@/lib/hooks/use-section-reorder-persist';
+import {
+  chunkMixedIdsByOrg,
+  ENTRY_GROUPING_SECTION_TYPES,
+  parseEntryGrouping,
+} from '@/lib/section-entry-grouping';
 import {
   addSubHeadingGroup,
   createDefaultSubHeadings,
@@ -67,6 +74,7 @@ import { cn } from '@/lib/utils';
 import { saveProfileDraft } from '../lib/save-profile-draft';
 import { AddSectionDialog } from './add-section-dialog';
 import { useBuilderStore } from './builder-store-provider';
+import { usePersistSectionEntryGrouping } from './connected-section-entry-grouping';
 import { usePersistSectionSubHeadings } from './connected-section-subheadings';
 import { FormSaveBar } from './form-save-bar';
 
@@ -392,6 +400,7 @@ export function AllSectionsEditor() {
     commitInlineChange({ certifications: items });
   });
   const persistSubHeadings = usePersistSectionSubHeadings();
+  const persistEntryGrouping = usePersistSectionEntryGrouping();
 
   type AnyReorderFn = (items: Array<{ id: string }>) => Promise<void>;
 
@@ -852,7 +861,10 @@ export function AllSectionsEditor() {
           </div>
         ) : null;
 
-      const renderEntryCard = (entry: EntryInfo) => {
+      const groupingMode = parseEntryGrouping(section.entryGrouping);
+      const groupingOn = groupingMode !== 'off' && ENTRY_GROUPING_SECTION_TYPES.has(section.type);
+
+      const renderEntryCard = (entry: EntryInfo, hideSubtitle = false) => {
         const entryHidden = entry.isVisible === false;
         return (
           <SortableEntryCard key={entry.id} id={entry.id}>
@@ -874,7 +886,7 @@ export function AllSectionsEditor() {
                 className="min-w-0 flex-1 text-left"
               >
                 <p className="truncate text-sm font-medium">{entry.title}</p>
-                {entry.subtitle ? (
+                {entry.subtitle && !hideSubtitle ? (
                   <p className="truncate text-xs text-muted-foreground">{entry.subtitle}</p>
                 ) : null}
               </button>
@@ -980,15 +992,21 @@ export function AllSectionsEditor() {
           >
             <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
               <div className="space-y-2 pl-5">
-                {parsedSubHeadings
-                  ? sortableIds.map((id) => {
-                      if (isSubheadingSortableId(id)) {
-                        const groupId = fromSubheadingSortableId(id);
-                        const group = parsedSubHeadings.groups.find((item) => item.id === groupId);
+                {groupingOn
+                  ? chunkMixedIdsByOrg(
+                      sortableIds,
+                      entryById,
+                      isSubheadingSortableId,
+                      (entry) => entry.subtitle,
+                      groupingMode
+                    ).map((chunk) => {
+                      if (chunk.type === 'heading') {
+                        const groupId = fromSubheadingSortableId(chunk.id);
+                        const group = parsedSubHeadings?.groups.find((item) => item.id === groupId);
                         if (!group) return null;
                         return (
                           <SortableSubheadingRow
-                            key={id}
+                            key={chunk.id}
                             groupId={group.id}
                             label={group.label}
                             onLabelCommit={(label) =>
@@ -998,10 +1016,38 @@ export function AllSectionsEditor() {
                           />
                         );
                       }
-                      const entry = entryById.get(id);
-                      return entry ? renderEntryCard(entry) : null;
+                      return (
+                        <ContentOrgGroupFrom key={chunk.group.id} group={chunk.group}>
+                          {chunk.group.entries.map((entry) =>
+                            renderEntryCard(entry, chunk.group.grouped)
+                          )}
+                        </ContentOrgGroupFrom>
+                      );
                     })
-                  : entries.map((entry) => renderEntryCard(entry))}
+                  : parsedSubHeadings
+                    ? sortableIds.map((id) => {
+                        if (isSubheadingSortableId(id)) {
+                          const groupId = fromSubheadingSortableId(id);
+                          const group = parsedSubHeadings.groups.find(
+                            (item) => item.id === groupId
+                          );
+                          if (!group) return null;
+                          return (
+                            <SortableSubheadingRow
+                              key={id}
+                              groupId={group.id}
+                              label={group.label}
+                              onLabelCommit={(label) =>
+                                handleRenameSubHeading(section, group.id, label)
+                              }
+                              onDelete={() => handleDeleteSubHeading(section, group.id)}
+                            />
+                          );
+                        }
+                        const entry = entryById.get(id);
+                        return entry ? renderEntryCard(entry) : null;
+                      })
+                    : entries.map((entry) => renderEntryCard(entry))}
               </div>
             </SortableContext>
           </DndContext>
@@ -1390,6 +1436,10 @@ export function AllSectionsEditor() {
       isExpanded &&
       SUBHEADING_SECTION_TYPES.has(section.type) &&
       (section.type !== 'CUSTOM' || section.contentType !== 'FREEFORM');
+    const showGroupingToggle =
+      isExpanded &&
+      ENTRY_GROUPING_SECTION_TYPES.has(section.type) &&
+      (section.type !== 'CUSTOM' || section.contentType !== 'FREEFORM');
     const subheadingsOn = isSubHeadingsEnabled(section.subHeadings);
     const subheadingSwitchId = `subheadings-${section.id}`;
 
@@ -1423,20 +1473,30 @@ export function AllSectionsEditor() {
                 {title}
               </span>
             </button>
-            {showSubheadingToggle && (
-              <div className="flex shrink-0 items-center gap-2">
-                <Label
-                  htmlFor={subheadingSwitchId}
-                  className="cursor-pointer whitespace-nowrap text-[11px] font-medium text-muted-foreground"
-                >
-                  Add Sub-headings
-                </Label>
-                <Switch
-                  id={subheadingSwitchId}
-                  checked={subheadingsOn}
-                  onCheckedChange={(checked) => handleSubHeadingsToggle(section, checked)}
-                  aria-label="Add Sub-headings"
-                />
+            {(showSubheadingToggle || showGroupingToggle) && (
+              <div className="flex shrink-0 items-center gap-3">
+                {showSubheadingToggle && (
+                  <div className="flex items-center gap-2">
+                    <Label
+                      htmlFor={subheadingSwitchId}
+                      className="cursor-pointer whitespace-nowrap text-[11px] font-medium text-muted-foreground"
+                    >
+                      Add Sub-headings
+                    </Label>
+                    <Switch
+                      id={subheadingSwitchId}
+                      checked={subheadingsOn}
+                      onCheckedChange={(checked) => handleSubHeadingsToggle(section, checked)}
+                      aria-label="Add Sub-headings"
+                    />
+                  </div>
+                )}
+                {showGroupingToggle && (
+                  <EntryGroupingControl
+                    value={section.entryGrouping}
+                    onChange={(mode) => persistEntryGrouping(section.id, mode)}
+                  />
+                )}
               </div>
             )}
             {entryCount !== null && (

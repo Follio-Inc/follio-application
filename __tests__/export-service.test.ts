@@ -593,6 +593,52 @@ describe('toPDFHtml', () => {
     expect(html.indexOf('Other combined')).toBeLessThan(html.indexOf('Intern'));
   });
 
+  it('promotes consecutive same-company roles in PDF HTML', () => {
+    const base = makeProfile();
+    const later = {
+      ...base.workExperiences[0],
+      id: 'w1',
+      role: 'Staff Engineer',
+      company: 'Acme Corp',
+    };
+    const earlier = {
+      ...base.workExperiences[0],
+      id: 'w2',
+      role: 'Engineer',
+      company: 'Acme Corp',
+      isCurrent: false,
+      startDate: new Date('2018-01-01'),
+      endDate: new Date('2019-12-01'),
+    };
+    const html = toPDFHtml(
+      makeProfile({
+        workExperiences: [later, earlier],
+        sections: [
+          {
+            id: 's-exp',
+            profileId: 'p1',
+            type: 'EXPERIENCE',
+            title: 'Experience',
+            sortOrder: 0,
+            isVisible: true,
+            customContent: null,
+            contentType: 'STRUCTURED',
+            subHeadings: null,
+            entryGrouping: 'REPEATS',
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ],
+      } as unknown as Partial<FullProfile>)
+    );
+    expect(html).toContain('resume-org-group');
+    expect(html).toContain('resume-org-name');
+    expect(html).toContain('Acme Corp, Remote');
+    expect(html).toContain('Staff Engineer');
+    expect(html).toContain('Engineer');
+    expect((html.match(/Acme Corp, Remote/g) ?? []).length).toBe(1);
+  });
+
   it('includes education section', () => {
     const html = toPDFHtml(makeProfile());
     expect(html).toContain('MIT');

@@ -295,6 +295,7 @@ export function CustomSection({ section, embedded }: CustomSectionProps) {
           onReorder={handleReorder}
           dateExtractor={customItemDateExtractor}
           disabled={isLoading}
+          orgOf={(item) => item.subtitle}
           renderItem={(item) => (
             <div
               className={cn(

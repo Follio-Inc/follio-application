@@ -837,6 +837,49 @@
     color: color-mix(in srgb, #e5e5e5 62%, transparent);
   }
 
+  .resume-org-group {
+    min-width: 0;
+  }
+
+  .resume-org-name {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.3;
+    margin: 0 0 6px;
+    color: inherit;
+    break-after: avoid;
+  }
+
+  .resume-org-roles {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-left: 12px;
+  }
+
+  .resume-org-roles::before {
+    content: '';
+    position: absolute;
+    left: 3px;
+    top: 5px;
+    bottom: 5px;
+    width: 1px;
+    background: color-mix(in srgb, currentColor 22%, transparent);
+  }
+
+  .resume-paper-wrapper[data-resume-theme='dark'] .resume-org-roles::before {
+    background: color-mix(in srgb, #e5e5e5 28%, transparent);
+  }
+
+  .resume-org-role {
+    min-width: 0;
+  }
+
+  .resume-entries-compact .resume-org-roles {
+    gap: 4px;
+  }
+
   .resume-entry {
     break-inside: avoid;
   }
@@ -2096,6 +2139,17 @@
 
   .resume-atelier-exp {
     margin-bottom: 18px;
+  }
+
+  .resume-org-roles .resume-atelier-exp {
+    margin-bottom: 0;
+  }
+
+  .resume-paper.resume-paper--atelier .resume-org-name {
+    font-family: var(--rd-font-body, 'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif);
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 8px;
   }
 
   .resume-atelier-exp-grid {

@@ -37,6 +37,12 @@ import {
   resolveResumeFonts,
 } from '@/lib/resume-design';
 import { getResumeTemplateId, isResumeAtelierRailSectionType } from '@/lib/resume/templates';
+import {
+  groupConsecutiveByOrg,
+  orgGroupHeaderLabel,
+  parseEntryGrouping,
+  type EntryGroupingMode,
+} from '@/lib/section-entry-grouping';
 import { groupEntriesBySubheadings, hasLabeledSubheadingGroups } from '@/lib/section-subheadings';
 import { resolveSkillCategoryLabel, skillGroupsHaveCategoryLabels } from '@/lib/skills/groups';
 import { displayEntryDurationFrom, wrapEntrySubtitleHtml } from '@/lib/entry-duration';
@@ -566,24 +572,72 @@ function getOrderedSectionObjects(profile: FullProfile): ProfileSection[] {
 
 // ── Section divider HTML ──────────────────────────────────────────
 
-function groupedEntriesHtml<T extends { id: string }>(
+type OrgRenderContext = { grouped: boolean; locationShared: boolean };
+
+function orgGroupedEntriesHtml<T extends { id: string }>(
   items: T[],
-  subHeadings: unknown,
-  renderItem: (item: T) => string,
+  mode: EntryGroupingMode,
+  orgOf: ((item: T) => string | null | undefined) | undefined,
+  locationOf: ((item: T) => string | null | undefined) | undefined,
+  renderItem: (item: T, ctx: OrgRenderContext) => string,
   compact = false
 ): string {
   const compactClass = compact ? ' resume-entries-compact' : '';
+  if (!orgOf || mode === 'off') {
+    return `<div class="resume-entries${compactClass}">${items.map((item) => renderItem(item, { grouped: false, locationShared: true })).join('')}</div>`;
+  }
+
+  const groups = groupConsecutiveByOrg(items, orgOf, mode, locationOf);
+  const inner = groups
+    .map((group) => {
+      const roles = group.entries
+        .map((item) =>
+          renderItem(item, { grouped: group.grouped, locationShared: group.locationShared })
+        )
+        .join('');
+      if (!group.grouped) return roles;
+      const label = orgGroupHeaderLabel(
+        group.orgName,
+        group.locationShared ? group.location : null
+      );
+      return `<div class="resume-org-group"><p class="resume-org-name">${escapeHtml(label)}</p><div class="resume-org-roles">${roles}</div></div>`;
+    })
+    .join('');
+
+  return `<div class="resume-entries${compactClass}">${inner}</div>`;
+}
+
+function groupedEntriesHtml<T extends { id: string }>(
+  items: T[],
+  subHeadings: unknown,
+  renderItem: (item: T, ctx?: OrgRenderContext) => string,
+  options:
+    | boolean
+    | {
+        compact?: boolean;
+        grouping?: unknown;
+        orgOf?: (item: T) => string | null | undefined;
+        locationOf?: (item: T) => string | null | undefined;
+      } = false
+): string {
+  const compact = typeof options === 'boolean' ? options : (options.compact ?? false);
+  const grouping = typeof options === 'boolean' ? undefined : options.grouping;
+  const orgOf = typeof options === 'boolean' ? undefined : options.orgOf;
+  const locationOf = typeof options === 'boolean' ? undefined : options.locationOf;
+  const mode = parseEntryGrouping(grouping);
+  const render = (item: T, ctx: OrgRenderContext) => renderItem(item, ctx);
+
   const groups = groupEntriesBySubheadings(items, subHeadings);
   if (!hasLabeledSubheadingGroups(groups)) {
-    return `<div class="resume-entries${compactClass}">${items.map(renderItem).join('')}</div>`;
+    return orgGroupedEntriesHtml(items, mode, orgOf, locationOf, render, compact);
   }
+  const compactClass = compact ? ' resume-entry-group-compact' : '';
   return groups
     .map((group) => {
       const heading = group.label
         ? `<p class="resume-subheading">${escapeHtml(group.label)}</p>`
         : '';
-      const groupClass = compact ? ' resume-entry-group-compact' : '';
-      return `<div class="resume-entry-group${groupClass}">${heading}<div class="resume-entries${compactClass}">${group.entries.map(renderItem).join('')}</div></div>`;
+      return `<div class="resume-entry-group${compactClass}">${heading}${orgGroupedEntriesHtml(group.entries, mode, orgOf, locationOf, render, compact)}</div>`;
     })
     .join('');
 }
@@ -639,26 +693,49 @@ function atelierContactIconSvg(kind: 'phone' | 'email' | 'website' | 'link'): st
 function experienceSectionHtml(
   profile: FullProfile,
   atelier = false,
-  subHeadings?: unknown
+  subHeadings?: unknown,
+  entryGrouping?: unknown
 ): string {
   const items = (profile.workExperiences ?? []).filter((e) => e.isVisible !== false);
   if (items.length === 0) return '';
 
-  const entries = groupedEntriesHtml(items, subHeadings, (exp) => {
-    const dateRange = atelier
-      ? formatAtelierYearRange(exp.startDate, exp.endDate, exp.isCurrent)
-      : formatDateRange(exp.startDate, exp.endDate, exp.isCurrent);
-    const companyLine = [exp.company, exp.location].filter(Boolean).join(', ');
-    const bulletsHtml = resumeEntryBodyHtml({
-      html: exp.bulletsHtml,
-      bullets: exp.bullets,
-    });
+  const entries = groupedEntriesHtml(
+    items,
+    subHeadings,
+    (exp, ctx) => {
+      const grouped = ctx?.grouped === true;
+      const dateRange = atelier
+        ? formatAtelierYearRange(exp.startDate, exp.endDate, exp.isCurrent)
+        : formatDateRange(exp.startDate, exp.endDate, exp.isCurrent);
+      const companyLine = [exp.company, exp.location].filter(Boolean).join(', ');
+      const bulletsHtml = resumeEntryBodyHtml({
+        html: exp.bulletsHtml,
+        bullets: exp.bullets,
+      });
 
-    const tagsHtml = headingTagsHtml(resolveExperienceHeadingTags(exp), escapeHtml);
-    const duration = displayEntryDurationFrom(exp);
+      const tagsHtml = headingTagsHtml(resolveExperienceHeadingTags(exp), escapeHtml);
+      const duration = displayEntryDurationFrom(exp);
+      const groupedClass = grouped ? ' resume-org-role' : '';
+      const roleLocation =
+        grouped && ctx?.locationShared === false && exp.location
+          ? `<p class="resume-entry-subtitle">${escapeHtml(exp.location)}</p>`
+          : '';
 
-    if (atelier) {
-      return `
+      if (atelier) {
+        if (grouped) {
+          return `
+      <div class="resume-entry resume-atelier-exp${groupedClass}">
+        <div class="resume-atelier-exp-grid">
+          <span class="resume-entry-date">${dateRange}</span>
+          <div class="resume-atelier-exp-body">
+            ${wrapHeadingTitleHtml(`<h3 class="resume-entry-title">${escapeHtml(exp.role)}</h3>`, tagsHtml)}
+            ${wrapEntrySubtitleHtml(roleLocation, duration, escapeHtml)}
+            ${bulletsHtml}
+          </div>
+        </div>
+      </div>`;
+        }
+        return `
       <div class="resume-entry resume-atelier-exp">
         <div class="resume-atelier-exp-grid">
           <span class="resume-entry-date">${dateRange}</span>
@@ -669,20 +746,34 @@ function experienceSectionHtml(
           </div>
         </div>
       </div>`;
-    }
+      }
 
-    return `
-      <div class="resume-entry">
+      return `
+      <div class="resume-entry${groupedClass}">
         <div class="resume-entry-header">
           <div class="resume-entry-title-block">
             ${wrapHeadingTitleHtml(`<h3 class="resume-entry-title">${escapeHtml(exp.role)}</h3>`, tagsHtml)}
-            ${wrapEntrySubtitleHtml(`<p class="resume-entry-subtitle">${escapeHtml(companyLine)}</p>`, duration, escapeHtml)}
+            ${
+              grouped
+                ? wrapEntrySubtitleHtml(roleLocation, duration, escapeHtml)
+                : wrapEntrySubtitleHtml(
+                    `<p class="resume-entry-subtitle">${escapeHtml(companyLine)}</p>`,
+                    duration,
+                    escapeHtml
+                  )
+            }
           </div>
           ${dateRange ? `<span class="resume-entry-date">${dateRange}</span>` : ''}
         </div>
         ${bulletsHtml}
       </div>`;
-  });
+    },
+    {
+      grouping: entryGrouping,
+      orgOf: (exp) => exp.company,
+      locationOf: (exp) => exp.location,
+    }
+  );
 
   return `
   <section class="resume-section">
@@ -702,52 +793,63 @@ function experienceSectionHtml(
 function educationSectionHtml(
   profile: FullProfile,
   atelier = false,
-  subHeadings?: unknown
+  subHeadings?: unknown,
+  entryGrouping?: unknown
 ): string {
   const items = (profile.educations ?? []).filter((e) => e.isVisible !== false);
   if (items.length === 0) return '';
 
-  const entries = groupedEntriesHtml(items, subHeadings, (edu) => {
-    const degreeLine = [edu.degree, edu.fieldOfStudy].filter(Boolean).join(' in ');
-    const dateRange = atelier
-      ? formatAtelierYearRange(edu.startDate, edu.endDate, edu.isCurrent)
-      : formatDateRange(edu.startDate, edu.endDate, edu.isCurrent);
+  const entries = groupedEntriesHtml(
+    items,
+    subHeadings,
+    (edu, ctx) => {
+      const grouped = ctx?.grouped === true;
+      const degreeLine = [edu.degree, edu.fieldOfStudy].filter(Boolean).join(' in ');
+      const dateRange = atelier
+        ? formatAtelierYearRange(edu.startDate, edu.endDate, edu.isCurrent)
+        : formatDateRange(edu.startDate, edu.endDate, edu.isCurrent);
 
-    const bodyHtml = resumeEntryBodyHtml({ html: edu.description });
-    let detailsHtml = '';
-    if (edu.gpa || edu.activities) {
-      const parts: string[] = [];
-      if (edu.gpa) parts.push(`<p>GPA: ${escapeHtml(edu.gpa)}</p>`);
-      if (edu.activities) parts.push(`<p>${escapeHtml(String(edu.activities))}</p>`);
-      detailsHtml = `<div class="resume-entry-details">${parts.join('')}</div>`;
-    }
+      const bodyHtml = resumeEntryBodyHtml({ html: edu.description });
+      let detailsHtml = '';
+      if (edu.gpa || edu.activities) {
+        const parts: string[] = [];
+        if (edu.gpa) parts.push(`<p>GPA: ${escapeHtml(edu.gpa)}</p>`);
+        if (edu.activities) parts.push(`<p>${escapeHtml(String(edu.activities))}</p>`);
+        detailsHtml = `<div class="resume-entry-details">${parts.join('')}</div>`;
+      }
 
-    const tagsHtml = headingTagsHtml(parseHeadingTags(edu.headingTags), escapeHtml);
-    const titleHtml = wrapHeadingTitleHtml(
-      `<h3 class="resume-entry-title">${escapeHtml(degreeLine || edu.institution)}</h3>`,
-      tagsHtml
-    );
-    const duration = displayEntryDurationFrom(edu);
-    const subtitleHtml = wrapEntrySubtitleHtml(
-      degreeLine ? `<p class="resume-entry-subtitle">${escapeHtml(edu.institution)}</p>` : '',
-      duration,
-      escapeHtml
-    );
+      const tagsHtml = headingTagsHtml(parseHeadingTags(edu.headingTags), escapeHtml);
+      const titleText = degreeLine || (grouped ? '' : edu.institution);
+      const titleHtml = wrapHeadingTitleHtml(
+        `<h3 class="resume-entry-title">${escapeHtml(titleText)}</h3>`,
+        tagsHtml
+      );
+      const duration = displayEntryDurationFrom(edu);
+      const subtitleLine = grouped
+        ? ctx?.locationShared === false && edu.location
+          ? `<p class="resume-entry-subtitle">${escapeHtml(edu.location)}</p>`
+          : ''
+        : degreeLine
+          ? `<p class="resume-entry-subtitle">${escapeHtml(edu.institution)}</p>`
+          : '';
+      const subtitleHtml = wrapEntrySubtitleHtml(subtitleLine, duration, escapeHtml);
+      const groupedClass = grouped ? ' resume-org-role' : '';
+      const atelierLocation = grouped && ctx?.locationShared ? null : edu.location;
 
-    if (atelier) {
-      const meta = [dateRange, edu.location].filter(Boolean).join(' · ');
-      return `
-      <div class="resume-entry resume-atelier-edu">
+      if (atelier) {
+        const meta = [dateRange, atelierLocation].filter(Boolean).join(' · ');
+        return `
+      <div class="resume-entry resume-atelier-edu${groupedClass}">
         ${titleHtml}
         ${subtitleHtml}
         ${meta ? `<p class="resume-atelier-edu-meta">${escapeHtml(meta)}</p>` : ''}
         ${bodyHtml}
         ${detailsHtml}
       </div>`;
-    }
+      }
 
-    return `
-      <div class="resume-entry">
+      return `
+      <div class="resume-entry${groupedClass}">
         <div class="resume-entry-header">
           <div class="resume-entry-title-block">
             ${titleHtml}
@@ -758,7 +860,13 @@ function educationSectionHtml(
         ${bodyHtml}
         ${detailsHtml}
       </div>`;
-  });
+    },
+    {
+      grouping: entryGrouping,
+      orgOf: (edu) => edu.institution,
+      locationOf: (edu) => edu.location,
+    }
+  );
 
   return `
   <section class="resume-section">
@@ -865,24 +973,29 @@ function projectsSectionHtml(profile: FullProfile, subHeadings?: unknown): strin
   </section>`;
 }
 
-function certificationsSectionHtml(profile: FullProfile, subHeadings?: unknown): string {
+function certificationsSectionHtml(
+  profile: FullProfile,
+  subHeadings?: unknown,
+  entryGrouping?: unknown
+): string {
   const items = (profile.certifications ?? []).filter((c) => c.isVisible !== false);
   if (items.length === 0) return '';
 
   const entries = groupedEntriesHtml(
     items,
     subHeadings,
-    (cert) => {
+    (cert, ctx) => {
       const issuedDate = formatResumeDate(cert.issueDate);
       const expDate = cert.expirationDate ? formatResumeDate(cert.expirationDate) : null;
+      const grouped = ctx?.grouped === true;
       return `
-      <div class="resume-entry-inline">
+      <div class="resume-entry-inline${grouped ? ' resume-org-role' : ''}">
         <span class="resume-entry-inline-title">${escapeHtml(cert.name)}</span>
-        <span class="resume-entry-inline-issuer"> — ${escapeHtml(cert.issuer)}</span>
+        ${grouped ? '' : `<span class="resume-entry-inline-issuer"> — ${escapeHtml(cert.issuer)}</span>`}
         ${issuedDate ? `<span class="resume-entry-inline-date"> (${issuedDate}${expDate ? `, expires ${expDate}` : ''})</span>` : ''}
       </div>`;
     },
-    true
+    { compact: true, grouping: entryGrouping, orgOf: (cert) => cert.issuer }
   );
 
   return `
@@ -895,7 +1008,8 @@ function certificationsSectionHtml(profile: FullProfile, subHeadings?: unknown):
 function awardsSectionHtml(
   profile: FullProfile,
   title = 'AWARDS & RECOGNITION',
-  subHeadings?: unknown
+  subHeadings?: unknown,
+  entryGrouping?: unknown
 ): string {
   const items = (profile.awards ?? []).filter((a) => a.isVisible !== false);
   if (items.length === 0) return '';
@@ -903,17 +1017,18 @@ function awardsSectionHtml(
   const entries = groupedEntriesHtml(
     items,
     subHeadings,
-    (award) => {
+    (award, ctx) => {
       const awardDate = formatResumeDate(award.date);
+      const grouped = ctx?.grouped === true;
       return `
-      <div class="resume-entry-inline">
+      <div class="resume-entry-inline${grouped ? ' resume-org-role' : ''}">
         <span class="resume-entry-inline-title">${escapeHtml(award.title)}</span>
-        ${award.issuer ? `<span class="resume-entry-inline-issuer"> — ${escapeHtml(award.issuer)}</span>` : ''}
+        ${award.issuer && !grouped ? `<span class="resume-entry-inline-issuer"> — ${escapeHtml(award.issuer)}</span>` : ''}
         ${awardDate ? `<span class="resume-entry-inline-date"> (${awardDate})</span>` : ''}
         ${award.description ? `<p class="resume-entry-inline-description">${escapeHtml(award.description)}</p>` : ''}
       </div>`;
     },
-    true
+    { compact: true, grouping: entryGrouping, orgOf: (award) => award.issuer }
   );
 
   return `
@@ -955,24 +1070,34 @@ function publicationsSectionHtml(items: PublicationItem[], subHeadings?: unknown
   </section>`;
 }
 
-function volunteeringSectionHtml(items: VolunteeringItem[], subHeadings?: unknown): string {
+function volunteeringSectionHtml(
+  items: VolunteeringItem[],
+  subHeadings?: unknown,
+  entryGrouping?: unknown
+): string {
   if (!items || items.length === 0) return '';
 
   const visible = items.filter((v) => v.isVisible !== false);
-  const entries = groupedEntriesHtml(visible, subHeadings, (vol) => {
-    const dateRange = formatDateRange(vol.startDate, vol.endDate, vol.isCurrent);
-    return `
-      <div class="resume-entry">
+  const entries = groupedEntriesHtml(
+    visible,
+    subHeadings,
+    (vol, ctx) => {
+      const dateRange = formatDateRange(vol.startDate, vol.endDate, vol.isCurrent);
+      const grouped = ctx?.grouped === true;
+      return `
+      <div class="resume-entry${grouped ? ' resume-org-role' : ''}">
         <div class="resume-entry-header">
           <div class="resume-entry-title-block">
             ${wrapHeadingTitleHtml(`<h3 class="resume-entry-title">${escapeHtml(vol.role)}</h3>`, headingTagsHtml(parseHeadingTags(vol.tags), escapeHtml))}
-            <p class="resume-entry-subtitle">${escapeHtml(vol.organization)}</p>
+            ${grouped ? '' : `<p class="resume-entry-subtitle">${escapeHtml(vol.organization)}</p>`}
           </div>
           ${dateRange ? `<span class="resume-entry-date">${dateRange}</span>` : ''}
         </div>
         ${vol.description ? `<p class="resume-entry-description">${escapeHtml(vol.description)}</p>` : ''}
       </div>`;
-  });
+    },
+    { grouping: entryGrouping, orgOf: (vol) => vol.organization }
+  );
 
   return `
   <section class="resume-section">
@@ -1055,23 +1180,25 @@ function customSectionHtml(section: ProfileSection): string {
     entriesHtml = groupedEntriesHtml(
       visibleItems,
       section.subHeadings,
-      (item: CustomSectionItem) => {
+      (item: CustomSectionItem, ctx) => {
         const dateRange =
           item.startDate || item.endDate || item.isCurrent
             ? `${item.startDate || ''} – ${item.isCurrent ? 'Present' : item.endDate || ''}`
             : '';
+        const grouped = ctx?.grouped === true;
         return `
-        <div class="resume-entry">
+        <div class="resume-entry${grouped ? ' resume-org-role' : ''}">
           <div class="resume-entry-header">
             <div class="resume-entry-title-block">
               ${wrapHeadingTitleHtml(`<h3 class="resume-entry-title">${escapeHtml(item.title)}</h3>`, headingTagsHtml(parseHeadingTags(item.tags), escapeHtml))}
-              ${item.subtitle ? `<p class="resume-entry-subtitle">${escapeHtml(item.subtitle)}</p>` : ''}
+              ${item.subtitle && !grouped ? `<p class="resume-entry-subtitle">${escapeHtml(item.subtitle)}</p>` : ''}
             </div>
             ${dateRange ? `<span class="resume-entry-date">${dateRange}</span>` : ''}
           </div>
           ${item.description ? `<p class="resume-entry-description">${escapeHtml(item.description)}</p>` : ''}
         </div>`;
-      }
+      },
+      { grouping: section.entryGrouping, orgOf: (item) => item.subtitle }
     );
   }
 
@@ -1103,9 +1230,19 @@ function renderSectionHtml(
     case 'SUMMARY':
       return summarySectionHtml(profile, options.atelier ? 'PROFILE' : 'SUMMARY');
     case 'EXPERIENCE':
-      return experienceSectionHtml(profile, options.atelier === true, section.subHeadings);
+      return experienceSectionHtml(
+        profile,
+        options.atelier === true,
+        section.subHeadings,
+        section.entryGrouping
+      );
     case 'EDUCATION':
-      return educationSectionHtml(profile, options.atelier === true, section.subHeadings);
+      return educationSectionHtml(
+        profile,
+        options.atelier === true,
+        section.subHeadings,
+        section.entryGrouping
+      );
     case 'SKILLS':
       return skillsSectionHtml(profile, {
         stacked: options.stackedSkills === true,
@@ -1113,12 +1250,13 @@ function renderSectionHtml(
     case 'PROJECTS':
       return projectsSectionHtml(profile, section.subHeadings);
     case 'CERTIFICATIONS':
-      return certificationsSectionHtml(profile, section.subHeadings);
+      return certificationsSectionHtml(profile, section.subHeadings, section.entryGrouping);
     case 'AWARDS':
       return awardsSectionHtml(
         profile,
         options.atelier ? 'AWARDS' : 'AWARDS & RECOGNITION',
-        section.subHeadings
+        section.subHeadings,
+        section.entryGrouping
       );
     case 'PUBLICATIONS':
       return publicationsSectionHtml(
@@ -1128,7 +1266,8 @@ function renderSectionHtml(
     case 'VOLUNTEERING':
       return volunteeringSectionHtml(
         getCustomContentItems<VolunteeringItem>(section),
-        section.subHeadings
+        section.subHeadings,
+        section.entryGrouping
       );
     case 'LANGUAGES':
       return languagesSectionHtml(getCustomContentItems<LanguageItem>(section));
@@ -1302,6 +1441,18 @@ const RESUME_CSS = `
     font-size: 9.5px; font-weight: 600; letter-spacing: 0.1em; line-height: 1.3;
     text-transform: none; color: color-mix(in srgb, currentColor 58%, transparent); margin: 0 0 8px;
   }
+  .resume-org-group { min-width: 0; }
+  .resume-org-name {
+    font-size: 13px; font-weight: 600; line-height: 1.3; margin: 0 0 6px; color: inherit;
+  }
+  .resume-org-roles {
+    position: relative; display: flex; flex-direction: column; gap: 10px; padding-left: 12px;
+  }
+  .resume-org-roles::before {
+    content: ''; position: absolute; left: 3px; top: 5px; bottom: 5px; width: 1px;
+    background: color-mix(in srgb, currentColor 22%, transparent);
+  }
+  .resume-entries-compact .resume-org-roles { gap: 4px; }
   .resume-entry { break-inside: avoid; }
   .resume-entry-header {
     display: flex;
@@ -1812,6 +1963,11 @@ const RESUME_CSS = `
   }
   .resume-paper--atelier .resume-summary { font-size: 12.5px; line-height: 1.6; color: #3a3a3a; }
   .resume-atelier-exp { margin-bottom: 18px; }
+  .resume-org-roles .resume-atelier-exp { margin-bottom: 0; }
+  .resume-paper.resume-paper--atelier .resume-org-name {
+    font-family: var(--rd-font-body, 'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif);
+    font-size: 13px; font-weight: 700; margin-bottom: 8px;
+  }
   .resume-atelier-exp-grid {
     display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 12px 16px; align-items: start;
   }

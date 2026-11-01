@@ -28,6 +28,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { ContentOrgGroupFrom } from '@/components/section-entry-grouping/content-org-group';
+import {
+  groupConsecutiveByOrg,
+  parseEntryGrouping,
+  type EntryGroupingMode,
+} from '@/lib/section-entry-grouping';
 import { cn } from '@/lib/utils';
 
 // ─────────────────────────────────────────────
@@ -64,6 +70,8 @@ interface SortableCardListProps<T extends { id: string }> {
   disabled?: boolean;
   /** Additional className for the list container */
   className?: string;
+  grouping?: unknown;
+  orgOf?: (item: T) => string | null | undefined;
 }
 
 interface SortableItemCardProps {
@@ -200,7 +208,10 @@ export function SortableCardList<T extends { id: string }>({
   renderItem,
   disabled = false,
   className,
+  grouping,
+  orgOf,
 }: SortableCardListProps<T>) {
+  const groupingMode: EntryGroupingMode = parseEntryGrouping(grouping);
   const dndId = useId();
   const [activeSortDirection, setActiveSortDirection] = useState<SortDirection | null>(null);
 
@@ -240,15 +251,39 @@ export function SortableCardList<T extends { id: string }>({
     [items, dateExtractor, onReorder]
   );
 
+  const orgGroups =
+    orgOf && groupingMode !== 'off' ? groupConsecutiveByOrg(items, orgOf, groupingMode) : null;
+
+  const renderGroupedCards = (wrapSortable: boolean) => {
+    if (!orgGroups) {
+      return items.map((item) =>
+        wrapSortable ? (
+          <SortableItemCard key={item.id} id={item.id} disabled={disabled}>
+            {renderItem(item)}
+          </SortableItemCard>
+        ) : (
+          <div key={item.id}>{renderItem(item)}</div>
+        )
+      );
+    }
+    return orgGroups.map((group) => (
+      <ContentOrgGroupFrom key={group.id} group={group}>
+        {group.entries.map((item) =>
+          wrapSortable ? (
+            <SortableItemCard key={item.id} id={item.id} disabled={disabled}>
+              {renderItem(item)}
+            </SortableItemCard>
+          ) : (
+            <div key={item.id}>{renderItem(item)}</div>
+          )
+        )}
+      </ContentOrgGroupFrom>
+    ));
+  };
+
   if (items.length <= 1 && !dateExtractor) {
     // Only one or zero items and no sort — just render directly
-    return (
-      <div className={cn('space-y-3', className)}>
-        {items.map((item) => (
-          <div key={item.id}>{renderItem(item)}</div>
-        ))}
-      </div>
-    );
+    return <div className={cn('space-y-3', className)}>{renderGroupedCards(false)}</div>;
   }
 
   return (
@@ -296,13 +331,7 @@ export function SortableCardList<T extends { id: string }>({
         modifiers={[restrictToVerticalAxis, restrictToParentElement]}
       >
         <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
-          <div className="space-y-3 pl-5">
-            {items.map((item) => (
-              <SortableItemCard key={item.id} id={item.id} disabled={disabled}>
-                {renderItem(item)}
-              </SortableItemCard>
-            ))}
-          </div>
+          <div className="space-y-3 pl-5">{renderGroupedCards(true)}</div>
         </SortableContext>
       </DndContext>
     </div>

@@ -170,6 +170,10 @@ model ProfileSection {
   /// Optional small-font groups inside the section (Sub-heading 1 / Sub-heading 2 by default).
   /// Null or empty = off. Groups store entry ids so items can move within or across groups.
   subHeadings   Json?
+  /// Consecutive same-organization grouping on the resume.
+  /// Null = off. "REPEATS" = only orgs with 2+ consecutive entries.
+  /// "ALL" = every entry uses org-on-top + vertical line (different orgs stay separate).
+  entryGrouping String?
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
   profile       Profile           @relation(fields: [profileId], references: [id], onDelete: Cascade)

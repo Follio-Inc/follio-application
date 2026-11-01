@@ -40,6 +40,7 @@ export function buildResumePreviewSections(profileId: string): PublicProfile['se
     customContent: null,
     contentType: 'STRUCTURED' as const,
     subHeadings: null,
+    entryGrouping: null,
     createdAt: now,
     updatedAt: now,
   })) as PublicProfile['sections'];

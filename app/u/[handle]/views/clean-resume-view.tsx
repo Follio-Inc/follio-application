@@ -539,16 +539,21 @@ function ExperienceEntry({
   variant = 'default',
   highlight,
   redline,
+  grouped = false,
+  showLocationOnRole = false,
 }: ExperienceEntryProps & {
   variant?: 'default' | 'atelier';
   highlight?: EntryHighlights;
   redline?: RoleRedline;
+  grouped?: boolean;
+  showLocationOnRole?: boolean;
 }) {
   const dateRange =
     variant === 'atelier'
       ? formatAtelierYearRange(startDate, endDate, isCurrent)
       : formatDateRange(startDate, endDate, isCurrent);
   const companyLine = [company, location].filter(Boolean).join(', ');
+  const roleLocation = showLocationOnRole ? location : null;
   const bulletsBlock = (
     <ResumeEntryBody
       html={bulletsHtml}
@@ -558,19 +563,33 @@ function ExperienceEntry({
     />
   );
   const inserts = highlight?.insert ? <GlanceInserts insert={highlight.insert} /> : null;
+  const groupedClass = grouped ? ' resume-org-role' : '';
 
   if (variant === 'atelier') {
     return (
-      <div className="resume-entry resume-atelier-exp">
+      <div className={`resume-entry resume-atelier-exp${groupedClass}`}>
         <div className="resume-atelier-exp-grid">
           <span className="resume-entry-date">{dateRange}</span>
           <div className="resume-atelier-exp-body">
-            <ResumeEntryTitle tags={headingTags}>
-              <h3 className="resume-entry-title">{company}</h3>
-            </ResumeEntryTitle>
-            <ResumeEntrySubtitle duration={duration}>
-              <p className="resume-entry-subtitle">{role}</p>
-            </ResumeEntrySubtitle>
+            {grouped ? (
+              <>
+                <ResumeEntryTitle tags={headingTags}>
+                  <h3 className="resume-entry-title">{role}</h3>
+                </ResumeEntryTitle>
+                <ResumeEntrySubtitle duration={duration}>
+                  {roleLocation ? <p className="resume-entry-subtitle">{roleLocation}</p> : null}
+                </ResumeEntrySubtitle>
+              </>
+            ) : (
+              <>
+                <ResumeEntryTitle tags={headingTags}>
+                  <h3 className="resume-entry-title">{company}</h3>
+                </ResumeEntryTitle>
+                <ResumeEntrySubtitle duration={duration}>
+                  <p className="resume-entry-subtitle">{role}</p>
+                </ResumeEntrySubtitle>
+              </>
+            )}
             {inserts}
             {bulletsBlock}
           </div>
@@ -580,15 +599,21 @@ function ExperienceEntry({
   }
 
   return (
-    <div className="resume-entry">
+    <div className={`resume-entry${groupedClass}`}>
       <div className="resume-entry-header">
         <div className="resume-entry-title-block">
           <ResumeEntryTitle tags={headingTags}>
             <h3 className="resume-entry-title">{role}</h3>
           </ResumeEntryTitle>
-          <ResumeEntrySubtitle duration={duration}>
-            <p className="resume-entry-subtitle">{companyLine}</p>
-          </ResumeEntrySubtitle>
+          {grouped ? (
+            <ResumeEntrySubtitle duration={duration}>
+              {roleLocation ? <p className="resume-entry-subtitle">{roleLocation}</p> : null}
+            </ResumeEntrySubtitle>
+          ) : (
+            <ResumeEntrySubtitle duration={duration}>
+              <p className="resume-entry-subtitle">{companyLine}</p>
+            </ResumeEntrySubtitle>
+          )}
         </div>
         {dateRange ? <span className="resume-entry-date">{dateRange}</span> : null}
       </div>
@@ -607,6 +632,7 @@ function ExperienceSection({
   variant = 'default',
   highlights,
   subHeadings,
+  entryGrouping,
 }: {
   experiences: PublicProfile['workExperiences'];
   totalExperience?: string | null;
@@ -616,6 +642,7 @@ function ExperienceSection({
   variant?: 'default' | 'atelier';
   highlights?: ResumeGlance | null;
   subHeadings?: unknown;
+  entryGrouping?: unknown;
 }) {
   const redline = useContext(RedlineContext);
   if (!experiences || experiences.length === 0) return null;
@@ -629,8 +656,14 @@ function ExperienceSection({
   return (
     <section className="resume-section">
       <SectionDivider title={variant === 'atelier' ? 'WORK EXPERIENCE' : 'EXPERIENCE'} tag={tag} />
-      <ResumeEntryGroups items={experiences} subHeadings={subHeadings}>
-        {(exp) => (
+      <ResumeEntryGroups
+        items={experiences}
+        subHeadings={subHeadings}
+        grouping={entryGrouping}
+        orgOf={(exp) => exp.company}
+        locationOf={(exp) => exp.location}
+      >
+        {(exp, ctx) => (
           <ExperienceEntry
             key={exp.id}
             role={exp.role}
@@ -646,6 +679,8 @@ function ExperienceSection({
             variant={variant}
             highlight={byEntry.get(exp.id)}
             redline={redline?.roles.get(exp.id)}
+            grouped={ctx.grouped}
+            showLocationOnRole={ctx.grouped && !ctx.locationShared}
           />
         )}
       </ResumeEntryGroups>
@@ -661,18 +696,26 @@ function EducationSection({
   educations,
   variant = 'default',
   subHeadings,
+  entryGrouping,
 }: {
   educations: PublicProfile['educations'];
   variant?: 'default' | 'atelier';
   subHeadings?: unknown;
+  entryGrouping?: unknown;
 }) {
   if (!educations || educations.length === 0) return null;
 
   return (
     <section className="resume-section">
       <SectionDivider title="EDUCATION" />
-      <ResumeEntryGroups items={educations} subHeadings={subHeadings}>
-        {(edu) => {
+      <ResumeEntryGroups
+        items={educations}
+        subHeadings={subHeadings}
+        grouping={entryGrouping}
+        orgOf={(edu) => edu.institution}
+        locationOf={(edu) => edu.location}
+      >
+        {(edu, ctx) => {
           const degreeLine = [edu.degree, edu.fieldOfStudy].filter(Boolean).join(' in ');
           const dateRange =
             variant === 'atelier'
@@ -690,20 +733,29 @@ function EducationSection({
 
           const headingTags = parseHeadingTags(edu.headingTags);
           const duration = displayEntryDurationFrom(edu);
-          const subtitle = degreeLine ? (
-            <p className="resume-entry-subtitle">{edu.institution}</p>
-          ) : null;
+          const grouped = ctx.grouped;
+          const showInstitution = !grouped;
+          const subtitle =
+            showInstitution && degreeLine ? (
+              <p className="resume-entry-subtitle">{edu.institution}</p>
+            ) : ctx.grouped && !ctx.locationShared && edu.location ? (
+              <p className="resume-entry-subtitle">{edu.location}</p>
+            ) : null;
+          const groupedClass = grouped ? ' resume-org-role' : '';
+          const atelierMetaLocation = grouped && ctx.locationShared ? null : edu.location;
 
           if (variant === 'atelier') {
             return (
-              <div key={edu.id} className="resume-entry resume-atelier-edu">
+              <div key={edu.id} className={`resume-entry resume-atelier-edu${groupedClass}`}>
                 <ResumeEntryTitle tags={headingTags}>
-                  <h3 className="resume-entry-title">{degreeLine || edu.institution}</h3>
+                  <h3 className="resume-entry-title">
+                    {degreeLine || (grouped ? '' : edu.institution)}
+                  </h3>
                 </ResumeEntryTitle>
                 <ResumeEntrySubtitle duration={duration}>{subtitle}</ResumeEntrySubtitle>
-                {(dateRange || edu.location) && (
+                {(dateRange || atelierMetaLocation) && (
                   <p className="resume-atelier-edu-meta">
-                    {[dateRange, edu.location].filter(Boolean).join(' · ')}
+                    {[dateRange, atelierMetaLocation].filter(Boolean).join(' · ')}
                   </p>
                 )}
                 {body}
@@ -713,11 +765,13 @@ function EducationSection({
           }
 
           return (
-            <div key={edu.id} className="resume-entry">
+            <div key={edu.id} className={`resume-entry${groupedClass}`}>
               <div className="resume-entry-header">
                 <div className="resume-entry-title-block">
                   <ResumeEntryTitle tags={headingTags}>
-                    <h3 className="resume-entry-title">{degreeLine || edu.institution}</h3>
+                    <h3 className="resume-entry-title">
+                      {degreeLine || (grouped ? '' : edu.institution)}
+                    </h3>
                   </ResumeEntryTitle>
                   <ResumeEntrySubtitle duration={duration}>{subtitle}</ResumeEntrySubtitle>
                 </div>
@@ -895,24 +949,37 @@ function ProjectsSection({
 function CertificationsSection({
   certifications,
   subHeadings,
+  entryGrouping,
 }: {
   certifications: PublicProfile['certifications'];
   subHeadings?: unknown;
+  entryGrouping?: unknown;
 }) {
   if (!certifications || certifications.length === 0) return null;
 
   return (
     <section className="resume-section">
       <SectionDivider title="CERTIFICATIONS" />
-      <ResumeEntryGroups items={certifications} subHeadings={subHeadings} compact>
-        {(cert) => {
+      <ResumeEntryGroups
+        items={certifications}
+        subHeadings={subHeadings}
+        grouping={entryGrouping}
+        orgOf={(cert) => cert.issuer}
+        compact
+      >
+        {(cert, ctx) => {
           const issuedDate = formatResumeDate(cert.issueDate);
           const expDate = cert.expirationDate ? formatResumeDate(cert.expirationDate) : null;
 
           return (
-            <div key={cert.id} className="resume-entry-inline">
+            <div
+              key={cert.id}
+              className={
+                ctx.grouped ? 'resume-entry-inline resume-org-role' : 'resume-entry-inline'
+              }
+            >
               <span className="resume-entry-inline-title">{cert.name}</span>
-              <span className="resume-entry-inline-issuer"> — {cert.issuer}</span>
+              {!ctx.grouped && <span className="resume-entry-inline-issuer"> — {cert.issuer}</span>}
               {issuedDate && (
                 <span className="resume-entry-inline-date">
                   {' '}
@@ -936,24 +1003,37 @@ function AwardsSection({
   awards,
   title = 'AWARDS & RECOGNITION',
   subHeadings,
+  entryGrouping,
 }: {
   awards: PublicProfile['awards'];
   title?: string;
   subHeadings?: unknown;
+  entryGrouping?: unknown;
 }) {
   if (!awards || awards.length === 0) return null;
 
   return (
     <section className="resume-section">
       <SectionDivider title={title} />
-      <ResumeEntryGroups items={awards} subHeadings={subHeadings} compact>
-        {(award) => {
+      <ResumeEntryGroups
+        items={awards}
+        subHeadings={subHeadings}
+        grouping={entryGrouping}
+        orgOf={(award) => award.issuer}
+        compact
+      >
+        {(award, ctx) => {
           const awardDate = formatResumeDate(award.date);
 
           return (
-            <div key={award.id} className="resume-entry-inline">
+            <div
+              key={award.id}
+              className={
+                ctx.grouped ? 'resume-entry-inline resume-org-role' : 'resume-entry-inline'
+              }
+            >
               <span className="resume-entry-inline-title">{award.title}</span>
-              {award.issuer && (
+              {award.issuer && !ctx.grouped && (
                 <span className="resume-entry-inline-issuer"> — {award.issuer}</span>
               )}
               {awardDate && <span className="resume-entry-inline-date"> ({awardDate})</span>}
@@ -1014,30 +1094,40 @@ function PublicationsSection({
 function VolunteeringSection({
   items,
   subHeadings,
+  entryGrouping,
 }: {
   items: VolunteeringItem[];
   subHeadings?: unknown;
+  entryGrouping?: unknown;
 }) {
   if (!items || items.length === 0) return null;
 
   return (
     <section className="resume-section">
       <SectionDivider title="VOLUNTEERING" />
-      <ResumeEntryGroups items={items} subHeadings={subHeadings}>
-        {(vol) => {
+      <ResumeEntryGroups
+        items={items}
+        subHeadings={subHeadings}
+        grouping={entryGrouping}
+        orgOf={(vol) => vol.organization}
+      >
+        {(vol, ctx) => {
           const dateRange =
             vol.startDate || vol.endDate || vol.isCurrent
               ? `${vol.startDate || ''} – ${vol.isCurrent ? 'Present' : vol.endDate || ''}`
               : '';
 
           return (
-            <div key={vol.id} className="resume-entry">
+            <div
+              key={vol.id}
+              className={ctx.grouped ? 'resume-entry resume-org-role' : 'resume-entry'}
+            >
               <div className="resume-entry-header">
                 <div className="resume-entry-title-block">
                   <ResumeEntryTitle tags={parseHeadingTags(vol.tags)}>
                     <h3 className="resume-entry-title">{vol.role}</h3>
                   </ResumeEntryTitle>
-                  <p className="resume-entry-subtitle">{vol.organization}</p>
+                  {!ctx.grouped && <p className="resume-entry-subtitle">{vol.organization}</p>}
                 </div>
                 {dateRange && <span className="resume-entry-date">{dateRange}</span>}
               </div>
@@ -1145,21 +1235,31 @@ function CustomSection({ section }: { section: ProfileSection }) {
       <SectionDivider title={section.title.toUpperCase()} />
 
       {items.length > 0 && (
-        <ResumeEntryGroups items={items} subHeadings={section.subHeadings}>
-          {(item: CustomSectionItem) => {
+        <ResumeEntryGroups
+          items={items}
+          subHeadings={section.subHeadings}
+          grouping={section.entryGrouping}
+          orgOf={(item) => item.subtitle}
+        >
+          {(item: CustomSectionItem, ctx) => {
             const dateRange =
               item.startDate || item.endDate || item.isCurrent
                 ? `${item.startDate || ''} – ${item.isCurrent ? 'Present' : item.endDate || ''}`
                 : '';
 
             return (
-              <div key={item.id} className="resume-entry">
+              <div
+                key={item.id}
+                className={ctx.grouped ? 'resume-entry resume-org-role' : 'resume-entry'}
+              >
                 <div className="resume-entry-header">
                   <div className="resume-entry-title-block">
                     <ResumeEntryTitle tags={parseHeadingTags(item.tags)}>
                       <h3 className="resume-entry-title">{item.title}</h3>
                     </ResumeEntryTitle>
-                    {item.subtitle && <p className="resume-entry-subtitle">{item.subtitle}</p>}
+                    {item.subtitle && !ctx.grouped && (
+                      <p className="resume-entry-subtitle">{item.subtitle}</p>
+                    )}
                   </div>
                   {dateRange && <span className="resume-entry-date">{dateRange}</span>}
                 </div>
@@ -1258,6 +1358,7 @@ export function CleanResumeView({
             variant={isAtelier ? 'atelier' : 'default'}
             highlights={highlights}
             subHeadings={section.subHeadings}
+            entryGrouping={section.entryGrouping}
           />
         );
       case 'EDUCATION':
@@ -1267,6 +1368,7 @@ export function CleanResumeView({
             educations={profile.educations}
             variant={isAtelier ? 'atelier' : 'default'}
             subHeadings={section.subHeadings}
+            entryGrouping={section.entryGrouping}
           />
         );
       case 'SKILLS':
@@ -1285,6 +1387,7 @@ export function CleanResumeView({
             key={section.id}
             certifications={profile.certifications}
             subHeadings={section.subHeadings}
+            entryGrouping={section.entryGrouping}
           />
         );
       case 'AWARDS':
@@ -1294,6 +1397,7 @@ export function CleanResumeView({
             awards={profile.awards}
             title={isAtelier ? 'AWARDS' : 'AWARDS & RECOGNITION'}
             subHeadings={section.subHeadings}
+            entryGrouping={section.entryGrouping}
           />
         );
       case 'PUBLICATIONS':
@@ -1310,6 +1414,7 @@ export function CleanResumeView({
             key={section.id}
             items={getCustomContentItems<VolunteeringItem>(section)}
             subHeadings={section.subHeadings}
+            entryGrouping={section.entryGrouping}
           />
         );
       case 'LANGUAGES':

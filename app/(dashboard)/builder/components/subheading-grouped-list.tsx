@@ -52,6 +52,7 @@ export function SubheadingGroupedCards<T extends { id: string }>({
   dateExtractor,
   disabled,
   renderItem,
+  orgOf,
 }: {
   section: ProfileSection | null | undefined;
   items: T[];
@@ -59,6 +60,7 @@ export function SubheadingGroupedCards<T extends { id: string }>({
   dateExtractor?: DateExtractor<T>;
   disabled?: boolean;
   renderItem: (item: T) => ReactNode;
+  orgOf?: (item: T) => string | null | undefined;
 }) {
   const persist = usePersistSectionSubHeadings();
   const parsed = parseSubHeadings(section?.subHeadings);
@@ -71,6 +73,8 @@ export function SubheadingGroupedCards<T extends { id: string }>({
         dateExtractor={dateExtractor}
         disabled={disabled}
         renderItem={renderItem}
+        grouping={section?.entryGrouping}
+        orgOf={orgOf}
       />
     );
   }
@@ -114,6 +118,8 @@ export function SubheadingGroupedCards<T extends { id: string }>({
                 dateExtractor={dateExtractor}
                 disabled={disabled}
                 renderItem={renderItem}
+                grouping={section.entryGrouping}
+                orgOf={orgOf}
               />
             ) : (
               <p className="px-1 text-xs text-muted-foreground">
