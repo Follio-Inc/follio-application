@@ -3,7 +3,6 @@
 import { Check, Eye, EyeOff } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { Button } from '@/components/ui/button';
 import { notifyProfileUpdated } from '@/lib/events';
 import {
   calculateTotalExperienceMonths,
@@ -254,13 +253,11 @@ export function TotalExperienceField({
 
   return (
     <div className="inline-block max-w-full">
-      <div className="inline-flex max-w-full items-center gap-1.5">
-        <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
-          Total experience
-        </span>
+      <div className="inline-flex max-w-full flex-wrap items-center gap-2">
+        <span className="shrink-0 text-xs font-medium text-muted-foreground">Total experience</span>
         <div
           className={cn(
-            'flex h-7 items-center rounded-md bg-muted/60 px-1 transition-colors',
+            'flex h-7 items-center px-0.5 transition-colors',
             !isVisible && 'opacity-50'
           )}
         >
@@ -361,11 +358,9 @@ export function TotalExperienceField({
           </span>
           Show months
         </button>
-        <Button
+        <button
           type="button"
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 shrink-0 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="builder-quiet-btn h-7 w-7"
           onClick={() => void persistVisibility(!isVisible)}
           title={isVisible ? 'Hide from resume' : 'Show on resume'}
           aria-label={isVisible ? 'Hide total experience' : 'Show total experience'}
@@ -376,7 +371,7 @@ export function TotalExperienceField({
           ) : (
             <EyeOff className="h-4 w-4 text-muted-foreground" />
           )}
-        </Button>
+        </button>
       </div>
       {error ? <p className="mt-1 text-[11px] text-destructive">{error}</p> : null}
     </div>

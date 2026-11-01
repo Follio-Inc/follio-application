@@ -157,26 +157,22 @@ export function SortableItemCard({ id, children, disabled }: SortableItemCardPro
     <div
       ref={setNodeRef}
       style={style}
-      className={cn('group/sortable relative', isDragging && 'z-50 opacity-90 shadow-lg')}
+      className={cn('flex items-start gap-1.5', isDragging && 'z-50 opacity-90')}
     >
-      {!disabled && (
+      {!disabled ? (
         <button
           {...attributes}
           {...listeners}
-          className={cn(
-            'absolute -left-1 top-1/2 -translate-x-full -translate-y-1/2',
-            'flex h-8 w-6 cursor-grab items-center justify-center rounded-md',
-            'text-muted-foreground/40 opacity-0 transition-opacity',
-            'hover:text-muted-foreground focus-visible:opacity-100 group-hover/sortable:opacity-100',
-            isDragging && 'cursor-grabbing opacity-100'
-          )}
+          className={cn('builder-grip mt-2', isDragging && 'cursor-grabbing text-muted-foreground')}
           title="Drag to reorder"
           type="button"
         >
           <GripVertical className="h-4 w-4" />
         </button>
+      ) : (
+        <span className="mt-2 flex h-8 w-6 shrink-0" aria-hidden />
       )}
-      {children}
+      <div className="min-w-0 flex-1">{children}</div>
     </div>
   );
 }
@@ -331,7 +327,7 @@ export function SortableCardList<T extends { id: string }>({
         modifiers={[restrictToVerticalAxis, restrictToParentElement]}
       >
         <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
-          <div className="space-y-3 pl-5">{renderGroupedCards(true)}</div>
+          <div className="space-y-2">{renderGroupedCards(true)}</div>
         </SortableContext>
       </DndContext>
     </div>

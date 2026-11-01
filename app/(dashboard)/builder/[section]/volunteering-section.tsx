@@ -198,15 +198,18 @@ export function VolunteeringSection({ section, embedded }: VolunteeringSectionPr
   };
 
   const addButton = (
-    <div className="flex flex-wrap items-center gap-2">
-      <Button
-        onClick={() => handleOpenDialog()}
-        size={embedded ? 'sm' : 'default'}
-        className="gap-2"
-      >
-        <Plus className="h-4 w-4" />
-        Add Experience
-      </Button>
+    <div className="flex flex-wrap items-center gap-1">
+      {embedded ? (
+        <button type="button" onClick={() => handleOpenDialog()} className="builder-add-btn">
+          <Plus className="h-3.5 w-3.5" />
+          Add experience
+        </button>
+      ) : (
+        <Button onClick={() => handleOpenDialog()} className="gap-2">
+          <Plus className="h-4 w-4" />
+          Add Experience
+        </Button>
+      )}
       <SubheadingAddButton section={section} disabled={isLoading} />
     </div>
   );
@@ -214,17 +217,19 @@ export function VolunteeringSection({ section, embedded }: VolunteeringSectionPr
   const volunteeringList = (
     <div className={cn(!embedded && 'rounded-xl bg-muted/40 p-4')}>
       {items.length === 0 && !isSubHeadingsEnabled(section?.subHeadings) ? (
-        <div className="rounded-lg border border-dashed p-8 text-center">
-          <Heart className="mx-auto h-12 w-12 text-muted-foreground/50" />
-          <h3 className="mt-4 font-medium">No volunteering added yet</h3>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Add volunteer experiences to showcase your community involvement
-          </p>
-          <Button onClick={() => handleOpenDialog()} className="mt-4 gap-2">
-            <Plus className="h-4 w-4" />
-            Add Experience
-          </Button>
-        </div>
+        embedded ? null : (
+          <div className="rounded-lg border border-dashed p-8 text-center">
+            <Heart className="mx-auto h-12 w-12 text-muted-foreground/50" />
+            <h3 className="mt-4 font-medium">No volunteering added yet</h3>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Add volunteer experiences to showcase your community involvement
+            </p>
+            <Button onClick={() => handleOpenDialog()} className="mt-4 gap-2">
+              <Plus className="h-4 w-4" />
+              Add Experience
+            </Button>
+          </div>
+        )
       ) : (
         <SubheadingGroupedCards
           section={section}
@@ -236,13 +241,10 @@ export function VolunteeringSection({ section, embedded }: VolunteeringSectionPr
           renderItem={(item) => (
             <div
               className={cn(
-                'group flex items-start gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50',
+                'group flex items-start gap-3 rounded-xl px-1 py-2.5 transition-colors hover:bg-foreground/[0.04]',
                 item.isVisible === false && 'opacity-50'
               )}
             >
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                <Heart className="h-5 w-5 text-primary" />
-              </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-start justify-between gap-2">
                   <div>
@@ -255,7 +257,7 @@ export function VolunteeringSection({ section, embedded }: VolunteeringSectionPr
                       <p className="text-xs text-muted-foreground">Cause: {item.cause}</p>
                     )}
                   </div>
-                  <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                  <div className="flex items-center gap-0.5">
                     <Button
                       variant="ghost"
                       size="icon"
@@ -437,13 +439,8 @@ export function VolunteeringSection({ section, embedded }: VolunteeringSectionPr
   if (embedded) {
     return (
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">
-            Add your volunteer work and community involvement
-          </p>
-          {addButton}
-        </div>
         {volunteeringList}
+        {addButton}
         {dialog}
       </div>
     );

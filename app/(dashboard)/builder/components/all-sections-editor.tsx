@@ -231,6 +231,34 @@ function getSectionEntryCount(sectionType: string, profile: FullProfile): number
 // Sortable Section Card (wraps each section accordion card)
 // ──────────────────────────────────────────────
 
+function SectionGrip({
+  disabled,
+  isDragging,
+  attributes,
+  listeners,
+}: {
+  disabled?: boolean;
+  isDragging?: boolean;
+  attributes?: React.HTMLAttributes<HTMLButtonElement>;
+  listeners?: React.HTMLAttributes<HTMLButtonElement>;
+}) {
+  if (disabled) {
+    return <span className="flex h-8 w-6 shrink-0" aria-hidden />;
+  }
+
+  return (
+    <button
+      {...attributes}
+      {...listeners}
+      className={cn('builder-grip', isDragging && 'cursor-grabbing text-muted-foreground')}
+      title="Drag to reorder section"
+      type="button"
+    >
+      <GripVertical className="h-4 w-4" />
+    </button>
+  );
+}
+
 function SortableSectionCard({
   id,
   disabled,
@@ -238,7 +266,7 @@ function SortableSectionCard({
 }: {
   id: string;
   disabled?: boolean;
-  children: React.ReactNode;
+  children: (dragHandle: React.ReactNode) => React.ReactNode;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
@@ -251,29 +279,15 @@ function SortableSectionCard({
   };
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={cn('group/sortable-section relative', isDragging && 'z-50 opacity-90 shadow-lg')}
-    >
-      {!disabled && (
-        <button
-          {...attributes}
-          {...listeners}
-          className={cn(
-            'absolute -left-1 top-4 -translate-x-full',
-            'flex h-8 w-6 cursor-grab items-center justify-center rounded-md',
-            'text-muted-foreground/40 opacity-0 transition-opacity',
-            'hover:text-muted-foreground focus-visible:opacity-100 group-hover/sortable-section:opacity-100',
-            isDragging && 'cursor-grabbing opacity-100'
-          )}
-          title="Drag to reorder section"
-          type="button"
-        >
-          <GripVertical className="h-4 w-4" />
-        </button>
+    <div ref={setNodeRef} style={style} className={cn(isDragging && 'z-50 opacity-90')}>
+      {children(
+        <SectionGrip
+          disabled={disabled}
+          isDragging={isDragging}
+          attributes={attributes}
+          listeners={listeners}
+        />
       )}
-      {children}
     </div>
   );
 }
@@ -289,7 +303,7 @@ function SortableEntryCard({
 }: {
   id: string;
   disabled?: boolean;
-  children: React.ReactNode;
+  children: (dragHandle: React.ReactNode) => React.ReactNode;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
@@ -301,30 +315,23 @@ function SortableEntryCard({
     transition,
   };
 
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={cn('group/sortable-entry relative', isDragging && 'z-50 opacity-90 shadow-lg')}
+  const dragHandle = disabled ? (
+    <span className="flex h-8 w-6 shrink-0" aria-hidden />
+  ) : (
+    <button
+      {...attributes}
+      {...listeners}
+      className={cn('builder-grip', isDragging && 'cursor-grabbing text-muted-foreground')}
+      title="Drag to reorder"
+      type="button"
     >
-      {!disabled && (
-        <button
-          {...attributes}
-          {...listeners}
-          className={cn(
-            'absolute -left-1 top-1/2 -translate-x-full -translate-y-1/2',
-            'flex h-8 w-6 cursor-grab items-center justify-center rounded-md',
-            'text-muted-foreground/40 opacity-0 transition-opacity',
-            'hover:text-muted-foreground focus-visible:opacity-100 group-hover/sortable-entry:opacity-100',
-            isDragging && 'cursor-grabbing opacity-100'
-          )}
-          title="Drag to reorder"
-          type="button"
-        >
-          <GripVertical className="h-4 w-4" />
-        </button>
-      )}
-      {children}
+      <GripVertical className="h-4 w-4" />
+    </button>
+  );
+
+  return (
+    <div ref={setNodeRef} style={style} className={cn(isDragging && 'z-50 opacity-90')}>
+      {children(dragHandle)}
     </div>
   );
 }
@@ -846,7 +853,7 @@ export function AllSectionsEditor() {
 
       const experienceMeta =
         section.type === 'EXPERIENCE' ? (
-          <div className="-mt-1 mb-5 pl-5">
+          <div className="mb-6">
             <TotalExperienceField
               override={draftProfile.totalExperience}
               visible={draftProfile.totalExperienceVisible}
@@ -866,88 +873,75 @@ export function AllSectionsEditor() {
 
       const renderEntryCard = (entry: EntryInfo, hideSubtitle = false) => {
         const entryHidden = entry.isVisible === false;
+        const secondary = [!hideSubtitle ? entry.subtitle : null, entry.meta]
+          .filter(Boolean)
+          .join(' · ');
         return (
           <SortableEntryCard key={entry.id} id={entry.id}>
-            <div
-              className={cn(
-                'group/entry flex w-full items-center gap-3 rounded-xl bg-background px-3.5 py-3 text-left transition-colors hover:bg-background/80',
-                entryHidden && 'opacity-50'
-              )}
-            >
-              <button
-                type="button"
-                onClick={() =>
-                  setEditingEntry({
-                    sectionType: section.type,
-                    sectionId: section.id,
-                    entryId: entry.id,
-                  })
-                }
-                className="min-w-0 flex-1 text-left"
+            {(dragHandle) => (
+              <div
+                className={cn(
+                  'group/entry flex w-full items-center gap-1.5 rounded-xl py-2.5 pl-0.5 pr-1 text-left transition-colors hover:bg-foreground/[0.04]',
+                  entryHidden && 'opacity-50'
+                )}
               >
-                <p className="truncate text-sm font-medium">{entry.title}</p>
-                {entry.subtitle && !hideSubtitle ? (
-                  <p className="truncate text-xs text-muted-foreground">{entry.subtitle}</p>
-                ) : null}
-              </button>
-              {entry.meta && (
-                <span className="shrink-0 text-xs text-muted-foreground/70">{entry.meta}</span>
-              )}
-              <span
-                role="button"
-                tabIndex={0}
-                onClick={(e) => toggleEntryVisibility(e, section.type, entry.id)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    toggleEntryVisibility(e as unknown as React.MouseEvent, section.type, entry.id);
+                {dragHandle}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setEditingEntry({
+                      sectionType: section.type,
+                      sectionId: section.id,
+                      entryId: entry.id,
+                    })
                   }
-                }}
-                className={cn(
-                  'flex h-6 w-6 shrink-0 items-center justify-center rounded transition-colors',
-                  'opacity-0 focus-visible:opacity-100 group-hover/entry:opacity-100',
-                  entryHidden
-                    ? 'text-muted-foreground opacity-100'
-                    : 'text-muted-foreground/40 hover:text-muted-foreground'
-                )}
-                title={entryHidden ? 'Show on resume' : 'Hide from resume'}
-              >
-                {entryHidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-              </span>
-              <button
-                type="button"
-                onClick={(e) => requestEntryDelete(e, section.type, entry)}
-                className={cn(
-                  'flex h-6 w-6 shrink-0 items-center justify-center rounded transition-colors',
-                  'opacity-0 focus-visible:opacity-100 group-hover/entry:opacity-100',
-                  'text-muted-foreground/40 hover:text-destructive'
-                )}
-                title={`Delete ${singularName.toLowerCase()}`}
-                aria-label={`Delete ${entry.title}`}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  setEditingEntry({
-                    sectionType: section.type,
-                    sectionId: section.id,
-                    entryId: entry.id,
-                  })
-                }
-                className="shrink-0"
-                aria-label="Edit entry"
-              >
-                <ChevronDown className="h-3.5 w-3.5 -rotate-90 text-muted-foreground/40 transition-colors group-hover/entry:text-muted-foreground" />
-              </button>
-            </div>
+                  className="min-w-0 flex-1 py-0.5 text-left"
+                >
+                  <p className="truncate text-sm font-medium tracking-[-0.01em]">{entry.title}</p>
+                  {secondary ? (
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">{secondary}</p>
+                  ) : null}
+                </button>
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => toggleEntryVisibility(e, section.type, entry.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      toggleEntryVisibility(
+                        e as unknown as React.MouseEvent,
+                        section.type,
+                        entry.id
+                      );
+                    }
+                  }}
+                  className="builder-quiet-btn"
+                  title={entryHidden ? 'Show on resume' : 'Hide from resume'}
+                >
+                  {entryHidden ? (
+                    <EyeOff className="h-3.5 w-3.5" />
+                  ) : (
+                    <Eye className="h-3.5 w-3.5" />
+                  )}
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => requestEntryDelete(e, section.type, entry)}
+                  className="builder-quiet-btn hover:text-destructive"
+                  title={`Delete ${singularName.toLowerCase()}`}
+                  aria-label={`Delete ${entry.title}`}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
           </SortableEntryCard>
         );
       };
 
       const addButtons = (
-        <div className={cn('flex gap-2', entries.length === 0 && !parsedSubHeadings && 'pt-1')}>
+        <div className={cn('flex flex-wrap items-center gap-1', entries.length === 0 && 'pt-1')}>
           <button
             type="button"
             onClick={() =>
@@ -957,25 +951,19 @@ export function AllSectionsEditor() {
                 entryId: 'new',
               })
             }
-            className={cn(
-              'flex flex-1 items-center justify-center gap-2 rounded-xl bg-background text-muted-foreground transition-colors hover:bg-background/80 hover:text-foreground',
-              entries.length === 0 ? 'py-8 text-sm' : 'py-2.5 text-xs'
-            )}
+            className="builder-add-btn"
           >
-            <Plus className={entries.length === 0 ? 'h-4 w-4' : 'h-3.5 w-3.5'} />
+            <Plus className="h-3.5 w-3.5" />
             Add {singularName}
           </button>
           {parsedSubHeadings && parsedSubHeadings.groups.length < MAX_SUBHEADING_GROUPS ? (
             <button
               type="button"
               onClick={() => handleAddSubHeading(section)}
-              className={cn(
-                'flex flex-1 items-center justify-center gap-2 rounded-xl bg-background text-muted-foreground transition-colors hover:bg-background/80 hover:text-foreground',
-                entries.length === 0 ? 'py-8 text-sm' : 'py-2.5 text-xs'
-              )}
+              className="builder-add-btn"
             >
-              <Plus className={entries.length === 0 ? 'h-4 w-4' : 'h-3.5 w-3.5'} />
-              Add Sub-heading
+              <Plus className="h-3.5 w-3.5" />
+              Add sub-heading
             </button>
           ) : null}
         </div>
@@ -991,7 +979,7 @@ export function AllSectionsEditor() {
             modifiers={[restrictToVerticalAxis, restrictToParentElement]}
           >
             <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
-              <div className="space-y-2 pl-5">
+              <div className="space-y-0.5">
                 {groupingOn
                   ? chunkMixedIdsByOrg(
                       sortableIds,
@@ -1056,7 +1044,7 @@ export function AllSectionsEditor() {
       return (
         <div>
           {experienceMeta}
-          <div className="space-y-2">
+          <div className="space-y-1">
             {list}
             {addButtons}
           </div>
@@ -1166,7 +1154,7 @@ export function AllSectionsEditor() {
     switch (type) {
       case 'BASIC_INFO':
         return (
-          <div className="space-y-6">
+          <div className="space-y-8">
             <PhotosSection
               profile={draftProfile}
               onUpdateAction={handleProfileUpdate}
@@ -1404,16 +1392,16 @@ export function AllSectionsEditor() {
     const title = SECTION_TITLES[editingEntry.sectionType] || section?.title || 'Edit';
 
     return (
-      <div className="rounded-xl bg-muted p-5">
+      <div className="px-1">
         <button
           type="button"
           onClick={handleBackFromEntry}
-          className="-ml-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium text-muted-foreground transition-colors duration-150 hover:text-foreground"
+          className="-ml-2 inline-flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-muted-foreground transition-colors duration-150 hover:bg-foreground/[0.04] hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4 shrink-0" />
           <span>Back to {title}</span>
         </button>
-        <div className="mt-5">
+        <div className="mt-8">
           {renderSectionEditor(editingEntry.sectionType, editingEntry.entryId)}
         </div>
       </div>
@@ -1423,7 +1411,7 @@ export function AllSectionsEditor() {
   // ── Normal accordion view ──
 
   /** Renders a single section accordion card */
-  const renderSectionCard = (section: ProfileSection) => {
+  const renderSectionCard = (section: ProfileSection, dragHandle: React.ReactNode) => {
     const isExpanded = expandedSection === section.id;
     const sectionHidden = section.isVisible === false;
     const title =
@@ -1450,64 +1438,26 @@ export function AllSectionsEditor() {
         data-section-type={section.type}
         className="group/section scroll-mt-16"
       >
-        {/* Unified section container — header + content share one visual card */}
         <div
           className={cn(
-            'overflow-hidden rounded-xl bg-muted transition-colors duration-150',
+            'overflow-hidden rounded-2xl transition-colors duration-150',
+            isExpanded ? 'bg-muted/50' : 'hover:bg-muted/35',
             sectionHidden && 'opacity-50'
           )}
         >
-          {/* Section card header */}
-          <div className="flex w-full items-center gap-3 px-4 py-3.5">
+          <div className="flex w-full items-center gap-2 px-2 py-3.5 sm:px-3">
+            {dragHandle}
             <button
               type="button"
               onClick={() => toggleSection(section.id)}
-              className="min-w-0 flex-1 text-left"
+              className="min-w-0 flex-1 py-0.5 text-left"
             >
-              <span
-                className={cn(
-                  'block truncate text-sm font-medium transition-colors duration-150',
-                  isExpanded ? 'text-foreground' : 'text-foreground/90'
-                )}
-              >
+              <span className="block truncate text-[15px] font-medium tracking-[-0.01em]">
                 {title}
               </span>
             </button>
-            {(showSubheadingToggle || showGroupingToggle) && (
-              <div className="flex shrink-0 items-center gap-3">
-                {showSubheadingToggle && (
-                  <div className="flex items-center gap-2">
-                    <Label
-                      htmlFor={subheadingSwitchId}
-                      className="cursor-pointer whitespace-nowrap text-[11px] font-medium text-muted-foreground"
-                    >
-                      Add Sub-headings
-                    </Label>
-                    <Switch
-                      id={subheadingSwitchId}
-                      checked={subheadingsOn}
-                      onCheckedChange={(checked) => handleSubHeadingsToggle(section, checked)}
-                      aria-label="Add Sub-headings"
-                    />
-                  </div>
-                )}
-                {showGroupingToggle && (
-                  <EntryGroupingControl
-                    value={section.entryGrouping}
-                    onChange={(mode) => persistEntryGrouping(section.id, mode)}
-                  />
-                )}
-              </div>
-            )}
             {entryCount !== null && (
-              <span
-                className={cn(
-                  'shrink-0 rounded-full px-2 py-0.5 text-[11px] tabular-nums',
-                  entryCount === 0
-                    ? 'bg-background text-muted-foreground'
-                    : 'bg-primary/10 text-primary'
-                )}
-              >
+              <span className="shrink-0 pr-1 text-xs tabular-nums text-muted-foreground/55">
                 {entryCount}
               </span>
             )}
@@ -1522,13 +1472,7 @@ export function AllSectionsEditor() {
                     toggleSectionVisibility(e as unknown as React.MouseEvent, section.id);
                   }
                 }}
-                className={cn(
-                  'flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors',
-                  'opacity-0 focus-visible:opacity-100 group-hover/section:opacity-100',
-                  sectionHidden
-                    ? 'text-muted-foreground opacity-100'
-                    : 'text-muted-foreground/40 hover:text-muted-foreground'
-                )}
+                className="builder-quiet-btn"
                 title={sectionHidden ? 'Show on resume' : 'Hide from resume'}
               >
                 {sectionHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -1537,19 +1481,18 @@ export function AllSectionsEditor() {
             <button
               type="button"
               onClick={() => toggleSection(section.id)}
-              className="flex h-7 w-7 shrink-0 items-center justify-center"
+              className="builder-quiet-btn"
               aria-label={isExpanded ? `Collapse ${title}` : `Expand ${title}`}
             >
               <ChevronDown
                 className={cn(
-                  'h-4 w-4 text-muted-foreground/50 transition-transform duration-200',
-                  isExpanded && '-rotate-180 text-primary'
+                  'h-4 w-4 transition-transform duration-200',
+                  isExpanded && 'rotate-180'
                 )}
               />
             </button>
           </div>
 
-          {/* Expanded content */}
           <AnimatePresence initial={false}>
             {isExpanded && (
               <motion.div
@@ -1559,19 +1502,49 @@ export function AllSectionsEditor() {
                 transition={{ duration: 0.2, ease: 'easeInOut' }}
                 className="overflow-hidden"
               >
-                <div className="rounded-b-xl bg-muted px-4 pb-5 pt-1">
-                  {ENTRY_SECTIONS.has(section.type)
-                    ? renderEntryList(section)
-                    : renderSection(section)}
-                  <FormSaveBar
-                    show={FORM_SECTION_TYPES.has(section.type)}
-                    canSave={hasFormChanges}
-                    isSaving={isSaving}
-                    onSave={handleFormSectionSave}
-                    onDiscard={handleFormSectionDiscard}
-                    sticky={false}
-                    variant="entry"
-                  />
+                <div className="px-2 pb-6 sm:px-3">
+                  <div className="ml-8 space-y-5">
+                    {(showSubheadingToggle || showGroupingToggle) && (
+                      <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                        {showSubheadingToggle && (
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              id={subheadingSwitchId}
+                              checked={subheadingsOn}
+                              onCheckedChange={(checked) =>
+                                handleSubHeadingsToggle(section, checked)
+                              }
+                              aria-label="Sub-headings"
+                            />
+                            <Label
+                              htmlFor={subheadingSwitchId}
+                              className="cursor-pointer text-xs font-medium text-muted-foreground"
+                            >
+                              Sub-headings
+                            </Label>
+                          </div>
+                        )}
+                        {showGroupingToggle && (
+                          <EntryGroupingControl
+                            value={section.entryGrouping}
+                            onChange={(mode) => persistEntryGrouping(section.id, mode)}
+                          />
+                        )}
+                      </div>
+                    )}
+                    {ENTRY_SECTIONS.has(section.type)
+                      ? renderEntryList(section)
+                      : renderSection(section)}
+                    <FormSaveBar
+                      show={FORM_SECTION_TYPES.has(section.type)}
+                      canSave={hasFormChanges}
+                      isSaving={isSaving}
+                      onSave={handleFormSectionSave}
+                      onDiscard={handleFormSectionDiscard}
+                      sticky={false}
+                      variant="entry"
+                    />
+                  </div>
                 </div>
               </motion.div>
             )}
@@ -1633,9 +1606,11 @@ export function AllSectionsEditor() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <div className="space-y-4 pl-5">
+      <div className="space-y-2">
         {/* Pinned sections (BASIC_INFO) — always at top, not draggable */}
-        {pinnedSections.map((section) => renderSectionCard(section))}
+        {pinnedSections.map((section) =>
+          renderSectionCard(section, <span className="flex h-8 w-6 shrink-0" aria-hidden />)
+        )}
 
         {/* Draggable body sections */}
         <DndContext
@@ -1646,17 +1621,17 @@ export function AllSectionsEditor() {
           modifiers={[restrictToVerticalAxis, restrictToParentElement]}
         >
           <SortableContext items={draggableSectionIds} strategy={verticalListSortingStrategy}>
-            <div className="space-y-4">
+            <div className="space-y-2">
               {draggableSections.map((section) => (
                 <SortableSectionCard key={section.id} id={section.id}>
-                  {renderSectionCard(section)}
+                  {(dragHandle) => renderSectionCard(section, dragHandle)}
                 </SortableSectionCard>
               ))}
             </div>
           </SortableContext>
         </DndContext>
 
-        <div className="pt-2">
+        <div className="px-2 pt-6 sm:px-3">
           <AddSectionDialog
             existingSections={draftProfile.sections || []}
             onAdd={handleAddSection}

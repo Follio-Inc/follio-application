@@ -19,8 +19,8 @@ export function ContentOrgGroup({
   const label = orgGroupHeaderLabel(orgName, locationShared ? location : null);
 
   return (
-    <div className={cn('space-y-2', className)}>
-      <div className="flex items-center gap-1.5 px-0.5">
+    <div className={cn('space-y-1', className)}>
+      <div className="flex items-center gap-1.5 px-1 pt-2">
         <span className="h-3 w-px rounded-full bg-foreground/25" aria-hidden />
         <p className="text-[11px] font-medium tracking-wide text-muted-foreground">{label}</p>
       </div>

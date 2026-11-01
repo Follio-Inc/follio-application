@@ -4,7 +4,6 @@ import { Plus } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import { SubheadingHeaderRow } from '@/components/section-subheadings/section-subheadings-editor';
-import { Button } from '@/components/ui/button';
 import {
   addSubHeadingGroup,
   groupEntriesBySubheadings,
@@ -31,17 +30,15 @@ export function SubheadingAddButton({
   if (!section || !parsed || parsed.groups.length >= MAX_SUBHEADING_GROUPS) return null;
 
   return (
-    <Button
+    <button
       type="button"
-      variant="outline"
-      size="sm"
       disabled={disabled}
-      className="gap-2"
+      className="builder-add-btn"
       onClick={() => persist(section.id, addSubHeadingGroup(parsed))}
     >
-      <Plus className="h-4 w-4" />
-      Add Sub-heading
-    </Button>
+      <Plus className="h-3.5 w-3.5" />
+      Add sub-heading
+    </button>
   );
 }
 

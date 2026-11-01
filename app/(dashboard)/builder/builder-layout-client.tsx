@@ -112,13 +112,18 @@ function BuilderLayoutInner({ sections }: BuilderLayoutInnerProps) {
         content={
           <>
             <BuilderContentHeader aiOpen={aiOpen} onToggleAi={() => setAiOpen((open) => !open)} />
-            <div className="min-h-[60vh] flex-1 pb-20 xl:pb-8">
+            <div className="min-h-[60vh] flex-1 pb-24 xl:pb-10">
               {/* The editor stays mounted while AI edit is open so inline state survives. */}
-              <div className={cn('flat-cards mx-auto max-w-3xl px-6 py-8', aiOpen && 'hidden')}>
+              <div
+                className={cn(
+                  'flat-cards mx-auto max-w-2xl px-6 py-10 sm:px-8',
+                  aiOpen && 'hidden'
+                )}
+              >
                 <AllSectionsEditor key={editorVersion} />
               </div>
               {aiOpen && (
-                <div className="mx-auto max-w-3xl px-6 py-8">
+                <div className="mx-auto max-w-2xl px-6 py-10 sm:px-8">
                   <AiEditPanel key={profileId} onClose={() => setAiOpen(false)} />
                 </div>
               )}

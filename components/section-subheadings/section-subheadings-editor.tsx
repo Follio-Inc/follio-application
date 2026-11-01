@@ -56,7 +56,7 @@ function SubheadingHeaderFields({
   };
 
   return (
-    <div className="flex items-center gap-2 rounded-xl bg-background/70 px-3 py-2">
+    <div className="flex items-center gap-1.5 px-0.5 py-1.5">
       <Input
         value={draft}
         maxLength={MAX_SUBHEADING_LABEL}
@@ -70,17 +70,13 @@ function SubheadingHeaderFields({
           }
         }}
         aria-label="Sub-heading name"
-        className="h-7 border-0 bg-transparent px-1 text-xs font-semibold tracking-[0.06em] shadow-none focus-visible:ring-1"
+        className="h-7 border-0 bg-transparent px-1 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground shadow-none focus-visible:ring-1"
       />
       <button
         type="button"
         disabled={disabled}
         onClick={onDelete}
-        className={cn(
-          'flex h-6 w-6 shrink-0 items-center justify-center rounded transition-colors',
-          'text-muted-foreground/40 hover:text-destructive',
-          'opacity-0 focus-visible:opacity-100 group-hover/sortable-entry:opacity-100'
-        )}
+        className="builder-quiet-btn hover:text-destructive"
         title="Delete sub-heading"
         aria-label={`Delete ${label}`}
       >
@@ -141,31 +137,29 @@ export function SortableSubheadingRow({
     <div
       ref={setNodeRef}
       style={style}
-      className={cn('group/sortable-entry relative', isDragging && 'z-50 opacity-90 shadow-lg')}
+      className={cn('flex items-center gap-1.5', isDragging && 'z-50 opacity-90')}
     >
-      {!disabled && (
+      {!disabled ? (
         <button
           {...attributes}
           {...listeners}
-          className={cn(
-            'absolute -left-1 top-1/2 -translate-x-full -translate-y-1/2',
-            'flex h-8 w-6 cursor-grab items-center justify-center rounded-md',
-            'text-muted-foreground/40 opacity-0 transition-opacity',
-            'hover:text-muted-foreground focus-visible:opacity-100 group-hover/sortable-entry:opacity-100',
-            isDragging && 'cursor-grabbing opacity-100'
-          )}
+          className={cn('builder-grip', isDragging && 'cursor-grabbing text-muted-foreground')}
           title="Drag to reorder sub-heading"
           type="button"
         >
           <GripVertical className="h-4 w-4" />
         </button>
+      ) : (
+        <span className="flex h-8 w-6 shrink-0" aria-hidden />
       )}
-      <SubheadingHeaderFields
-        label={label}
-        disabled={disabled}
-        onLabelCommit={onLabelCommit}
-        onDelete={onDelete}
-      />
+      <div className="min-w-0 flex-1">
+        <SubheadingHeaderFields
+          label={label}
+          disabled={disabled}
+          onLabelCommit={onLabelCommit}
+          onDelete={onDelete}
+        />
+      </div>
     </div>
   );
 }

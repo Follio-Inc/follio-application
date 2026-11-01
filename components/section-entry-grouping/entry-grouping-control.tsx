@@ -55,8 +55,8 @@ export function EntryGroupingControl({
         <button
           type="button"
           className={cn(
-            'flex shrink-0 items-center gap-0.5 whitespace-nowrap text-[11px] font-medium outline-none',
-            'rounded-md px-1 py-0.5 hover:bg-background/70 focus-visible:ring-1 focus-visible:ring-ring',
+            'flex shrink-0 items-center gap-1 whitespace-nowrap text-xs font-medium outline-none',
+            'rounded-lg px-1.5 py-1 hover:bg-foreground/[0.05] focus-visible:ring-2 focus-visible:ring-ring/40',
             mode === 'off' ? 'text-muted-foreground' : 'text-foreground'
           )}
           aria-label="Group consecutive entries by organization"

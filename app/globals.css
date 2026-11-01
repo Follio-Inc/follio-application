@@ -274,6 +274,17 @@
     box-shadow: none;
   }
 
+  /* Quiet, always-visible builder chrome — available without competing with content. */
+  .builder-quiet-btn {
+    @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground/55 transition-colors hover:bg-foreground/[0.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40;
+  }
+  .builder-grip {
+    @apply flex h-8 w-6 shrink-0 cursor-grab items-center justify-center rounded-md text-muted-foreground/40 transition-colors hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 active:cursor-grabbing;
+  }
+  .builder-add-btn {
+    @apply inline-flex h-9 items-center gap-1.5 rounded-lg px-2 text-sm text-muted-foreground transition-colors hover:bg-foreground/[0.05] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:pointer-events-none disabled:opacity-50;
+  }
+
   /* Gradient text */
   .gradient-text {
     @apply bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent;

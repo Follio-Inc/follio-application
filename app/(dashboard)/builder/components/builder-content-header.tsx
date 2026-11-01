@@ -29,7 +29,7 @@ export function BuilderContentHeader({ aiOpen = false, onToggleAi }: BuilderCont
     hasContactDraftChanges(contactDraft, savedContact);
 
   return (
-    <div className="sticky top-0 z-20 flex h-12 shrink-0 items-center justify-between gap-3 border-b border-border/30 bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:px-6">
+    <div className="sticky top-0 z-20 flex h-12 shrink-0 items-center justify-between gap-3 border-b border-border/20 bg-background/95 px-5 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:px-8">
       <span className="text-eyebrow">{aiOpen ? 'Edit with AI' : 'Content'}</span>
       <div className="flex items-center gap-3">
         {(hasUnsaved || isSaving) && (
