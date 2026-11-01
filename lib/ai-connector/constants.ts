@@ -13,9 +13,10 @@ export const DRAFT_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
 export const ACCESS_TOKEN_PREFIX = 'flio_';
 export const CLIENT_ID_PREFIX = 'follio_cli_';
 
+/** Oldest Streamable HTTP revision this server still answers via initialize. */
 export const MCP_PROTOCOL_VERSION = '2025-03-26';
 export const MCP_SERVER_NAME = 'follio';
-export const MCP_SERVER_VERSION = '1.0.0';
+export const MCP_SERVER_VERSION = '1.1.0';
 
 export const MCP_INSTRUCTIONS = [
   "You are connected to the user's Follio (their professional profile).",

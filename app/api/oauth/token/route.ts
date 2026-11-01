@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 
 import { corsEmpty, corsJson } from '@/lib/ai-connector/cors';
+import { isMcpResource } from '@/lib/ai-connector/oauth-metadata';
 import { isAppError } from '@/lib/errors';
 import { exchangeAuthorizationCode } from '@/services/ai-connector-oauth.service';
 
@@ -32,6 +33,16 @@ async function readTokenParams(request: NextRequest): Promise<Record<string, str
 export async function POST(request: NextRequest) {
   try {
     const params = await readTokenParams(request);
+    if (!isMcpResource(params.resource)) {
+      return corsJson(
+        {
+          error: 'invalid_target',
+          error_description: 'resource must be the Follio connector URL',
+        },
+        { status: 400 }
+      );
+    }
+
     if (params.grant_type !== 'authorization_code') {
       return corsJson(
         { error: 'unsupported_grant_type', error_description: 'Use authorization_code' },

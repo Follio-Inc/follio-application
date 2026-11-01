@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { claudeCustomConnectorUrl } from '@/lib/ai-connector/connect-links';
 import { copyTextToClipboard } from '@/lib/share/clipboard';
 
 interface ConnectorDraft {
@@ -124,20 +125,19 @@ export function AiAssistantsSection() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Connect Claude</CardTitle>
+          <CardTitle>Connect an AI assistant</CardTitle>
           <CardDescription>
-            Let Claude read your Follio and propose edits. Nothing goes live until you confirm in
-            chat or apply a draft here. Works on Claude Free (one custom connector).
+            Claude, ChatGPT, Gemini, and any other app that supports MCP can read your Follio and
+            propose edits. Nothing goes live until you confirm in chat or apply a draft here.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <ol className="list-decimal space-y-2 pl-5 text-sm text-muted-foreground">
-            <li>In Claude, open Customize → Connectors → Add custom connector.</li>
-            <li>Paste the Follio connector URL below.</li>
-            <li>Sign in to Follio when Claude asks, then allow access.</li>
+            <li>In the AI app, add a custom connector and paste the URL below.</li>
+            <li>Sign in to Follio when it asks, then allow access.</li>
             <li>
-              Ask Claude to improve your resume, like “tighten my bullets for this job.” It shows
-              each change and applies only what you confirm.
+              Ask it to improve your resume, like “tighten my bullets for this job.” It shows each
+              change and applies only what you confirm.
             </li>
             <li>
               Every change also appears in the builder under Edit with AI, where you can review or
@@ -147,21 +147,35 @@ export function AiAssistantsSection() {
 
           <div>
             <p className="mb-2 text-sm font-medium text-foreground">Connector URL</p>
-            <div className="flex flex-col gap-2 sm:flex-row">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
               <code className="block min-w-0 flex-1 truncate rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-sm">
                 {mcpUrl}
               </code>
               <Button type="button" variant="outline" onClick={() => void handleCopy()}>
                 {copied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
-                {copied ? 'Copied' : 'Copy'}
+                {copied ? 'Copied' : 'Copy URL'}
               </Button>
+              {mcpUrl.startsWith('http') && (
+                <Button variant="outline" asChild>
+                  <a
+                    href={claudeCustomConnectorUrl(mcpUrl)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Add in Claude
+                  </a>
+                </Button>
+              )}
             </div>
           </div>
 
-          <p className="text-sm text-muted-foreground">
-            Free ChatGPT and Gemini cannot add a custom connector. Those users can still edit here,
-            or wait until Follio is listed in their app directory.
-          </p>
+          <ul className="space-y-1 text-sm text-muted-foreground">
+            <li>Claude: Customize → Connectors → Add custom connector, or use Add in Claude.</li>
+            <li>ChatGPT: Plugins → Add custom MCP server, on plans that allow custom apps.</li>
+            <li>
+              Gemini: Settings → Connected apps → Add a custom app, on personal Google accounts.
+            </li>
+          </ul>
         </CardContent>
       </Card>
 
