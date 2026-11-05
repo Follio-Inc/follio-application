@@ -14,7 +14,11 @@ import { renderQrSvg } from '@/lib/follio-identity/qr';
 import { isPortfolioEnabled } from '@/lib/features';
 import { resumeAccessQuery } from '@/lib/resume/presentation';
 import { getFollioUrl } from '@/lib/url';
-import { getPublicProfile, validateUnlistedKey } from '@/services/profile.service';
+import {
+  getOrCreateUnlistedKey,
+  getPublicProfile,
+  validateUnlistedKey,
+} from '@/services/profile.service';
 
 import { getViewerAuthState, validateShareToken } from './access';
 import { IdentityViewer } from './identity-viewer';
@@ -91,6 +95,20 @@ export default async function IdentityPage({ params, searchParams }: IdentityPag
     notFound();
   }
 
+  const visibility = getFollioVisibility(profile);
+  // An Unlisted Follio only opens with its key, so the shared link and QR must carry it. Only
+  // the owner and visitors who already came with the key get it; a share-token visitor can't
+  // pass the Follio on, so they get no share button.
+  const shareKey =
+    visibility !== 'UNLISTED'
+      ? null
+      : isOwner
+        ? (profile.unlistedKey ?? (await getOrCreateUnlistedKey(profile.id)))
+        : isValidKey
+          ? key
+          : null;
+  const canShare = visibility !== 'UNLISTED' || shareKey !== null;
+
   const isPreview = preview === 'true';
   const doors = isPreview ? embedAsVisitor() : { authState, hasUnlistedAccess: hasShareAccess };
 
@@ -106,15 +124,16 @@ export default async function IdentityPage({ params, searchParams }: IdentityPag
       doors.authState,
       doors.hasUnlistedAccess
     ),
+    unlistedKey: shareKey,
   });
 
   return (
     <IdentityViewer
       identity={identity}
-      qrSvg={renderQrSvg(identity.follioUrl)}
+      qrSvg={canShare ? renderQrSvg(identity.follioUrl) : null}
       authState={authState}
       profileHandle={handle}
-      visibility={getFollioVisibility(profile)}
+      visibility={visibility}
       embed={isPreview}
       accessQuery={resumeAccessQuery({ token, key })}
     />

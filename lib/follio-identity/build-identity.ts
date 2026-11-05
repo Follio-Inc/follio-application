@@ -337,6 +337,11 @@ function skillsOf(profile: PublicProfile): string[] {
 export type BuildFollioIdentityOptions = {
   showResume: boolean;
   showWork: boolean;
+  /**
+   * The unlisted key, when the Follio is Unlisted and this viewer may share it. Without it the
+   * shared link and QR open a page visitors can't see.
+   */
+  unlistedKey?: string | null;
 };
 
 export function buildFollioIdentity(
@@ -365,7 +370,7 @@ export function buildFollioIdentity(
     education: educationOf(profile),
     skills: skillsOf(profile),
     links: linksOf(profile),
-    follioUrl: getFollioUrl(profile.handle),
+    follioUrl: getFollioUrl(profile.handle, options.unlistedKey),
     resumeHref: getResumePath(profile.handle),
     workHref: getPortfolioPath(profile.handle),
     doors: { resume: options.showResume, work: options.showWork },

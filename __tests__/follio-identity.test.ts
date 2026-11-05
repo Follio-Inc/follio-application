@@ -158,6 +158,18 @@ describe('buildFollioIdentity', () => {
     expect(identity.totalExperience).toMatch(/yrs/);
   });
 
+  it('puts the unlisted key in the shared Follio link', () => {
+    const shared = buildFollioIdentity(profile(), {
+      showResume: false,
+      showWork: false,
+      unlistedKey: 'abc123',
+    });
+    const plain = buildFollioIdentity(profile(), { showResume: false, showWork: false });
+
+    expect(shared.follioUrl).toBe(`${plain.follioUrl}?key=abc123`);
+    expect(plain.follioUrl).not.toContain('key=');
+  });
+
   it('uses a stored total experience override on the Experience header', () => {
     const identity = buildFollioIdentity(profile({ totalExperience: '10+ years' }), {
       showResume: false,
