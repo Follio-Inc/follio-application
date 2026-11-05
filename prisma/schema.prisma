@@ -35,13 +35,28 @@ model User {
 
 /// Completely separate admin table — admins are NOT regular users.
 /// An admin has their own Clerk account and their own row here.
+/// Developer Platform authorization (PLATFORM_TODO item 28).
+///
+/// Distinct from `/api/admin/users/[id]/role`, which promotes a product user
+/// *to* admin by creating an Admin row. This decides what an admin may do
+/// inside `/admin/platform`, and nothing else.
+enum PlatformRole {
+  viewer
+  runner
+  maintainer
+}
+
 model Admin {
-  id        String   @id @default(cuid())
-  clerkId   String   @unique
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String       @id @default(cuid())
+  clerkId      String       @unique
+  email        String       @unique
+  name         String?
+  /// Non-null, defaulting to `maintainer` so the admins that existed before
+  /// item 28 keep exactly the access they had. Roles are therefore opt-in
+  /// demotion: nobody is restricted until someone is explicitly set lower.
+  platformRole PlatformRole @default(maintainer)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
   @@index([clerkId])
   @@index([email])

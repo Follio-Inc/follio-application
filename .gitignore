@@ -12,6 +12,13 @@ _admin-panel/modules/developer/live-qa/.artifacts/
 _admin-panel/modules/developer/live-qa/.auth/
 _admin-panel/modules/developer/live-qa/fixtures/resumes/uploads/
 
+# Developer Platform local run history (PLATFORM_TODO item 16)
+_admin-panel/platform/.runs/
+
+# Developer Platform quarantine + destructive-action audit (PLATFORM_TODO item 19)
+_admin-panel/platform/.quarantine/
+_admin-panel/platform/.audit/
+
 # Next.js
 .next/
 out/
@@ -68,3 +75,8 @@ logs
 
 # Legacy Chromium pack (no longer downloaded; worker prints PDFs)
 /public/chromium-*-pack.*
+
+# Item 26: the CI failure baseline, when the watch CLI is run locally.
+_admin-panel/platform/.watch/
+_admin-panel/platform/.perf/
+_admin-panel/platform/.cost/

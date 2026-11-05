@@ -1,0 +1,82 @@
+name: Developer Platform Scheduled Tests
+
+# PLATFORM_TODO item 26. A separate workflow from `ci.yml` on purpose: that
+# file holds the required checks, and nothing here may change whether a pull
+# request can merge. This one never runs on `pull_request` at all.
+on:
+  schedule:
+    # 03:17 UTC daily. Off the hour because GitHub queues the top of every
+    # hour heavily, and a scheduled run that starts late is a run whose
+    # baseline is written late.
+    - cron: '17 3 * * *'
+  push:
+    # Post-merge, which in this repository is a push to a protected branch —
+    # the same three `ci.yml` builds on. A merged pull request arrives here
+    # as a push to its base.
+    branches: [main, develop, staging]
+  workflow_dispatch:
+
+# One run at a time per branch. The baseline is read at the start and written
+# at the end, so two overlapping runs would race over the cache entry and the
+# later one would compare against a baseline the earlier one had not finished
+# writing. `cancel-in-progress: false`, unlike `ci.yml`: cancelling a run
+# halfway leaves the baseline unwritten, and the next run then reports every
+# known failure as first-observed.
+concurrency:
+  group: platform-watch-${{ github.ref }}
+  cancel-in-progress: false
+
+# Read-only. This job annotates the run it is part of, which needs nothing
+# beyond the default token, and it must not be able to write to the
+# repository: its whole output is a report.
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '20'
+  BASELINE_DIR: .platform-watch
+
+jobs:
+  scheduled-tests:
+    name: Scheduled test run
+    runs-on: ubuntu-latest
+    # Advisory, exactly like the drift job. A scheduled run that finds a new
+    # failure annotates it; it does not fail the workflow, and it gates
+    # nothing. Making CI blocking is item 30 and needs explicit approval.
+    continue-on-error: true
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # A rolling cache, which is the repository-native way to carry state
+      # between runs without a third-party action or a committed file. The
+      # key is unique per run so each run saves a new entry; `restore-keys`
+      # picks the most recent one that matches the prefix. A cache miss is a
+      # first run, which the report says in as many words.
+      - name: Restore failure baseline
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.BASELINE_DIR }}
+          key: platform-watch-baseline-v1-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: |
+            platform-watch-baseline-v1-${{ github.ref_name }}-
+            platform-watch-baseline-v1-
+
+      # `DEVTOOLS_ENABLED` is what `guard.ts` requires outside production.
+      # It cannot unlock production: that ban is unconditional, and a test
+      # asserts the gate refuses `NODE_ENV=production` with this flag set.
+      - name: Run scheduled Developer Platform tests
+        env:
+          DEVTOOLS_ENABLED: 'true'
+          PLATFORM_WATCH_BASELINE: ${{ env.BASELINE_DIR }}/baseline.json
+          PLATFORM_WATCH_TRIGGER: ${{ github.event_name == 'schedule' && 'schedule' || github.event_name == 'push' && 'post-merge' || 'manual' }}
+        run: npm run platform:watch

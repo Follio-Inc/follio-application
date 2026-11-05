@@ -121,3 +121,84 @@ jobs:
       - name: Run npm audit
         run: npm audit --audit-level=high
         continue-on-error: true
+
+  drift:
+    name: Developer Platform Drift
+    runs-on: ubuntu-latest
+    # Blocking, per PLATFORM_TODO item 30, which supersedes item 9's
+    # warning-only job. There is deliberately no `continue-on-error` here, at
+    # either level: this job gates the build, and a setup failure fails it like
+    # any other job's would.
+    #
+    # What counts as blocking is decided by the scanner, not by this file.
+    # `--strict` makes the CLI exit 1 when `DriftReport.ok` is false, and `ok`
+    # is false only for the contradiction findings — the coverage map
+    # disagreeing with the repository. Recorded gaps (an unclaimed model, a
+    # feature with no pathway, a category with no lab) and category health
+    # leave `ok` true and this job green. Nothing here widens that definition
+    # to make CI stricter, and nothing here reads the report text to reach a
+    # verdict: the exit code is the verdict.
+    #
+    # A non-zero exit therefore means one of two things — the scan found a
+    # contradiction, or the scan failed to run. Both fail the build, which is
+    # the point of the item; the report in the log and in the step summary says
+    # which it was, and this file does not guess on its behalf.
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # No `prisma generate` step: the scanner's whole import closure is
+      # node:fs, node:path and typescript, so it needs no generated client.
+      # Leaving it out keeps a Prisma problem from looking like drift.
+      - name: Run Developer Platform drift scan
+        id: scan
+        run: |
+          set -o pipefail
+          npm run platform:scan -- --strict 2>&1 | tee "$RUNNER_TEMP/drift-report.txt"
+
+      # Separate, and `always()`, so the report reaches the summary whether the
+      # scan passed, found drift or failed outright. The wording comes from
+      # `steps.scan.outcome`, which is GitHub's own record of the exit code —
+      # not a reading of the report.
+      - name: Publish the drift report
+        if: always()
+        env:
+          SCAN_OUTCOME: ${{ steps.scan.outcome }}
+        run: |
+          REPORT="$RUNNER_TEMP/drift-report.txt"
+          {
+            echo "## Developer Platform drift scan"
+            echo
+            if [ "$SCAN_OUTCOME" = 'success' ]; then
+              echo "**No drift found** — the coverage map matches the repository. Recorded gaps and category health are reported above without failing this job."
+            elif [ "$SCAN_OUTCOME" = 'skipped' ]; then
+              echo "**The scan did not run** — an earlier step in this job failed."
+            else
+              echo "**This build is blocked by the drift scan.** Either the coverage map contradicts the repository or the scan failed to run; the report below says which. Blocking per PLATFORM_TODO item 30 — fix the contradiction, or record the change in the coverage map."
+            fi
+            echo
+            if [ -s "$REPORT" ]; then
+              echo "<details><summary>Full report</summary>"
+              echo
+              echo '```text'
+              cat "$REPORT"
+              echo '```'
+              echo
+              echo "</details>"
+            else
+              echo "_The scan produced no output._"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$SCAN_OUTCOME" != 'success' ]; then
+            echo "::error title=Developer Platform drift scan::$SCAN_OUTCOME — see the job summary. Either the coverage map contradicts the repository or the scan failed to run. This blocks the build."
+          fi

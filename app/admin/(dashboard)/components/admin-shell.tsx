@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, BarChart3, Menu, Shield, Users, Wrench, X } from 'lucide-react';
+import { ArrowLeft, BarChart3, LayoutDashboard, Menu, Shield, Users, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 
 const ICONS: Record<AdminPanelModuleId, React.ElementType> = {
   overview: BarChart3,
-  developer: Wrench,
+  platform: LayoutDashboard,
   users: Users,
 };
 

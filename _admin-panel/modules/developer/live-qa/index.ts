@@ -7,7 +7,8 @@ export {
   saveUploadedResume,
   getLiveQaRoot,
 } from './fixtures';
-export { buildLiveQaCatalog, runLiveQa } from './runner';
+export { buildLiveQaCatalog, runLiveQa, toSpecFilter } from './runner';
+export type { LiveQaRunHooks } from './runner';
 export { isAiTriageAvailable, triagePathwayFailure } from './triage';
 export type {
   LiveQaArea,
