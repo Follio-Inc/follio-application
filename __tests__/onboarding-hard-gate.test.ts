@@ -16,9 +16,23 @@ describe('onboarding hard gate', () => {
 
     expect(src).toContain('hasOnboardedProfile');
     expect(src).toContain('ClientRedirect');
+    expect(src).toContain('WorkspaceUnavailable');
     expect(src).toContain('href="/onboarding"');
     expect(src).not.toContain("redirect('/onboarding')");
     expect(src).toContain("export const dynamic = 'force-dynamic'");
+  });
+
+  it('does not treat a workspace lookup failure as incomplete onboarding', () => {
+    const dashboardLayout = readFileSync(
+      resolve(process.cwd(), 'app/(dashboard)/layout.tsx'),
+      'utf8'
+    );
+    const homePage = readFileSync(resolve(process.cwd(), 'app/page.tsx'), 'utf8');
+    const myPage = readFileSync(resolve(process.cwd(), 'app/me/page.tsx'), 'utf8');
+
+    expect(dashboardLayout).toContain('return <WorkspaceUnavailable />');
+    expect(homePage).toContain('return <WorkspaceUnavailable />');
+    expect(myPage).toContain('return <WorkspaceUnavailable />');
   });
 
   it('requires a Profile on /resumes, not only a User row', () => {

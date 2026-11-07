@@ -176,8 +176,13 @@ export function LanguagesSection({ section, embedded }: LanguagesSectionProps) {
     return PROFICIENCY_LEVELS.find((p) => p.value === proficiency)?.label || proficiency;
   };
 
-  const addButton = (
-    <Button onClick={() => handleOpenDialog()} size={embedded ? 'sm' : 'default'} className="gap-2">
+  const addButton = embedded ? (
+    <button type="button" onClick={() => handleOpenDialog()} className="builder-add-btn">
+      <Plus className="h-3.5 w-3.5" />
+      Add language
+    </button>
+  ) : (
+    <Button onClick={() => handleOpenDialog()} className="gap-2">
       <Plus className="h-4 w-4" />
       Add Language
     </Button>
@@ -186,35 +191,36 @@ export function LanguagesSection({ section, embedded }: LanguagesSectionProps) {
   const languagesList = (
     <div className={cn(!embedded && 'rounded-xl bg-muted/40 p-4')}>
       {items.length === 0 ? (
-        <div className="rounded-lg border border-dashed p-8 text-center">
-          <Globe className="mx-auto h-12 w-12 text-muted-foreground/50" />
-          <h3 className="mt-4 font-medium">No languages added yet</h3>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Add languages to show your multilingual abilities
-          </p>
-          <Button onClick={() => handleOpenDialog()} className="mt-4 gap-2">
-            <Plus className="h-4 w-4" />
-            Add Language
-          </Button>
-        </div>
+        embedded ? null : (
+          <div className="rounded-lg border border-dashed p-8 text-center">
+            <Globe className="mx-auto h-12 w-12 text-muted-foreground/50" />
+            <h3 className="mt-4 font-medium">No languages added yet</h3>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Add languages to show your multilingual abilities
+            </p>
+            <Button onClick={() => handleOpenDialog()} className="mt-4 gap-2">
+              <Plus className="h-4 w-4" />
+              Add Language
+            </Button>
+          </div>
+        )
       ) : (
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-2">
           {items.map((item) => (
             <div
               key={item.id}
               className={cn(
-                'group flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50',
+                'group flex items-center gap-2 rounded-full bg-foreground/[0.04] px-3 py-1.5',
                 item.isVisible === false && 'opacity-50'
               )}
             >
               <div className="flex items-center gap-2">
-                <Globe className="h-4 w-4 text-muted-foreground" />
-                <span className="font-medium">{item.language}</span>
+                <span className="text-sm font-medium">{item.language}</span>
               </div>
               <Badge variant="outline" className={getProficiencyColor(item.proficiency)}>
                 {getProficiencyLabel(item.proficiency)}
               </Badge>
-              <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+              <div className="flex items-center gap-0.5">
                 <Button
                   variant="ghost"
                   size="icon"
@@ -318,13 +324,8 @@ export function LanguagesSection({ section, embedded }: LanguagesSectionProps) {
   if (embedded) {
     return (
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">
-            Add languages you speak and your proficiency level
-          </p>
-          {addButton}
-        </div>
         {languagesList}
+        {addButton}
         {dialog}
       </div>
     );

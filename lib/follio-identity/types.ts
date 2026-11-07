@@ -84,7 +84,8 @@ export type FollioEducationItem = {
   period: string | null;
   location: string | null;
   gpa: string | null;
-  description: string | null;
+  /** Two proof points for the study peek — complete lines, not cut with an ellipsis. */
+  highlights: string[];
   honors: string[];
   activities: string[];
 };
@@ -108,6 +109,8 @@ export type FollioIdentity = {
   /** One or two sentences — who they are, not a résumé objective. */
   about: string | null;
   experience: FollioExperienceItem[];
+  /** Career tenure tag on the Experience header, e.g. "5 yrs". */
+  totalExperience: string | null;
   education: FollioEducationItem[];
   /** Top skills only, in the order the person ranked them. */
   skills: string[];
@@ -138,4 +141,5 @@ export type FollioCompletenessInput = {
   phone?: string | null;
   phonePublic?: boolean | null;
   status?: string | null;
+  resumeVisibility?: string | null;
 };

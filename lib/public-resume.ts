@@ -10,6 +10,8 @@
 import { cache } from 'react';
 
 import { db } from '@/lib/db';
+import { interactiveTransactionOptions } from '@/lib/db-transaction';
+import { profileStatusForVisibility } from '@/lib/follio-identity/page-access';
 import { isReservedUsername } from '@/lib/reserved-usernames';
 import { applyVisibilityFilter } from '@/lib/visibility';
 import type { ContentVisibility, PublicProfile } from '@/types';
@@ -146,17 +148,20 @@ async function getPublicProfileByHandle(handle: string): Promise<PublicProfile |
 }
 
 /**
- * Set resume visibility. When setting PUBLIC, demote any other PUBLIC resume
- * for the same user to UNLISTED so only one public resume exists.
+ * Set resume visibility. The attached Follio uses the same value, so `status`
+ * is kept in lockstep (Public vs not). When setting PUBLIC, demote any other
+ * PUBLIC resume for the same user to UNLISTED so only one public resume exists.
  */
 export async function setExclusiveResumeVisibility(
   profileId: string,
   visibility: ContentVisibility
 ): Promise<{ replacedPublicResume: ReplacedPublicResume | null }> {
+  const status = profileStatusForVisibility(visibility);
+
   if (visibility !== 'PUBLIC') {
     await db.profile.update({
       where: { id: profileId },
-      data: { resumeVisibility: visibility },
+      data: { resumeVisibility: visibility, status },
     });
     return { replacedPublicResume: null };
   }
@@ -164,7 +169,7 @@ export async function setExclusiveResumeVisibility(
   return db.$transaction(async (tx) => {
     const profile = await tx.profile.findUnique({
       where: { id: profileId },
-      select: { id: true, userId: true, isArchived: true },
+      select: { id: true, userId: true, isArchived: true, publishedAt: true },
     });
 
     if (!profile || profile.isArchived) {
@@ -184,13 +189,20 @@ export async function setExclusiveResumeVisibility(
     if (existingPublic) {
       await tx.profile.update({
         where: { id: existingPublic.id },
-        data: { resumeVisibility: 'UNLISTED' },
+        data: {
+          resumeVisibility: 'UNLISTED',
+          status: profileStatusForVisibility('UNLISTED'),
+        },
       });
     }
 
     await tx.profile.update({
       where: { id: profileId },
-      data: { resumeVisibility: 'PUBLIC' },
+      data: {
+        resumeVisibility: 'PUBLIC',
+        status: 'PUBLIC',
+        publishedAt: profile.publishedAt ?? new Date(),
+      },
     });
 
     return {
@@ -202,7 +214,7 @@ export async function setExclusiveResumeVisibility(
           }
         : null,
     };
-  });
+  }, interactiveTransactionOptions);
 }
 
 /**

@@ -1,7 +1,16 @@
 'use client';
 
 import { ChevronLeft, ChevronRight, PenLine, WandSparkles, type LucideIcon } from 'lucide-react';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+  type Dispatch,
+  type ReactNode,
+  type SetStateAction,
+} from 'react';
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
@@ -19,6 +28,17 @@ import {
   type BuilderViewMode,
 } from '@/lib/document-builder';
 import { cn } from '@/lib/utils';
+
+type BuilderPaneApi = {
+  setMode: Dispatch<SetStateAction<BuilderViewMode>>;
+};
+
+const BuilderPaneContext = createContext<BuilderPaneApi | null>(null);
+
+/** Lets the preview call `closeBuilderSide` without rebuilding the pane layout. */
+export function useBuilderPane(): BuilderPaneApi | null {
+  return useContext(BuilderPaneContext);
+}
 
 interface DocumentBuilderShellProps {
   content: ReactNode;
@@ -78,88 +98,90 @@ export function DocumentBuilderShell({
   }, [designerActive]);
 
   return (
-    <div className="builder-base flex min-h-[calc(100vh-3.5rem)] flex-col xl:h-[calc(100vh-3.5rem)]">
-      <TooltipProvider delayDuration={300}>
-        <div className="relative flex-1 xl:min-h-0 xl:overflow-hidden">
-          <div
-            className="builder-slide flex h-full"
-            data-designer-active={designerActive || undefined}
-            data-preview-only={previewOnly || undefined}
-          >
-            {/* Content — full width on mobile; flex 4 on xl.
+    <BuilderPaneContext.Provider value={{ setMode }}>
+      <div className="builder-base flex h-full min-h-0 flex-col">
+        <TooltipProvider delayDuration={300}>
+          <div className="relative flex-1 xl:min-h-0 xl:overflow-hidden">
+            <div
+              className="builder-slide flex h-full"
+              data-designer-active={designerActive || undefined}
+              data-preview-only={previewOnly || undefined}
+            >
+              {/* Content — full width on mobile; flex 4 on xl.
                 Stay in the flex strip when not revealed (opacity gutters) so
                 canvas width/preview size never change during mode transitions.
                 Column uses builder-base; inner surface is the elevated panel. */}
-            <div
-              data-builder-side="content"
-              className={cn(
-                'builder-base relative flex w-full min-w-0 flex-col xl:w-auto xl:flex-[4_0_0%]',
-                contentClassName
-              )}
-              aria-hidden={contentRevealed ? undefined : true}
-              inert={contentRevealed ? undefined : true}
-            >
-              {/* No adjacent margin — preview always owns the shared gap via
+              <div
+                data-builder-side="content"
+                className={cn(
+                  'builder-base relative flex w-full min-w-0 flex-col xl:w-auto xl:flex-[4_0_0%]',
+                  contentClassName
+                )}
+                aria-hidden={contentRevealed ? undefined : true}
+                inert={contentRevealed ? undefined : true}
+              >
+                {/* No adjacent margin — preview always owns the shared gap via
                   constant mx so insets do not jump mid-slide. */}
-              <div className="builder-panel flex min-h-0 flex-1 flex-col overflow-y-auto xl:my-2.5 xl:ml-2.5 xl:rounded-xl">
-                {content}
+                <div className="builder-panel flex min-h-0 flex-1 flex-col overflow-y-auto xl:my-2.5 xl:ml-2.5 xl:rounded-xl">
+                  {content}
+                </div>
               </div>
-            </div>
 
-            {/* Preview — xl only; always flex 5 so fit-zoom stays stable */}
-            <div
-              className={cn(
-                'builder-base relative hidden min-w-0 xl:flex xl:flex-[5_0_0%]',
-                previewClassName
-              )}
-            >
-              {/* Overflow stays on the inner surface so the seam collapse
+              {/* Preview — xl only; always flex 5 so fit-zoom stays stable */}
+              <div
+                className={cn(
+                  'builder-base relative hidden min-w-0 xl:flex xl:flex-[5_0_0%]',
+                  previewClassName
+                )}
+              >
+                {/* Overflow stays on the inner surface so the seam collapse
                   control can sit fully in the gutter without being clipped. */}
-              <div className="builder-panel relative flex h-full min-h-0 w-full min-w-0 flex-1 xl:mx-2.5 xl:my-2.5 xl:rounded-xl">
-                <BuilderSideCollapse mode={mode} onCollapse={closeSide} />
-                <div className="h-full min-h-0 w-full min-w-0 flex-1 overflow-hidden xl:rounded-xl">
-                  {preview}
+                <div className="builder-panel relative flex h-full min-h-0 w-full min-w-0 flex-1 xl:mx-2.5 xl:my-2.5 xl:rounded-xl">
+                  <BuilderSideCollapse mode={mode} onCollapse={closeSide} />
+                  <div className="h-full min-h-0 w-full min-w-0 flex-1 overflow-hidden xl:rounded-xl">
+                    {preview}
+                  </div>
+                </div>
+              </div>
+
+              {/* Designer — xl only; flex 4; opacity gutter when not revealed */}
+              <div
+                data-builder-side="designer"
+                className={cn(
+                  'builder-base relative hidden min-w-0 xl:flex xl:flex-[4_0_0%] xl:flex-col',
+                  designerClassName
+                )}
+                aria-hidden={designerRevealed ? undefined : true}
+                inert={designerRevealed ? undefined : true}
+              >
+                <div className="builder-panel flex min-h-0 flex-1 flex-col overflow-hidden xl:my-2.5 xl:mr-2.5 xl:rounded-xl">
+                  {designer}
                 </div>
               </div>
             </div>
 
-            {/* Designer — xl only; flex 4; opacity gutter when not revealed */}
-            <div
-              data-builder-side="designer"
-              className={cn(
-                'builder-base relative hidden min-w-0 xl:flex xl:flex-[4_0_0%] xl:flex-col',
-                designerClassName
-              )}
-              aria-hidden={designerRevealed ? undefined : true}
-              inert={designerRevealed ? undefined : true}
-            >
-              <div className="builder-panel flex min-h-0 flex-1 flex-col overflow-hidden xl:my-2.5 xl:mr-2.5 xl:rounded-xl">
-                {designer}
-              </div>
-            </div>
+            <BuilderEdgeTab
+              side="right"
+              label={designLabel}
+              icon={WandSparkles}
+              visible={isDesignEdgeTabVisible(mode)}
+              onClick={openDesign}
+              tooltip={`Show ${designLabel.toLowerCase()}`}
+            />
+            <BuilderEdgeTab
+              side="left"
+              label={contentLabel}
+              icon={PenLine}
+              visible={isContentEdgeTabVisible(mode)}
+              onClick={openContent}
+              tooltip={`Show ${contentLabel.toLowerCase()}`}
+            />
           </div>
+        </TooltipProvider>
 
-          <BuilderEdgeTab
-            side="right"
-            label={designLabel}
-            icon={WandSparkles}
-            visible={isDesignEdgeTabVisible(mode)}
-            onClick={openDesign}
-            tooltip={`Show ${designLabel.toLowerCase()}`}
-          />
-          <BuilderEdgeTab
-            side="left"
-            label={contentLabel}
-            icon={PenLine}
-            visible={isContentEdgeTabVisible(mode)}
-            onClick={openContent}
-            tooltip={`Show ${contentLabel.toLowerCase()}`}
-          />
-        </div>
-      </TooltipProvider>
-
-      {mobileBar}
-    </div>
+        {mobileBar}
+      </div>
+    </BuilderPaneContext.Provider>
   );
 }
 

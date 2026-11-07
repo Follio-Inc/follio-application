@@ -170,8 +170,8 @@ interface ContactInfoFormProps {
  * including Clerk email verification, add/delete, and set primary functionality.
  */
 export function ContactInfoForm({ profile, onContactUpdate }: ContactInfoFormProps) {
-  const [emailPublic, setEmailPublic] = useState(profile.contactInfo?.emailPublic || false);
-  const [phonePublic, setPhonePublic] = useState(profile.contactInfo?.phonePublic || false);
+  const [emailPublic, setEmailPublic] = useState(profile.contactInfo?.emailPublic ?? true);
+  const [phonePublic, setPhonePublic] = useState(profile.contactInfo?.phonePublic ?? true);
   const [website, setWebsite] = useState(profile.contactInfo?.website || '');
 
   // Build initial contact data from profile for ContactSection

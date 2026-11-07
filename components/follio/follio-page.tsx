@@ -87,7 +87,11 @@ export function FollioPage({
           <div className="mt-10 space-y-9">
             {about ? <FollioAbout about={about} /> : null}
             {experience.length > 0 ? (
-              <FollioExperience experience={experience} interactive={interactive} />
+              <FollioExperience
+                experience={experience}
+                totalExperience={identity.totalExperience}
+                interactive={interactive}
+              />
             ) : null}
             {education.length > 0 ? (
               <FollioEducation education={education} interactive={interactive} />

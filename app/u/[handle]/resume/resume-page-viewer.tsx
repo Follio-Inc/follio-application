@@ -20,6 +20,7 @@ interface ResumePageViewerProps {
   resumeVisibility: ContentVisibility;
   /** When true, renders only the resume content (used by the print preview iframe). */
   minimal?: boolean;
+  accessQuery?: string;
 }
 
 export function ResumePageViewer({
@@ -28,6 +29,7 @@ export function ResumePageViewer({
   profileHandle,
   resumeVisibility,
   minimal,
+  accessQuery,
 }: ResumePageViewerProps) {
   if (minimal) {
     return (
@@ -45,6 +47,7 @@ export function ResumePageViewer({
       authState={authState}
       profileHandle={profileHandle}
       resumeVisibility={resumeVisibility}
+      accessQuery={accessQuery}
     />
   );
 }

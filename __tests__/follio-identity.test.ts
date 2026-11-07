@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildFollioIdentity,
   buildVCard,
+  canOpenFollioPage,
   canShowResumeDoor,
   canShowWorkDoor,
   cloakContactValue,
@@ -13,6 +14,8 @@ import {
   follioCardFacts,
   formatDuration,
   getFollioCompleteness,
+  getFollioVisibility,
+  isFollioPublic,
   splitFollioLinks,
   toDialString,
   unveilContactValue,
@@ -152,6 +155,25 @@ describe('buildFollioIdentity', () => {
     expect(identity.doors).toEqual({ resume: true, work: false });
     expect(identity.resumeHref).toBe('/u/ada/resume');
     expect(identity.workHref).toBe('/u/ada/work');
+    expect(identity.totalExperience).toMatch(/yrs/);
+  });
+
+  it('uses a stored total experience override on the Experience header', () => {
+    const identity = buildFollioIdentity(profile({ totalExperience: '10+ years' }), {
+      showResume: false,
+      showWork: false,
+    });
+
+    expect(identity.totalExperience).toBe('10+ years');
+  });
+
+  it('hides total experience when the user turned the tag off', () => {
+    const identity = buildFollioIdentity(
+      profile({ totalExperience: '10+ years', totalExperienceVisible: false }),
+      { showResume: false, showWork: false }
+    );
+
+    expect(identity.totalExperience).toBeNull();
   });
 
   it('makes a legacy stored phone dialable and readable', () => {
@@ -191,6 +213,7 @@ describe('buildFollioIdentity', () => {
       institution: 'University of London',
       credential: 'BS, Mathematics',
       period: '2014 – 2018',
+      highlights: [],
       honors: [],
       activities: [],
     });
@@ -361,7 +384,95 @@ describe('getFollioCompleteness', () => {
     expect(result.readyToShare).toBe(false);
     expect(result.missing).toContain('Add your name');
     expect(result.missing).toContain('Make email or phone visible to visitors');
-    expect(result.missing).toContain('Publish your Follio so the link works');
+    expect(result.missing).toContain('Set your Follio to Public or Unlisted so the link works');
+  });
+
+  it('treats a public attached resume as a published Follio', () => {
+    const result = getFollioCompleteness({
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      headline: 'Writer',
+      avatarUrl: 'https://example.com/a.png',
+      email: 'ada@example.com',
+      emailPublic: true,
+      status: 'DRAFT',
+      resumeVisibility: 'PUBLIC',
+    });
+    expect(result.isPublic).toBe(true);
+    expect(result.readyToShare).toBe(true);
+  });
+
+  it('treats an unlisted Follio as ready to share', () => {
+    const result = getFollioCompleteness({
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      headline: 'Writer',
+      avatarUrl: 'https://example.com/a.png',
+      email: 'ada@example.com',
+      emailPublic: true,
+      status: 'PRIVATE',
+      resumeVisibility: 'UNLISTED',
+    });
+    expect(result.isPublic).toBe(false);
+    expect(result.readyToShare).toBe(true);
+  });
+});
+
+describe('Follio page access', () => {
+  it('uses one visibility for the Follio and attached resume', () => {
+    expect(getFollioVisibility({ status: 'DRAFT', resumeVisibility: 'PUBLIC' })).toBe('PUBLIC');
+    expect(getFollioVisibility({ status: 'DRAFT', resumeVisibility: 'UNLISTED' })).toBe('UNLISTED');
+    expect(getFollioVisibility({ status: 'DRAFT', resumeVisibility: 'PRIVATE' })).toBe('PRIVATE');
+    expect(getFollioVisibility({ status: 'PUBLIC', resumeVisibility: 'PRIVATE' })).toBe('PUBLIC');
+  });
+
+  it('lets visitors open a public Follio', () => {
+    expect(isFollioPublic({ status: 'DRAFT', resumeVisibility: 'PUBLIC' })).toBe(true);
+    expect(
+      canOpenFollioPage({
+        status: 'DRAFT',
+        resumeVisibility: 'PUBLIC',
+        isOwner: false,
+      })
+    ).toBe(true);
+  });
+
+  it('lets visitors open an unlisted Follio only with the link', () => {
+    expect(
+      canOpenFollioPage({
+        status: 'PRIVATE',
+        resumeVisibility: 'UNLISTED',
+        isOwner: false,
+        hasShareAccess: false,
+      })
+    ).toBe(false);
+    expect(
+      canOpenFollioPage({
+        status: 'PRIVATE',
+        resumeVisibility: 'UNLISTED',
+        isOwner: false,
+        hasShareAccess: true,
+      })
+    ).toBe(true);
+  });
+
+  it('hides private Follios from visitors, including people with an old share token', () => {
+    expect(isFollioPublic({ status: 'DRAFT', resumeVisibility: 'PRIVATE' })).toBe(false);
+    expect(
+      canOpenFollioPage({
+        status: 'PRIVATE',
+        resumeVisibility: 'PRIVATE',
+        isOwner: false,
+        hasShareAccess: true,
+      })
+    ).toBe(false);
+    expect(
+      canOpenFollioPage({
+        status: 'DRAFT',
+        resumeVisibility: 'PRIVATE',
+        isOwner: true,
+      })
+    ).toBe(true);
   });
 });
 

@@ -1,8 +1,9 @@
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 
-import { parseScopeString } from '@/lib/ai-connector/scopes';
+import { isMcpResource } from '@/lib/ai-connector/oauth-metadata';
 import { isAllowedRedirectUri, redirectUriMatches } from '@/lib/ai-connector/oauth-register';
+import { parseScopeString } from '@/lib/ai-connector/scopes';
 import { getOauthClient } from '@/services/ai-connector-oauth.service';
 
 export const dynamic = 'force-dynamic';
@@ -45,6 +46,16 @@ export default async function OauthAuthorizePage({ searchParams }: AuthorizePage
   const codeChallengeMethod = firstParam(params.code_challenge_method) || 'S256';
   const state = firstParam(params.state);
   const scope = firstParam(params.scope);
+  const resource = firstParam(params.resource);
+
+  if (!isMcpResource(resource)) {
+    return (
+      <ErrorState
+        title="Wrong connection target"
+        message="This request is not for the Follio connector. Start the connection again from your AI app."
+      />
+    );
+  }
 
   if (responseType !== 'code') {
     return (
@@ -75,7 +86,7 @@ export default async function OauthAuthorizePage({ searchParams }: AuthorizePage
     return (
       <ErrorState
         title="Unknown assistant"
-        message="This AI client is not registered with Follio. Start the connection from Claude again."
+        message="This AI client is not registered with Follio. Start the connection again from your AI app."
       />
     );
   }

@@ -1,12 +1,13 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { createContext, useContext, useMemo, useRef, useState } from 'react';
 
 import { useResolvedResumeColorTheme } from '@/lib/hooks/use-resume-color-theme';
 import {
   containsHtmlFormatting,
   isHtmlEmpty,
   resumeBulletInnerHtml,
+  resumeEntryBodyHtml,
   sanitizeRichHtml,
 } from '@/lib/html-utils';
 import {
@@ -20,7 +21,20 @@ import {
   getResumeFullName,
   shouldShowResumePhoto,
 } from '@/lib/resume/contact';
+import type { ResumeGlance } from '@/lib/resume/glance';
+import {
+  highlightsByEntry,
+  markPhrasesInHtml,
+  type EntryHighlights,
+  type GlanceInsert,
+} from '@/lib/resume/glance-marks';
 import { resolveHeaderComposition, isPhotoBeforeText } from '@/lib/resume/header-layout';
+import {
+  redlineDataProps,
+  redlineListHtml,
+  type ResumeRedline,
+  type RoleRedline,
+} from '@/lib/resume-edit/redline';
 import { getResumeTemplateId, isResumeAtelierRailSectionType } from '@/lib/resume/templates';
 import {
   buildResumeDesignStyles,
@@ -31,8 +45,14 @@ import {
 } from '@/lib/resume-design';
 import { isPagedPageLayout } from '@/lib/resume/page-layout';
 import { resolveSkillCategoryLabel, skillGroupsHaveCategoryLabels } from '@/lib/skills/groups';
+import { displayTotalExperience } from '@/lib/total-experience';
 import { formatDate } from '@/lib/utils';
 import { applyVisibilityFilter, type FilteredProfile } from '@/lib/visibility';
+import {
+  parseHeadingTags,
+  resolveExperienceHeadingTags,
+  type HeadingTag,
+} from '@/lib/heading-tags';
 import type {
   CustomSectionContent,
   CustomSectionItem,
@@ -44,9 +64,18 @@ import type {
   ReferenceItem,
   VolunteeringItem,
 } from '@/types';
+import {
+  ResumeEntrySubtitle,
+  ResumeEntryTitle,
+} from '@/components/heading-tags/resume-heading-tags';
+import { displayEntryDurationFrom } from '@/lib/entry-duration';
+import { ResumeEntryGroups } from '@/components/section-subheadings/resume-entry-groups';
 import { HEADER_SECTION_TYPES, type ResumeDesign } from '@/types';
 
 import { ResumePagedStack } from '@/components/resume-paged-stack';
+import { FileText } from 'lucide-react';
+
+import { ViewHighlightsButton } from '@/components/resume-presentation/view-highlights-button';
 
 import { PublicResumeActions } from './public-resume-actions';
 import { ResumeFontLoader } from './resume-font-loader';
@@ -61,16 +90,40 @@ interface CleanResumeViewProps {
    * handled by `<PreviewFloatingActions>` instead.
    */
   authState?: 'owner' | 'authenticated' | 'anonymous';
+  /**
+   * When set, a flying "View Highlights" control sits on the resume's
+   * top-right and opens this Follio URL. Omit in the builder, thumbnails,
+   * and print preview — those surfaces mount their own control or none.
+   */
+  viewHighlightsHref?: string;
+  /** Toggle the stored glance on this same resume. Takes precedence over href. */
+  onViewHighlights?: () => void;
+  highlightsOpen?: boolean;
+  /**
+   * Stored highlights to draw into the resume: marker phrases in the bullets,
+   * and an impact box plus skill tags under each company heading. Omit or pass
+   * null to show the resume unchanged.
+   */
+  highlights?: ResumeGlance | null;
+  /**
+   * Suggested edits to draw into the resume while they are reviewed: rewritten
+   * lines in a marker with added words in green, new bullets in green, and
+   * removed bullets struck in red. Builder preview only.
+   */
+  redline?: ResumeRedline | null;
 }
 
 // ============================================================================
 // SECTION DIVIDER COMPONENT
 // ============================================================================
 
-function SectionDivider({ title }: { title: string }) {
+function SectionDivider({ title, tag }: { title: string; tag?: string | null }) {
   return (
     <div className="resume-section-header">
-      <h2 className="resume-section-title">{title}</h2>
+      <div className="resume-section-heading">
+        <h2 className="resume-section-title">{title}</h2>
+        {tag ? <span className="resume-section-tag">{tag}</span> : null}
+      </div>
       <div className="resume-section-line" />
     </div>
   );
@@ -136,8 +189,29 @@ function formatDateRange(
 }
 
 // ============================================================================
+// SUGGESTED EDITS
+// ============================================================================
+
+/** Suggested edits drawn into the resume while the owner reviews them in the builder. */
+const RedlineContext = createContext<ResumeRedline | null>(null);
+
+// ============================================================================
 // HEADER SECTION
 // ============================================================================
+
+function ResumeHeadline({ headline }: { headline?: string | null }) {
+  const mark = useContext(RedlineContext)?.headline;
+  if (mark) {
+    return (
+      <p
+        className="resume-headline"
+        {...redlineDataProps(mark)}
+        dangerouslySetInnerHTML={{ __html: mark.html }}
+      />
+    );
+  }
+  return headline ? <p className="resume-headline">{headline}</p> : null;
+}
 
 function ResumeHeaderIdentityText({
   fullName,
@@ -151,7 +225,7 @@ function ResumeHeaderIdentityText({
   return (
     <div className="resume-header-text min-w-0">
       <h1 className="resume-name">{fullName}</h1>
-      {headline ? <p className="resume-headline">{headline}</p> : null}
+      <ResumeHeadline headline={headline} />
       {contactItems.length > 0 ? (
         <p className="resume-contact-line">
           {contactItems.map((item, index) => (
@@ -235,7 +309,7 @@ function SleekHeader({ profile }: { profile: FilteredProfile }) {
   const text = (
     <div className="resume-header-text min-w-0">
       <h1 className="resume-name">{fullName}</h1>
-      {profile.headline ? <p className="resume-headline">{profile.headline}</p> : null}
+      <ResumeHeadline headline={profile.headline} />
     </div>
   );
 
@@ -284,7 +358,7 @@ function StudioHeader({ profile }: { profile: FilteredProfile }) {
   const text = (
     <div className="resume-studio-identity-text resume-header-text">
       <h1 className="resume-name">{fullName}</h1>
-      {profile.headline ? <p className="resume-headline">{profile.headline}</p> : null}
+      <ResumeHeadline headline={profile.headline} />
     </div>
   );
 
@@ -326,7 +400,7 @@ function AtelierHeader({ profile }: { profile: FilteredProfile }) {
     <header className="resume-header resume-atelier-header">
       <div className="resume-atelier-identity">
         <h1 className="resume-name">{fullName}</h1>
-        {profile.headline ? <p className="resume-headline">{profile.headline}</p> : null}
+        <ResumeHeadline headline={profile.headline} />
       </div>
       {contactFields.length > 0 ? (
         <ul className="resume-atelier-contact">
@@ -369,15 +443,66 @@ function RichHtml({
   return <Tag className={className}>{html}</Tag>;
 }
 
+/** Experience highlights and education notes share this body renderer. */
+function ResumeEntryBody({
+  html,
+  bullets,
+  phrases,
+  redline,
+}: {
+  html?: string | null;
+  bullets?: string[] | null;
+  /** Words already in the body to draw with a marker. */
+  phrases?: readonly string[];
+  /** Suggested bullet edits for this entry. */
+  redline?: RoleRedline;
+}) {
+  const sanitized = resumeEntryBodyHtml({ html, bullets });
+  const markup = redline ? redlineListHtml(sanitized, redline) : sanitized;
+  if (!markup) return null;
+  const marked = phrases?.length ? markPhrasesInHtml(markup, phrases) : markup;
+  return <div dangerouslySetInnerHTML={{ __html: marked }} />;
+}
+
+/** Impact summary, then skill tags. In the flow, so everything below moves down. */
+function GlanceInserts({ insert }: { insert: GlanceInsert }) {
+  return (
+    <div className="glance-inserts" data-copy-exclude>
+      {insert.summary ? (
+        <p className="glance-summary">
+          <span className="sr-only">Impact: </span>
+          {insert.summary}
+        </p>
+      ) : null}
+      {insert.skills.length > 0 ? (
+        <ul className="glance-skills" aria-label="Top skills">
+          {insert.skills.map((skill) => (
+            <li key={skill}>{skill}</li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
 // ============================================================================
 // SUMMARY SECTION
 // ============================================================================
 
 function SummarySection({ summary, title = 'SUMMARY' }: { summary: string; title?: string }) {
+  const mark = useContext(RedlineContext)?.summary;
   return (
     <section className="resume-section">
       <SectionDivider title={title} />
-      <RichHtml html={summary} className="resume-summary resume-rich-html" />
+      {mark ? (
+        <div
+          className="resume-summary resume-rich-html"
+          {...redlineDataProps(mark)}
+          dangerouslySetInnerHTML={{ __html: mark.html }}
+        />
+      ) : (
+        <RichHtml html={summary} className="resume-summary resume-rich-html" />
+      )}
     </section>
   );
 }
@@ -396,6 +521,8 @@ interface ExperienceEntryProps {
   bullets: string[];
   /** Complete editor HTML — when present, rendered directly for perfect fidelity. */
   bulletsHtml?: string | null;
+  headingTags?: HeadingTag[];
+  duration?: string | null;
 }
 
 function ExperienceEntry({
@@ -407,35 +534,63 @@ function ExperienceEntry({
   isCurrent,
   bullets,
   bulletsHtml,
+  headingTags = [],
+  duration,
   variant = 'default',
-}: ExperienceEntryProps & { variant?: 'default' | 'atelier' }) {
+  highlight,
+  redline,
+  grouped = false,
+  showLocationOnRole = false,
+}: ExperienceEntryProps & {
+  variant?: 'default' | 'atelier';
+  highlight?: EntryHighlights;
+  redline?: RoleRedline;
+  grouped?: boolean;
+  showLocationOnRole?: boolean;
+}) {
   const dateRange =
     variant === 'atelier'
       ? formatAtelierYearRange(startDate, endDate, isCurrent)
       : formatDateRange(startDate, endDate, isCurrent);
   const companyLine = [company, location].filter(Boolean).join(', ');
-
-  const bulletsBlock = bulletsHtml ? (
-    <div dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(bulletsHtml) }} />
-  ) : (
-    bullets &&
-    bullets.length > 0 && (
-      <ul className="resume-bullets">
-        {bullets.map((bullet, index) => (
-          <li key={index} dangerouslySetInnerHTML={{ __html: resumeBulletInnerHtml(bullet) }} />
-        ))}
-      </ul>
-    )
+  const roleLocation = showLocationOnRole ? location : null;
+  const bulletsBlock = (
+    <ResumeEntryBody
+      html={bulletsHtml}
+      bullets={bullets}
+      phrases={highlight?.phrases}
+      redline={redline}
+    />
   );
+  const inserts = highlight?.insert ? <GlanceInserts insert={highlight.insert} /> : null;
+  const groupedClass = grouped ? ' resume-org-role' : '';
 
   if (variant === 'atelier') {
     return (
-      <div className="resume-entry resume-atelier-exp">
+      <div className={`resume-entry resume-atelier-exp${groupedClass}`}>
         <div className="resume-atelier-exp-grid">
           <span className="resume-entry-date">{dateRange}</span>
           <div className="resume-atelier-exp-body">
-            <h3 className="resume-entry-title">{company}</h3>
-            <p className="resume-entry-subtitle">{role}</p>
+            {grouped ? (
+              <>
+                <ResumeEntryTitle tags={headingTags}>
+                  <h3 className="resume-entry-title">{role}</h3>
+                </ResumeEntryTitle>
+                <ResumeEntrySubtitle duration={duration}>
+                  {roleLocation ? <p className="resume-entry-subtitle">{roleLocation}</p> : null}
+                </ResumeEntrySubtitle>
+              </>
+            ) : (
+              <>
+                <ResumeEntryTitle tags={headingTags}>
+                  <h3 className="resume-entry-title">{company}</h3>
+                </ResumeEntryTitle>
+                <ResumeEntrySubtitle duration={duration}>
+                  <p className="resume-entry-subtitle">{role}</p>
+                </ResumeEntrySubtitle>
+              </>
+            )}
+            {inserts}
             {bulletsBlock}
           </div>
         </div>
@@ -444,14 +599,25 @@ function ExperienceEntry({
   }
 
   return (
-    <div className="resume-entry">
+    <div className={`resume-entry${groupedClass}`}>
       <div className="resume-entry-header">
         <div className="resume-entry-title-block">
-          <h3 className="resume-entry-title">{role}</h3>
-          <p className="resume-entry-subtitle">{companyLine}</p>
+          <ResumeEntryTitle tags={headingTags}>
+            <h3 className="resume-entry-title">{role}</h3>
+          </ResumeEntryTitle>
+          {grouped ? (
+            <ResumeEntrySubtitle duration={duration}>
+              {roleLocation ? <p className="resume-entry-subtitle">{roleLocation}</p> : null}
+            </ResumeEntrySubtitle>
+          ) : (
+            <ResumeEntrySubtitle duration={duration}>
+              <p className="resume-entry-subtitle">{companyLine}</p>
+            </ResumeEntrySubtitle>
+          )}
         </div>
         {dateRange ? <span className="resume-entry-date">{dateRange}</span> : null}
       </div>
+      {inserts}
       {bulletsBlock}
     </div>
   );
@@ -459,18 +625,45 @@ function ExperienceEntry({
 
 function ExperienceSection({
   experiences,
+  totalExperience,
+  totalExperienceVisible,
+  totalExperienceShowYears,
+  totalExperienceShowMonths,
   variant = 'default',
+  highlights,
+  subHeadings,
+  entryGrouping,
 }: {
   experiences: PublicProfile['workExperiences'];
+  totalExperience?: string | null;
+  totalExperienceVisible?: boolean | null;
+  totalExperienceShowYears?: boolean | null;
+  totalExperienceShowMonths?: boolean | null;
   variant?: 'default' | 'atelier';
+  highlights?: ResumeGlance | null;
+  subHeadings?: unknown;
+  entryGrouping?: unknown;
 }) {
+  const redline = useContext(RedlineContext);
   if (!experiences || experiences.length === 0) return null;
+
+  const tag = displayTotalExperience(totalExperience, experiences, totalExperienceVisible, {
+    showYears: totalExperienceShowYears,
+    showMonths: totalExperienceShowMonths,
+  });
+  const byEntry = highlightsByEntry(experiences, highlights);
 
   return (
     <section className="resume-section">
-      <SectionDivider title={variant === 'atelier' ? 'WORK EXPERIENCE' : 'EXPERIENCE'} />
-      <div className="resume-entries">
-        {experiences.map((exp) => (
+      <SectionDivider title={variant === 'atelier' ? 'WORK EXPERIENCE' : 'EXPERIENCE'} tag={tag} />
+      <ResumeEntryGroups
+        items={experiences}
+        subHeadings={subHeadings}
+        grouping={entryGrouping}
+        orgOf={(exp) => exp.company}
+        locationOf={(exp) => exp.location}
+      >
+        {(exp, ctx) => (
           <ExperienceEntry
             key={exp.id}
             role={exp.role}
@@ -481,10 +674,16 @@ function ExperienceSection({
             isCurrent={exp.isCurrent}
             bullets={exp.bullets}
             bulletsHtml={exp.bulletsHtml}
+            headingTags={resolveExperienceHeadingTags(exp)}
+            duration={displayEntryDurationFrom(exp)}
             variant={variant}
+            highlight={byEntry.get(exp.id)}
+            redline={redline?.roles.get(exp.id)}
+            grouped={ctx.grouped}
+            showLocationOnRole={ctx.grouped && !ctx.locationShared}
           />
-        ))}
-      </div>
+        )}
+      </ResumeEntryGroups>
     </section>
   );
 }
@@ -496,62 +695,94 @@ function ExperienceSection({
 function EducationSection({
   educations,
   variant = 'default',
+  subHeadings,
+  entryGrouping,
 }: {
   educations: PublicProfile['educations'];
   variant?: 'default' | 'atelier';
+  subHeadings?: unknown;
+  entryGrouping?: unknown;
 }) {
   if (!educations || educations.length === 0) return null;
 
   return (
     <section className="resume-section">
       <SectionDivider title="EDUCATION" />
-      <div className="resume-entries">
-        {educations.map((edu) => {
+      <ResumeEntryGroups
+        items={educations}
+        subHeadings={subHeadings}
+        grouping={entryGrouping}
+        orgOf={(edu) => edu.institution}
+        locationOf={(edu) => edu.location}
+      >
+        {(edu, ctx) => {
           const degreeLine = [edu.degree, edu.fieldOfStudy].filter(Boolean).join(' in ');
           const dateRange =
             variant === 'atelier'
               ? formatAtelierYearRange(edu.startDate, edu.endDate, edu.isCurrent)
               : formatDateRange(edu.startDate, edu.endDate, edu.isCurrent);
 
+          const body = <ResumeEntryBody html={edu.description} />;
+          const details =
+            edu.gpa || edu.activities ? (
+              <div className="resume-entry-details">
+                {edu.gpa && <p>GPA: {edu.gpa}</p>}
+                {edu.activities && <p>{edu.activities}</p>}
+              </div>
+            ) : null;
+
+          const headingTags = parseHeadingTags(edu.headingTags);
+          const duration = displayEntryDurationFrom(edu);
+          const grouped = ctx.grouped;
+          const showInstitution = !grouped;
+          const subtitle =
+            showInstitution && degreeLine ? (
+              <p className="resume-entry-subtitle">{edu.institution}</p>
+            ) : ctx.grouped && !ctx.locationShared && edu.location ? (
+              <p className="resume-entry-subtitle">{edu.location}</p>
+            ) : null;
+          const groupedClass = grouped ? ' resume-org-role' : '';
+          const atelierMetaLocation = grouped && ctx.locationShared ? null : edu.location;
+
           if (variant === 'atelier') {
             return (
-              <div key={edu.id} className="resume-entry resume-atelier-edu">
-                <h3 className="resume-entry-title">{degreeLine || edu.institution}</h3>
-                {degreeLine ? <p className="resume-entry-subtitle">{edu.institution}</p> : null}
-                {(dateRange || edu.location) && (
+              <div key={edu.id} className={`resume-entry resume-atelier-edu${groupedClass}`}>
+                <ResumeEntryTitle tags={headingTags}>
+                  <h3 className="resume-entry-title">
+                    {degreeLine || (grouped ? '' : edu.institution)}
+                  </h3>
+                </ResumeEntryTitle>
+                <ResumeEntrySubtitle duration={duration}>{subtitle}</ResumeEntrySubtitle>
+                {(dateRange || atelierMetaLocation) && (
                   <p className="resume-atelier-edu-meta">
-                    {[dateRange, edu.location].filter(Boolean).join(' · ')}
+                    {[dateRange, atelierMetaLocation].filter(Boolean).join(' · ')}
                   </p>
                 )}
-                {(edu.gpa || edu.activities) && (
-                  <div className="resume-entry-details">
-                    {edu.gpa && <p>GPA: {edu.gpa}</p>}
-                    {edu.activities && <p>{edu.activities}</p>}
-                  </div>
-                )}
+                {body}
+                {details}
               </div>
             );
           }
 
           return (
-            <div key={edu.id} className="resume-entry">
+            <div key={edu.id} className={`resume-entry${groupedClass}`}>
               <div className="resume-entry-header">
                 <div className="resume-entry-title-block">
-                  <h3 className="resume-entry-title">{degreeLine || edu.institution}</h3>
-                  {degreeLine && <p className="resume-entry-subtitle">{edu.institution}</p>}
+                  <ResumeEntryTitle tags={headingTags}>
+                    <h3 className="resume-entry-title">
+                      {degreeLine || (grouped ? '' : edu.institution)}
+                    </h3>
+                  </ResumeEntryTitle>
+                  <ResumeEntrySubtitle duration={duration}>{subtitle}</ResumeEntrySubtitle>
                 </div>
                 {dateRange ? <span className="resume-entry-date">{dateRange}</span> : null}
               </div>
-              {(edu.gpa || edu.activities) && (
-                <div className="resume-entry-details">
-                  {edu.gpa && <p>GPA: {edu.gpa}</p>}
-                  {edu.activities && <p>{edu.activities}</p>}
-                </div>
-              )}
+              {body}
+              {details}
             </div>
           );
-        })}
-      </div>
+        }}
+      </ResumeEntryGroups>
     </section>
   );
 }
@@ -643,14 +874,20 @@ function SkillsSection({
 // PROJECTS SECTION
 // ============================================================================
 
-function ProjectsSection({ projects }: { projects: PublicProfile['projects'] }) {
+function ProjectsSection({
+  projects,
+  subHeadings,
+}: {
+  projects: PublicProfile['projects'];
+  subHeadings?: unknown;
+}) {
   if (!projects || projects.length === 0) return null;
 
   return (
     <section className="resume-section">
       <SectionDivider title="PROJECTS" />
-      <div className="resume-entries">
-        {projects.map((project) => {
+      <ResumeEntryGroups items={projects} subHeadings={subHeadings}>
+        {(project) => {
           const dateRange = formatDateRange(project.startDate, project.endDate, project.isCurrent);
           const description = project.customDescription || project.shortDesc || project.description;
 
@@ -658,20 +895,22 @@ function ProjectsSection({ projects }: { projects: PublicProfile['projects'] }) 
             <div key={project.id} className="resume-entry">
               <div className="resume-entry-header">
                 <div className="resume-entry-title-block">
-                  <h3 className="resume-entry-title">
-                    {project.title}
-                    {project.url && (
-                      <a
-                        href={project.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="resume-project-link"
-                      >
-                        {' '}
-                        ↗
-                      </a>
-                    )}
-                  </h3>
+                  <ResumeEntryTitle tags={parseHeadingTags(project.headingTags)}>
+                    <h3 className="resume-entry-title">
+                      {project.title}
+                      {project.url && (
+                        <a
+                          href={project.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="resume-project-link"
+                        >
+                          {' '}
+                          ↗
+                        </a>
+                      )}
+                    </h3>
+                  </ResumeEntryTitle>
                   {project.techStack && project.techStack.length > 0 && (
                     <p className="resume-entry-tech">{project.techStack.join(', ')}</p>
                   )}
@@ -697,8 +936,8 @@ function ProjectsSection({ projects }: { projects: PublicProfile['projects'] }) 
               )}
             </div>
           );
-        })}
-      </div>
+        }}
+      </ResumeEntryGroups>
     </section>
   );
 }
@@ -709,23 +948,38 @@ function ProjectsSection({ projects }: { projects: PublicProfile['projects'] }) 
 
 function CertificationsSection({
   certifications,
+  subHeadings,
+  entryGrouping,
 }: {
   certifications: PublicProfile['certifications'];
+  subHeadings?: unknown;
+  entryGrouping?: unknown;
 }) {
   if (!certifications || certifications.length === 0) return null;
 
   return (
     <section className="resume-section">
       <SectionDivider title="CERTIFICATIONS" />
-      <div className="resume-entries resume-entries-compact">
-        {certifications.map((cert) => {
+      <ResumeEntryGroups
+        items={certifications}
+        subHeadings={subHeadings}
+        grouping={entryGrouping}
+        orgOf={(cert) => cert.issuer}
+        compact
+      >
+        {(cert, ctx) => {
           const issuedDate = formatResumeDate(cert.issueDate);
           const expDate = cert.expirationDate ? formatResumeDate(cert.expirationDate) : null;
 
           return (
-            <div key={cert.id} className="resume-entry-inline">
+            <div
+              key={cert.id}
+              className={
+                ctx.grouped ? 'resume-entry-inline resume-org-role' : 'resume-entry-inline'
+              }
+            >
               <span className="resume-entry-inline-title">{cert.name}</span>
-              <span className="resume-entry-inline-issuer"> — {cert.issuer}</span>
+              {!ctx.grouped && <span className="resume-entry-inline-issuer"> — {cert.issuer}</span>}
               {issuedDate && (
                 <span className="resume-entry-inline-date">
                   {' '}
@@ -735,8 +989,8 @@ function CertificationsSection({
               )}
             </div>
           );
-        })}
-      </div>
+        }}
+      </ResumeEntryGroups>
     </section>
   );
 }
@@ -748,23 +1002,38 @@ function CertificationsSection({
 function AwardsSection({
   awards,
   title = 'AWARDS & RECOGNITION',
+  subHeadings,
+  entryGrouping,
 }: {
   awards: PublicProfile['awards'];
   title?: string;
+  subHeadings?: unknown;
+  entryGrouping?: unknown;
 }) {
   if (!awards || awards.length === 0) return null;
 
   return (
     <section className="resume-section">
       <SectionDivider title={title} />
-      <div className="resume-entries resume-entries-compact">
-        {awards.map((award) => {
+      <ResumeEntryGroups
+        items={awards}
+        subHeadings={subHeadings}
+        grouping={entryGrouping}
+        orgOf={(award) => award.issuer}
+        compact
+      >
+        {(award, ctx) => {
           const awardDate = formatResumeDate(award.date);
 
           return (
-            <div key={award.id} className="resume-entry-inline">
+            <div
+              key={award.id}
+              className={
+                ctx.grouped ? 'resume-entry-inline resume-org-role' : 'resume-entry-inline'
+              }
+            >
               <span className="resume-entry-inline-title">{award.title}</span>
-              {award.issuer && (
+              {award.issuer && !ctx.grouped && (
                 <span className="resume-entry-inline-issuer"> — {award.issuer}</span>
               )}
               {awardDate && <span className="resume-entry-inline-date"> ({awardDate})</span>}
@@ -773,8 +1042,8 @@ function AwardsSection({
               )}
             </div>
           );
-        })}
-      </div>
+        }}
+      </ResumeEntryGroups>
     </section>
   );
 }
@@ -783,14 +1052,20 @@ function AwardsSection({
 // PUBLICATIONS SECTION
 // ============================================================================
 
-function PublicationsSection({ items }: { items: PublicationItem[] }) {
+function PublicationsSection({
+  items,
+  subHeadings,
+}: {
+  items: PublicationItem[];
+  subHeadings?: unknown;
+}) {
   if (!items || items.length === 0) return null;
 
   return (
     <section className="resume-section">
       <SectionDivider title="PUBLICATIONS" />
-      <div className="resume-entries resume-entries-compact">
-        {items.map((pub) => (
+      <ResumeEntryGroups items={items} subHeadings={subHeadings} compact>
+        {(pub) => (
           <div key={pub.id} className="resume-publication">
             <p className="resume-publication-title">
               {pub.url ? (
@@ -806,8 +1081,8 @@ function PublicationsSection({ items }: { items: PublicationItem[] }) {
               {[pub.publisher, pub.date].filter(Boolean).join(', ')}
             </p>
           </div>
-        ))}
-      </div>
+        )}
+      </ResumeEntryGroups>
     </section>
   );
 }
@@ -816,33 +1091,51 @@ function PublicationsSection({ items }: { items: PublicationItem[] }) {
 // VOLUNTEERING SECTION
 // ============================================================================
 
-function VolunteeringSection({ items }: { items: VolunteeringItem[] }) {
+function VolunteeringSection({
+  items,
+  subHeadings,
+  entryGrouping,
+}: {
+  items: VolunteeringItem[];
+  subHeadings?: unknown;
+  entryGrouping?: unknown;
+}) {
   if (!items || items.length === 0) return null;
 
   return (
     <section className="resume-section">
       <SectionDivider title="VOLUNTEERING" />
-      <div className="resume-entries">
-        {items.map((vol) => {
+      <ResumeEntryGroups
+        items={items}
+        subHeadings={subHeadings}
+        grouping={entryGrouping}
+        orgOf={(vol) => vol.organization}
+      >
+        {(vol, ctx) => {
           const dateRange =
             vol.startDate || vol.endDate || vol.isCurrent
               ? `${vol.startDate || ''} – ${vol.isCurrent ? 'Present' : vol.endDate || ''}`
               : '';
 
           return (
-            <div key={vol.id} className="resume-entry">
+            <div
+              key={vol.id}
+              className={ctx.grouped ? 'resume-entry resume-org-role' : 'resume-entry'}
+            >
               <div className="resume-entry-header">
                 <div className="resume-entry-title-block">
-                  <h3 className="resume-entry-title">{vol.role}</h3>
-                  <p className="resume-entry-subtitle">{vol.organization}</p>
+                  <ResumeEntryTitle tags={parseHeadingTags(vol.tags)}>
+                    <h3 className="resume-entry-title">{vol.role}</h3>
+                  </ResumeEntryTitle>
+                  {!ctx.grouped && <p className="resume-entry-subtitle">{vol.organization}</p>}
                 </div>
                 {dateRange && <span className="resume-entry-date">{dateRange}</span>}
               </div>
               {vol.description && <p className="resume-entry-description">{vol.description}</p>}
             </div>
           );
-        })}
-      </div>
+        }}
+      </ResumeEntryGroups>
     </section>
   );
 }
@@ -942,30 +1235,39 @@ function CustomSection({ section }: { section: ProfileSection }) {
       <SectionDivider title={section.title.toUpperCase()} />
 
       {items.length > 0 && (
-        <div className="resume-entries">
-          {items.map((item: CustomSectionItem) => {
+        <ResumeEntryGroups
+          items={items}
+          subHeadings={section.subHeadings}
+          grouping={section.entryGrouping}
+          orgOf={(item) => item.subtitle}
+        >
+          {(item: CustomSectionItem, ctx) => {
             const dateRange =
               item.startDate || item.endDate || item.isCurrent
                 ? `${item.startDate || ''} – ${item.isCurrent ? 'Present' : item.endDate || ''}`
                 : '';
 
             return (
-              <div key={item.id} className="resume-entry">
+              <div
+                key={item.id}
+                className={ctx.grouped ? 'resume-entry resume-org-role' : 'resume-entry'}
+              >
                 <div className="resume-entry-header">
                   <div className="resume-entry-title-block">
-                    <h3 className="resume-entry-title">{item.title}</h3>
-                    {item.subtitle && <p className="resume-entry-subtitle">{item.subtitle}</p>}
+                    <ResumeEntryTitle tags={parseHeadingTags(item.tags)}>
+                      <h3 className="resume-entry-title">{item.title}</h3>
+                    </ResumeEntryTitle>
+                    {item.subtitle && !ctx.grouped && (
+                      <p className="resume-entry-subtitle">{item.subtitle}</p>
+                    )}
                   </div>
                   {dateRange && <span className="resume-entry-date">{dateRange}</span>}
                 </div>
                 {item.description && <p className="resume-entry-description">{item.description}</p>}
-                {item.tags && item.tags.length > 0 && (
-                  <p className="resume-entry-tags">{item.tags.join(', ')}</p>
-                )}
               </div>
             );
-          })}
-        </div>
+          }}
+        </ResumeEntryGroups>
       )}
 
       {freeformContent && <p className="resume-freeform">{freeformContent}</p>}
@@ -977,7 +1279,15 @@ function CustomSection({ section }: { section: ProfileSection }) {
 // MAIN COMPONENT
 // ============================================================================
 
-export function CleanResumeView({ profile: rawProfile, authState }: CleanResumeViewProps) {
+export function CleanResumeView({
+  profile: rawProfile,
+  authState,
+  viewHighlightsHref,
+  onViewHighlights,
+  highlightsOpen = false,
+  highlights = null,
+  redline = null,
+}: CleanResumeViewProps) {
   const resumeRef = useRef<HTMLDivElement>(null);
 
   const parsedDesign = useMemo(
@@ -1029,10 +1339,10 @@ export function CleanResumeView({ profile: rawProfile, authState }: CleanResumeV
   const renderSection = (section: ProfileSection) => {
     switch (section.type) {
       case 'SUMMARY':
-        return profile.summary && !isHtmlEmpty(profile.summary) ? (
+        return (profile.summary && !isHtmlEmpty(profile.summary)) || redline?.summary ? (
           <SummarySection
             key={section.id}
-            summary={profile.summary}
+            summary={profile.summary ?? ''}
             title={isAtelier ? 'PROFILE' : 'SUMMARY'}
           />
         ) : null;
@@ -1041,7 +1351,14 @@ export function CleanResumeView({ profile: rawProfile, authState }: CleanResumeV
           <ExperienceSection
             key={section.id}
             experiences={profile.workExperiences}
+            totalExperience={profile.totalExperience}
+            totalExperienceVisible={profile.totalExperienceVisible}
+            totalExperienceShowYears={profile.totalExperienceShowYears}
+            totalExperienceShowMonths={profile.totalExperienceShowMonths}
             variant={isAtelier ? 'atelier' : 'default'}
+            highlights={highlights}
+            subHeadings={section.subHeadings}
+            entryGrouping={section.entryGrouping}
           />
         );
       case 'EDUCATION':
@@ -1050,20 +1367,37 @@ export function CleanResumeView({ profile: rawProfile, authState }: CleanResumeV
             key={section.id}
             educations={profile.educations}
             variant={isAtelier ? 'atelier' : 'default'}
+            subHeadings={section.subHeadings}
+            entryGrouping={section.entryGrouping}
           />
         );
       case 'SKILLS':
         return <SkillsSection key={section.id} profile={profile} stacked={isAtelier} />;
       case 'PROJECTS':
-        return <ProjectsSection key={section.id} projects={profile.projects} />;
+        return (
+          <ProjectsSection
+            key={section.id}
+            projects={profile.projects}
+            subHeadings={section.subHeadings}
+          />
+        );
       case 'CERTIFICATIONS':
-        return <CertificationsSection key={section.id} certifications={profile.certifications} />;
+        return (
+          <CertificationsSection
+            key={section.id}
+            certifications={profile.certifications}
+            subHeadings={section.subHeadings}
+            entryGrouping={section.entryGrouping}
+          />
+        );
       case 'AWARDS':
         return (
           <AwardsSection
             key={section.id}
             awards={profile.awards}
             title={isAtelier ? 'AWARDS' : 'AWARDS & RECOGNITION'}
+            subHeadings={section.subHeadings}
+            entryGrouping={section.entryGrouping}
           />
         );
       case 'PUBLICATIONS':
@@ -1071,6 +1405,7 @@ export function CleanResumeView({ profile: rawProfile, authState }: CleanResumeV
           <PublicationsSection
             key={section.id}
             items={getCustomContentItems<PublicationItem>(section)}
+            subHeadings={section.subHeadings}
           />
         );
       case 'VOLUNTEERING':
@@ -1078,6 +1413,8 @@ export function CleanResumeView({ profile: rawProfile, authState }: CleanResumeV
           <VolunteeringSection
             key={section.id}
             items={getCustomContentItems<VolunteeringItem>(section)}
+            subHeadings={section.subHeadings}
+            entryGrouping={section.entryGrouping}
           />
         );
       case 'LANGUAGES':
@@ -1136,6 +1473,19 @@ export function CleanResumeView({ profile: rawProfile, authState }: CleanResumeV
         data-resume-theme={resolvedColorTheme}
         data-page-layout={pageLayout}
       >
+        {viewHighlightsHref || onViewHighlights ? (
+          <div className="pointer-events-none sticky top-6 z-30 h-0 w-full print:hidden">
+            <div className="absolute right-6 top-6">
+              <ViewHighlightsButton
+                href={onViewHighlights ? undefined : viewHighlightsHref}
+                onClick={onViewHighlights}
+                label={highlightsOpen ? 'View resume' : 'View Highlights'}
+                icon={highlightsOpen ? <FileText className="h-[18px] w-[18px]" /> : undefined}
+              />
+            </div>
+          </div>
+        ) : null}
+
         {/* Kebab anchor — sits *outside* the resume's right margin,
             vertically aligned with the top of the paper. The actual
             menu is portalled in by `<PublicResumeActions>` so it
@@ -1150,47 +1500,49 @@ export function CleanResumeView({ profile: rawProfile, authState }: CleanResumeV
           />
         ) : null}
 
-        <ResumePagedStack
-          enabled={isPagedPageLayout(pageLayout)}
-          pageLayout={pageLayout === 'a4' ? 'a4' : 'letter'}
-          contentRef={resumeRef}
-        >
-          <article
-            className={[
-              'resume-paper',
-              isSleek && 'resume-paper--sleek',
-              isStudio && 'resume-paper--studio',
-              isAtelier && 'resume-paper--atelier',
-              isLumen && 'resume-paper--lumen',
-            ]
-              .filter(Boolean)
-              .join(' ')}
-            data-resume-template={templateId}
-            style={designStyles}
+        <RedlineContext.Provider value={redline}>
+          <ResumePagedStack
+            enabled={isPagedPageLayout(pageLayout)}
+            pageLayout={pageLayout === 'a4' ? 'a4' : 'letter'}
+            contentRef={resumeRef}
           >
-            {isAtelier ? (
-              <>
-                <AtelierHeader profile={profile} />
-                <div className="resume-atelier-layout">
-                  <div className="resume-atelier-main">{mainSections.map(renderSection)}</div>
-                  <aside className="resume-atelier-rail">
-                    {sidebarSections.map(renderSection)}
-                  </aside>
-                </div>
-              </>
-            ) : isStudio ? (
-              <>
-                <StudioHeader profile={profile} />
-                <div className="resume-studio-body">{mainSections.map(renderSection)}</div>
-              </>
-            ) : (
-              <>
-                {isSleek ? <SleekHeader profile={profile} /> : <ResumeHeader profile={profile} />}
-                {mainSections.map(renderSection)}
-              </>
-            )}
-          </article>
-        </ResumePagedStack>
+            <article
+              className={[
+                'resume-paper',
+                isSleek && 'resume-paper--sleek',
+                isStudio && 'resume-paper--studio',
+                isAtelier && 'resume-paper--atelier',
+                isLumen && 'resume-paper--lumen',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              data-resume-template={templateId}
+              style={designStyles}
+            >
+              {isAtelier ? (
+                <>
+                  <AtelierHeader profile={profile} />
+                  <div className="resume-atelier-layout">
+                    <div className="resume-atelier-main">{mainSections.map(renderSection)}</div>
+                    <aside className="resume-atelier-rail">
+                      {sidebarSections.map(renderSection)}
+                    </aside>
+                  </div>
+                </>
+              ) : isStudio ? (
+                <>
+                  <StudioHeader profile={profile} />
+                  <div className="resume-studio-body">{mainSections.map(renderSection)}</div>
+                </>
+              ) : (
+                <>
+                  {isSleek ? <SleekHeader profile={profile} /> : <ResumeHeader profile={profile} />}
+                  {mainSections.map(renderSection)}
+                </>
+              )}
+            </article>
+          </ResumePagedStack>
+        </RedlineContext.Provider>
       </div>
     </>
   );

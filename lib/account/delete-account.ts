@@ -9,6 +9,7 @@
 import { isClerkAPIResponseError } from '@clerk/nextjs/errors';
 
 import { db } from '@/lib/db';
+import { interactiveTransactionOptions } from '@/lib/db-transaction';
 
 export class AccountDeletionError extends Error {
   readonly code: 'CLERK_DELETE_FAILED' | 'DATABASE_DELETE_FAILED';
@@ -81,7 +82,7 @@ export async function deleteLocalAccountData(userId: string): Promise<void> {
       await tx.user.delete({
         where: { id: userId },
       });
-    });
+    }, interactiveTransactionOptions);
   } catch (error) {
     throw new AccountDeletionError(
       'DATABASE_DELETE_FAILED',

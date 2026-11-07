@@ -11,6 +11,8 @@ export interface ContactEntryLike {
   linkId?: string;
 }
 
+const DEFAULT_CONTACT_ENTRY_ORDER = ['email', 'phone', 'location'];
+
 /**
  * Accepts `github.com/user` as well as full http(s) URLs.
  * Rejects non-web schemes so we never persist `javascript:` / `data:` values.
@@ -49,13 +51,15 @@ export function createDraftLinkEntryId(linkType: string): string {
 
 /**
  * Apply a persisted Contact & Links row order.
+ * Without a persisted order, email, phone, and location are prioritized in
+ * that order; remaining links are appended in their existing order.
  * Unknown ids are ignored; rows missing from the stored order are appended.
  */
 export function applyContactEntryOrder<T extends { id: string }>(
   entries: T[],
-  storedOrder: string[] | null | undefined
+  storedOrder?: string[] | null
 ): T[] {
-  if (!storedOrder || storedOrder.length === 0) return entries;
+  const order = storedOrder && storedOrder.length > 0 ? storedOrder : DEFAULT_CONTACT_ENTRY_ORDER;
 
   const byId = new Map<string, T>();
   for (const entry of entries) {
@@ -64,7 +68,7 @@ export function applyContactEntryOrder<T extends { id: string }>(
 
   const ordered: T[] = [];
   const seen = new Set<string>();
-  for (const orderId of storedOrder) {
+  for (const orderId of order) {
     const entry = byId.get(orderId);
     if (entry && !seen.has(entry.id)) {
       ordered.push(entry);

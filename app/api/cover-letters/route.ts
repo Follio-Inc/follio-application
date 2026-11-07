@@ -16,6 +16,7 @@ import {
   type CoverLetterDesign,
 } from '@/lib/cover-letter';
 import { db } from '@/lib/db';
+import { interactiveTransactionOptions } from '@/lib/db-transaction';
 import { resolveDocumentPageLayout } from '@/lib/document-design';
 import { handleApiError } from '@/lib/errors';
 import { parseResumeDesign } from '@/lib/resume-design';
@@ -195,7 +196,7 @@ export async function POST(request: NextRequest) {
       });
       await setActiveCoverLetter(tx, user.id, letter.id);
       return letter;
-    });
+    }, interactiveTransactionOptions);
 
     return NextResponse.json(
       {

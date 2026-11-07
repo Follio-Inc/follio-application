@@ -2,6 +2,7 @@ import type { Prisma } from '@prisma/client';
 
 import { db } from '@/lib/db';
 import { AppError, ErrorCode, isAppError } from '@/lib/errors';
+import { withPrismaRetry } from '@/lib/prisma-connection';
 
 interface ActiveProfileContext {
   userId: string;
@@ -15,13 +16,17 @@ interface ActiveProfileContext {
 type ProfileWriteClient = Pick<Prisma.TransactionClient, 'profile' | 'user'>;
 
 export async function resolveActiveProfileContext(clerkId: string): Promise<ActiveProfileContext> {
-  const user = await db.user.findUnique({
-    where: { clerkId },
-    select: {
-      id: true,
-      profile: { select: { id: true } },
-    },
-  });
+  const user = await withPrismaRetry(
+    () =>
+      db.user.findUnique({
+        where: { clerkId },
+        select: {
+          id: true,
+          profile: { select: { id: true } },
+        },
+      }),
+    'findUnique'
+  );
 
   if (!user) {
     throw new AppError('User not found', ErrorCode.NOT_FOUND, 404);
@@ -31,24 +36,32 @@ export async function resolveActiveProfileContext(clerkId: string): Promise<Acti
     return { userId: user.id, profileId: user.profile.id };
   }
 
-  const fallback = await db.profile.findFirst({
-    where: { userId: user.id },
-    orderBy: { createdAt: 'asc' },
-    select: { id: true },
-  });
+  const fallback = await withPrismaRetry(
+    () =>
+      db.profile.findFirst({
+        where: { userId: user.id },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true },
+      }),
+    'findFirst'
+  );
 
   if (!fallback) {
     throw new AppError('Profile not found', ErrorCode.NOT_FOUND, 404);
   }
 
-  await db.user.update({
-    where: { id: user.id },
-    data: {
-      profile: {
-        connect: { id: fallback.id },
-      },
-    },
-  });
+  await withPrismaRetry(
+    () =>
+      db.user.update({
+        where: { id: user.id },
+        data: {
+          profile: {
+            connect: { id: fallback.id },
+          },
+        },
+      }),
+    'update'
+  );
 
   return { userId: user.id, profileId: fallback.id };
 }

@@ -32,9 +32,37 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { ContentOrgGroupFrom } from '@/components/section-entry-grouping/content-org-group';
+import { EntryGroupingControl } from '@/components/section-entry-grouping/entry-grouping-control';
+import { SortableSubheadingRow } from '@/components/section-subheadings/section-subheadings-editor';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { notifyProfileUpdated } from '@/lib/events';
 import { useReorderPersist } from '@/lib/hooks/use-reorder-persist';
 import { useSectionReorderPersist } from '@/lib/hooks/use-section-reorder-persist';
+import {
+  chunkMixedIdsByOrg,
+  ENTRY_GROUPING_SECTION_TYPES,
+  parseEntryGrouping,
+} from '@/lib/section-entry-grouping';
+import {
+  addSubHeadingGroup,
+  createDefaultSubHeadings,
+  customContentItemIds,
+  flattenSubheadingSortableIds,
+  fromSubheadingSortableId,
+  isSubheadingSortableId,
+  isSubHeadingsEnabled,
+  MAX_SUBHEADING_GROUPS,
+  moveFlattenedSortableIds,
+  parseSubHeadings,
+  pruneMissingSubHeadingEntries,
+  rebuildSubHeadingsFromSortableIds,
+  removeSubHeadingGroup,
+  reorderItemsByIds,
+  setGroupLabel,
+  SUBHEADING_SECTION_TYPES,
+} from '@/lib/section-subheadings';
 import { type EntryEditGuard, type RegisterEntryEditGuard } from '../lib/entry-edit-guard';
 import {
   hasContactDraftChanges,
@@ -46,6 +74,8 @@ import { cn } from '@/lib/utils';
 import { saveProfileDraft } from '../lib/save-profile-draft';
 import { AddSectionDialog } from './add-section-dialog';
 import { useBuilderStore } from './builder-store-provider';
+import { usePersistSectionEntryGrouping } from './connected-section-entry-grouping';
+import { usePersistSectionSubHeadings } from './connected-section-subheadings';
 import { FormSaveBar } from './form-save-bar';
 
 import { AwardsSection } from '../[section]/awards-section';
@@ -64,6 +94,7 @@ import { PhotosSection } from '../sections/photos-section';
 import { ProjectsSection } from '../sections/projects-section';
 import { SkillsSection } from '../sections/skills-section';
 import { SummarySection } from '../sections/summary-section';
+import { TotalExperienceField } from '../sections/total-experience-field';
 
 import type {
   Award as AwardType,
@@ -200,6 +231,34 @@ function getSectionEntryCount(sectionType: string, profile: FullProfile): number
 // Sortable Section Card (wraps each section accordion card)
 // ──────────────────────────────────────────────
 
+function SectionGrip({
+  disabled,
+  isDragging,
+  attributes,
+  listeners,
+}: {
+  disabled?: boolean;
+  isDragging?: boolean;
+  attributes?: React.HTMLAttributes<HTMLButtonElement>;
+  listeners?: React.HTMLAttributes<HTMLButtonElement>;
+}) {
+  if (disabled) {
+    return <span className="flex h-8 w-6 shrink-0" aria-hidden />;
+  }
+
+  return (
+    <button
+      {...attributes}
+      {...listeners}
+      className={cn('builder-grip', isDragging && 'cursor-grabbing text-muted-foreground')}
+      title="Drag to reorder section"
+      type="button"
+    >
+      <GripVertical className="h-4 w-4" />
+    </button>
+  );
+}
+
 function SortableSectionCard({
   id,
   disabled,
@@ -207,7 +266,7 @@ function SortableSectionCard({
 }: {
   id: string;
   disabled?: boolean;
-  children: React.ReactNode;
+  children: (dragHandle: React.ReactNode) => React.ReactNode;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
@@ -220,29 +279,15 @@ function SortableSectionCard({
   };
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={cn('group/sortable-section relative', isDragging && 'z-50 opacity-90 shadow-lg')}
-    >
-      {!disabled && (
-        <button
-          {...attributes}
-          {...listeners}
-          className={cn(
-            'absolute -left-1 top-4 -translate-x-full',
-            'flex h-8 w-6 cursor-grab items-center justify-center rounded-md',
-            'text-muted-foreground/40 opacity-0 transition-opacity',
-            'hover:text-muted-foreground focus-visible:opacity-100 group-hover/sortable-section:opacity-100',
-            isDragging && 'cursor-grabbing opacity-100'
-          )}
-          title="Drag to reorder section"
-          type="button"
-        >
-          <GripVertical className="h-4 w-4" />
-        </button>
+    <div ref={setNodeRef} style={style} className={cn(isDragging && 'z-50 opacity-90')}>
+      {children(
+        <SectionGrip
+          disabled={disabled}
+          isDragging={isDragging}
+          attributes={attributes}
+          listeners={listeners}
+        />
       )}
-      {children}
     </div>
   );
 }
@@ -258,7 +303,7 @@ function SortableEntryCard({
 }: {
   id: string;
   disabled?: boolean;
-  children: React.ReactNode;
+  children: (dragHandle: React.ReactNode) => React.ReactNode;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
@@ -270,30 +315,23 @@ function SortableEntryCard({
     transition,
   };
 
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={cn('group/sortable-entry relative', isDragging && 'z-50 opacity-90 shadow-lg')}
+  const dragHandle = disabled ? (
+    <span className="flex h-8 w-6 shrink-0" aria-hidden />
+  ) : (
+    <button
+      {...attributes}
+      {...listeners}
+      className={cn('builder-grip', isDragging && 'cursor-grabbing text-muted-foreground')}
+      title="Drag to reorder"
+      type="button"
     >
-      {!disabled && (
-        <button
-          {...attributes}
-          {...listeners}
-          className={cn(
-            'absolute -left-1 top-1/2 -translate-x-full -translate-y-1/2',
-            'flex h-8 w-6 cursor-grab items-center justify-center rounded-md',
-            'text-muted-foreground/40 opacity-0 transition-opacity',
-            'hover:text-muted-foreground focus-visible:opacity-100 group-hover/sortable-entry:opacity-100',
-            isDragging && 'cursor-grabbing opacity-100'
-          )}
-          title="Drag to reorder"
-          type="button"
-        >
-          <GripVertical className="h-4 w-4" />
-        </button>
-      )}
-      {children}
+      <GripVertical className="h-4 w-4" />
+    </button>
+  );
+
+  return (
+    <div ref={setNodeRef} style={style} className={cn(isDragging && 'z-50 opacity-90')}>
+      {children(dragHandle)}
     </div>
   );
 }
@@ -368,6 +406,8 @@ export function AllSectionsEditor() {
   const persistCertificationOrder = useReorderPersist<Certification>('certification', (items) => {
     commitInlineChange({ certifications: items });
   });
+  const persistSubHeadings = usePersistSectionSubHeadings();
+  const persistEntryGrouping = usePersistSectionEntryGrouping();
 
   type AnyReorderFn = (items: Array<{ id: string }>) => Promise<void>;
 
@@ -432,6 +472,37 @@ export function AllSectionsEditor() {
       setInlineEditing(isEditing);
     },
     [setInlineEditing]
+  );
+
+  const handleTotalExperiencePreview = useCallback(
+    (totalExperience: string | null) => {
+      updateDraft({ totalExperience });
+    },
+    [updateDraft]
+  );
+
+  const handleTotalExperiencePersisted = useCallback(
+    (totalExperience: string | null) => {
+      commitInlineChange({ totalExperience });
+    },
+    [commitInlineChange]
+  );
+
+  const handleTotalExperienceVisibleChange = useCallback(
+    (totalExperienceVisible: boolean) => {
+      commitInlineChange({ totalExperienceVisible });
+    },
+    [commitInlineChange]
+  );
+
+  const handleTotalExperienceUnitsChange = useCallback(
+    (units: { showYears: boolean; showMonths: boolean }) => {
+      commitInlineChange({
+        totalExperienceShowYears: units.showYears,
+        totalExperienceShowMonths: units.showMonths,
+      });
+    },
+    [commitInlineChange]
   );
 
   const handleSave = useCallback(async (): Promise<boolean> => {
@@ -534,6 +605,73 @@ export function AllSectionsEditor() {
       }
     },
     [draftProfile]
+  );
+
+  const getStoreItems = useCallback(
+    (sectionType: string): Array<{ id: string }> => {
+      switch (sectionType) {
+        case 'EXPERIENCE':
+          return draftProfile.workExperiences;
+        case 'EDUCATION':
+          return draftProfile.educations;
+        case 'PROJECTS':
+          return draftProfile.projects;
+        case 'AWARDS':
+          return draftProfile.awards;
+        case 'CERTIFICATIONS':
+          return draftProfile.certifications;
+        default:
+          return [];
+      }
+    },
+    [draftProfile]
+  );
+
+  const entryIdsForSubheadings = useCallback(
+    (section: ProfileSection): string[] => {
+      if (ENTRY_SECTIONS.has(section.type)) {
+        return getEntries(section.type).map((entry) => entry.id);
+      }
+      return customContentItemIds(section.customContent);
+    },
+    [getEntries]
+  );
+
+  const handleSubHeadingsToggle = useCallback(
+    (section: ProfileSection, enabled: boolean) => {
+      persistSubHeadings(
+        section.id,
+        enabled ? createDefaultSubHeadings(entryIdsForSubheadings(section)) : null
+      );
+    },
+    [entryIdsForSubheadings, persistSubHeadings]
+  );
+
+  const handleAddSubHeading = useCallback(
+    (section: ProfileSection) => {
+      persistSubHeadings(section.id, addSubHeadingGroup(parseSubHeadings(section.subHeadings)));
+    },
+    [persistSubHeadings]
+  );
+
+  const handleDeleteSubHeading = useCallback(
+    (section: ProfileSection, groupId: string) => {
+      persistSubHeadings(
+        section.id,
+        removeSubHeadingGroup(parseSubHeadings(section.subHeadings), groupId)
+      );
+    },
+    [persistSubHeadings]
+  );
+
+  const handleRenameSubHeading = useCallback(
+    (section: ProfileSection, groupId: string, label: string) => {
+      persistSubHeadings(
+        section.id,
+        setGroupLabel(parseSubHeadings(section.subHeadings), groupId, label)
+      );
+    },
+    [persistSubHeadings]
   );
 
   const handleEditComplete = useCallback(() => {
@@ -648,6 +786,16 @@ export function AllSectionsEditor() {
       if (editingEntry?.sectionType === sectionType && editingEntry.entryId === entryId) {
         setEditingEntry(null);
       }
+      const section = (draftProfile.sections || []).find((item) => item.type === sectionType);
+      if (section && isSubHeadingsEnabled(section.subHeadings)) {
+        persistSubHeadings(
+          section.id,
+          pruneMissingSubHeadingEntries(
+            parseSubHeadings(section.subHeadings),
+            updatedItems.map((item) => item.id)
+          )
+        );
+      }
       notifyProfileUpdated();
       setPendingEntryDelete(null);
     } catch (err) {
@@ -656,47 +804,39 @@ export function AllSectionsEditor() {
     } finally {
       setIsDeletingEntry(false);
     }
-  }, [pendingEntryDelete, draftProfile, commitInlineChange, editingEntry]);
+  }, [pendingEntryDelete, draftProfile, commitInlineChange, editingEntry, persistSubHeadings]);
 
   // ── Entry drag-end handler (generic for any entry section) ──
   const handleEntryDragEnd = useCallback(
-    (sectionType: string, event: DragEndEvent) => {
+    (section: ProfileSection, event: DragEndEvent) => {
       const { active, over } = event;
       if (!over || active.id === over.id) return;
 
-      const entries = getEntries(sectionType);
-      const oldIndex = entries.findIndex((e) => e.id === active.id);
-      const newIndex = entries.findIndex((e) => e.id === over.id);
-      if (oldIndex === -1 || newIndex === -1) return;
-
-      // Get the actual data items for the reorder
-      const persistFn = entryReorderMap[sectionType];
+      const persistFn = entryReorderMap[section.type];
       if (!persistFn) return;
 
-      let items: Array<{ id: string }>;
-      switch (sectionType) {
-        case 'EXPERIENCE':
-          items = arrayMove([...draftProfile.workExperiences], oldIndex, newIndex);
-          break;
-        case 'EDUCATION':
-          items = arrayMove([...draftProfile.educations], oldIndex, newIndex);
-          break;
-        case 'PROJECTS':
-          items = arrayMove([...draftProfile.projects], oldIndex, newIndex);
-          break;
-        case 'AWARDS':
-          items = arrayMove([...draftProfile.awards], oldIndex, newIndex);
-          break;
-        case 'CERTIFICATIONS':
-          items = arrayMove([...draftProfile.certifications], oldIndex, newIndex);
-          break;
-        default:
-          return;
+      const storeItems = getStoreItems(section.type);
+      const parsed = parseSubHeadings(section.subHeadings);
+
+      if (!parsed) {
+        const oldIndex = storeItems.findIndex((item) => item.id === active.id);
+        const newIndex = storeItems.findIndex((item) => item.id === over.id);
+        if (oldIndex === -1 || newIndex === -1) return;
+        persistFn(arrayMove([...storeItems], oldIndex, newIndex));
+        return;
       }
 
-      persistFn(items);
+      const flattened = flattenSubheadingSortableIds(storeItems, parsed);
+      const nextFlat = moveFlattenedSortableIds(flattened, String(active.id), String(over.id));
+      if (nextFlat.join('\0') === flattened.join('\0')) return;
+
+      const rebuilt = rebuildSubHeadingsFromSortableIds(nextFlat, parsed);
+      const nextItems = reorderItemsByIds(storeItems, rebuilt.entryIds);
+      const orderChanged = nextItems.some((item, index) => item.id !== storeItems[index]?.id);
+      if (orderChanged) persistFn(nextItems);
+      persistSubHeadings(section.id, { groups: rebuilt.groups });
     },
-    [draftProfile, getEntries, entryReorderMap]
+    [entryReorderMap, getStoreItems, persistSubHeadings]
   );
 
   /** Render entry cards + "Add" button when a list-based section is expanded */
@@ -704,137 +844,104 @@ export function AllSectionsEditor() {
     (section: ProfileSection) => {
       const entries = getEntries(section.type);
       const singularName = ENTRY_SINGULAR[section.type] || section.title || 'Item';
-
-      if (entries.length === 0) {
-        return (
-          <button
-            type="button"
-            onClick={() =>
-              setEditingEntry({
-                sectionType: section.type,
-                sectionId: section.id,
-                entryId: 'new',
-              })
-            }
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-background py-8 text-sm text-muted-foreground transition-colors hover:bg-background/80 hover:text-foreground"
-          >
-            <Plus className="h-4 w-4" />
-            Add {singularName}
-          </button>
-        );
-      }
-
-      const entryIds = entries.map((e) => e.id);
-      // eslint-disable-next-line react-hooks/rules-of-hooks -- stable section type per render cycle
+      const parsedSubHeadings = parseSubHeadings(section.subHeadings);
+      const sortableIds = parsedSubHeadings
+        ? flattenSubheadingSortableIds(entries, parsedSubHeadings)
+        : entries.map((entry) => entry.id);
+      const entryById = new Map(entries.map((entry) => [entry.id, entry]));
       const dndId = `entry-dnd-${section.id}`;
 
-      return (
-        <div className="space-y-2">
-          <DndContext
-            id={dndId}
-            sensors={sectionSensors}
-            collisionDetection={closestCenter}
-            onDragEnd={(event) => handleEntryDragEnd(section.type, event)}
-            modifiers={[restrictToVerticalAxis, restrictToParentElement]}
-          >
-            <SortableContext items={entryIds} strategy={verticalListSortingStrategy}>
-              <div className="space-y-2 pl-5">
-                {entries.map((entry) => {
-                  const entryHidden = entry.isVisible === false;
-                  return (
-                    <SortableEntryCard key={entry.id} id={entry.id}>
-                      <div
-                        className={cn(
-                          'group/entry flex w-full items-center gap-3 rounded-xl bg-background px-3.5 py-3 text-left transition-colors hover:bg-background/80',
-                          entryHidden && 'opacity-50'
-                        )}
-                      >
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setEditingEntry({
-                              sectionType: section.type,
-                              sectionId: section.id,
-                              entryId: entry.id,
-                            })
-                          }
-                          className="min-w-0 flex-1 text-left"
-                        >
-                          <p className="truncate text-sm font-medium">{entry.title}</p>
-                          {entry.subtitle && (
-                            <p className="truncate text-xs text-muted-foreground">
-                              {entry.subtitle}
-                            </p>
-                          )}
-                        </button>
-                        {entry.meta && (
-                          <span className="shrink-0 text-xs text-muted-foreground/70">
-                            {entry.meta}
-                          </span>
-                        )}
-                        <span
-                          role="button"
-                          tabIndex={0}
-                          onClick={(e) => toggleEntryVisibility(e, section.type, entry.id)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault();
-                              toggleEntryVisibility(
-                                e as unknown as React.MouseEvent,
-                                section.type,
-                                entry.id
-                              );
-                            }
-                          }}
-                          className={cn(
-                            'flex h-6 w-6 shrink-0 items-center justify-center rounded transition-colors',
-                            'opacity-0 focus-visible:opacity-100 group-hover/entry:opacity-100',
-                            entryHidden
-                              ? 'text-muted-foreground opacity-100'
-                              : 'text-muted-foreground/40 hover:text-muted-foreground'
-                          )}
-                          title={entryHidden ? 'Show on resume' : 'Hide from resume'}
-                        >
-                          {entryHidden ? (
-                            <EyeOff className="h-3.5 w-3.5" />
-                          ) : (
-                            <Eye className="h-3.5 w-3.5" />
-                          )}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={(e) => requestEntryDelete(e, section.type, entry)}
-                          className={cn(
-                            'flex h-6 w-6 shrink-0 items-center justify-center rounded transition-colors',
-                            'opacity-0 focus-visible:opacity-100 group-hover/entry:opacity-100',
-                            'text-muted-foreground/40 hover:text-destructive'
-                          )}
-                          title={`Delete ${singularName.toLowerCase()}`}
-                          aria-label={`Delete ${entry.title}`}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setEditingEntry({
-                              sectionType: section.type,
-                              sectionId: section.id,
-                              entryId: entry.id,
-                            })
-                          }
-                          className="shrink-0"
-                          aria-label="Edit entry"
-                        >
-                          <ChevronDown className="h-3.5 w-3.5 -rotate-90 text-muted-foreground/40 transition-colors group-hover/entry:text-muted-foreground" />
-                        </button>
-                      </div>
-                    </SortableEntryCard>
-                  );
-                })}
+      const experienceMeta =
+        section.type === 'EXPERIENCE' ? (
+          <div className="mb-6">
+            <TotalExperienceField
+              override={draftProfile.totalExperience}
+              visible={draftProfile.totalExperienceVisible}
+              showYears={draftProfile.totalExperienceShowYears}
+              showMonths={draftProfile.totalExperienceShowMonths}
+              experiences={draftProfile.workExperiences}
+              onPreviewChange={handleTotalExperiencePreview}
+              onPersisted={handleTotalExperiencePersisted}
+              onVisibleChange={handleTotalExperienceVisibleChange}
+              onUnitsChange={handleTotalExperienceUnitsChange}
+            />
+          </div>
+        ) : null;
+
+      const groupingMode = parseEntryGrouping(section.entryGrouping);
+      const groupingOn = groupingMode !== 'off' && ENTRY_GROUPING_SECTION_TYPES.has(section.type);
+
+      const renderEntryCard = (entry: EntryInfo, hideSubtitle = false) => {
+        const entryHidden = entry.isVisible === false;
+        const secondary = [!hideSubtitle ? entry.subtitle : null, entry.meta]
+          .filter(Boolean)
+          .join(' · ');
+        return (
+          <SortableEntryCard key={entry.id} id={entry.id}>
+            {(dragHandle) => (
+              <div
+                className={cn(
+                  'group/entry flex w-full items-center gap-1.5 rounded-xl py-2.5 pl-0.5 pr-1 text-left transition-colors hover:bg-foreground/[0.04]',
+                  entryHidden && 'opacity-50'
+                )}
+              >
+                {dragHandle}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setEditingEntry({
+                      sectionType: section.type,
+                      sectionId: section.id,
+                      entryId: entry.id,
+                    })
+                  }
+                  className="min-w-0 flex-1 py-0.5 text-left"
+                >
+                  <p className="truncate text-sm font-medium tracking-[-0.01em]">{entry.title}</p>
+                  {secondary ? (
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">{secondary}</p>
+                  ) : null}
+                </button>
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => toggleEntryVisibility(e, section.type, entry.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      toggleEntryVisibility(
+                        e as unknown as React.MouseEvent,
+                        section.type,
+                        entry.id
+                      );
+                    }
+                  }}
+                  className="builder-quiet-btn"
+                  title={entryHidden ? 'Show on resume' : 'Hide from resume'}
+                >
+                  {entryHidden ? (
+                    <EyeOff className="h-3.5 w-3.5" />
+                  ) : (
+                    <Eye className="h-3.5 w-3.5" />
+                  )}
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => requestEntryDelete(e, section.type, entry)}
+                  className="builder-quiet-btn hover:text-destructive"
+                  title={`Delete ${singularName.toLowerCase()}`}
+                  aria-label={`Delete ${entry.title}`}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
               </div>
-            </SortableContext>
-          </DndContext>
+            )}
+          </SortableEntryCard>
+        );
+      };
+
+      const addButtons = (
+        <div className={cn('flex flex-wrap items-center gap-1', entries.length === 0 && 'pt-1')}>
           <button
             type="button"
             onClick={() =>
@@ -844,15 +951,125 @@ export function AllSectionsEditor() {
                 entryId: 'new',
               })
             }
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-background py-2.5 text-xs text-muted-foreground transition-colors hover:bg-background/80 hover:text-foreground"
+            className="builder-add-btn"
           >
             <Plus className="h-3.5 w-3.5" />
             Add {singularName}
           </button>
+          {parsedSubHeadings && parsedSubHeadings.groups.length < MAX_SUBHEADING_GROUPS ? (
+            <button
+              type="button"
+              onClick={() => handleAddSubHeading(section)}
+              className="builder-add-btn"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add sub-heading
+            </button>
+          ) : null}
+        </div>
+      );
+
+      const list =
+        sortableIds.length === 0 ? null : (
+          <DndContext
+            id={dndId}
+            sensors={sectionSensors}
+            collisionDetection={closestCenter}
+            onDragEnd={(event) => handleEntryDragEnd(section, event)}
+            modifiers={[restrictToVerticalAxis, restrictToParentElement]}
+          >
+            <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
+              <div className="space-y-0.5">
+                {groupingOn
+                  ? chunkMixedIdsByOrg(
+                      sortableIds,
+                      entryById,
+                      isSubheadingSortableId,
+                      (entry) => entry.subtitle,
+                      groupingMode
+                    ).map((chunk) => {
+                      if (chunk.type === 'heading') {
+                        const groupId = fromSubheadingSortableId(chunk.id);
+                        const group = parsedSubHeadings?.groups.find((item) => item.id === groupId);
+                        if (!group) return null;
+                        return (
+                          <SortableSubheadingRow
+                            key={chunk.id}
+                            groupId={group.id}
+                            label={group.label}
+                            onLabelCommit={(label) =>
+                              handleRenameSubHeading(section, group.id, label)
+                            }
+                            onDelete={() => handleDeleteSubHeading(section, group.id)}
+                          />
+                        );
+                      }
+                      return (
+                        <ContentOrgGroupFrom key={chunk.group.id} group={chunk.group}>
+                          {chunk.group.entries.map((entry) =>
+                            renderEntryCard(entry, chunk.group.grouped)
+                          )}
+                        </ContentOrgGroupFrom>
+                      );
+                    })
+                  : parsedSubHeadings
+                    ? sortableIds.map((id) => {
+                        if (isSubheadingSortableId(id)) {
+                          const groupId = fromSubheadingSortableId(id);
+                          const group = parsedSubHeadings.groups.find(
+                            (item) => item.id === groupId
+                          );
+                          if (!group) return null;
+                          return (
+                            <SortableSubheadingRow
+                              key={id}
+                              groupId={group.id}
+                              label={group.label}
+                              onLabelCommit={(label) =>
+                                handleRenameSubHeading(section, group.id, label)
+                              }
+                              onDelete={() => handleDeleteSubHeading(section, group.id)}
+                            />
+                          );
+                        }
+                        const entry = entryById.get(id);
+                        return entry ? renderEntryCard(entry) : null;
+                      })
+                    : entries.map((entry) => renderEntryCard(entry))}
+              </div>
+            </SortableContext>
+          </DndContext>
+        );
+
+      return (
+        <div>
+          {experienceMeta}
+          <div className="space-y-1">
+            {list}
+            {addButtons}
+          </div>
         </div>
       );
     },
-    [getEntries, sectionSensors, handleEntryDragEnd, toggleEntryVisibility, requestEntryDelete]
+    [
+      getEntries,
+      sectionSensors,
+      handleEntryDragEnd,
+      handleAddSubHeading,
+      handleDeleteSubHeading,
+      handleRenameSubHeading,
+      toggleEntryVisibility,
+      requestEntryDelete,
+      draftProfile.totalExperience,
+      draftProfile.totalExperienceVisible,
+      draftProfile.totalExperienceShowYears,
+      draftProfile.totalExperienceShowMonths,
+      draftProfile.workExperiences,
+      handleTotalExperiencePreview,
+      handleTotalExperiencePersisted,
+      handleTotalExperienceVisibleChange,
+      handleTotalExperienceUnitsChange,
+    ]
   );
 
   /** Render a section editor with autoEditId for focused entry editing */
@@ -937,7 +1154,7 @@ export function AllSectionsEditor() {
     switch (type) {
       case 'BASIC_INFO':
         return (
-          <div className="space-y-6">
+          <div className="space-y-8">
             <PhotosSection
               profile={draftProfile}
               onUpdateAction={handleProfileUpdate}
@@ -963,6 +1180,14 @@ export function AllSectionsEditor() {
             experiences={draftProfile.workExperiences}
             profileId={draftProfile.id}
             onUpdate={(workExperiences) => handleInlineUpdate({ workExperiences })}
+            totalExperience={draftProfile.totalExperience}
+            totalExperienceVisible={draftProfile.totalExperienceVisible}
+            totalExperienceShowYears={draftProfile.totalExperienceShowYears}
+            totalExperienceShowMonths={draftProfile.totalExperienceShowMonths}
+            onTotalExperiencePreview={handleTotalExperiencePreview}
+            onTotalExperiencePersisted={handleTotalExperiencePersisted}
+            onTotalExperienceVisibleChange={handleTotalExperienceVisibleChange}
+            onTotalExperienceUnitsChange={handleTotalExperienceUnitsChange}
             onEditingStateChange={handleInlineEditingChange}
             embedded
           />
@@ -1167,16 +1392,16 @@ export function AllSectionsEditor() {
     const title = SECTION_TITLES[editingEntry.sectionType] || section?.title || 'Edit';
 
     return (
-      <div className="rounded-xl bg-muted p-5">
+      <div className="px-1">
         <button
           type="button"
           onClick={handleBackFromEntry}
-          className="-ml-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium text-muted-foreground transition-colors duration-150 hover:text-foreground"
+          className="-ml-2 inline-flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-muted-foreground transition-colors duration-150 hover:bg-foreground/[0.04] hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4 shrink-0" />
           <span>Back to {title}</span>
         </button>
-        <div className="mt-5">
+        <div className="mt-8">
           {renderSectionEditor(editingEntry.sectionType, editingEntry.entryId)}
         </div>
       </div>
@@ -1186,7 +1411,7 @@ export function AllSectionsEditor() {
   // ── Normal accordion view ──
 
   /** Renders a single section accordion card */
-  const renderSectionCard = (section: ProfileSection) => {
+  const renderSectionCard = (section: ProfileSection, dragHandle: React.ReactNode) => {
     const isExpanded = expandedSection === section.id;
     const sectionHidden = section.isVisible === false;
     const title =
@@ -1195,6 +1420,16 @@ export function AllSectionsEditor() {
         : SECTION_TITLES[section.type] || section.title;
     const showVisibilityToggle = !PINNED_SECTION_TYPES.has(section.type);
     const entryCount = getSectionEntryCount(section.type, draftProfile);
+    const showSubheadingToggle =
+      isExpanded &&
+      SUBHEADING_SECTION_TYPES.has(section.type) &&
+      (section.type !== 'CUSTOM' || section.contentType !== 'FREEFORM');
+    const showGroupingToggle =
+      isExpanded &&
+      ENTRY_GROUPING_SECTION_TYPES.has(section.type) &&
+      (section.type !== 'CUSTOM' || section.contentType !== 'FREEFORM');
+    const subheadingsOn = isSubHeadingsEnabled(section.subHeadings);
+    const subheadingSwitchId = `subheadings-${section.id}`;
 
     return (
       <section
@@ -1203,36 +1438,26 @@ export function AllSectionsEditor() {
         data-section-type={section.type}
         className="group/section scroll-mt-16"
       >
-        {/* Unified section container — header + content share one visual card */}
         <div
           className={cn(
-            'overflow-hidden rounded-xl bg-muted transition-colors duration-150',
+            'overflow-hidden rounded-2xl transition-colors duration-150',
+            isExpanded ? 'bg-muted/50' : 'hover:bg-muted/35',
             sectionHidden && 'opacity-50'
           )}
         >
-          {/* Section card header */}
-          <button
-            type="button"
-            onClick={() => toggleSection(section.id)}
-            className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors"
-          >
-            <span
-              className={cn(
-                'flex-1 text-sm font-medium transition-colors duration-150',
-                isExpanded ? 'text-foreground' : 'text-foreground/90'
-              )}
+          <div className="flex w-full items-center gap-2 px-2 py-3.5 sm:px-3">
+            {dragHandle}
+            <button
+              type="button"
+              onClick={() => toggleSection(section.id)}
+              className="min-w-0 flex-1 py-0.5 text-left"
             >
-              {title}
-            </span>
+              <span className="block truncate text-[15px] font-medium tracking-[-0.01em]">
+                {title}
+              </span>
+            </button>
             {entryCount !== null && (
-              <span
-                className={cn(
-                  'shrink-0 rounded-full px-2 py-0.5 text-[11px] tabular-nums',
-                  entryCount === 0
-                    ? 'bg-background text-muted-foreground'
-                    : 'bg-primary/10 text-primary'
-                )}
-              >
+              <span className="shrink-0 pr-1 text-xs tabular-nums text-muted-foreground/55">
                 {entryCount}
               </span>
             )}
@@ -1247,27 +1472,27 @@ export function AllSectionsEditor() {
                     toggleSectionVisibility(e as unknown as React.MouseEvent, section.id);
                   }
                 }}
-                className={cn(
-                  'flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors',
-                  'opacity-0 focus-visible:opacity-100 group-hover/section:opacity-100',
-                  sectionHidden
-                    ? 'text-muted-foreground opacity-100'
-                    : 'text-muted-foreground/40 hover:text-muted-foreground'
-                )}
+                className="builder-quiet-btn"
                 title={sectionHidden ? 'Show on resume' : 'Hide from resume'}
               >
                 {sectionHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </span>
             )}
-            <ChevronDown
-              className={cn(
-                'h-4 w-4 shrink-0 text-muted-foreground/50 transition-transform duration-200',
-                isExpanded && '-rotate-180 text-primary'
-              )}
-            />
-          </button>
+            <button
+              type="button"
+              onClick={() => toggleSection(section.id)}
+              className="builder-quiet-btn"
+              aria-label={isExpanded ? `Collapse ${title}` : `Expand ${title}`}
+            >
+              <ChevronDown
+                className={cn(
+                  'h-4 w-4 transition-transform duration-200',
+                  isExpanded && 'rotate-180'
+                )}
+              />
+            </button>
+          </div>
 
-          {/* Expanded content */}
           <AnimatePresence initial={false}>
             {isExpanded && (
               <motion.div
@@ -1277,19 +1502,49 @@ export function AllSectionsEditor() {
                 transition={{ duration: 0.2, ease: 'easeInOut' }}
                 className="overflow-hidden"
               >
-                <div className="rounded-b-xl bg-muted px-4 pb-5 pt-1">
-                  {ENTRY_SECTIONS.has(section.type)
-                    ? renderEntryList(section)
-                    : renderSection(section)}
-                  <FormSaveBar
-                    show={FORM_SECTION_TYPES.has(section.type)}
-                    canSave={hasFormChanges}
-                    isSaving={isSaving}
-                    onSave={handleFormSectionSave}
-                    onDiscard={handleFormSectionDiscard}
-                    sticky={false}
-                    variant="entry"
-                  />
+                <div className="px-2 pb-6 sm:px-3">
+                  <div className="ml-8 space-y-5">
+                    {(showSubheadingToggle || showGroupingToggle) && (
+                      <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                        {showSubheadingToggle && (
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              id={subheadingSwitchId}
+                              checked={subheadingsOn}
+                              onCheckedChange={(checked) =>
+                                handleSubHeadingsToggle(section, checked)
+                              }
+                              aria-label="Sub-headings"
+                            />
+                            <Label
+                              htmlFor={subheadingSwitchId}
+                              className="cursor-pointer text-xs font-medium text-muted-foreground"
+                            >
+                              Sub-headings
+                            </Label>
+                          </div>
+                        )}
+                        {showGroupingToggle && (
+                          <EntryGroupingControl
+                            value={section.entryGrouping}
+                            onChange={(mode) => persistEntryGrouping(section.id, mode)}
+                          />
+                        )}
+                      </div>
+                    )}
+                    {ENTRY_SECTIONS.has(section.type)
+                      ? renderEntryList(section)
+                      : renderSection(section)}
+                    <FormSaveBar
+                      show={FORM_SECTION_TYPES.has(section.type)}
+                      canSave={hasFormChanges}
+                      isSaving={isSaving}
+                      onSave={handleFormSectionSave}
+                      onDiscard={handleFormSectionDiscard}
+                      sticky={false}
+                      variant="entry"
+                    />
+                  </div>
                 </div>
               </motion.div>
             )}
@@ -1351,9 +1606,11 @@ export function AllSectionsEditor() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <div className="space-y-4 pl-5">
+      <div className="space-y-2">
         {/* Pinned sections (BASIC_INFO) — always at top, not draggable */}
-        {pinnedSections.map((section) => renderSectionCard(section))}
+        {pinnedSections.map((section) =>
+          renderSectionCard(section, <span className="flex h-8 w-6 shrink-0" aria-hidden />)
+        )}
 
         {/* Draggable body sections */}
         <DndContext
@@ -1364,17 +1621,17 @@ export function AllSectionsEditor() {
           modifiers={[restrictToVerticalAxis, restrictToParentElement]}
         >
           <SortableContext items={draggableSectionIds} strategy={verticalListSortingStrategy}>
-            <div className="space-y-4">
+            <div className="space-y-2">
               {draggableSections.map((section) => (
                 <SortableSectionCard key={section.id} id={section.id}>
-                  {renderSectionCard(section)}
+                  {(dragHandle) => renderSectionCard(section, dragHandle)}
                 </SortableSectionCard>
               ))}
             </div>
           </SortableContext>
         </DndContext>
 
-        <div className="pt-2">
+        <div className="px-2 pt-6 sm:px-3">
           <AddSectionDialog
             existingSections={draftProfile.sections || []}
             onAdd={handleAddSection}

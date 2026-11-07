@@ -135,19 +135,19 @@ export async function generateUniqueResumeTitle(
   const dateBase = getDefaultResumeTitleBase(rawTitle);
   const baseTitle = dateBase ?? rawTitle;
 
-  const titleExists = async (title: string): Promise<boolean> => {
-    const found = await tx.profile.findFirst({
-      where: { userId, resumeTitle: title, isArchived: false },
-      select: { id: true },
-    });
-    return !!found;
-  };
+  // One read for every existing title. Checking candidates one query at a time
+  // adds a round trip for each same-day resume and can blow the create transaction.
+  const existing = await tx.profile.findMany({
+    where: { userId, isArchived: false },
+    select: { resumeTitle: true },
+  });
+  const taken = new Set(existing.map((row) => row.resumeTitle));
 
-  if (!(await titleExists(baseTitle))) return baseTitle;
+  if (!taken.has(baseTitle)) return baseTitle;
 
   for (let sequence = 2; sequence <= 100; sequence += 1) {
     const candidate = withResumeTitleSequence(baseTitle, sequence);
-    if (!(await titleExists(candidate))) return candidate;
+    if (!taken.has(candidate)) return candidate;
   }
 
   return withResumeTitleSequence(baseTitle, 101);

@@ -11,7 +11,7 @@
  */
 export default function BuilderLoading() {
   return (
-    <div className="builder-base flex min-h-[calc(100vh-3.5rem)] animate-pulse flex-col xl:h-[calc(100vh-3.5rem)]">
+    <div className="builder-base flex h-full min-h-0 animate-pulse flex-col">
       {/* Top toolbar skeleton */}
       <div className="builder-base hidden h-12 shrink-0 items-center justify-between border-b border-border/30 px-5 xl:flex">
         <div className="h-3 w-24 rounded bg-muted-foreground/15" />

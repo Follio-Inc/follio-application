@@ -28,6 +28,20 @@ export function authorizationServerMetadata() {
   };
 }
 
+/** True when the OAuth resource is omitted or is this server's MCP URL. */
+export function isMcpResource(resource: string | null | undefined): boolean {
+  if (!resource) return true;
+
+  try {
+    const given = new URL(resource);
+    const expected = new URL(mcpResourceUrl());
+    const path = (value: string) => value.replace(/\/+$/, '') || '/';
+    return given.origin === expected.origin && path(given.pathname) === path(expected.pathname);
+  } catch {
+    return false;
+  }
+}
+
 export function protectedResourceMetadata() {
   return {
     resource: mcpResourceUrl(),

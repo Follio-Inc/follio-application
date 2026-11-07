@@ -9,6 +9,7 @@ import {
   parseCoverLetterDesign,
 } from '@/lib/cover-letter';
 import { db } from '@/lib/db';
+import { interactiveTransactionOptions } from '@/lib/db-transaction';
 
 import { CoverLetterBuilderClient } from './cover-letter-builder-client';
 
@@ -67,7 +68,7 @@ export default async function CoverLetterBuilderPage({
         where: { id: letter!.id },
         data: { activeForUserId: user.id },
       });
-    });
+    }, interactiveTransactionOptions);
   }
 
   return (

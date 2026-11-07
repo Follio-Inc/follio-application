@@ -84,7 +84,7 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
   // Contact info state
   const [contactInfo, setContactInfo] = useState({
     email: initialProfile.contactInfo?.email || '',
-    emailPublic: initialProfile.contactInfo?.emailPublic || false,
+    emailPublic: initialProfile.contactInfo?.emailPublic ?? true,
     phone: initialProfile.contactInfo?.phone || '',
     phoneCountryCode:
       ((initialProfile.contactInfo as Record<string, unknown>)?.phoneCountryCode as
@@ -92,7 +92,7 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
         | null) || null,
     phoneNumber:
       ((initialProfile.contactInfo as Record<string, unknown>)?.phoneNumber as string) || '',
-    phonePublic: initialProfile.contactInfo?.phonePublic || false,
+    phonePublic: initialProfile.contactInfo?.phonePublic ?? true,
     website: initialProfile.contactInfo?.website || '',
     additionalEmails: (() => {
       try {
@@ -301,7 +301,7 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
     // Reset contact info to initial values
     setContactInfo({
       email: initialProfile.contactInfo?.email || '',
-      emailPublic: initialProfile.contactInfo?.emailPublic || false,
+      emailPublic: initialProfile.contactInfo?.emailPublic ?? true,
       phone: initialProfile.contactInfo?.phone || '',
       phoneCountryCode:
         ((initialProfile.contactInfo as Record<string, unknown>)?.phoneCountryCode as
@@ -309,7 +309,7 @@ export function BuilderClient({ initialProfile }: BuilderClientProps) {
           | null) || null,
       phoneNumber:
         ((initialProfile.contactInfo as Record<string, unknown>)?.phoneNumber as string) || '',
-      phonePublic: initialProfile.contactInfo?.phonePublic || false,
+      phonePublic: initialProfile.contactInfo?.phonePublic ?? true,
       website: initialProfile.contactInfo?.website || '',
       additionalEmails: (() => {
         try {

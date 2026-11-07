@@ -133,6 +133,9 @@ export async function upsertGitHubProfileForProfile(
       },
     },
   });
+
+  const { scheduleResumeRefresh } = await import('@/lib/resume/schedule-refresh');
+  scheduleResumeRefresh(profileId);
 }
 
 /**

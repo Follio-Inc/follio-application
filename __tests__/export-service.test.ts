@@ -232,6 +232,22 @@ describe('toJSONResume', () => {
     expect(result.education![0].area).toBe('Computer Science');
     expect(result.education![0].score).toBe('3.8');
     expect(result.education![0].courses).toEqual(['Algorithms', 'Data Structures']);
+    expect(result.education![0].highlights).toBeUndefined();
+  });
+
+  it('maps education highlights from the stored description', () => {
+    const result = toJSONResume(
+      makeProfile({
+        educations: [
+          {
+            ...makeProfile().educations[0],
+            description:
+              '<ul class="rich-text-bullets"><li><p>Thesis on compilers</p></li><li><p>Dean’s list</p></li></ul>',
+          },
+        ],
+      } as unknown as Partial<FullProfile>)
+    );
+    expect(result.education![0].highlights).toEqual(['Thesis on compilers', 'Dean’s list']);
   });
 
   it('maps flat skills when no skill groups', () => {
@@ -384,6 +400,73 @@ describe('toPlainText', () => {
     expect(text).toContain('• Led team of 5');
   });
 
+  it('shows total experience as a tag on the experience header', () => {
+    const html = toPDFHtml(
+      makeProfile({ totalExperience: '5+ years' } as unknown as Partial<FullProfile>)
+    );
+    expect(html).toContain('resume-section-tag');
+    expect(html).toContain('5+ years');
+    expect(
+      toPlainText(makeProfile({ totalExperience: '5+ years' } as unknown as Partial<FullProfile>))
+    ).toContain('EXPERIENCE (5+ years)');
+  });
+
+  it('shows per-role duration on the subheading only when opted in', () => {
+    const hidden = toPDFHtml(makeProfile());
+    expect(hidden).not.toContain('class="resume-entry-subtitle-row"');
+    expect(toPlainText(makeProfile())).toContain('Senior Engineer | Acme Corp\n');
+
+    const shown = toPDFHtml(
+      makeProfile({
+        workExperiences: [
+          {
+            ...makeProfile().workExperiences[0],
+            startDate: new Date('2020-01-01'),
+            endDate: new Date('2021-01-01'),
+            isCurrent: false,
+            durationVisible: true,
+          },
+        ],
+      } as unknown as Partial<FullProfile>)
+    );
+    expect(shown).toContain('class="resume-entry-subtitle-row"');
+    expect(shown).toContain('1 yr 1 mo');
+    expect(
+      toPlainText(
+        makeProfile({
+          workExperiences: [
+            {
+              ...makeProfile().workExperiences[0],
+              startDate: new Date('2020-01-01'),
+              endDate: new Date('2021-01-01'),
+              isCurrent: false,
+              durationVisible: true,
+            },
+          ],
+        } as unknown as Partial<FullProfile>)
+      )
+    ).toContain('Senior Engineer | Acme Corp (1 yr 1 mo)');
+  });
+
+  it('omits the total experience tag when it is hidden', () => {
+    const html = toPDFHtml(
+      makeProfile({
+        totalExperience: '5+ years',
+        totalExperienceVisible: false,
+      } as unknown as Partial<FullProfile>)
+    );
+    expect(html).not.toContain('<span class="resume-section-tag">');
+    expect(html).not.toContain('5+ years');
+    expect(
+      toPlainText(
+        makeProfile({
+          totalExperience: '5+ years',
+          totalExperienceVisible: false,
+        } as unknown as Partial<FullProfile>)
+      )
+    ).not.toContain('EXPERIENCE (5+ years)');
+  });
+
   it('shows "Present" for current positions', () => {
     const text = toPlainText(makeProfile());
     expect(text).toContain('Present');
@@ -394,6 +477,20 @@ describe('toPlainText', () => {
     expect(text).toContain('EDUCATION');
     expect(text).toContain('MIT');
     expect(text).toContain('GPA: 3.8');
+  });
+
+  it('includes education highlights in plain text', () => {
+    const text = toPlainText(
+      makeProfile({
+        educations: [
+          {
+            ...makeProfile().educations[0],
+            description: '<ul class="rich-text-bullets"><li><p>Thesis on compilers</p></li></ul>',
+          },
+        ],
+      } as unknown as Partial<FullProfile>)
+    );
+    expect(text).toContain('• Thesis on compilers');
   });
 
   it('includes SKILLS section', () => {
@@ -454,9 +551,111 @@ describe('toPDFHtml', () => {
     expect(html).toContain('Acme Corp');
   });
 
+  it('groups experience under Most Relevant and Other combined', () => {
+    const base = makeProfile();
+    const extra = {
+      ...base.workExperiences[0],
+      id: 'w2',
+      role: 'Intern',
+      company: 'Startup',
+      isCurrent: false,
+      startDate: new Date('2018-01-01'),
+      endDate: new Date('2018-08-01'),
+    };
+    const html = toPDFHtml(
+      makeProfile({
+        workExperiences: [base.workExperiences[0], extra],
+        sections: [
+          {
+            id: 's-exp',
+            profileId: 'p1',
+            type: 'EXPERIENCE',
+            title: 'Experience',
+            sortOrder: 0,
+            isVisible: true,
+            customContent: null,
+            contentType: 'STRUCTURED',
+            subHeadings: {
+              groups: [
+                { id: 'featured', label: 'Most Relevant', entryIds: ['w1'] },
+                { id: 'other', label: 'Other combined', catchAll: true },
+              ],
+            },
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ],
+      } as unknown as Partial<FullProfile>)
+    );
+    expect(html).toContain('Most Relevant');
+    expect(html).toContain('Other combined');
+    expect(html.indexOf('Most Relevant')).toBeLessThan(html.indexOf('Senior Engineer'));
+    expect(html.indexOf('Other combined')).toBeLessThan(html.indexOf('Intern'));
+  });
+
+  it('promotes consecutive same-company roles in PDF HTML', () => {
+    const base = makeProfile();
+    const later = {
+      ...base.workExperiences[0],
+      id: 'w1',
+      role: 'Staff Engineer',
+      company: 'Acme Corp',
+    };
+    const earlier = {
+      ...base.workExperiences[0],
+      id: 'w2',
+      role: 'Engineer',
+      company: 'Acme Corp',
+      isCurrent: false,
+      startDate: new Date('2018-01-01'),
+      endDate: new Date('2019-12-01'),
+    };
+    const html = toPDFHtml(
+      makeProfile({
+        workExperiences: [later, earlier],
+        sections: [
+          {
+            id: 's-exp',
+            profileId: 'p1',
+            type: 'EXPERIENCE',
+            title: 'Experience',
+            sortOrder: 0,
+            isVisible: true,
+            customContent: null,
+            contentType: 'STRUCTURED',
+            subHeadings: null,
+            entryGrouping: 'REPEATS',
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ],
+      } as unknown as Partial<FullProfile>)
+    );
+    expect(html).toContain('resume-org-group');
+    expect(html).toContain('resume-org-name');
+    expect(html).toContain('Acme Corp, Remote');
+    expect(html).toContain('Staff Engineer');
+    expect(html).toContain('Engineer');
+    expect((html.match(/Acme Corp, Remote/g) ?? []).length).toBe(1);
+  });
+
   it('includes education section', () => {
     const html = toPDFHtml(makeProfile());
     expect(html).toContain('MIT');
+  });
+
+  it('includes education highlights from the stored description', () => {
+    const html = toPDFHtml(
+      makeProfile({
+        educations: [
+          {
+            ...makeProfile().educations[0],
+            description: '<ul class="rich-text-bullets"><li><p>Thesis on compilers</p></li></ul>',
+          },
+        ],
+      } as unknown as Partial<FullProfile>)
+    );
+    expect(html).toContain('Thesis on compilers');
   });
 
   it('includes skills section', () => {

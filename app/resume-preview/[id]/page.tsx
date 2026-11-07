@@ -82,7 +82,9 @@ export default async function ResumePreviewPage({ params }: ResumePreviewPagePro
 
   return (
     <TooltipProvider>
-      <div className="bg-white" style={{ overflow: 'hidden' }}>
+      {/* Snapshot only — the dashboard thumbnail must not scroll this document. */}
+      <style>{`html, body { overflow: hidden !important; height: auto !important; background: white; }`}</style>
+      <div className="bg-white">
         <main className="mx-auto max-w-5xl">
           <div className="[&>.resume-actions]:hidden">
             <CleanResumeView profile={publicProfile} />

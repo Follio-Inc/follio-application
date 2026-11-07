@@ -1000,8 +1000,8 @@ function Hero() {
   // brand review (and other crawlers) reject homepages that appear blank when
   // Framer Motion SSR-inlines opacity:0 on the purpose text.
   const purpose = isPortfolioEnabled()
-    ? 'Follio is a web app for job seekers and professionals to own their first impression. Share one Follio to connect — with your number, email, resume, and work behind a single link, plus AI assistance that helps answer recruiter questions and suggest skills based on market trends.'
-    : 'Follio is a web app for job seekers and professionals to own their first impression. Share one Follio to connect — with your number, email, and resume behind a single link, plus AI assistance that helps answer recruiter questions and suggest skills based on market trends.';
+    ? 'Follio is a web app for job seekers and professionals to own their first impression. Share one Follio to connect with your number, email, resume, and work behind a single link, plus AI assistance that helps answer recruiter questions and suggest skills based on market trends.'
+    : 'Follio is a web app for job seekers and professionals to own their first impression. Share one Follio to connect with your number, email, and resume behind a single link, plus AI assistance that helps answer recruiter questions and suggest skills based on market trends.';
 
   return (
     <section className="relative flex min-h-[calc(100svh-3.5rem)] items-center overflow-hidden border-b border-border/60">
@@ -1009,7 +1009,7 @@ function Hero() {
         <p className="text-eyebrow">Own your first impression</p>
 
         <h1 className="text-display mt-4 max-w-3xl text-balance text-[2.4rem] text-foreground sm:mt-5 sm:text-[3.5rem] lg:text-[4rem]">
-          Your shareable professional identity — much more than a PDF resume
+          Your shareable professional identity. Much more than a PDF resume
         </h1>
 
         <p className="mt-5 max-w-2xl text-pretty text-[15px] leading-7 text-muted-foreground sm:mt-6 sm:text-lg sm:leading-8">

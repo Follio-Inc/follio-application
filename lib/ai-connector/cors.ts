@@ -8,7 +8,7 @@ export const MCP_CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
   'Access-Control-Allow-Headers':
-    'Authorization, Content-Type, MCP-Protocol-Version, MCP-Session-Id, Last-Event-ID',
+    'Authorization, Content-Type, MCP-Protocol-Version, Mcp-Method, Mcp-Name, MCP-Session-Id, Last-Event-ID',
   'Access-Control-Expose-Headers': 'WWW-Authenticate, MCP-Session-Id, MCP-Protocol-Version',
   'Access-Control-Max-Age': '86400',
 };

@@ -6,6 +6,7 @@ import { makeProfilePortfolioReady } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { handleApiError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { setExclusiveResumeVisibility } from '@/lib/public-resume';
 
 const resumeLogger = logger.child({ source: 'api-resume-crud' });
 
@@ -16,11 +17,13 @@ interface RouteContext {
 const updateResumeSchema = z.object({
   resumeTitle: z.string().trim().min(1, 'Title is required').max(120).optional(),
   isArchived: z.boolean().optional(),
+  resumeVisibility: z.enum(['PUBLIC', 'UNLISTED', 'PRIVATE']).optional(),
 });
 
 /**
  * PATCH /api/resumes/[resumeId]
- * Update resume metadata (title, archive status)
+ * Update resume metadata (title, archive status) and visibility.
+ * Visibility is shared with the Follio when this resume is attached.
  */
 export async function PATCH(request: NextRequest, context: RouteContext) {
   try {
@@ -59,6 +62,15 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Resume not found' }, { status: 404 });
     }
 
+    let replacedPublicResume: Awaited<
+      ReturnType<typeof setExclusiveResumeVisibility>
+    >['replacedPublicResume'] = null;
+
+    if (parsed.data.resumeVisibility) {
+      const result = await setExclusiveResumeVisibility(profile.id, parsed.data.resumeVisibility);
+      replacedPublicResume = result.replacedPublicResume;
+    }
+
     // Uniqueness check: no two non-archived resumes for the same user can share a title
     if (parsed.data.resumeTitle && parsed.data.resumeTitle !== profile.resumeTitle) {
       const duplicate = await db.profile.findFirst({
@@ -79,19 +91,32 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       }
     }
 
-    const updated = await db.profile.update({
-      where: { id: profile.id },
-      data: {
-        ...(parsed.data.resumeTitle !== undefined && { resumeTitle: parsed.data.resumeTitle }),
-        ...(parsed.data.isArchived !== undefined && { isArchived: parsed.data.isArchived }),
-      },
-      select: {
-        id: true,
-        resumeTitle: true,
-        handle: true,
-        isArchived: true,
-      },
-    });
+    const hasMetaUpdate =
+      parsed.data.resumeTitle !== undefined || parsed.data.isArchived !== undefined;
+
+    const updated = hasMetaUpdate
+      ? await db.profile.update({
+          where: { id: profile.id },
+          data: {
+            ...(parsed.data.resumeTitle !== undefined && { resumeTitle: parsed.data.resumeTitle }),
+            ...(parsed.data.isArchived !== undefined && { isArchived: parsed.data.isArchived }),
+          },
+          select: {
+            id: true,
+            resumeTitle: true,
+            handle: true,
+            isArchived: true,
+          },
+        })
+      : await db.profile.findUniqueOrThrow({
+          where: { id: profile.id },
+          select: {
+            id: true,
+            resumeTitle: true,
+            handle: true,
+            isArchived: true,
+          },
+        });
 
     resumeLogger.info('Updated resume', {
       userId: user.id,
@@ -99,7 +124,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       changes: parsed.data,
     });
 
-    return NextResponse.json({ success: true, resume: updated });
+    return NextResponse.json({ success: true, resume: updated, replacedPublicResume });
   } catch (error) {
     return handleApiError(error, {
       method: 'PATCH',

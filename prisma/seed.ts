@@ -124,6 +124,10 @@ I love open source, technical writing, and mentoring junior developers. When I'm
         location: 'San Francisco, CA',
         locationType: LocationType.HYBRID,
         employmentType: EmploymentType.FULL_TIME,
+        headingTags: [
+          { label: 'Full Time', color: 'slate' },
+          { label: 'Hybrid', color: 'amber' },
+        ],
         startDate: new Date('2022-03-01'),
         isCurrent: true,
         bullets: [

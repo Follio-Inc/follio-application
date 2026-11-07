@@ -15,6 +15,7 @@ import {
   Linkedin,
   Mail,
   MapPin,
+  Phone,
   Sparkles,
   Star,
   Twitter,
@@ -26,7 +27,15 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 
-import { containsHtmlFormatting, sanitizeRichHtml } from '@/lib/html-utils';
+import {
+  containsHtmlFormatting,
+  isHtmlEmpty,
+  resumeEntryBodyHtml,
+  sanitizeRichHtml,
+} from '@/lib/html-utils';
+import { displayEntryDurationFrom } from '@/lib/entry-duration';
+import { parseHeadingTags } from '@/lib/heading-tags';
+import { cleanPhoneDisplay } from '@/lib/phone';
 import { formatDate } from '@/lib/utils';
 import { applyVisibilityFilter } from '@/lib/visibility';
 import type {
@@ -138,12 +147,6 @@ export function ResumeView({ profile: rawProfile }: ResumeViewProps) {
                 <p className="mt-1 text-xl text-muted-foreground">{profile.headline}</p>
               )}
               <div className="mt-3 flex flex-wrap justify-center gap-3 text-sm text-muted-foreground sm:justify-start">
-                {profile.location && (
-                  <span className="flex items-center gap-1">
-                    <MapPin className="h-4 w-4" />
-                    {profile.location}
-                  </span>
-                )}
                 {profile.contactInfo?.email && (
                   <a
                     href={`mailto:${profile.contactInfo.email}`}
@@ -152,6 +155,21 @@ export function ResumeView({ profile: rawProfile }: ResumeViewProps) {
                     <Mail className="h-4 w-4" />
                     {profile.contactInfo.email}
                   </a>
+                )}
+                {profile.contactInfo?.phone && (
+                  <a
+                    href={`tel:${profile.contactInfo.phone}`}
+                    className="flex items-center gap-1 hover:text-primary"
+                  >
+                    <Phone className="h-4 w-4" />
+                    {cleanPhoneDisplay(profile.contactInfo.phone)}
+                  </a>
+                )}
+                {profile.location && (
+                  <span className="flex items-center gap-1">
+                    <MapPin className="h-4 w-4" />
+                    {profile.location}
+                  </span>
                 )}
               </div>
               {/* Links */}
@@ -313,6 +331,9 @@ export function ResumeView({ profile: rawProfile }: ResumeViewProps) {
                         <p className="text-muted-foreground">
                           {exp.company}
                           {exp.location && <span> · {exp.location}</span>}
+                          {displayEntryDurationFrom(exp) ? (
+                            <span> · {displayEntryDurationFrom(exp)}</span>
+                          ) : null}
                         </p>
                       </div>
                       <div className="flex items-center gap-1 text-sm text-muted-foreground">
@@ -372,6 +393,9 @@ export function ResumeView({ profile: rawProfile }: ResumeViewProps) {
                         <p className="text-muted-foreground">
                           {edu.degree}
                           {edu.fieldOfStudy && ` in ${edu.fieldOfStudy}`}
+                          {displayEntryDurationFrom(edu) ? (
+                            <span> · {displayEntryDurationFrom(edu)}</span>
+                          ) : null}
                         </p>
                       </div>
                       <div className="flex items-center gap-1 text-sm text-muted-foreground">
@@ -381,6 +405,14 @@ export function ResumeView({ profile: rawProfile }: ResumeViewProps) {
                     </div>
                     {edu.gpa && (
                       <p className="mt-1 text-sm text-muted-foreground">GPA: {edu.gpa}</p>
+                    )}
+                    {edu.description && !isHtmlEmpty(edu.description) && (
+                      <div
+                        className="mt-2 text-sm text-muted-foreground"
+                        dangerouslySetInnerHTML={{
+                          __html: resumeEntryBodyHtml({ html: edu.description }),
+                        }}
+                      />
                     )}
                     {edu.activities && (
                       <p className="mt-2 text-sm text-muted-foreground">{edu.activities}</p>
@@ -715,9 +747,9 @@ export function ResumeView({ profile: rawProfile }: ResumeViewProps) {
                           )}
                           {item.tags && item.tags.length > 0 && (
                             <div className="mt-3 flex flex-wrap gap-1">
-                              {item.tags.map((tag) => (
-                                <Badge key={tag} variant="outline" className="text-xs">
-                                  {tag}
+                              {parseHeadingTags(item.tags).map((tag) => (
+                                <Badge key={tag.label} variant="outline" className="text-xs">
+                                  {tag.label}
                                 </Badge>
                               ))}
                             </div>

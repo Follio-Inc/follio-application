@@ -78,6 +78,24 @@ describe('contact header drafts', () => {
 });
 
 describe('contact header order', () => {
+  it('defaults to email, phone, location, then links', () => {
+    const rows = [
+      entry({ id: 'location', kind: 'location', value: 'Austin, TX' }),
+      entry({ id: 'email', kind: 'email', value: 'a@b.com' }),
+      entry({ id: 'phone', kind: 'phone', value: '555' }),
+      entry({ id: 'github', linkType: 'GITHUB' }),
+      entry({ id: 'linkedin', linkType: 'LINKEDIN' }),
+    ];
+
+    expect(applyContactEntryOrder(rows).map((row) => row.id)).toEqual([
+      'email',
+      'phone',
+      'location',
+      'github',
+      'linkedin',
+    ]);
+  });
+
   it('moves Location off the top when a stored order is present', () => {
     const rows = [
       entry({ id: 'location', kind: 'location', value: 'Austin, TX' }),

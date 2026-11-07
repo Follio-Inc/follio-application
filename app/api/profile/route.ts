@@ -1,7 +1,11 @@
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 
-import { EmailConflictError, getOrCreateUserForClerk } from '@/lib/account/resolve-user';
+import {
+  EmailConflictError,
+  getOrCreateUserForClerk,
+  RemoteDatabaseProtectedError,
+} from '@/lib/account/resolve-user';
 import {
   resolveActiveProfileContext,
   resolveActiveProfileContextOrNull,
@@ -111,6 +115,16 @@ export async function POST(request: NextRequest) {
             error: 'Email already in use',
             message: error.message,
             code: 'EMAIL_CONFLICT',
+          },
+          { status: 409 }
+        );
+      }
+      if (error instanceof RemoteDatabaseProtectedError) {
+        return NextResponse.json(
+          {
+            error: 'Remote database protected',
+            message: error.message,
+            code: 'REMOTE_DATABASE_PROTECTED',
           },
           { status: 409 }
         );
@@ -327,6 +341,25 @@ export async function PATCH(request: NextRequest) {
         lastName: body.lastName,
         headline: body.headline,
         summary: body.summary,
+        ...(body.totalExperience !== undefined && {
+          totalExperience:
+            body.totalExperience == null
+              ? null
+              : typeof body.totalExperience === 'string'
+                ? body.totalExperience.trim()
+                  ? body.totalExperience.trim().slice(0, 60)
+                  : null
+                : undefined,
+        }),
+        ...(typeof body.totalExperienceVisible === 'boolean' && {
+          totalExperienceVisible: body.totalExperienceVisible,
+        }),
+        ...(typeof body.totalExperienceShowYears === 'boolean' && {
+          totalExperienceShowYears: body.totalExperienceShowYears,
+        }),
+        ...(typeof body.totalExperienceShowMonths === 'boolean' && {
+          totalExperienceShowMonths: body.totalExperienceShowMonths,
+        }),
         location: body.location,
         avatarUrl: body.avatarUrl,
         status: body.status,
@@ -356,6 +389,9 @@ export async function PATCH(request: NextRequest) {
     }
 
     const vanityUsername = await getVanityUsernameForUser(context.userId);
+
+    const { scheduleResumeRefresh } = await import('@/lib/resume/schedule-refresh');
+    scheduleResumeRefresh(existingProfile.id);
 
     return NextResponse.json({
       success: true,

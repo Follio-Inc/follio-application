@@ -57,8 +57,12 @@ const nextConfig: NextConfig = {
     ],
   },
 
-  // Externalize packages that don't work with webpack bundling
+  // Externalize packages that don't work with webpack bundling.
+  // Prisma must load from node_modules. If Next bundles it, `prisma generate`
+  // leaves the running server on a stale schema until .next is rebuilt.
   serverExternalPackages: [
+    '@prisma/client',
+    'prisma',
     'pdf-parse',
     'puppeteer',
     'puppeteer-core',
@@ -155,7 +159,7 @@ const nextConfig: NextConfig = {
           {
             key: 'Access-Control-Allow-Headers',
             value:
-              'Authorization, Content-Type, MCP-Protocol-Version, MCP-Session-Id, Last-Event-ID',
+              'Authorization, Content-Type, MCP-Protocol-Version, Mcp-Method, Mcp-Name, MCP-Session-Id, Last-Event-ID',
           },
           {
             key: 'Access-Control-Expose-Headers',

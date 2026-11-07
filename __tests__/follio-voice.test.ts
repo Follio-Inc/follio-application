@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildFollioIdentity,
   rewriteAbout,
+  rewriteEducationHighlights,
   rewriteEducationNote,
   rewriteExtras,
   rewriteHeadline,
@@ -47,6 +48,12 @@ describe('Follio voice', () => {
     expect(rewriteEducationNote('Thesis on the analytical engine.')).toBe(
       'Thesis on the analytical engine.'
     );
+    expect(rewriteEducationHighlights('Relevant coursework: Algebra, Geometry')).toEqual([]);
+    expect(
+      rewriteEducationHighlights(
+        '<ul><li>Thesis on the analytical engine.</li><li>Relevant coursework: Algebra</li><li>President of the math society</li></ul>'
+      )
+    ).toEqual(['Thesis on the analytical engine.', 'President of the math society']);
     expect(
       rewriteExtras(['First published algorithm', 'Royal Society medal', 'Chess club'])
     ).toEqual(['First published algorithm', 'Royal Society medal']);
@@ -107,7 +114,7 @@ describe('buildFollioIdentity applies Follio voice', () => {
     expect(identity.headline).toBe('Mathematician');
     expect(identity.about).toBe('Wrote the first algorithm.');
     expect(identity.experience[0]?.highlights).toEqual(['Shipped the compiler', 'Wrote the notes']);
-    expect(identity.education[0]?.description).toBeNull();
+    expect(identity.education[0]?.highlights).toEqual([]);
     expect(identity.education[0]?.honors).toEqual(['Medal', 'Prize']);
   });
 });

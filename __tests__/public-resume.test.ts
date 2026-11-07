@@ -61,13 +61,14 @@ describe('setExclusiveResumeVisibility', () => {
     expect(result.replacedPublicResume).toBeNull();
     expect(mockProfileUpdate).toHaveBeenCalledWith({
       where: { id: 'profile-1' },
-      data: { resumeVisibility: 'UNLISTED' },
+      data: { resumeVisibility: 'UNLISTED', status: 'PRIVATE' },
     });
     expect(mockTransaction).not.toHaveBeenCalled();
   });
 
   it('demotes an existing public resume when making another public', async () => {
     const { setExclusiveResumeVisibility } = await import('@/lib/public-resume');
+    const update = vi.fn().mockResolvedValue({});
 
     mockTransaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
       const tx = {
@@ -76,13 +77,15 @@ describe('setExclusiveResumeVisibility', () => {
             id: 'profile-2',
             userId: 'user-1',
             isArchived: false,
+            status: 'DRAFT',
+            publishedAt: null,
           }),
           findFirst: vi.fn().mockResolvedValue({
             id: 'profile-1',
             resumeTitle: 'Main Resume',
             handle: 'alice',
           }),
-          update: vi.fn().mockResolvedValue({}),
+          update,
         },
       };
       return fn(tx);
@@ -94,6 +97,14 @@ describe('setExclusiveResumeVisibility', () => {
       id: 'profile-1',
       resumeTitle: 'Main Resume',
       handle: 'alice',
+    });
+    expect(update).toHaveBeenCalledWith({
+      where: { id: 'profile-2' },
+      data: {
+        resumeVisibility: 'PUBLIC',
+        status: 'PUBLIC',
+        publishedAt: expect.any(Date),
+      },
     });
   });
 });

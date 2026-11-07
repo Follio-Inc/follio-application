@@ -22,10 +22,10 @@ describe('buildLinkShareMessage', () => {
     expect(message).toContain('https://follio.me/alex/portfolio');
   });
 
-  it('uses cover letter wording for unlisted letters', () => {
-    const message = buildLinkShareMessage('Alex', 'https://follio.me/cl/abc', 'cover-letter');
-    expect(message).toContain('cover letter');
-    expect(message).toContain('https://follio.me/cl/abc');
+  it('uses Follio wording', () => {
+    const message = buildLinkShareMessage('Alex', 'https://follio.me/u/alex', 'follio');
+    expect(message).toContain('Follio');
+    expect(message).toContain('https://follio.me/u/alex');
   });
 });
 

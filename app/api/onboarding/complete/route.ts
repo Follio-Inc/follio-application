@@ -1,4 +1,8 @@
-import { EmailConflictError, getOrCreateUserForClerk } from '@/lib/account/resolve-user';
+import {
+  EmailConflictError,
+  getOrCreateUserForClerk,
+  RemoteDatabaseProtectedError,
+} from '@/lib/account/resolve-user';
 import { syncAvatarToClerk } from '@/lib/clerk-avatar-sync';
 import { upsertGitHubProfileForProfile } from '@/services/import/github-enhanced.service';
 import { db } from '@/lib/db';
@@ -393,6 +397,16 @@ export async function POST(request: NextRequest) {
           { status: 409 }
         );
       }
+      if (error instanceof RemoteDatabaseProtectedError) {
+        return NextResponse.json(
+          {
+            error: 'Remote database protected',
+            message: error.message,
+            code: 'REMOTE_DATABASE_PROTECTED',
+          },
+          { status: 409 }
+        );
+      }
       throw error;
     }
 
@@ -562,6 +576,7 @@ export async function POST(request: NextRequest) {
       : 'MANUAL';
 
     // Create or update profile
+    let onboardingProfileId: string | undefined = user.profile?.id;
     if (!user.profile) {
       // Create new profile
       const resumeTitle = await generateUniqueResumeTitle(db, user.id);
@@ -577,8 +592,8 @@ export async function POST(request: NextRequest) {
           summary: mergedProfile.summary,
           location: mergedProfile.location,
           avatarUrl: finalAvatarUrl,
-          status: 'PUBLIC', // Make profile public by default
-          resumeVisibility: 'PRIVATE', // Resume private by default
+          status: 'PRIVATE', // Follio and resume stay private until the owner shares
+          resumeVisibility: 'PRIVATE',
           portfolioVisibility: 'PUBLIC', // Portfolio public by default
           // Set sources for provenance
           firstNameSource: toDataSource(finalNameSource),
@@ -590,6 +605,7 @@ export async function POST(request: NextRequest) {
           avatarUrlSource: finalAvatarSource,
         },
       });
+      onboardingProfileId = profile.id;
 
       await db.user.update({
         where: { id: user.id },
@@ -622,10 +638,10 @@ export async function POST(request: NextRequest) {
           profileId: profile.id,
           email: signupEmail, // Signup email is always primary
           emailSource: 'MANUAL', // Signup email source is always MANUAL
-          emailPublic: false,
+          emailPublic: true,
           phone: mergedProfile.phone,
           phoneSource: toDataSource(mergedProfile.phoneSource),
-          phonePublic: false,
+          phonePublic: true,
           website: mergedProfile.website,
           additionalEmails: additionalEmails.length > 0 ? additionalEmails : undefined,
         },
@@ -867,7 +883,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate AI-enriched portfolio (fire and forget - don't block the response)
-    const profileId = user.profile?.id;
+    const profileId = onboardingProfileId;
+    if (profileId) {
+      try {
+        const { refreshResumeGlance } = await import('@/services/resume-glance.service');
+        await refreshResumeGlance(profileId);
+      } catch (err) {
+        console.error('[Onboarding Complete] Failed to write highlights:', err);
+      }
+    }
     if (profileId && isPortfolioEnabled()) {
       const startingTemplateId = typeof templateId === 'string' ? templateId : undefined;
       import('@/services/portfolio/enhanced-generation.service')
@@ -969,7 +993,7 @@ async function handleReviewedData(
         summary: reviewedData.profile.summary,
         location: reviewedData.profile.location,
         avatarUrl: avatarUrlForDb,
-        status: 'PUBLIC',
+        status: 'PRIVATE',
         resumeVisibility: 'PRIVATE',
         portfolioVisibility: 'PUBLIC',
         ...(resumeDesign ? { resumeDesign: resumeDesign as object } : {}),
@@ -1104,12 +1128,12 @@ async function handleReviewedData(
       profileId,
       email: chosenPrimaryEmail,
       emailSource: toDataSource(chosenPrimarySource),
-      emailPublic: false,
+      emailPublic: true,
       phone: primaryPhone,
       phoneCountryCode: primaryPhoneCountryCode,
       phoneNumber: primaryPhoneNumber,
       phoneSource: primaryPhone ? toDataSource(phoneSource) : undefined,
-      phonePublic: false,
+      phonePublic: true,
       additionalEmails: additionalEmails.length > 0 ? additionalEmails : undefined,
     },
     update: {
@@ -1668,6 +1692,15 @@ async function handleReviewedData(
     } catch (err) {
       // Don't fail onboarding if portfolio generation fails — user can regenerate later
       console.error('[handleReviewedData] Failed to generate portfolio:', err);
+    }
+  }
+
+  if (profileId) {
+    try {
+      const { refreshResumeGlance } = await import('@/services/resume-glance.service');
+      await refreshResumeGlance(profileId);
+    } catch (err) {
+      console.error('[handleReviewedData] Failed to write highlights:', err);
     }
   }
 

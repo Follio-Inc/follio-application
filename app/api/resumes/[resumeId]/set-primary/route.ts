@@ -4,7 +4,9 @@ import { NextResponse } from 'next/server';
 import { makeProfilePortfolioReady } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { handleApiError } from '@/lib/errors';
+import { getFollioVisibility } from '@/lib/follio-identity/page-access';
 import { logger } from '@/lib/logger';
+import { setExclusiveResumeVisibility } from '@/lib/public-resume';
 
 const setPrimaryLogger = logger.child({ source: 'api-resume-set-primary' });
 
@@ -50,12 +52,22 @@ export async function PATCH(_request: Request, context: RouteContext) {
       return NextResponse.json({ error: 'Resume not found' }, { status: 404 });
     }
 
+    const currentPrimary = await db.profile.findFirst({
+      where: { primaryForUserId: user.id, isArchived: false },
+      select: { id: true, status: true, resumeVisibility: true },
+    });
+
     // Guarantee the target is renderable as a portfolio BEFORE repointing the
     // pointer, so we never expose a "portfolio not found" page. When no portfolio
     // exists yet, run AI so resume data is transformed into portfolio-owned
     // content (summaries, not resume bullets). If this fails we surface the
     // error and leave the existing portfolio untouched.
     await makeProfilePortfolioReady(targetProfile.id, { useAI: true });
+
+    if (currentPrimary && currentPrimary.id !== targetProfile.id) {
+      const follioVisibility = getFollioVisibility(currentPrimary);
+      await setExclusiveResumeVisibility(targetProfile.id, follioVisibility);
+    }
 
     await db.user.update({
       where: { id: user.id },

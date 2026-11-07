@@ -10,12 +10,20 @@ export type { SplitFollioLinks } from './links';
 export {
   FOLLIO_VOICE,
   rewriteAbout,
+  rewriteEducationHighlights,
   rewriteEducationNote,
   rewriteExtras,
   rewriteHeadline,
   rewriteHighlights,
 } from './voice';
 export { canShowResumeDoor, canShowWorkDoor, embedAsVisitor } from './doors';
+export {
+  canOpenFollioPage,
+  getFollioVisibility,
+  isFollioPublic,
+  profileStatusForVisibility,
+} from './page-access';
+export type { FollioPageAccessInput, FollioPageOpenInput, FollioVisibility } from './page-access';
 export { getFollioCompleteness } from './completeness';
 export { follioCardActions, follioCardDoors, follioCardFacts } from './card';
 export type {

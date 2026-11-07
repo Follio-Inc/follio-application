@@ -8,6 +8,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useConnectExternalAccount } from '@/lib/hooks/use-connect-external-account';
 
 import type { SyncStatus } from './source-types';
 
@@ -45,6 +46,7 @@ export function GoogleSourcePanel({
   onSyncStatusRefreshAction,
 }: GoogleSourcePanelProps) {
   const { user, isLoaded: isUserLoaded } = useUser();
+  const connectExternalAccount = useConnectExternalAccount();
   const [status, setStatus] = useState<'idle' | 'importing' | 'applying' | 'success' | 'error'>(
     'idle'
   );
@@ -81,22 +83,12 @@ export function GoogleSourcePanel({
     if (!user) return;
     setIsConnecting(true);
     setConnectError(null);
-    try {
-      const externalAccount = await user.createExternalAccount({
-        strategy: 'oauth_google',
-        redirectUrl: window.location.href,
-      });
-      const url = externalAccount?.verification?.externalVerificationRedirectURL;
-      if (url) window.location.href = url.toString();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes('already connected')) {
-        await user.reload();
-      } else {
-        setConnectError(`Connection failed: ${msg}`);
-      }
-      setIsConnecting(false);
+    const result = await connectExternalAccount('oauth_google');
+    if (result.status === 'redirected') return;
+    if (result.status === 'error') {
+      setConnectError(result.message);
     }
+    setIsConnecting(false);
   };
 
   const handleSync = useCallback(async () => {

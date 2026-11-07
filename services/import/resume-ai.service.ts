@@ -192,6 +192,9 @@ CRITICAL RULES:
 8. Headline/title is the professional title (e.g., "Senior Software Engineer", "Product Manager")
 9. Look for LinkedIn, GitHub, portfolio URLs in the contact/header section
 10. Parse certifications with their issuing organization and date if available
+11. Treat a professional summary or objective as source text: copy it verbatim. Do not rewrite,
+    shorten, correct, normalize, or generate a summary. If the resume has no summary or objective,
+    omit "summary" entirely.
 
 IMPORTANT: Return ONLY valid JSON, no markdown code blocks, no explanations.
 
@@ -1135,6 +1138,9 @@ export async function saveAIResumeToProfile(
     });
 
     console.log('[AI Resume Save] Successfully saved to profile');
+
+    const { refreshResumeGlance } = await import('@/services/resume-glance.service');
+    await refreshResumeGlance(profileId);
 
     return { success: true };
   } catch (error) {

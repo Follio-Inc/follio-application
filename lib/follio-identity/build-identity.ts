@@ -1,4 +1,10 @@
 import { cleanPhoneDisplay } from '@/lib/phone';
+import {
+  displayTotalExperience,
+  formatTenureMonths,
+  inclusiveMonthCount,
+  unitsFromProfile,
+} from '@/lib/total-experience';
 import { getFollioUrl, getPortfolioPath, getResumePath } from '@/lib/url';
 import { formatDate } from '@/lib/utils';
 import type { PublicProfile } from '@/types';
@@ -16,7 +22,7 @@ import { formatArrangement } from './depth';
 import { condense } from './text';
 import {
   rewriteAbout,
-  rewriteEducationNote,
+  rewriteEducationHighlights,
   rewriteExtras,
   rewriteHeadline,
   rewriteHighlights,
@@ -73,25 +79,7 @@ export function formatDuration(
   end: Date | string | null | undefined,
   isCurrent: boolean
 ): string | null {
-  if (!start) return null;
-  const from = new Date(start);
-  const to = isCurrent || !end ? new Date() : new Date(end);
-  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || to < from) return null;
-
-  // Whole elapsed months, then rounded up by one so a role reads inclusively
-  // (a Jan–Dec year is 12 months, not 11).
-  const months =
-    (to.getUTCFullYear() - from.getUTCFullYear()) * 12 +
-    (to.getUTCMonth() - from.getUTCMonth()) +
-    1;
-  if (months < 1) return null;
-
-  const years = Math.floor(months / 12);
-  const remMonths = months % 12;
-  const parts: string[] = [];
-  if (years > 0) parts.push(`${years} ${years === 1 ? 'yr' : 'yrs'}`);
-  if (remMonths > 0) parts.push(`${remMonths} ${remMonths === 1 ? 'mo' : 'mos'}`);
-  return parts.join(' ');
+  return formatTenureMonths(inclusiveMonthCount(start, end, isCurrent));
 }
 
 /** "2015 – 2017" — schools only need years. */
@@ -310,7 +298,7 @@ function educationOf(profile: PublicProfile): FollioEducationItem[] {
       period: yearRange(item.startDate, item.endDate, item.isCurrent),
       location: text(item.location),
       gpa: text(item.gpa),
-      description: rewriteEducationNote(item.description),
+      highlights: rewriteEducationHighlights(item.description),
       honors: rewriteExtras(item.honors),
       activities: rewriteExtras(item.activities),
     }));
@@ -368,6 +356,12 @@ export function buildFollioIdentity(
     contact: contactOf(profile),
     about: rewriteAbout(profile.summary),
     experience: experienceOf(profile),
+    totalExperience: displayTotalExperience(
+      profile.totalExperience,
+      (profile.workExperiences ?? []).filter(isShown),
+      profile.totalExperienceVisible,
+      unitsFromProfile(profile)
+    ),
     education: educationOf(profile),
     skills: skillsOf(profile),
     links: linksOf(profile),

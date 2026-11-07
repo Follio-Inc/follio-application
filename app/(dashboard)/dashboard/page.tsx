@@ -4,18 +4,16 @@ import { redirect } from 'next/navigation';
 import { ensurePrimaryProfile, makeProfilePortfolioReady } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { isPortfolioEnabled } from '@/lib/features';
-import { buildFollioIdentity, canShowResumeDoor, canShowWorkDoor } from '@/lib/follio-identity';
-import { renderQrSvg } from '@/lib/follio-identity/qr';
+import { getFollioVisibility } from '@/lib/follio-identity';
+import { setExclusiveResumeVisibility } from '@/lib/public-resume';
 import { resolveResumePageLayout } from '@/lib/resume/page-layout';
-import { getFollioUrl, getDisplayHost } from '@/lib/url';
-import { getPublicProfile } from '@/services/profile.service';
 import type { ResumeDesign } from '@/types';
 
 import { DashboardClient, type DashboardData } from './dashboard-client';
 
 export const metadata = {
   title: 'Dashboard - Follio',
-  description: 'Your Follio — share one link, and keep your resume current.',
+  description: 'Your resumes — each one opens as a traditional resume or a Follio view.',
 };
 
 export default async function DashboardPage() {
@@ -78,12 +76,14 @@ export default async function DashboardPage() {
     redirect('/onboarding');
   }
 
+  const identityProfileId = identityProfile.id;
+
   if (isPortfolioEnabled()) {
     const resolveCurrentTemplateId = async (): Promise<string | null> => {
       const portfolio = await db.generatedPortfolio
         .findFirst({
           where: {
-            profileId: identityProfile.id,
+            profileId: identityProfileId,
             isActive: true,
             status: { in: ['PUBLISHED', 'DRAFT'] },
           },
@@ -100,7 +100,7 @@ export default async function DashboardPage() {
 
     if (!currentTemplateId || identityProfile.status === 'DRAFT') {
       try {
-        await makeProfilePortfolioReady(identityProfile.id);
+        await makeProfilePortfolioReady(identityProfileId);
         currentTemplateId = await resolveCurrentTemplateId();
       } catch {
         // Leave the dashboard usable.
@@ -108,25 +108,33 @@ export default async function DashboardPage() {
     }
   }
 
-  const publicProfile = await getPublicProfile(identityProfile.handle);
-  const identity = publicProfile
-    ? buildFollioIdentity(publicProfile, {
-        showResume: canShowResumeDoor(identityProfile.resumeVisibility, 'owner', true),
-        showWork: canShowWorkDoor(
-          isPortfolioEnabled(),
-          identityProfile.portfolioVisibility,
-          'owner',
-          true
-        ),
-      })
-    : null;
+  const visibility = getFollioVisibility(identityProfile);
+  const resumeMatches = identityProfile.resumeVisibility === visibility;
+  const statusShouldBePublic = visibility === 'PUBLIC';
+  const statusMatches = statusShouldBePublic
+    ? identityProfile.status === 'PUBLIC'
+    : identityProfile.status !== 'PUBLIC';
+
+  if (!resumeMatches || !statusMatches) {
+    try {
+      await setExclusiveResumeVisibility(identityProfile.id, visibility);
+      identityProfile = {
+        ...identityProfile,
+        resumeVisibility: visibility,
+        status: statusShouldBePublic ? 'PUBLIC' : 'PRIVATE',
+      };
+    } catch {
+      // Leave the dashboard usable; the next visibility save will heal.
+    }
+  }
 
   const resumes = rawProfiles.map((r) => ({
     id: r.id,
     handle: r.handle,
     resumeTitle: r.resumeTitle,
-    status: r.status,
-    resumeVisibility: r.resumeVisibility,
+    status: r.id === identityProfile.id ? identityProfile.status : r.status,
+    resumeVisibility:
+      r.id === identityProfile.id ? identityProfile.resumeVisibility : r.resumeVisibility,
     firstName: r.firstName,
     middleName: r.middleName,
     lastName: r.lastName,
@@ -136,18 +144,7 @@ export default async function DashboardPage() {
     pageLayout: resolveResumePageLayout((r.resumeDesign as ResumeDesign | null) ?? null),
   }));
 
-  const follioUrl = getFollioUrl(identityProfile.handle);
-
   const data: DashboardData = {
-    follio: {
-      id: identityProfile.id,
-      handle: identityProfile.handle,
-      status: identityProfile.status,
-      displayHost: getDisplayHost(identityProfile.handle),
-      url: follioUrl,
-      identity,
-      qrSvg: renderQrSvg(follioUrl),
-    },
     resumes,
     activeProfileId: user.profile?.id ?? null,
     primaryProfileId: identityProfile.id,

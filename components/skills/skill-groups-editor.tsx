@@ -3,7 +3,6 @@
 import { ChevronDown, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useRef, type ReactNode } from 'react';
 
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
@@ -107,10 +106,7 @@ export function SkillGroupsEditor({
           const preview = skillPreview(group.skillsHtml);
 
           return (
-            <div
-              key={group.id}
-              className="overflow-hidden rounded-lg border border-border/60 bg-background/50"
-            >
+            <div key={group.id} className="overflow-hidden rounded-xl">
               <div className="flex items-center gap-1 p-1.5 sm:p-2">
                 <button
                   type="button"
@@ -142,23 +138,21 @@ export function SkillGroupsEditor({
                     )}
                   </span>
                 </button>
-                <Button
+                <button
                   type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                  className="builder-quiet-btn hover:text-destructive"
                   onClick={() => removeRow(group.id)}
                   disabled={disabled || groups.length <= 1}
                   aria-label={`Remove ${title}`}
                 >
                   <Trash2 className="h-4 w-4" />
-                </Button>
+                </button>
               </div>
 
               {isOpen ? (
                 <div
                   id={`skill-group-panel-${group.id}`}
-                  className="space-y-3 border-t border-border/50 px-3 pb-3 pt-3 sm:px-4 sm:pb-4"
+                  className="space-y-3 px-2 pb-3 pt-1 sm:px-3 sm:pb-4"
                 >
                   <div className="space-y-1.5">
                     <Label
@@ -196,14 +190,10 @@ export function SkillGroupsEditor({
         })}
       </div>
 
-      <Button type="button" variant="outline" size="sm" onClick={addRow} disabled={disabled}>
-        <Plus className="mr-1.5 h-4 w-4" />
+      <button type="button" className="builder-add-btn" onClick={addRow} disabled={disabled}>
+        <Plus className="h-3.5 w-3.5" />
         {addLabel}
-      </Button>
-
-      <p className="text-xs text-muted-foreground">
-        Category is optional. Open one at a time to edit — bold, bullets, and justified by default.
-      </p>
+      </button>
     </div>
   );
 }

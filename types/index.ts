@@ -43,6 +43,7 @@ import {
   type DocumentTextStyle,
   type PdfLayout,
 } from '@/lib/document-design';
+import type { HeadingTag } from '@/lib/heading-tags';
 
 export type { ContentVisibility } from '@prisma/client';
 
@@ -413,6 +414,7 @@ export interface JSONResume {
     endDate?: string;
     score?: string;
     courses?: string[];
+    highlights?: string[];
   }[];
   skills?: {
     name: string;
@@ -681,7 +683,7 @@ export interface CustomSectionItem {
   endDate?: string;
   isCurrent?: boolean;
   url?: string;
-  tags?: string[];
+  tags?: HeadingTag[];
   isVisible?: boolean;
 }
 
@@ -706,6 +708,7 @@ export interface VolunteeringItem {
   endDate?: string;
   isCurrent?: boolean;
   url?: string;
+  tags?: HeadingTag[];
   isVisible?: boolean;
 }
 

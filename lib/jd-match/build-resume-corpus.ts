@@ -30,6 +30,7 @@ export type ProfileForMatch = {
     institution: string;
     degree?: string | null;
     fieldOfStudy?: string | null;
+    description?: string | null;
     isVisible?: boolean | null;
   }>;
   certifications: Array<{
@@ -82,6 +83,7 @@ export function buildResumeCorpus(profile: ProfileForMatch): ResumeCorpus {
     parts.push(e.institution);
     if (e.degree) parts.push(e.degree);
     if (e.fieldOfStudy) parts.push(e.fieldOfStudy);
+    if (e.description) parts.push(stripHtml(e.description));
   }
 
   for (const c of profile.certifications.filter((cert) => cert.isVisible !== false)) {

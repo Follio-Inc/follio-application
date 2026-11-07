@@ -1,7 +1,7 @@
 /**
  * Document share foundation.
  *
- * One UI: `components/share-dialog` (`ShareDialog`) for resume, portfolio,
+ * One UI: `components/share-dialog` (`ShareDialog`) for Follio, resume, portfolio,
  * and cover letter. Cover letters omit Public (Unlisted | Private only).
  *
  * Shared here: message builders, email subjects, webmail compose, clipboard.

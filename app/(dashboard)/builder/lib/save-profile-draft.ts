@@ -1,4 +1,5 @@
 import type { ContactDraft } from '@/lib/stores/builder-store';
+import { emptyToNull } from '@/lib/validations';
 import type { FullProfile } from '@/types';
 
 interface SaveProfileDraftParams {
@@ -23,6 +24,10 @@ export async function saveProfileDraft({
         lastName: draftProfile.lastName,
         headline: draftProfile.headline,
         summary: draftProfile.summary,
+        totalExperience: emptyToNull(draftProfile.totalExperience),
+        totalExperienceVisible: draftProfile.totalExperienceVisible,
+        totalExperienceShowYears: draftProfile.totalExperienceShowYears,
+        totalExperienceShowMonths: draftProfile.totalExperienceShowMonths,
         location: draftProfile.location,
         avatarUrl: draftProfile.avatarUrl,
         status: draftProfile.status,

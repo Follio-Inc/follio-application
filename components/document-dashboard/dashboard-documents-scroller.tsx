@@ -75,7 +75,10 @@ export function DashboardDocumentsScroller({
         </button>
       )}
 
-      <div ref={scrollRef} className="scrollbar-none flex gap-5 overflow-x-auto pb-2">
+      <div
+        ref={scrollRef}
+        className="scrollbar-none flex gap-5 overflow-x-auto overflow-y-clip pb-2"
+      >
         {children}
       </div>
     </div>

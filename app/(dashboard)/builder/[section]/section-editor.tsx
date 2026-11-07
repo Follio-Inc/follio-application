@@ -202,21 +202,42 @@ export function SectionEditor({ sectionType, section }: SectionEditorProps) {
 
       case 'EXPERIENCE':
         return (
-          <ExperienceSection
-            experiences={draftProfile.workExperiences}
-            profileId={draftProfile.id}
-            onUpdate={(workExperiences) => handleInlineUpdate({ workExperiences })}
-            onEditingStateChange={handleInlineEditingChange}
-          />
+          <>
+            <ExperienceSection
+              experiences={draftProfile.workExperiences}
+              profileId={draftProfile.id}
+              onUpdate={(workExperiences) => handleInlineUpdate({ workExperiences })}
+              totalExperience={draftProfile.totalExperience}
+              totalExperienceVisible={draftProfile.totalExperienceVisible}
+              totalExperienceShowYears={draftProfile.totalExperienceShowYears}
+              totalExperienceShowMonths={draftProfile.totalExperienceShowMonths}
+              onTotalExperiencePreview={(totalExperience) => updateDraft({ totalExperience })}
+              onTotalExperiencePersisted={(totalExperience) =>
+                commitInlineChange({ totalExperience })
+              }
+              onTotalExperienceVisibleChange={(totalExperienceVisible) =>
+                commitInlineChange({ totalExperienceVisible })
+              }
+              onTotalExperienceUnitsChange={({ showYears, showMonths }) =>
+                commitInlineChange({
+                  totalExperienceShowYears: showYears,
+                  totalExperienceShowMonths: showMonths,
+                })
+              }
+              onEditingStateChange={handleInlineEditingChange}
+            />
+          </>
         );
 
       case 'EDUCATION':
         return (
-          <EducationSection
-            educations={draftProfile.educations}
-            profileId={draftProfile.id}
-            onUpdate={(educations) => handleInlineUpdate({ educations })}
-          />
+          <>
+            <EducationSection
+              educations={draftProfile.educations}
+              profileId={draftProfile.id}
+              onUpdate={(educations) => handleInlineUpdate({ educations })}
+            />
+          </>
         );
 
       case 'SKILLS':
@@ -231,29 +252,35 @@ export function SectionEditor({ sectionType, section }: SectionEditorProps) {
 
       case 'PROJECTS':
         return (
-          <ProjectsSection
-            projects={draftProfile.projects}
-            profileId={draftProfile.id}
-            onUpdate={(projects) => handleInlineUpdate({ projects })}
-          />
+          <>
+            <ProjectsSection
+              projects={draftProfile.projects}
+              profileId={draftProfile.id}
+              onUpdate={(projects) => handleInlineUpdate({ projects })}
+            />
+          </>
         );
 
       case 'AWARDS':
         return (
-          <AwardsSection
-            awards={draftProfile.awards}
-            profileId={draftProfile.id}
-            onUpdate={(awards: Award[]) => handleInlineUpdate({ awards })}
-          />
+          <>
+            <AwardsSection
+              awards={draftProfile.awards}
+              profileId={draftProfile.id}
+              onUpdate={(awards: Award[]) => handleInlineUpdate({ awards })}
+            />
+          </>
         );
 
       case 'CERTIFICATIONS':
         return (
-          <CertificationsSection
-            certifications={draftProfile.certifications}
-            profileId={draftProfile.id}
-            onUpdate={(certifications: Certification[]) => handleInlineUpdate({ certifications })}
-          />
+          <>
+            <CertificationsSection
+              certifications={draftProfile.certifications}
+              profileId={draftProfile.id}
+              onUpdate={(certifications: Certification[]) => handleInlineUpdate({ certifications })}
+            />
+          </>
         );
 
       case 'VOLUNTEERING':

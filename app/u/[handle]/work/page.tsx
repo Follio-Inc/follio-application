@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 
 import { db } from '@/lib/db';
 import { isPortfolioEnabled } from '@/lib/features';
+import { canOpenFollioPage } from '@/lib/follio-identity';
 import { getPortfolioUrl } from '@/lib/url';
 import { getPublicProfile, validateUnlistedKey } from '@/services/profile.service';
 
@@ -86,16 +87,24 @@ export default async function WorkPage({ params, searchParams }: WorkPageProps) 
     getViewerAuthState(handle),
   ]);
 
-  if (!profile || profile.status === 'DRAFT') {
+  if (!profile) {
     notFound();
   }
 
-  if (profile.status === 'PRIVATE' && authState !== 'owner') {
-    const isValidToken = token ? await validateShareToken(handle, token, 'portfolio') : false;
-    const isValidKey = key ? await validateUnlistedKey(handle, key) : false;
-    if (!isValidToken && !isValidKey) {
-      notFound();
-    }
+  const isOwner = authState === 'owner';
+  const isValidFollioToken = token ? await validateShareToken(handle, token, 'portfolio') : false;
+  const isValidFollioKey = key ? await validateUnlistedKey(handle, key) : false;
+  const hasShareAccess = isOwner || isValidFollioToken || isValidFollioKey;
+
+  if (
+    !canOpenFollioPage({
+      status: profile.status,
+      resumeVisibility: profile.resumeVisibility,
+      isOwner,
+      hasShareAccess,
+    })
+  ) {
+    notFound();
   }
 
   const portfolioVisibility = profile.portfolioVisibility || 'PUBLIC';

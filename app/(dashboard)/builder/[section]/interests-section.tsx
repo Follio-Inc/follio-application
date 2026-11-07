@@ -183,8 +183,13 @@ export function InterestsSection({ section, embedded }: InterestsSectionProps) {
     return colors[category] || 'bg-gray-500/10 text-gray-700 border-gray-500/20';
   };
 
-  const addButton = (
-    <Button onClick={() => handleOpenDialog()} size={embedded ? 'sm' : 'default'} className="gap-2">
+  const addButton = embedded ? (
+    <button type="button" onClick={() => handleOpenDialog()} className="builder-add-btn">
+      <Plus className="h-3.5 w-3.5" />
+      Add interest
+    </button>
+  ) : (
+    <Button onClick={() => handleOpenDialog()} className="gap-2">
       <Plus className="h-4 w-4" />
       Add Interest
     </Button>
@@ -193,17 +198,19 @@ export function InterestsSection({ section, embedded }: InterestsSectionProps) {
   const interestsList = (
     <div className={cn(!embedded && 'rounded-xl bg-muted/40 p-4')}>
       {items.length === 0 ? (
-        <div className="rounded-lg border border-dashed p-8 text-center">
-          <Sparkles className="mx-auto h-12 w-12 text-muted-foreground/50" />
-          <h3 className="mt-4 font-medium">No interests added yet</h3>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Add your hobbies and interests to show your personality
-          </p>
-          <Button onClick={() => handleOpenDialog()} className="mt-4 gap-2">
-            <Plus className="h-4 w-4" />
-            Add Interest
-          </Button>
-        </div>
+        embedded ? null : (
+          <div className="rounded-lg border border-dashed p-8 text-center">
+            <Sparkles className="mx-auto h-12 w-12 text-muted-foreground/50" />
+            <h3 className="mt-4 font-medium">No interests added yet</h3>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Add your hobbies and interests to show your personality
+            </p>
+            <Button onClick={() => handleOpenDialog()} className="mt-4 gap-2">
+              <Plus className="h-4 w-4" />
+              Add Interest
+            </Button>
+          </div>
+        )
       ) : (
         <div className="space-y-6">
           {Object.entries(groupedItems).map(([category, categoryItems]) => (
@@ -219,7 +226,7 @@ export function InterestsSection({ section, embedded }: InterestsSectionProps) {
                     )}
                   >
                     <span className="text-sm font-medium">{item.name}</span>
-                    <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                    <div className="flex items-center gap-0.5">
                       <button
                         onClick={() => toggleItemVisibility(item)}
                         className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -318,11 +325,8 @@ export function InterestsSection({ section, embedded }: InterestsSectionProps) {
   if (embedded) {
     return (
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">Add your personal interests and hobbies</p>
-          {addButton}
-        </div>
         {interestsList}
+        {addButton}
         {dialog}
       </div>
     );

@@ -9,6 +9,7 @@ import {
   isHtmlFullyJustified,
   justifyHtmlContent,
   resumeBulletInnerHtml,
+  resumeEntryBodyHtml,
   sanitizeRichHtml,
   sanitizeRichHtmlFallback,
   stripHtmlTags,
@@ -102,6 +103,14 @@ describe('isHtmlEmpty', () => {
 
   it('returns true for &nbsp; only', () => {
     expect(isHtmlEmpty('<p>&nbsp;</p>')).toBe(true);
+  });
+
+  it('returns true for an empty bullet list', () => {
+    expect(
+      isHtmlEmpty(
+        '<ul data-bullet-style="disc" class="rich-text-bullets bullet-style-disc"><li><p style="text-align: justify"></p></li></ul>'
+      )
+    ).toBe(true);
   });
 
   it('returns false for content with text', () => {
@@ -460,5 +469,26 @@ describe('resumeBulletInnerHtml', () => {
     expect(resumeBulletInnerHtml('<strong>Led</strong> a team')).toBe(
       '<p style="text-align: justify"><strong>Led</strong> a team</p>'
     );
+  });
+});
+
+describe('resumeEntryBodyHtml', () => {
+  it('prefers stored editor HTML for experience and education', () => {
+    expect(
+      resumeEntryBodyHtml({
+        html: '<ul class="rich-text-bullets"><li><p>Thesis on compilers</p></li></ul>',
+        bullets: ['ignored fallback'],
+      })
+    ).toContain('Thesis on compilers');
+  });
+
+  it('falls back to bullets when HTML is empty', () => {
+    const html = resumeEntryBodyHtml({ html: '<p></p>', bullets: ['Dean’s list'] });
+    expect(html).toContain('resume-bullets');
+    expect(html).toContain('Dean’s list');
+  });
+
+  it('returns empty when there is nothing to render', () => {
+    expect(resumeEntryBodyHtml({ html: null, bullets: [] })).toBe('');
   });
 });

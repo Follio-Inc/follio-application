@@ -42,24 +42,24 @@ function stripUrl(url: string): string {
 }
 
 /**
- * Contact line for Atelier header: phone → email → website → links.
+ * Contact line for Atelier header: email → phone → website → links.
  * Matches the icon row in the reference design (no location / social block).
  */
 export function buildResumeAtelierContactFields(profile: FilteredProfile): AtelierContactField[] {
   const fields: AtelierContactField[] = [];
 
-  if (profile.contactInfo?.phone) {
-    fields.push({
-      id: 'phone',
-      kind: 'phone',
-      value: cleanPhoneDisplay(profile.contactInfo.phone),
-    });
-  }
   if (profile.contactInfo?.email) {
     fields.push({
       id: 'email',
       kind: 'email',
       value: profile.contactInfo.email,
+    });
+  }
+  if (profile.contactInfo?.phone) {
+    fields.push({
+      id: 'phone',
+      kind: 'phone',
+      value: cleanPhoneDisplay(profile.contactInfo.phone),
     });
   }
 

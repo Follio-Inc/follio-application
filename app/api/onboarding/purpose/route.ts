@@ -1,4 +1,8 @@
-import { EmailConflictError, getOrCreateUserForClerk } from '@/lib/account/resolve-user';
+import {
+  EmailConflictError,
+  getOrCreateUserForClerk,
+  RemoteDatabaseProtectedError,
+} from '@/lib/account/resolve-user';
 import { db } from '@/lib/db';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import type { MainPurpose } from '@prisma/client';
@@ -76,6 +80,16 @@ export async function POST(request: NextRequest) {
           error: 'Email already in use',
           message: error.message,
           code: 'EMAIL_CONFLICT',
+        },
+        { status: 409 }
+      );
+    }
+    if (error instanceof RemoteDatabaseProtectedError) {
+      return NextResponse.json(
+        {
+          error: 'Remote database protected',
+          message: error.message,
+          code: 'REMOTE_DATABASE_PROTECTED',
         },
         { status: 409 }
       );

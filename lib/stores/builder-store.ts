@@ -27,7 +27,7 @@ export interface ContactDraft {
   website: string;
   additionalEmails: Array<{ email: string; source: string }>;
   additionalPhones: Array<{ countryCode: string | null; number: string; source: string }>;
-  /** Order of header contact fields for drag-and-drop: ["location","email","phone",linkId,...] */
+  /** Order of header contact fields for drag-and-drop: ["email","phone","location",linkId,...] */
   headerFieldsOrder?: string[];
 }
 
@@ -102,11 +102,11 @@ export function extractContactDraft(profile: FullProfile): ContactDraft {
   const ci = profile.contactInfo as Record<string, unknown> | null;
   return {
     email: (ci?.email as string) || '',
-    emailPublic: (ci?.emailPublic as boolean) || false,
+    emailPublic: (ci?.emailPublic as boolean | undefined) ?? true,
     phone: (ci?.phone as string) || '',
     phoneCountryCode: (ci?.phoneCountryCode as string | null) || null,
     phoneNumber: (ci?.phoneNumber as string) || '',
-    phonePublic: (ci?.phonePublic as boolean) || false,
+    phonePublic: (ci?.phonePublic as boolean | undefined) ?? true,
     locationPublic: (ci?.locationPublic as boolean) ?? true,
     website: (ci?.website as string) || '',
     additionalEmails: parseJsonArray<{ email: string; source: string }>(ci?.additionalEmails),
@@ -131,6 +131,10 @@ export function hasProfileChanges(draft: FullProfile, saved: FullProfile): boole
     draft.lastName !== saved.lastName ||
     draft.headline !== saved.headline ||
     draft.summary !== saved.summary ||
+    draft.totalExperience !== saved.totalExperience ||
+    draft.totalExperienceVisible !== saved.totalExperienceVisible ||
+    draft.totalExperienceShowYears !== saved.totalExperienceShowYears ||
+    draft.totalExperienceShowMonths !== saved.totalExperienceShowMonths ||
     draft.location !== saved.location ||
     draft.avatarUrl !== saved.avatarUrl ||
     draft.status !== saved.status

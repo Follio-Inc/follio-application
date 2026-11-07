@@ -1,6 +1,7 @@
 import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
+import { canOpenFollioPage } from '@/lib/follio-identity';
 import { getLinksUrl } from '@/lib/url';
 import { getPublicProfile, validateUnlistedKey } from '@/services/profile.service';
 
@@ -64,17 +65,24 @@ export default async function LinksPage({ params, searchParams }: LinksPageProps
     getViewerAuthState(handle),
   ]);
 
-  if (!profile || profile.status === 'DRAFT') {
+  if (!profile) {
     notFound();
   }
 
-  // For PRIVATE profiles, require a share token or unlisted key (unless owner)
-  if (profile.status === 'PRIVATE' && authState !== 'owner') {
-    const isValidToken = token ? await validateShareToken(handle, token, 'links') : false;
-    const isValidKey = key ? await validateUnlistedKey(handle, key) : false;
-    if (!isValidToken && !isValidKey) {
-      notFound();
-    }
+  const isOwner = authState === 'owner';
+  const isValidFollioToken = token ? await validateShareToken(handle, token, 'links') : false;
+  const isValidFollioKey = key ? await validateUnlistedKey(handle, key) : false;
+  const hasShareAccess = isOwner || isValidFollioToken || isValidFollioKey;
+
+  if (
+    !canOpenFollioPage({
+      status: profile.status,
+      resumeVisibility: profile.resumeVisibility,
+      isOwner,
+      hasShareAccess,
+    })
+  ) {
+    notFound();
   }
 
   // Check links-specific visibility

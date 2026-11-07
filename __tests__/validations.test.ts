@@ -168,6 +168,33 @@ describe('Validation Schemas', () => {
       const data = { firstName: 'a'.repeat(51) };
       expect(() => ProfileBasicInfoSchema.parse(data)).toThrow();
     });
+
+    it('should accept a totalExperience override and clear empty values', () => {
+      expect(
+        ProfileBasicInfoSchema.parse({ firstName: 'John', totalExperience: '5 yrs' })
+          .totalExperience
+      ).toBe('5 yrs');
+      expect(
+        ProfileBasicInfoSchema.parse({ firstName: 'John', totalExperience: '' }).totalExperience
+      ).toBeNull();
+    });
+
+    it('should accept totalExperienceVisible', () => {
+      expect(
+        ProfileBasicInfoSchema.parse({ firstName: 'John', totalExperienceVisible: false })
+          .totalExperienceVisible
+      ).toBe(false);
+    });
+
+    it('should accept total experience unit toggles', () => {
+      const parsed = ProfileBasicInfoSchema.parse({
+        firstName: 'John',
+        totalExperienceShowYears: true,
+        totalExperienceShowMonths: false,
+      });
+      expect(parsed.totalExperienceShowYears).toBe(true);
+      expect(parsed.totalExperienceShowMonths).toBe(false);
+    });
   });
 
   describe('CreateProfileSchema', () => {
@@ -332,6 +359,32 @@ describe('Validation Schemas', () => {
       };
       expect(() => WorkExperienceSchema.parse(data)).not.toThrow();
     });
+
+    it('should accept heading tags and allow clearing employment type', () => {
+      const data = {
+        company: 'Tech Corp',
+        role: 'Engineer',
+        startDate: '2020-01-01',
+        employmentType: null,
+        headingTags: [{ label: 'Contract', color: 'blue' }, { label: 'Remote' }],
+      };
+      const result = WorkExperienceSchema.parse(data);
+      expect(result.employmentType).toBeNull();
+      expect(result.headingTags).toEqual([
+        { label: 'Contract', color: 'blue' },
+        { label: 'Remote' },
+      ]);
+    });
+
+    it('should accept durationVisible', () => {
+      const result = WorkExperienceSchema.parse({
+        company: 'Tech Corp',
+        role: 'Engineer',
+        startDate: '2020-01-01',
+        durationVisible: true,
+      });
+      expect(result.durationVisible).toBe(true);
+    });
   });
 
   describe('EducationSchema', () => {
@@ -352,6 +405,25 @@ describe('Validation Schemas', () => {
 
     it('should accept optional fields', () => {
       expect(() => EducationSchema.parse({ institution: 'MIT' })).not.toThrow();
+    });
+
+    it('should accept heading tags', () => {
+      const result = EducationSchema.parse({
+        institution: 'MIT',
+        headingTags: [{ label: 'Pursuing', color: 'teal' }, { label: 'Online' }],
+      });
+      expect(result.headingTags).toEqual([
+        { label: 'Pursuing', color: 'teal' },
+        { label: 'Online' },
+      ]);
+    });
+
+    it('should accept durationVisible', () => {
+      const result = EducationSchema.parse({
+        institution: 'MIT',
+        durationVisible: true,
+      });
+      expect(result.durationVisible).toBe(true);
     });
 
     it('should accept arrays for activities and honors', () => {
@@ -430,18 +502,76 @@ describe('Validation Schemas', () => {
       expect(() => ProjectSchema.parse(data)).not.toThrow();
     });
 
+    it('should accept a title-only project', () => {
+      const result = ProjectSchema.parse({ title: '  Side project  ' });
+      expect(result.title).toBe('Side project');
+      expect(result.description).toBeUndefined();
+      expect(result.url).toBeUndefined();
+    });
+
     it('should require title', () => {
-      expect(() => ProjectSchema.parse({ description: 'Test' })).toThrow();
+      expect(() => ProjectSchema.parse({ description: 'Test' })).toThrow(
+        /Project title is required/
+      );
+      expect(() => ProjectSchema.parse({ title: '   ' })).toThrow(/Project title is required/);
     });
 
-    it('should accept empty URLs', () => {
-      expect(() =>
-        ProjectSchema.parse({ title: 'Test', url: '', repoUrl: '', imageUrl: '' })
-      ).not.toThrow();
+    it('should clear blank optional fields instead of failing', () => {
+      const result = ProjectSchema.parse({
+        title: 'Test',
+        description: '',
+        shortDesc: null,
+        url: '',
+        repoUrl: null,
+        imageUrl: '   ',
+        startDate: '',
+        endDate: null,
+        highlights: ['', '  '],
+        techStack: [''],
+      });
+      expect(result.description).toBeNull();
+      expect(result.shortDesc).toBeNull();
+      expect(result.url).toBeNull();
+      expect(result.repoUrl).toBeNull();
+      expect(result.imageUrl).toBeNull();
+      expect(result.startDate).toBeNull();
+      expect(result.endDate).toBeNull();
+      expect(result.highlights).toEqual([]);
+      expect(result.techStack).toEqual([]);
     });
 
-    it('should reject invalid URLs', () => {
-      expect(() => ProjectSchema.parse({ title: 'Test', url: 'not-a-url' })).toThrow();
+    it('should accept a link without a protocol', () => {
+      const result = ProjectSchema.parse({
+        title: 'Test',
+        url: 'github.com/me/repo',
+        repoUrl: 'example.com',
+      });
+      expect(result.url).toBe('https://github.com/me/repo');
+      expect(result.repoUrl).toBe('https://example.com');
+    });
+
+    it('should accept a long description and highlight', () => {
+      const result = ProjectSchema.parse({
+        title: 'Test',
+        description: 'a'.repeat(5000),
+        shortDesc: 'b'.repeat(400),
+        highlights: ['c'.repeat(500)],
+      });
+      expect(result.description).toHaveLength(5000);
+      expect(result.shortDesc).toHaveLength(400);
+      expect(result.highlights).toEqual(['c'.repeat(500)]);
+    });
+
+    it('should reject unsafe URL schemes', () => {
+      expect(() => ProjectSchema.parse({ title: 'Test', url: 'javascript:alert(1)' })).toThrow();
+      expect(() => ProjectSchema.parse({ title: 'Test', repoUrl: 'data:text/html,hi' })).toThrow();
+    });
+
+    it('does not require optional fields on a partial update', () => {
+      const parsed = ProjectSchema.partial().parse({ isVisible: false });
+      expect(parsed).toEqual({ isVisible: false });
+      expect('description' in parsed).toBe(false);
+      expect('highlights' in parsed).toBe(false);
     });
   });
 

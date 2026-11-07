@@ -274,6 +274,17 @@
     box-shadow: none;
   }
 
+  /* Quiet, always-visible builder chrome — available without competing with content. */
+  .builder-quiet-btn {
+    @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground/55 transition-colors hover:bg-foreground/[0.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40;
+  }
+  .builder-grip {
+    @apply flex h-8 w-6 shrink-0 cursor-grab items-center justify-center rounded-md text-muted-foreground/40 transition-colors hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 active:cursor-grabbing;
+  }
+  .builder-add-btn {
+    @apply inline-flex h-9 items-center gap-1.5 rounded-lg px-2 text-sm text-muted-foreground transition-colors hover:bg-foreground/[0.05] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:pointer-events-none disabled:opacity-50;
+  }
+
   /* Gradient text */
   .gradient-text {
     @apply bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent;
@@ -724,6 +735,13 @@
     margin-bottom: 12px;
   }
 
+  .resume-section-heading {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin: 0 0 6px 0;
+  }
+
   .resume-section-title {
     font-size: var(--rd-heading-font-size, 12px);
     font-weight: var(--rd-heading-font-weight, 700);
@@ -732,7 +750,7 @@
     letter-spacing: 0.15em;
     text-transform: uppercase;
     color: var(--rd-heading-color, inherit);
-    margin: 0 0 6px 0;
+    margin: 0;
     font-family: var(
       --rd-font-heading,
       -apple-system,
@@ -741,6 +759,28 @@
       Roboto,
       sans-serif
     );
+  }
+
+  .resume-section-tag {
+    font-family: var(
+      --rd-font-body,
+      -apple-system,
+      BlinkMacSystemFont,
+      'Segoe UI',
+      Roboto,
+      sans-serif
+    );
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1.2;
+    text-transform: none;
+    white-space: nowrap;
+    flex-shrink: 0;
+    padding: 1px 7px;
+    border: 1px solid color-mix(in srgb, currentColor 32%, transparent);
+    border-radius: 999px;
+    opacity: 0.78;
   }
 
   .resume-paper-wrapper[data-resume-theme='dark'] .resume-section-title {
@@ -782,6 +822,75 @@
     gap: 8px;
   }
 
+  .resume-entry-group + .resume-entry-group {
+    margin-top: calc(var(--rd-entry-gap, 16px) + 4px);
+  }
+
+  .resume-subheading {
+    font-family: var(
+      --rd-font-heading,
+      -apple-system,
+      BlinkMacSystemFont,
+      'Segoe UI',
+      Roboto,
+      sans-serif
+    );
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    line-height: 1.3;
+    text-transform: none;
+    color: color-mix(in srgb, currentColor 58%, transparent);
+    margin: 0 0 8px;
+  }
+
+  .resume-paper-wrapper[data-resume-theme='dark'] .resume-subheading {
+    color: color-mix(in srgb, #e5e5e5 62%, transparent);
+  }
+
+  .resume-org-group {
+    min-width: 0;
+  }
+
+  .resume-org-name {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.3;
+    margin: 0 0 6px;
+    color: inherit;
+    break-after: avoid;
+  }
+
+  .resume-org-roles {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-left: 12px;
+  }
+
+  .resume-org-roles::before {
+    content: '';
+    position: absolute;
+    left: 3px;
+    top: 5px;
+    bottom: 5px;
+    width: 1px;
+    background: color-mix(in srgb, currentColor 22%, transparent);
+  }
+
+  .resume-paper-wrapper[data-resume-theme='dark'] .resume-org-roles::before {
+    background: color-mix(in srgb, #e5e5e5 28%, transparent);
+  }
+
+  .resume-org-role {
+    min-width: 0;
+  }
+
+  .resume-entries-compact .resume-org-roles {
+    gap: 4px;
+  }
+
   .resume-entry {
     break-inside: avoid;
   }
@@ -805,10 +914,68 @@
     color: inherit;
   }
 
+  .resume-entry-title-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 5px 8px;
+  }
+
+  .resume-heading-tags {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .resume-heading-tag {
+    font-family: var(
+      --rd-font-body,
+      -apple-system,
+      BlinkMacSystemFont,
+      'Segoe UI',
+      Roboto,
+      sans-serif
+    );
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1.2;
+    text-transform: none;
+    white-space: nowrap;
+    flex-shrink: 0;
+    padding: 1px 7px;
+    /* Flex centering uses the ascender box, which sits above the heading's visual center. */
+    position: relative;
+    top: 1px;
+    border-radius: 999px;
+    color: var(--tag-fg, currentColor);
+    background: var(--tag-bg, color-mix(in srgb, currentColor 8%, transparent));
+    border: 1px solid var(--tag-border, color-mix(in srgb, currentColor 28%, transparent));
+  }
+
+  .resume-paper-wrapper[data-resume-theme='dark'] .resume-heading-tag {
+    color: var(--tag-fg-dark, var(--tag-fg, #d4d4d8));
+    background: var(--tag-bg-dark, var(--tag-bg, #27272a));
+    border-color: var(--tag-border-dark, var(--tag-border, #52525b));
+  }
+
   .resume-entry-subtitle {
     font-size: 13px;
     color: #555;
     margin: 1px 0 0 0;
+  }
+
+  .resume-entry-subtitle-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 5px 8px;
+    margin: 1px 0 0 0;
+  }
+
+  .resume-entry-subtitle-row .resume-entry-subtitle {
+    margin: 0;
   }
 
   .resume-paper-wrapper[data-resume-theme='dark'] .resume-entry-subtitle {
@@ -1329,6 +1496,12 @@
     color: #525252;
   }
 
+  .resume-paper--lumen .resume-subheading {
+    letter-spacing: 0.14em;
+    font-weight: 600;
+    color: #737373;
+  }
+
   .resume-paper-wrapper[data-resume-theme='dark'] .resume-paper--lumen .resume-entry-subtitle {
     color: #a3a3a3;
   }
@@ -1459,6 +1632,13 @@
     letter-spacing: 0.24em;
   }
 
+  .resume-paper--sleek .resume-section-heading {
+    margin: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
   .resume-paper--sleek .resume-section-line {
     display: none;
   }
@@ -1476,6 +1656,27 @@
 
   .resume-paper--sleek .resume-section > .resume-entries-compact {
     grid-column: 2;
+  }
+
+  .resume-paper--sleek .resume-section > .resume-entry-group {
+    grid-column: 1 / -1;
+  }
+
+  .resume-paper--sleek .resume-section > .resume-entry-group-compact {
+    grid-column: 2;
+  }
+
+  .resume-paper--sleek .resume-subheading {
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-size: 9px;
+    margin: 0 0 10px 204px;
+  }
+
+  .resume-paper--sleek .resume-entry-group-compact .resume-subheading {
+    margin-left: 0;
+    text-transform: none;
+    letter-spacing: 0.08em;
   }
 
   .resume-paper--sleek .resume-entry {
@@ -1673,6 +1874,14 @@
     margin-bottom: 12px;
   }
 
+  .resume-paper--studio .resume-section-heading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    margin: 0;
+  }
+
   .resume-paper--studio .resume-section-title {
     display: inline-flex;
     align-items: center;
@@ -1704,6 +1913,18 @@
     background: #c4c4c4;
     opacity: 1;
     margin: 0;
+  }
+
+  .resume-paper--studio .resume-section-tag {
+    border-color: #9ca3af;
+    opacity: 1;
+    font-size: 10.5px;
+    padding: 2px 8px;
+  }
+
+  .resume-paper--studio .resume-subheading {
+    letter-spacing: 0.08em;
+    color: #6b7280;
   }
 
   /* Skills as a plain vertical list — no proficiency bars */
@@ -1909,6 +2130,18 @@
     display: none;
   }
 
+  .resume-paper--atelier .resume-subheading {
+    font-family: var(--rd-font-heading, 'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-size: 9px;
+    color: color-mix(
+      in srgb,
+      var(--rd-heading-color, var(--rd-accent-color, #c25b42)) 72%,
+      #8a6a62
+    );
+  }
+
   .resume-paper--atelier .resume-summary {
     font-size: 12.5px;
     line-height: 1.6;
@@ -1917,6 +2150,17 @@
 
   .resume-atelier-exp {
     margin-bottom: 18px;
+  }
+
+  .resume-org-roles .resume-atelier-exp {
+    margin-bottom: 0;
+  }
+
+  .resume-paper.resume-paper--atelier .resume-org-name {
+    font-family: var(--rd-font-body, 'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif);
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 8px;
   }
 
   .resume-atelier-exp-grid {
@@ -2064,17 +2308,244 @@
   }
 }
 
+/*
+ * Highlighter stroke. Background covers the words only; the line-height on
+ * the parent leaves a gap, so a wrapped sentence reads as separate marker
+ * passes. Ink stays dark on the mark in both themes — a highlighter lights
+ * the paper, it does not invert with the page.
+ */
+.resume-highlights mark.resume-highlight-stroke {
+  --highlight-ink: #1c1917;
+  --highlight-mark: #ffe14a;
+  color: var(--highlight-ink);
+  font: inherit;
+  background-color: var(--highlight-mark);
+  padding: 0.08em 0.2em 0.02em;
+  border-radius: 0.08em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.dark .resume-highlights mark.resume-highlight-stroke {
+  --highlight-mark: #f5d84a;
+}
+
+/*
+ * Highlights drawn into the resume. A light-green marker over words already
+ * on the page, and two boxes under each company heading: the impact summary,
+ * then skill tags. The boxes sit in the document flow, so everything below
+ * moves down by their height. The marker keeps the paper's ink colour.
+ */
+.resume-paper mark.glance-mark {
+  --glance-marker: rgb(134 239 172 / 0.55);
+  color: inherit;
+  font: inherit;
+  background: linear-gradient(
+    180deg,
+    transparent 0.18em,
+    var(--glance-marker) 0.18em,
+    var(--glance-marker) calc(100% - 0.06em),
+    transparent calc(100% - 0.06em)
+  );
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  padding: 0 0.14em;
+  margin: 0 -0.04em;
+  border-radius: 0.2em 0.12em 0.24em 0.1em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  /* The pen sweeps left to right. Only the ink moves; the words never fade. */
+  animation: glance-swipe 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes glance-swipe {
+  from {
+    background-size: 0% 100%;
+  }
+  to {
+    background-size: 100% 100%;
+  }
+}
+
+.resume-paper-wrapper[data-resume-theme='dark'] .resume-paper mark.glance-mark {
+  --glance-marker: rgb(74 222 128 / 0.26);
+}
+
+.resume-paper .glance-inserts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 5px 0 6px;
+  animation: glance-paint 0.3s ease-out;
+}
+
+/* Quieter than the job title above it: same family, smaller, regular weight. */
+.resume-paper .glance-summary {
+  margin: 0;
+  padding: 5px 10px 5px 9px;
+  border-radius: 4px;
+  border-left: 2px solid #22c55e;
+  background: #f0fdf4;
+  color: #14532d;
+  font-size: 0.86em;
+  font-weight: 500;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+.resume-paper .glance-skills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 4px 6px;
+  list-style: none;
+  border-radius: 4px;
+  background: #f0f9ff;
+}
+
+.resume-paper .glance-skills li {
+  margin: 0;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px rgb(2 132 199 / 0.18);
+  color: #075985;
+  font-size: 0.76em;
+  font-weight: 500;
+  line-height: 1.75;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.resume-paper .glance-skills li::marker {
+  content: none;
+}
+
+.resume-paper-wrapper[data-resume-theme='dark'] .resume-paper .glance-summary {
+  border-left-color: rgb(74 222 128 / 0.7);
+  background: rgb(34 197 94 / 0.1);
+  color: #bbf7d0;
+}
+
+.resume-paper-wrapper[data-resume-theme='dark'] .resume-paper .glance-skills {
+  background: rgb(56 189 248 / 0.08);
+}
+
+.resume-paper-wrapper[data-resume-theme='dark'] .resume-paper .glance-skills li {
+  background: rgb(255 255 255 / 0.05);
+  box-shadow: inset 0 0 0 1px rgb(125 211 252 / 0.22);
+  color: #bae6fd;
+}
+
+/*
+ * AI suggestions drawn into the resume while the user reviews them.
+ * A rewritten line wears a neutral marker with its new words in green; a new
+ * line is green as a whole; a removed line is light red and struck through.
+ * Same marker band as the highlights, so the two read as one family.
+ */
+.resume-paper .redline {
+  --redline-neutral: rgb(120 113 108 / 0.16);
+  --redline-green: rgb(74 222 128 / 0.42);
+  --redline-red: rgb(248 113 113 / 0.2);
+  color: inherit;
+  font: inherit;
+  text-decoration: none;
+  padding: 0 0.12em;
+  margin: 0 -0.04em;
+  border-radius: 0.2em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.resume-paper .redline--modified {
+  background: var(--redline-neutral);
+}
+
+.resume-paper .redline--modified .redline-ins,
+.resume-paper .redline--added {
+  background: var(--redline-green);
+  color: inherit;
+  text-decoration: none;
+  border-radius: 0.16em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.resume-paper .redline--removed {
+  background: var(--redline-red);
+  text-decoration: line-through;
+  text-decoration-color: rgb(220 38 38 / 0.75);
+  text-decoration-thickness: 0.08em;
+}
+
+.resume-paper .redline-blank {
+  padding: 0 0.15em;
+  border-radius: 0.16em;
+  background: rgb(251 191 36 / 0.45);
+  font-weight: 600;
+}
+
+.resume-paper [data-edit-id] {
+  border-radius: 3px;
+  cursor: pointer;
+  transition: box-shadow 0.15s ease;
+}
+
+.resume-paper [data-edit-id][data-redline-active] {
+  box-shadow: 0 0 0 2px hsl(var(--primary) / 0.45);
+}
+
+.resume-paper-wrapper[data-resume-theme='dark'] .resume-paper .redline {
+  --redline-neutral: rgb(255 255 255 / 0.1);
+  --redline-green: rgb(74 222 128 / 0.28);
+  --redline-red: rgb(248 113 113 / 0.18);
+}
+
+[data-copying] [data-copy-exclude] {
+  display: none !important;
+}
+
+@keyframes glance-paint {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .resume-paper mark.glance-mark,
+  .resume-paper .glance-inserts {
+    animation: none;
+  }
+}
+
 /* Print styles for clean resume */
 @media print {
   /* Hide everything except the resume */
   body > *:not(.resume-paper):not(.resume-paper-wrapper),
   .resume-actions,
   .resume-justify-button,
+  .view-highlights,
+  .glance-inserts,
   .resume-lens-ui,
   header,
   footer,
   nav {
     display: none !important;
+  }
+
+  /* A printed resume is the resume, never the highlights drawn on it. */
+  .resume-paper mark.glance-mark,
+  .resume-paper .redline,
+  .resume-paper .redline-ins {
+    background: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
   }
 
   /* Reset the paper styling for print */
@@ -2218,7 +2689,8 @@
   outline: none;
 }
 
-.tiptap p.is-editor-empty:first-child::before {
+.tiptap p.is-editor-empty:first-child::before,
+.tiptap.is-editor-empty::before {
   content: attr(data-placeholder);
   pointer-events: none;
   color: hsl(var(--muted-foreground));

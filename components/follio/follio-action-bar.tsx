@@ -40,7 +40,7 @@ export function FollioActionBar({ identity, visible, onShare }: FollioActionBarP
           ) : (
             <UserRoundPlus className="h-4 w-4" aria-hidden />
           )}
-          {saved ? 'Saved' : 'Save contact'}
+          {saved ? 'Contact card ready' : 'Save contact'}
         </Button>
 
         {identity.doors.resume ? (

@@ -25,6 +25,8 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useRef } from 'react';
 
+import { isHtmlEmpty } from '@/lib/html-utils';
+import { BulletMode } from '@/lib/rich-text/bullet-mode';
 import { cn } from '@/lib/utils';
 
 import { Toggle } from '@/components/ui/toggle';
@@ -59,11 +61,12 @@ interface RichTextEditorProps {
   /** Disabled state */
   disabled?: boolean;
   /**
-   * When true, the editor enforces bullet-list mode:
-   * - Content starts in a bullet list
-   * - Paragraphs are auto-converted to bullet items on input
+   * When true, the editor uses bullet lists for non-empty content:
+   * - Empty fields stay a blank paragraph (no lone bullet)
+   * - Typing wraps paragraphs into bullet items
    *
-   * Use for fields that represent bullet points (experience highlights, etc.)
+   * Use for fields that represent bullet points (experience and education
+   * highlights, etc.)
    */
   bulletMode?: boolean;
 }
@@ -110,6 +113,18 @@ const BULLET_STYLES: { style: BulletStyle; icon: React.ElementType; label: strin
   { style: 'square', icon: Square, label: 'Square' },
   { style: 'dash', icon: Minus, label: 'Dash' },
 ];
+
+function editorContentFromValue(value: string): string {
+  return isHtmlEmpty(value) ? '' : value;
+}
+
+function htmlFromEditor(html: string): string {
+  return isHtmlEmpty(html) ? '' : html;
+}
+
+function syncEditorEmptyClass(ed: { isEmpty: boolean; view: { dom: HTMLElement } }) {
+  ed.view.dom.classList.toggle('is-editor-empty', ed.isEmpty);
+}
 
 // ─────────────────────────────────────────────
 // Toolbar button helper
@@ -167,10 +182,7 @@ export function RichTextEditor({
   // to avoid fighting the editor's own output (and resetting the cursor).
   const isInternalUpdate = useRef(false);
 
-  const EMPTY_BULLET_HTML =
-    '<ul data-bullet-style="disc" class="rich-text-bullets bullet-style-disc"><li><p style="text-align: justify"></p></li></ul>';
-
-  const initialContent = value || (bulletMode ? EMPTY_BULLET_HTML : '');
+  const initialContent = editorContentFromValue(value);
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -188,6 +200,7 @@ export function RichTextEditor({
         HTMLAttributes: { class: 'rich-text-ordered' },
       }),
       ListItem,
+      ...(bulletMode ? [BulletMode] : []),
       // Always write text-align into HTML, including justify. TipTap's default
       // omits the default alignment, which made the preview look justified via
       // CSS while the stored (and PDF) HTML had no alignment.
@@ -226,9 +239,13 @@ export function RichTextEditor({
         ...(placeholder ? { 'data-placeholder': placeholder } : {}),
       },
     },
+    onCreate: ({ editor: ed }) => {
+      syncEditorEmptyClass(ed);
+    },
     onUpdate: ({ editor: ed }) => {
       isInternalUpdate.current = true;
-      onChange(ed.getHTML());
+      syncEditorEmptyClass(ed);
+      onChange(htmlFromEditor(ed.getHTML()));
     },
     onBlur: ({ event }) => {
       const related = event.relatedTarget as Node | null;
@@ -248,9 +265,13 @@ export function RichTextEditor({
     }
 
     const current = editor.getHTML();
+    if (isHtmlEmpty(current) && isHtmlEmpty(value)) {
+      syncEditorEmptyClass(editor);
+      return;
+    }
     if (current !== value) {
-      const newContent = value || (bulletMode ? EMPTY_BULLET_HTML : '');
-      editor.commands.setContent(newContent, { emitUpdate: false });
+      editor.commands.setContent(editorContentFromValue(value), { emitUpdate: false });
+      syncEditorEmptyClass(editor);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor, value]);
@@ -259,29 +280,6 @@ export function RichTextEditor({
     if (!editor) return;
     editor.setEditable(!disabled);
   }, [editor, disabled]);
-
-  // Bullet mode: when the cursor escapes to a bare paragraph (e.g. after
-  // pressing Enter twice or Backspace at the start), wrap it back into
-  // a bullet list.  Only do this on user-driven "selectionUpdate" events
-  // (not programmatic transactions) to avoid infinite loops.
-  useEffect(() => {
-    if (!editor || !bulletMode) return;
-
-    const handler = () => {
-      if (
-        editor.isActive('paragraph') &&
-        !editor.isActive('bulletList') &&
-        !editor.isActive('orderedList')
-      ) {
-        editor.chain().toggleBulletList().run();
-      }
-    };
-
-    editor.on('selectionUpdate', handler);
-    return () => {
-      editor.off('selectionUpdate', handler);
-    };
-  }, [editor, bulletMode]);
 
   const setBulletStyle = useCallback(
     (style: BulletStyle) => {

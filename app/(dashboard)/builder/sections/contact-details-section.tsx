@@ -140,7 +140,7 @@ function buildEntries(profile: FullProfile): ContactEntry[] {
     kind: 'email',
     label: 'Email',
     value: (contactInfo?.email as string) || '',
-    isVisible: (contactInfo?.emailPublic as boolean) || false,
+    isVisible: (contactInfo?.emailPublic as boolean | undefined) ?? true,
     placeholder: 'you@example.com',
     removable: false,
   });
@@ -149,7 +149,7 @@ function buildEntries(profile: FullProfile): ContactEntry[] {
     kind: 'phone',
     label: 'Phone',
     value: (contactInfo?.phoneNumber as string) || (contactInfo?.phone as string) || '',
-    isVisible: (contactInfo?.phonePublic as boolean) || false,
+    isVisible: (contactInfo?.phonePublic as boolean | undefined) ?? true,
     placeholder: '+1 (555) 123-4567',
     removable: false,
   });
@@ -242,9 +242,9 @@ function SortableEntryRow({
     <div ref={setNodeRef} style={style} className="space-y-1" data-entry-id={dataEntryId}>
       <div
         className={cn(
-          'group flex items-center gap-1.5 rounded-xl bg-background px-2.5 py-1.5 transition-colors',
-          isDragging && 'z-50 bg-background shadow-md',
-          !isDragging && 'hover:bg-background/80'
+          'group flex items-center gap-1.5 rounded-xl px-1 py-1.5 transition-colors',
+          isDragging && 'z-50 bg-background/80 shadow-sm',
+          !isDragging && 'hover:bg-foreground/[0.04]'
         )}
       >
         {/* Drag handle */}
@@ -253,7 +253,7 @@ function SortableEntryRow({
           type="button"
           title="Drag to reorder"
           aria-label={`Reorder ${entry.label}`}
-          className="flex shrink-0 cursor-grab touch-none items-center text-muted-foreground/30 opacity-0 transition-opacity hover:text-muted-foreground focus-visible:opacity-100 active:cursor-grabbing group-hover:opacity-100"
+          className="builder-grip"
           {...attributes}
           {...listeners}
         >
@@ -289,7 +289,7 @@ function SortableEntryRow({
               <button
                 type="button"
                 onClick={onVisibilityToggle}
-                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-accent"
+                className="builder-quiet-btn"
                 tabIndex={-1}
               >
                 {entry.isVisible ? (
@@ -314,7 +314,7 @@ function SortableEntryRow({
               <button
                 type="button"
                 onClick={onRemove}
-                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground/30 opacity-0 transition-opacity hover:bg-accent hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
+                className="builder-quiet-btn hover:text-destructive"
                 tabIndex={-1}
               >
                 <Trash2 className="h-3.5 w-3.5" />
@@ -796,7 +796,7 @@ export function ContactDetailsSection({
         onDragEnd={handleDragEnd}
       >
         <SortableContext items={entryIds} strategy={verticalListSortingStrategy}>
-          <div className="space-y-2">
+          <div className="space-y-0.5">
             {entries.map((entry) => (
               <SortableEntryRow
                 key={entry.kind === 'link' ? `link-${entry.linkType}` : entry.id}

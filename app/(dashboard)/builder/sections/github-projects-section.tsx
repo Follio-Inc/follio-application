@@ -17,6 +17,7 @@ import {
 import { useMemo, useState } from 'react';
 
 import { isPortfolioEnabled } from '@/lib/features';
+import { useConnectExternalAccount } from '@/lib/hooks/use-connect-external-account';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -53,6 +54,7 @@ interface ProjectVisibility {
 
 export function GitHubProjectsSection({ projects, onUpdateAction }: GitHubProjectsSectionProps) {
   const { user, isLoaded: isUserLoaded } = useUser();
+  const connectExternalAccount = useConnectExternalAccount();
   const [isLoading, setIsLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,21 +87,12 @@ export function GitHubProjectsSection({ projects, onUpdateAction }: GitHubProjec
     setIsConnecting(true);
     setError(null);
 
-    try {
-      const externalAccount = await user.createExternalAccount({
-        strategy: 'oauth_github',
-        redirectUrl: window.location.href,
-      });
-
-      const url = externalAccount?.verification?.externalVerificationRedirectURL;
-      if (url) {
-        window.location.href = url.toString();
-      }
-    } catch (err) {
-      console.error('GitHub connect error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to connect GitHub');
-      setIsConnecting(false);
+    const result = await connectExternalAccount('oauth_github');
+    if (result.status === 'redirected') return;
+    if (result.status === 'error') {
+      setError(result.message);
     }
+    setIsConnecting(false);
   };
 
   const handleSyncGitHub = async () => {

@@ -11,7 +11,7 @@
  */
 
 /** Content that can be shared via a Follio link. */
-export type LinkShareKind = 'resume' | 'portfolio' | 'cover-letter';
+export type LinkShareKind = 'resume' | 'portfolio' | 'cover-letter' | 'follio';
 
 /**
  * How a document is shared with recipients.
