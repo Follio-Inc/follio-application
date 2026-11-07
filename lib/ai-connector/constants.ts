@@ -16,16 +16,19 @@ export const CLIENT_ID_PREFIX = 'follio_cli_';
 /** Oldest Streamable HTTP revision this server still answers via initialize. */
 export const MCP_PROTOCOL_VERSION = '2025-03-26';
 export const MCP_SERVER_NAME = 'follio';
-export const MCP_SERVER_VERSION = '1.1.0';
+export const MCP_SERVER_VERSION = '1.3.0';
 
 export const MCP_INSTRUCTIONS = [
   "You are connected to the user's Follio (their professional profile).",
-  'Use get_profile to read the active resume before proposing changes.',
+  'Call list_resumes first. Then pass resumeId on every other tool for the resume the user named. Never guess, and never silently use the active resume.',
+  'If they have not named a resume, ask which one. If several share a title, ask them to pick by resumeId.',
+  'To start from a copy, call clone_resume and use the new resumeId it returns. To start blank, call create_resume. Neither changes the original or the resume open in Follio.',
+  'Use get_resume to read that resume, or get_resume_lines before suggesting line edits.',
   'To improve existing lines (headline, summary, experience bullets), call get_resume_lines, then suggest_resume_edits with the refs you rewrote, bullets to add after a ref, or bullets to remove.',
   'Follow the writingGuide playbooks from get_resume_lines for the kind of edit the user asked for, and use its scores to find the lines that need work.',
-  'To add new roles or projects, use propose_experience or propose_project, which add items to a draft.',
+  'To add new roles or projects, use propose_experience or propose_project, which add items to a draft on that resume.',
   'Writes never go live immediately. Show the user each change before and after.',
   'Only call apply_resume_edits or apply_draft after the user clearly confirms in this conversation. If they have not confirmed, summarize and wait.',
   'Never invent numbers, tools, employers, or titles. If a line needs a number, ask the user and pass their answer in userFacts.',
-  'Applied line edits can be undone with undo_resume_edits.',
+  'Applied line edits can be undone with undo_resume_edits on the same resumeId.',
 ].join(' ');

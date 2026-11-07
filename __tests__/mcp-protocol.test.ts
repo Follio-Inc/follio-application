@@ -27,7 +27,10 @@ const ctx: McpAuthContext = {
 };
 
 const handlers: McpToolHandlers = {
-  getProfile: async () => ({ handle: 'alex' }),
+  listResumes: async () => ({ resumes: [{ resumeId: 'p1' }] }),
+  getResume: async () => ({ handle: 'alex' }),
+  createResume: async () => ({ resumeId: 'p2' }),
+  cloneResume: async () => ({ resumeId: 'p3' }),
   listDrafts: async () => [],
   proposeSummary: async () => ({ draftId: 'd1' }),
   proposeExperience: async () => ({ draftId: 'd1' }),
@@ -83,7 +86,7 @@ describe('tool catalog', () => {
         expect(tool.annotations.destructiveHint).toBe(false);
       }
     }
-    expect(MCP_TOOLS.find((tool) => tool.name === 'get_profile')?.annotations.readOnlyHint).toBe(
+    expect(MCP_TOOLS.find((tool) => tool.name === 'get_resume')?.annotations.readOnlyHint).toBe(
       true
     );
     expect(MCP_TOOLS.find((tool) => tool.name === 'apply_draft')?.annotations.destructiveHint).toBe(
@@ -113,7 +116,7 @@ describe('modern MCP', () => {
         supportedVersions: ['2026-07-28'],
         cacheScope: 'public',
         _meta: {
-          'io.modelcontextprotocol/serverInfo': { name: 'follio', version: '1.1.0' },
+          'io.modelcontextprotocol/serverInfo': { name: 'follio', version: '1.3.0' },
         },
       },
     });
@@ -125,12 +128,12 @@ describe('modern MCP', () => {
         jsonrpc: '2.0',
         id: 2,
         method: 'tools/call',
-        params: { name: 'get_profile', arguments: {}, _meta: MODERN_META },
+        params: { name: 'get_resume', arguments: { resumeId: 'p1' }, _meta: MODERN_META },
       },
       {
         protocolHeader: '2026-07-28',
         mcpMethodHeader: 'tools/call',
-        mcpNameHeader: 'get_profile',
+        mcpNameHeader: 'get_resume',
       },
       ctx,
       handlers
@@ -145,13 +148,13 @@ describe('modern MCP', () => {
   });
 
   it('accepts a base64 Mcp-Name header', async () => {
-    const encoded = `=?base64?${Buffer.from('get_profile').toString('base64')}?=`;
+    const encoded = `=?base64?${Buffer.from('get_resume').toString('base64')}?=`;
     const result = await dispatchMcpMessage(
       {
         jsonrpc: '2.0',
         id: 3,
         method: 'tools/call',
-        params: { name: 'get_profile', arguments: {}, _meta: MODERN_META },
+        params: { name: 'get_resume', arguments: { resumeId: 'p1' }, _meta: MODERN_META },
       },
       {
         protocolHeader: '2026-07-28',
@@ -170,7 +173,7 @@ describe('modern MCP', () => {
         jsonrpc: '2.0',
         id: 4,
         method: 'tools/call',
-        params: { name: 'get_profile', arguments: {}, _meta: MODERN_META },
+        params: { name: 'get_resume', arguments: { resumeId: 'p1' }, _meta: MODERN_META },
       },
       {
         protocolHeader: '2026-07-28',
@@ -228,9 +231,9 @@ describe('transport guards', () => {
   });
 
   it('decodes a base64 header sentinel', () => {
-    const encoded = `=?base64?${Buffer.from('get_profile').toString('base64')}?=`;
-    expect(decodeMcpHeaderValue(encoded)).toBe('get_profile');
-    expect(decodeMcpHeaderValue('get_profile')).toBe('get_profile');
+    const encoded = `=?base64?${Buffer.from('get_resume').toString('base64')}?=`;
+    expect(decodeMcpHeaderValue(encoded)).toBe('get_resume');
+    expect(decodeMcpHeaderValue('get_resume')).toBe('get_resume');
   });
 });
 

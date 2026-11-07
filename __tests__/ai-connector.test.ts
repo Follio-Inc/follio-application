@@ -168,7 +168,10 @@ describe('MCP protocol', () => {
   };
 
   const handlers: McpToolHandlers = {
-    getProfile: async () => ({ handle: 'alex' }),
+    listResumes: async () => ({ resumes: [{ resumeId: 'p1', title: 'Product PM' }] }),
+    getResume: async () => ({ handle: 'alex' }),
+    createResume: async () => ({ resumeId: 'p2', title: 'New' }),
+    cloneResume: async () => ({ resumeId: 'p3', title: 'Stripe PM' }),
     listDrafts: async () => [],
     proposeSummary: async () => ({ draftId: 'd1' }),
     proposeExperience: async () => ({ draftId: 'd1' }),
@@ -194,7 +197,10 @@ describe('MCP protocol', () => {
 
   it('lists the Follio tools', () => {
     expect(MCP_TOOLS.map((tool) => tool.name)).toEqual([
-      'get_profile',
+      'list_resumes',
+      'get_resume',
+      'create_resume',
+      'clone_resume',
       'list_drafts',
       'propose_summary',
       'propose_experience',
@@ -209,8 +215,16 @@ describe('MCP protocol', () => {
     ]);
   });
 
+  it('requires resumeId on every tool except list and create', () => {
+    for (const tool of MCP_TOOLS) {
+      if (tool.name === 'list_resumes' || tool.name === 'create_resume') continue;
+      expect(tool.inputSchema.required).toEqual(expect.arrayContaining(['resumeId']));
+    }
+  });
+
   it('passes valid line edits through to the handler', async () => {
     const result = await callTool('suggest_resume_edits', {
+      resumeId: 'p1',
       request: 'Tighten my bullets',
       changes: [{ ref: 'E1.2', text: 'Cut deploy time 40% with CI caching' }],
     });
@@ -220,6 +234,7 @@ describe('MCP protocol', () => {
 
   it('rejects line edits that do not point at a resume line', async () => {
     const result = await callTool('suggest_resume_edits', {
+      resumeId: 'p1',
       request: 'Tighten my bullets',
       changes: [{ ref: 'experience 1', text: 'Something' }],
     });
@@ -230,7 +245,7 @@ describe('MCP protocol', () => {
   it('needs the apply permission to write or undo line edits', async () => {
     const limited = { ...ctx, scopes: ['follio.read', 'follio.draft'] };
     for (const name of ['apply_resume_edits', 'undo_resume_edits']) {
-      const result = await callTool(name, { sessionId: 's1' }, limited);
+      const result = await callTool(name, { resumeId: 'p1', sessionId: 's1' }, limited);
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain('follio.apply');
     }
@@ -261,13 +276,31 @@ describe('MCP protocol', () => {
     expect(response).toBeNull();
   });
 
-  it('calls get_profile', async () => {
+  it('creates a blank resume without resumeId', async () => {
+    const result = await callTool('create_resume', { title: 'Stripe PM' });
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain('p2');
+  });
+
+  it('refuses to clone without a source resumeId', async () => {
+    const result = await callTool('clone_resume', { title: 'Copy' });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('list_resumes');
+  });
+
+  it('refuses get_resume without a resumeId', async () => {
+    const result = await callTool('get_resume', {});
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('list_resumes');
+  });
+
+  it('calls get_resume', async () => {
     const response = await handleMcpMessage(
       {
         jsonrpc: '2.0',
         id: 2,
         method: 'tools/call',
-        params: { name: 'get_profile', arguments: {} },
+        params: { name: 'get_resume', arguments: { resumeId: 'p1' } },
       },
       ctx,
       handlers
@@ -286,7 +319,7 @@ describe('MCP protocol', () => {
         jsonrpc: '2.0',
         id: 3,
         method: 'tools/call',
-        params: { name: 'apply_draft', arguments: { draftId: 'd1' } },
+        params: { name: 'apply_draft', arguments: { resumeId: 'p1', draftId: 'd1' } },
       },
       { ...ctx, scopes: ['follio.read', 'follio.draft'] },
       handlers
@@ -305,7 +338,10 @@ describe('MCP protocol', () => {
         jsonrpc: '2.0',
         id: 4,
         method: 'tools/call',
-        params: { name: 'propose_experience', arguments: { company: 'Acme' } },
+        params: {
+          name: 'propose_experience',
+          arguments: { resumeId: 'p1', company: 'Acme' },
+        },
       },
       ctx,
       handlers

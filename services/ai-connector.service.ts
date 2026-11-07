@@ -26,6 +26,7 @@ import {
   type ResumeEditSelectionInput,
   type SuggestResumeEditsInput,
 } from '@/lib/ai-connector/resume-edits';
+import { listOwnedResumes, requireOwnedResume } from '@/lib/ai-connector/resume-target';
 import { db } from '@/lib/db';
 import { interactiveTransactionOptions } from '@/lib/db-transaction';
 import { Errors } from '@/lib/errors';
@@ -40,6 +41,7 @@ import {
   listResumeEditSessions,
   revertResumeEdits,
 } from '@/services/resume-edit-session.service';
+import { createResume, type CreatedResume } from '@/services/resume-library.service';
 
 const connectorLogger = logger.child({ source: 'ai-connector' });
 
@@ -49,34 +51,6 @@ export interface ConnectorAuth {
   clerkId: string;
   scopes: string[];
   clientLabel: string | null;
-}
-
-async function resolveActiveProfileId(userId: string): Promise<string> {
-  const user = await db.user.findUnique({
-    where: { id: userId },
-    select: {
-      profile: { select: { id: true } },
-    },
-  });
-
-  if (user?.profile?.id) return user.profile.id;
-
-  const fallback = await db.profile.findFirst({
-    where: { userId },
-    orderBy: { createdAt: 'asc' },
-    select: { id: true },
-  });
-
-  if (!fallback) {
-    throw Errors.notFound('Follio');
-  }
-
-  await db.user.update({
-    where: { id: userId },
-    data: { profile: { connect: { id: fallback.id } } },
-  });
-
-  return fallback.id;
 }
 
 export async function authenticateConnectorToken(token: string): Promise<ConnectorAuth | null> {
@@ -150,8 +124,73 @@ export async function revokeConnectorToken(userId: string, tokenId: string): Pro
   });
 }
 
-export async function getConnectorProfile(userId: string) {
-  const profileId = await resolveActiveProfileId(userId);
+async function connectorUser(userId: string) {
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true },
+  });
+  if (!user) throw Errors.notFound('User');
+  return user;
+}
+
+function createdResumeView(
+  created: CreatedResume,
+  message: string,
+  extra: Record<string, unknown> = {}
+) {
+  return {
+    resumeId: created.id,
+    title: created.resumeTitle,
+    handle: created.handle,
+    ...extra,
+    message,
+  };
+}
+
+export async function createConnectorResume(userId: string, title?: string) {
+  const user = await connectorUser(userId);
+  const created = await createResume({
+    userId: user.id,
+    email: user.email,
+    strategy: 'BLANK',
+    title,
+    activate: false,
+  });
+  return createdResumeView(
+    created,
+    'Created a blank resume. Pass this resumeId on later tools. It is private. The Follio builder still shows the resume that was already open.'
+  );
+}
+
+export async function cloneConnectorResume(userId: string, resumeRef: string, title?: string) {
+  const user = await connectorUser(userId);
+  const source = await requireOwnedResume(userId, resumeRef);
+  const created = await createResume({
+    userId: user.id,
+    email: user.email,
+    strategy: 'CLONE',
+    sourceProfileId: source.resumeId,
+    title,
+    activate: false,
+  });
+  return createdResumeView(
+    created,
+    `Cloned “${source.title}”. Pass this resumeId on later tools. The original is unchanged. The copy is private and was not switched in the Follio builder.`,
+    { sourceResumeId: source.resumeId, sourceTitle: source.title }
+  );
+}
+
+export async function listConnectorResumes(userId: string) {
+  const resumes = await listOwnedResumes(userId);
+  return {
+    resumes,
+    note: 'Pass resumeId on every other tool. isActive is only a hint — never assume it.',
+  };
+}
+
+export async function getConnectorProfile(userId: string, resumeRef: string) {
+  const resume = await requireOwnedResume(userId, resumeRef);
+  const profileId = resume.resumeId;
 
   const profile = await db.profile.findUnique({
     where: { id: profileId },
@@ -172,11 +211,19 @@ export async function getConnectorProfile(userId: string) {
     throw Errors.notFound('Profile');
   }
 
-  return toConnectorProfileView(profile);
+  return {
+    resumeId: resume.resumeId,
+    title: resume.title,
+    isActive: resume.isActive,
+    ...toConnectorProfileView(profile),
+  };
 }
 
-async function getOrCreatePendingDraft(userId: string, clientLabel: string | null) {
-  const profileId = await resolveActiveProfileId(userId);
+async function getOrCreatePendingDraft(
+  userId: string,
+  clientLabel: string | null,
+  profileId: string
+) {
   const now = new Date();
 
   const existing = await db.aiEditDraft.findFirst({
@@ -207,9 +254,10 @@ async function getOrCreatePendingDraft(userId: string, clientLabel: string | nul
 async function appendOperation(
   userId: string,
   clientLabel: string | null,
+  profileId: string,
   operation: DraftOperation
 ) {
-  const draft = await getOrCreatePendingDraft(userId, clientLabel);
+  const draft = await getOrCreatePendingDraft(userId, clientLabel, profileId);
   const operations = [...parseOperations(draft.operations), operation];
   const summary = summarizeOperations(operations);
 
@@ -225,43 +273,51 @@ async function appendOperation(
 
   return {
     draftId: updated.id,
+    resumeId: updated.profileId,
     status: updated.status,
     summary: updated.summary,
     operations,
     added: describeOperation(operation),
     message:
-      'Saved to a draft. The live Follio is unchanged. Ask the user to confirm, then call apply_draft.',
+      'Saved to a draft. The live Follio is unchanged. Ask the user to confirm, then call apply_draft with this resumeId.',
   };
 }
 
 export async function proposeSummary(
   userId: string,
   clientLabel: string | null,
+  resumeRef: string,
   input: ProposeSummaryInput
 ) {
-  return appendOperation(userId, clientLabel, operationFromSummary(input));
+  const resume = await requireOwnedResume(userId, resumeRef);
+  return appendOperation(userId, clientLabel, resume.resumeId, operationFromSummary(input));
 }
 
 export async function proposeExperience(
   userId: string,
   clientLabel: string | null,
+  resumeRef: string,
   input: ProposeExperienceInput
 ) {
   requireFlexibleDate(input.startDate, 'startDate');
   if (input.endDate) requireFlexibleDate(input.endDate, 'endDate');
-  return appendOperation(userId, clientLabel, operationFromExperience(input));
+  const resume = await requireOwnedResume(userId, resumeRef);
+  return appendOperation(userId, clientLabel, resume.resumeId, operationFromExperience(input));
 }
 
 export async function proposeProject(
   userId: string,
   clientLabel: string | null,
+  resumeRef: string,
   input: ProposeProjectInput
 ) {
-  return appendOperation(userId, clientLabel, operationFromProject(input));
+  const resume = await requireOwnedResume(userId, resumeRef);
+  return appendOperation(userId, clientLabel, resume.resumeId, operationFromProject(input));
 }
 
 function serializeDraft(draft: {
   id: string;
+  profileId: string;
   status: string;
   summary: string;
   operations: unknown;
@@ -272,6 +328,7 @@ function serializeDraft(draft: {
 }) {
   return {
     draftId: draft.id,
+    resumeId: draft.profileId,
     status: draft.status,
     summary: draft.summary,
     operations: parseOperations(draft.operations),
@@ -282,10 +339,12 @@ function serializeDraft(draft: {
   };
 }
 
-export async function listDrafts(userId: string, includeApplied = false) {
+export async function listDrafts(userId: string, includeApplied = false, resumeRef?: string) {
+  const resume = resumeRef ? await requireOwnedResume(userId, resumeRef) : null;
   const drafts = await db.aiEditDraft.findMany({
     where: {
       userId,
+      ...(resume ? { profileId: resume.resumeId } : {}),
       ...(includeApplied ? {} : { status: 'PENDING' }),
     },
     orderBy: { updatedAt: 'desc' },
@@ -320,8 +379,21 @@ async function getOwnedDraft(userId: string, draftId: string) {
   return draft;
 }
 
-export async function discardDraft(userId: string, draftId: string) {
+async function requireDraftOnResume(userId: string, draftId: string, resumeRef: string) {
+  const resume = await requireOwnedResume(userId, resumeRef);
   const draft = await getOwnedDraft(userId, draftId);
+  if (draft.profileId !== resume.resumeId) {
+    throw Errors.badRequest(
+      'That draft belongs to a different resume. Pass the resumeId from the draft.'
+    );
+  }
+  return draft;
+}
+
+export async function discardDraft(userId: string, draftId: string, resumeRef?: string) {
+  const draft = resumeRef
+    ? await requireDraftOnResume(userId, draftId, resumeRef)
+    : await getOwnedDraft(userId, draftId);
   if (draft.status !== 'PENDING') {
     throw Errors.badRequest('Only pending drafts can be discarded');
   }
@@ -407,8 +479,10 @@ async function applyOperation(
   }
 }
 
-export async function applyDraft(userId: string, draftId: string) {
-  const draft = await getOwnedDraft(userId, draftId);
+export async function applyDraft(userId: string, draftId: string, resumeRef?: string) {
+  const draft = resumeRef
+    ? await requireDraftOnResume(userId, draftId, resumeRef)
+    : await getOwnedDraft(userId, draftId);
 
   if (draft.status !== 'PENDING') {
     throw Errors.badRequest('This draft has already been applied or discarded');
@@ -446,6 +520,7 @@ export async function applyDraft(userId: string, draftId: string) {
 
   return {
     draftId: draft.id,
+    resumeId: draft.profileId,
     status: 'APPLIED' as const,
     applied: operations.map(describeOperation),
     message: 'Draft applied. The live Follio is updated.',
@@ -456,15 +531,26 @@ export async function applyDraft(userId: string, draftId: string) {
 
 type AssistantContext = { clerkId: string; userId: string; clientLabel: string | null };
 
-async function getResumeLines(ctx: AssistantContext) {
-  return toResumeLinesView(await getEditableResume(ctx.clerkId));
+async function resumeIdFrom(ctx: AssistantContext, resumeRef: string) {
+  return (await requireOwnedResume(ctx.userId, resumeRef)).resumeId;
 }
 
-async function suggestResumeEdits(ctx: AssistantContext, input: SuggestResumeEditsInput) {
+async function getResumeLines(ctx: AssistantContext, resumeRef: string) {
+  return toResumeLinesView(
+    await getEditableResume(ctx.clerkId, await resumeIdFrom(ctx, resumeRef))
+  );
+}
+
+async function suggestResumeEdits(
+  ctx: AssistantContext,
+  input: SuggestResumeEditsInput & { resumeId: string }
+) {
+  const profileId = await resumeIdFrom(ctx, input.resumeId);
   const result = await createAssistantResumeEditSession(
     ctx.clerkId,
     input,
-    ctx.clientLabel || 'AI assistant'
+    ctx.clientLabel || 'AI assistant',
+    profileId
   );
   const changes = result.session?.changes ?? [];
   const message = suggestionMessage({
@@ -479,8 +565,9 @@ async function suggestResumeEdits(ctx: AssistantContext, input: SuggestResumeEdi
 
 async function applyResumeEditsForAssistant(
   ctx: AssistantContext,
-  input: ResumeEditSelectionInput
+  input: ResumeEditSelectionInput & { resumeId: string }
 ) {
+  const profileId = await resumeIdFrom(ctx, input.resumeId);
   const session = await getResumeEditSession(ctx.clerkId, input.sessionId);
   const selection = selectForApply(session.changes, input.changeIds);
   const counts = {
@@ -494,10 +581,15 @@ async function applyResumeEditsForAssistant(
     };
   }
 
-  const result = await applyResumeEdits(ctx.clerkId, session.id, {
-    apply: selection.ready.map((change) => ({ id: change.id, text: change.after })),
-    reject: [],
-  });
+  const result = await applyResumeEdits(
+    ctx.clerkId,
+    session.id,
+    {
+      apply: selection.ready.map((change) => ({ id: change.id, text: change.after })),
+      reject: [],
+    },
+    profileId
+  );
   const outcomes = Object.values(result.outcomes);
   const applied = outcomes.filter((outcome) => outcome === 'applied').length;
   connectorLogger.info('Assistant applied resume edits', {
@@ -511,8 +603,17 @@ async function applyResumeEditsForAssistant(
   };
 }
 
-async function undoResumeEditsForAssistant(ctx: AssistantContext, input: ResumeEditSelectionInput) {
-  const result = await revertResumeEdits(ctx.clerkId, input.sessionId, input.changeIds ?? null);
+async function undoResumeEditsForAssistant(
+  ctx: AssistantContext,
+  input: ResumeEditSelectionInput & { resumeId: string }
+) {
+  const profileId = await resumeIdFrom(ctx, input.resumeId);
+  const result = await revertResumeEdits(
+    ctx.clerkId,
+    input.sessionId,
+    input.changeIds ?? null,
+    profileId
+  );
   const outcomes = Object.values(result.outcomes);
   return {
     message: undoMessage({
@@ -523,30 +624,69 @@ async function undoResumeEditsForAssistant(ctx: AssistantContext, input: ResumeE
   };
 }
 
-async function listResumeEditsForAssistant(ctx: AssistantContext) {
-  const sessions = await listResumeEditSessions(ctx.clerkId);
-  return { sessions: sessions.map(toAssistantSession) };
+async function listResumeEditsForAssistant(ctx: AssistantContext, resumeRef: string) {
+  const profileId = await resumeIdFrom(ctx, resumeRef);
+  const sessions = await listResumeEditSessions(ctx.clerkId, profileId);
+  return { resumeId: profileId, sessions: sessions.map(toAssistantSession) };
 }
 
+type ResumeToolInput = { resumeId: string };
+
 export const aiConnectorHandlers = {
-  getProfile: (ctx: { userId: string }) => getConnectorProfile(ctx.userId),
-  listDrafts: (ctx: { userId: string }) => listDrafts(ctx.userId),
+  listResumes: (ctx: { userId: string }) => listConnectorResumes(ctx.userId),
+  getResume: (ctx: { userId: string }, input: unknown) =>
+    getConnectorProfile(ctx.userId, (input as ResumeToolInput).resumeId),
+  createResume: (ctx: { userId: string }, input: unknown) =>
+    createConnectorResume(ctx.userId, (input as { title?: string }).title),
+  cloneResume: (ctx: { userId: string }, input: unknown) =>
+    cloneConnectorResume(
+      ctx.userId,
+      (input as ResumeToolInput).resumeId,
+      (input as { title?: string }).title
+    ),
+  listDrafts: (ctx: { userId: string }, input: unknown) =>
+    listDrafts(ctx.userId, false, (input as ResumeToolInput).resumeId),
   proposeSummary: (ctx: { userId: string; clientLabel: string | null }, input: unknown) =>
-    proposeSummary(ctx.userId, ctx.clientLabel, input as ProposeSummaryInput),
+    proposeSummary(
+      ctx.userId,
+      ctx.clientLabel,
+      (input as ResumeToolInput).resumeId,
+      input as ProposeSummaryInput
+    ),
   proposeExperience: (ctx: { userId: string; clientLabel: string | null }, input: unknown) =>
-    proposeExperience(ctx.userId, ctx.clientLabel, input as ProposeExperienceInput),
+    proposeExperience(
+      ctx.userId,
+      ctx.clientLabel,
+      (input as ResumeToolInput).resumeId,
+      input as ProposeExperienceInput
+    ),
   proposeProject: (ctx: { userId: string; clientLabel: string | null }, input: unknown) =>
-    proposeProject(ctx.userId, ctx.clientLabel, input as ProposeProjectInput),
+    proposeProject(
+      ctx.userId,
+      ctx.clientLabel,
+      (input as ResumeToolInput).resumeId,
+      input as ProposeProjectInput
+    ),
   applyDraft: (ctx: { userId: string }, input: unknown) =>
-    applyDraft(ctx.userId, (input as { draftId: string }).draftId),
+    applyDraft(
+      ctx.userId,
+      (input as { draftId: string }).draftId,
+      (input as ResumeToolInput).resumeId
+    ),
   discardDraft: (ctx: { userId: string }, input: unknown) =>
-    discardDraft(ctx.userId, (input as { draftId: string }).draftId),
-  getResumeLines,
+    discardDraft(
+      ctx.userId,
+      (input as { draftId: string }).draftId,
+      (input as ResumeToolInput).resumeId
+    ),
+  getResumeLines: (ctx: AssistantContext, input: unknown) =>
+    getResumeLines(ctx, (input as ResumeToolInput).resumeId),
   suggestResumeEdits: (ctx: AssistantContext, input: unknown) =>
-    suggestResumeEdits(ctx, input as SuggestResumeEditsInput),
+    suggestResumeEdits(ctx, input as SuggestResumeEditsInput & { resumeId: string }),
   applyResumeEdits: (ctx: AssistantContext, input: unknown) =>
-    applyResumeEditsForAssistant(ctx, input as ResumeEditSelectionInput),
+    applyResumeEditsForAssistant(ctx, input as ResumeEditSelectionInput & { resumeId: string }),
   undoResumeEdits: (ctx: AssistantContext, input: unknown) =>
-    undoResumeEditsForAssistant(ctx, input as ResumeEditSelectionInput),
-  listResumeEdits: listResumeEditsForAssistant,
+    undoResumeEditsForAssistant(ctx, input as ResumeEditSelectionInput & { resumeId: string }),
+  listResumeEdits: (ctx: AssistantContext, input: unknown) =>
+    listResumeEditsForAssistant(ctx, (input as ResumeToolInput).resumeId),
 };

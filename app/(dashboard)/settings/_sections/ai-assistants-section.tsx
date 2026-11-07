@@ -136,8 +136,9 @@ export function AiAssistantsSection() {
             <li>In the AI app, add a custom connector and paste the URL below.</li>
             <li>Sign in to Follio when it asks, then allow access.</li>
             <li>
-              Ask it to improve your resume, like “tighten my bullets for this job.” It shows each
-              change and applies only what you confirm.
+              Ask it to list your resumes, then name the one to edit — for example “clone Product PM
+              as Stripe PM, then tighten the bullets.” It shows each change and applies only what
+              you confirm.
             </li>
             <li>
               Every change also appears in the builder under Edit with AI, where you can review or

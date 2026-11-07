@@ -42,18 +42,21 @@ export interface McpAuthContext {
 }
 
 export interface McpToolHandlers {
-  getProfile: (ctx: McpAuthContext) => Promise<unknown>;
-  listDrafts: (ctx: McpAuthContext) => Promise<unknown>;
+  listResumes: (ctx: McpAuthContext) => Promise<unknown>;
+  getResume: (ctx: McpAuthContext, input: unknown) => Promise<unknown>;
+  createResume: (ctx: McpAuthContext, input: unknown) => Promise<unknown>;
+  cloneResume: (ctx: McpAuthContext, input: unknown) => Promise<unknown>;
+  listDrafts: (ctx: McpAuthContext, input: unknown) => Promise<unknown>;
   proposeSummary: (ctx: McpAuthContext, input: unknown) => Promise<unknown>;
   proposeExperience: (ctx: McpAuthContext, input: unknown) => Promise<unknown>;
   proposeProject: (ctx: McpAuthContext, input: unknown) => Promise<unknown>;
   applyDraft: (ctx: McpAuthContext, input: unknown) => Promise<unknown>;
   discardDraft: (ctx: McpAuthContext, input: unknown) => Promise<unknown>;
-  getResumeLines: (ctx: McpAuthContext) => Promise<unknown>;
+  getResumeLines: (ctx: McpAuthContext, input: unknown) => Promise<unknown>;
   suggestResumeEdits: (ctx: McpAuthContext, input: unknown) => Promise<unknown>;
   applyResumeEdits: (ctx: McpAuthContext, input: unknown) => Promise<unknown>;
   undoResumeEdits: (ctx: McpAuthContext, input: unknown) => Promise<unknown>;
-  listResumeEdits: (ctx: McpAuthContext) => Promise<unknown>;
+  listResumeEdits: (ctx: McpAuthContext, input: unknown) => Promise<unknown>;
 }
 
 /** Headers the Streamable HTTP transport mirrors from the JSON-RPC body. */
@@ -76,18 +79,21 @@ const TOOL_CALLS: Record<
   McpToolName,
   (handlers: McpToolHandlers, ctx: McpAuthContext, args: unknown) => Promise<unknown>
 > = {
-  get_profile: (handlers, ctx) => handlers.getProfile(ctx),
-  list_drafts: (handlers, ctx) => handlers.listDrafts(ctx),
+  list_resumes: (handlers, ctx) => handlers.listResumes(ctx),
+  get_resume: (handlers, ctx, args) => handlers.getResume(ctx, args),
+  create_resume: (handlers, ctx, args) => handlers.createResume(ctx, args),
+  clone_resume: (handlers, ctx, args) => handlers.cloneResume(ctx, args),
+  list_drafts: (handlers, ctx, args) => handlers.listDrafts(ctx, args),
   propose_summary: (handlers, ctx, args) => handlers.proposeSummary(ctx, args),
   propose_experience: (handlers, ctx, args) => handlers.proposeExperience(ctx, args),
   propose_project: (handlers, ctx, args) => handlers.proposeProject(ctx, args),
   apply_draft: (handlers, ctx, args) => handlers.applyDraft(ctx, args),
   discard_draft: (handlers, ctx, args) => handlers.discardDraft(ctx, args),
-  get_resume_lines: (handlers, ctx) => handlers.getResumeLines(ctx),
+  get_resume_lines: (handlers, ctx, args) => handlers.getResumeLines(ctx, args),
   suggest_resume_edits: (handlers, ctx, args) => handlers.suggestResumeEdits(ctx, args),
   apply_resume_edits: (handlers, ctx, args) => handlers.applyResumeEdits(ctx, args),
   undo_resume_edits: (handlers, ctx, args) => handlers.undoResumeEdits(ctx, args),
-  list_resume_edits: (handlers, ctx) => handlers.listResumeEdits(ctx),
+  list_resume_edits: (handlers, ctx, args) => handlers.listResumeEdits(ctx, args),
 };
 
 function toolResult(payload: unknown, isError = false) {

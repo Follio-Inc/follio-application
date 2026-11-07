@@ -127,10 +127,24 @@ export async function createResumeEditSession(
 
 // ── Connected assistants ─────────────────────────────────
 
-/** The active resume as refs an assistant can point at. */
-export async function getEditableResume(clerkId: string): Promise<EditFacts> {
-  const { profileId } = await resolveActiveProfileContext(clerkId);
-  return buildEditFacts(await loadEditSource(profileId));
+async function resolveEditTarget(
+  clerkId: string,
+  profileId?: string
+): Promise<{ userId: string; profileId: string }> {
+  const active = await resolveActiveProfileContext(clerkId);
+  if (!profileId) return active;
+  const owned = await db.profile.findFirst({
+    where: { id: profileId, userId: active.userId, isArchived: false },
+    select: { id: true },
+  });
+  if (!owned) throw Errors.notFound('Resume');
+  return { userId: active.userId, profileId: owned.id };
+}
+
+/** Resume lines an assistant can point at. Defaults to the resume open in the builder. */
+export async function getEditableResume(clerkId: string, profileId?: string): Promise<EditFacts> {
+  const target = await resolveEditTarget(clerkId, profileId);
+  return buildEditFacts(await loadEditSource(target.profileId));
 }
 
 export interface AssistantSuggestionResult extends Omit<AssistantEditResult, 'changes'> {
@@ -145,16 +159,17 @@ export interface AssistantSuggestionResult extends Omit<AssistantEditResult, 'ch
 export async function createAssistantResumeEditSession(
   clerkId: string,
   input: SuggestResumeEditsInput,
-  via: string
+  via: string,
+  profileId?: string
 ): Promise<AssistantSuggestionResult> {
-  const { userId, profileId } = await resolveActiveProfileContext(clerkId);
+  const { userId, profileId: targetId } = await resolveEditTarget(clerkId, profileId);
 
   const recent = await recentSessionCounts(userId);
   if (recent.assistant >= RESUME_EDIT_LIMITS.assistantDailySessions) {
     throw Errors.rateLimited('Too many suggestion sets today. Try again tomorrow.');
   }
 
-  const grounded = groundAssistantEdits(buildEditFacts(await loadEditSource(profileId)), {
+  const grounded = groundAssistantEdits(buildEditFacts(await loadEditSource(targetId)), {
     changes: input.changes,
     instructions: assistantInstructions(input),
     jobDescription: input.jobDescription || null,
@@ -173,7 +188,7 @@ export async function createAssistantResumeEditSession(
   const row = await db.resumeEditSession.create({
     data: {
       userId,
-      profileId,
+      profileId: targetId,
       brief: brief as unknown as Prisma.InputJsonValue,
       changes: grounded.changes as unknown as Prisma.InputJsonValue,
       droppedCount: grounded.dropped,
@@ -193,11 +208,14 @@ export async function getResumeEditSession(
   return toView(row);
 }
 
-/** Recent sessions for the resume open in the builder, newest first. */
-export async function listResumeEditSessions(clerkId: string): Promise<ResumeEditSessionView[]> {
-  const { userId, profileId } = await resolveActiveProfileContext(clerkId);
+/** Recent sessions for one resume, newest first. Defaults to the resume open in the builder. */
+export async function listResumeEditSessions(
+  clerkId: string,
+  profileId?: string
+): Promise<ResumeEditSessionView[]> {
+  const { userId, profileId: targetId } = await resolveEditTarget(clerkId, profileId);
   const rows = await db.resumeEditSession.findMany({
-    where: { userId, profileId },
+    where: { userId, profileId: targetId },
     orderBy: { createdAt: 'desc' },
     take: RECENT_SESSIONS,
   });
@@ -277,22 +295,23 @@ async function runPlan(
   clerkId: string,
   sessionId: string,
   plan: (doc: EditableDocument, changes: ResumeEditChange[]) => EditPlan,
-  markApplied: boolean
+  markApplied: boolean,
+  profileId?: string
 ): Promise<ResumeEditResult> {
-  const { userId, profileId } = await resolveActiveProfileContext(clerkId);
+  const { userId, profileId: targetId } = await resolveEditTarget(clerkId, profileId);
 
   const result = await db.$transaction(async (tx) => {
     const session = await tx.resumeEditSession.findFirst({ where: { id: sessionId, userId } });
     if (!session) throw Errors.notFound('Suggestions');
-    if (session.profileId !== profileId) {
+    if (session.profileId !== targetId) {
       throw Errors.conflict(
-        'These suggestions belong to another resume. Switch back to it to use them.'
+        'These suggestions belong to another resume. Pass that resumeId, or switch back to it in Follio.'
       );
     }
 
-    const doc = await loadDocument(tx, profileId);
+    const doc = await loadDocument(tx, targetId);
     const planned = plan(doc, parseChanges(session.changes));
-    const patch = await writeDocument(tx, profileId, doc, planned.doc);
+    const patch = await writeDocument(tx, targetId, doc, planned.doc);
     const row = await tx.resumeEditSession.update({
       where: { id: session.id },
       data: {
@@ -305,7 +324,7 @@ async function runPlan(
     return { session: toView(row), outcomes: planned.outcomes, patch };
   }, interactiveTransactionOptions);
 
-  if (Object.keys(result.patch).length > 0) scheduleResumeRefresh(profileId);
+  if (Object.keys(result.patch).length > 0) scheduleResumeRefresh(targetId);
   return result;
 }
 
@@ -317,7 +336,8 @@ export interface ApplyResumeEditsInput {
 export async function applyResumeEdits(
   clerkId: string,
   sessionId: string,
-  input: ApplyResumeEditsInput
+  input: ApplyResumeEditsInput,
+  profileId?: string
 ): Promise<ResumeEditResult> {
   const chosen = new Map(input.apply.map((item) => [item.id, item.text.trim()]));
   const rejected = new Set(input.reject);
@@ -343,7 +363,8 @@ export async function applyResumeEdits(
         ),
       };
     },
-    true
+    true,
+    profileId
   );
 }
 
@@ -351,8 +372,15 @@ export async function applyResumeEdits(
 export async function revertResumeEdits(
   clerkId: string,
   sessionId: string,
-  ids: string[] | null
+  ids: string[] | null,
+  profileId?: string
 ): Promise<ResumeEditResult> {
   const only = ids ? new Set(ids) : null;
-  return runPlan(clerkId, sessionId, (doc, changes) => planRevert(doc, changes, only), false);
+  return runPlan(
+    clerkId,
+    sessionId,
+    (doc, changes) => planRevert(doc, changes, only),
+    false,
+    profileId
+  );
 }
