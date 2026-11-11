@@ -7,6 +7,7 @@ import {
   unauthorizedMcpResponse,
 } from '@/lib/ai-connector/cors';
 import { extractBearerToken } from '@/lib/ai-connector/bearer';
+import { publicOriginFromHeaders } from '@/lib/ai-connector/public-origin';
 import {
   JSON_RPC_INTERNAL_ERROR,
   JSON_RPC_INVALID_REQUEST,
@@ -67,15 +68,17 @@ export async function POST(request: NextRequest) {
     });
   }
 
+  const origin = publicOriginFromHeaders(request.headers);
   const token = extractBearerToken(request);
   if (!token) {
-    return unauthorizedMcpResponse('Connect Follio with OAuth, then retry.');
+    return unauthorizedMcpResponse('Connect Follio with OAuth, then retry.', origin);
   }
 
   const auth = await authenticateConnectorToken(token);
   if (!auth) {
     return unauthorizedMcpResponse(
-      'This Follio connection is invalid or expired. Reconnect Follio.'
+      'This Follio connection is invalid or expired. Reconnect Follio.',
+      origin
     );
   }
 

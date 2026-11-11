@@ -1,19 +1,22 @@
-import { absoluteUrl } from '@/lib/utils';
-
 import {
   AI_CONNECTOR_SCOPES,
+  MCP_PATH,
   OAUTH_AUTHORIZE_PATH,
   OAUTH_REGISTER_PATH,
   OAUTH_TOKEN_PATH,
 } from './constants';
-import { mcpResourceUrl } from './cors';
+import { configuredOrigin, isAllowedConnectorHost } from './public-origin';
 
-export function oauthIssuer(): string {
-  return absoluteUrl('').replace(/\/+$/, '');
+export function oauthIssuer(origin?: string): string {
+  return (origin ?? configuredOrigin()).replace(/\/+$/, '');
 }
 
-export function authorizationServerMetadata() {
-  const issuer = oauthIssuer();
+export function mcpResourceUrl(origin?: string): string {
+  return `${oauthIssuer(origin)}${MCP_PATH}`;
+}
+
+export function authorizationServerMetadata(origin?: string) {
+  const issuer = oauthIssuer(origin);
   return {
     issuer,
     authorization_endpoint: `${issuer}${OAUTH_AUTHORIZE_PATH}`,
@@ -28,26 +31,29 @@ export function authorizationServerMetadata() {
   };
 }
 
-/** True when the OAuth resource is omitted or is this server's MCP URL. */
+function mcpPath(pathname: string): string {
+  return pathname.replace(/\/+$/, '') || '/';
+}
+
+/** True when the OAuth resource is omitted or is this app's MCP URL. */
 export function isMcpResource(resource: string | null | undefined): boolean {
   if (!resource) return true;
 
   try {
     const given = new URL(resource);
-    const expected = new URL(mcpResourceUrl());
-    const path = (value: string) => value.replace(/\/+$/, '') || '/';
-    return given.origin === expected.origin && path(given.pathname) === path(expected.pathname);
+    return mcpPath(given.pathname) === MCP_PATH && isAllowedConnectorHost(given.hostname);
   } catch {
     return false;
   }
 }
 
-export function protectedResourceMetadata() {
+export function protectedResourceMetadata(origin?: string) {
+  const issuer = oauthIssuer(origin);
   return {
-    resource: mcpResourceUrl(),
-    authorization_servers: [oauthIssuer()],
+    resource: mcpResourceUrl(origin),
+    authorization_servers: [issuer],
     bearer_methods_supported: ['header'],
     scopes_supported: [...AI_CONNECTOR_SCOPES],
-    resource_documentation: absoluteUrl('/settings?tab=ai-assistants'),
+    resource_documentation: `${issuer}/settings?tab=ai-assistants`,
   };
 }
