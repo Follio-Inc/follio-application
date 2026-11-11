@@ -250,6 +250,9 @@ describe('connector links and resource', () => {
     expect(isMcpResource(undefined)).toBe(true);
     expect(isMcpResource(absoluteUrl('/api/mcp'))).toBe(true);
     expect(isMcpResource(`${absoluteUrl('/api/mcp')}/`)).toBe(true);
+    expect(isMcpResource('https://www.follio.me/api/mcp')).toBe(true);
+    expect(isMcpResource('https://follio.me/api/mcp')).toBe(true);
     expect(isMcpResource('https://evil.example/api/mcp')).toBe(false);
+    expect(isMcpResource('https://www.follio.me/api/other')).toBe(false);
   });
 });
