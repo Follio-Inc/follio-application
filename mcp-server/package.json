@@ -4,9 +4,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "tsx src/index.ts",
-    "build": "tsc"
+    "build": "tsc",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json",
+    "test": "npm run build && node --import tsx --test tests/*.test.ts",
+    "test:unit": "node --import tsx --test tests/portfolio-repository.test.ts tests/get-portfolio-tool.test.ts",
+    "test:protocol": "npm run build && node --import tsx --test tests/mcp-protocol.test.ts"
   },
   "keywords": [],
   "author": "",
