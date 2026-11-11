@@ -6,15 +6,15 @@ Steps to clone the repo and open it in the browser. Do this once on each machine
 
 - A GitHub account that has been added to the [Follio-Inc/follio-application](https://github.com/Follio-Inc/follio-application) repo
 - [Git](https://git-scm.com/downloads)
-- [Node.js 20](https://nodejs.org/) (20 LTS) and npm 10 or newer
+- [Node.js 26](https://nodejs.org/) (26 LTS). npm 11 comes with it.
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/), running before the database step
 - Clerk development keys (`pk_test_...` and `sk_test_...`). Ask for the shared keys, or create a free app at [dashboard.clerk.com](https://dashboard.clerk.com) and copy the keys from API keys
 
 Check the versions:
 
 ```bash
-node -v    # v20.x
-npm -v     # 10 or higher
+node -v    # v26.x
+npm -v     # 11 or higher
 docker -v
 ```
 
@@ -98,7 +98,7 @@ git pull origin develop
 
 | What you see                                   | What to do                                                                                             |
 | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `node -v` is not v20                           | Install Node 20 and open a new terminal                                                                |
+| `node -v` is not v26                           | Install Node 26 and open a new terminal                                                                |
 | `npm install` fails on GitHub packages or auth | Confirm you are signed into the invited GitHub account                                                 |
 | Database connection error                      | Docker Desktop is running, then `docker compose up -d` again                                           |
 | Port 5432 already in use                       | Another Postgres is running. Stop it, or change the port in `docker-compose.yml` and in both env files |
