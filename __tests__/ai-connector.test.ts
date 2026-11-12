@@ -16,9 +16,10 @@ import { isAllowedRedirectUri, redirectUriMatches } from '@/lib/ai-connector/oau
 import { toConnectorProfileView } from '@/lib/ai-connector/profile-view';
 import { verifyPkceS256 } from '@/lib/ai-connector/pkce';
 import { hasScope, parseScopeString } from '@/lib/ai-connector/scopes';
-import { handleMcpMessage } from '@/lib/mcp/protocol';
+import type { McpAuthContext, McpToolHandlers } from '@/lib/mcp/server';
 import { MCP_TOOLS } from '@/lib/mcp/tools';
-import type { McpAuthContext, McpToolHandlers } from '@/lib/mcp/protocol';
+
+import { createTestMcp } from './utils/mcp-client';
 
 describe('PKCE S256', () => {
   it('accepts a matching verifier', () => {
@@ -185,15 +186,8 @@ describe('MCP protocol', () => {
     listResumeEdits: async () => ({ sessions: [] }),
   };
 
-  async function callTool(name: string, args: unknown, context = ctx) {
-    const response = await handleMcpMessage(
-      { jsonrpc: '2.0', id: 9, method: 'tools/call', params: { name, arguments: args } },
-      context,
-      handlers
-    );
-    if (!response || !('result' in response)) throw new Error('Expected a tool result');
-    return response.result as { isError?: boolean; content: Array<{ text: string }> };
-  }
+  // Through the real SDK handler, as /api/mcp serves it after the token check.
+  const { callTool } = createTestMcp(handlers, ctx);
 
   it('lists the Follio tools', () => {
     expect(MCP_TOOLS.map((tool) => tool.name)).toEqual([
@@ -251,30 +245,7 @@ describe('MCP protocol', () => {
     }
   });
 
-  it('handles initialize', async () => {
-    const response = await handleMcpMessage(
-      { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-03-26' } },
-      ctx,
-      handlers
-    );
-    expect(response).toMatchObject({
-      jsonrpc: '2.0',
-      id: 1,
-      result: {
-        protocolVersion: '2025-03-26',
-        serverInfo: { name: 'follio' },
-      },
-    });
-  });
-
-  it('returns no body for initialized notifications', async () => {
-    const response = await handleMcpMessage(
-      { jsonrpc: '2.0', method: 'notifications/initialized' },
-      ctx,
-      handlers
-    );
-    expect(response).toBeNull();
-  });
+  // initialize and notifications are covered in mcp-protocol.test.ts.
 
   it('creates a blank resume without resumeId', async () => {
     const result = await callTool('create_resume', { title: 'Stripe PM' });
@@ -295,61 +266,38 @@ describe('MCP protocol', () => {
   });
 
   it('calls get_resume', async () => {
-    const response = await handleMcpMessage(
-      {
-        jsonrpc: '2.0',
-        id: 2,
-        method: 'tools/call',
-        params: { name: 'get_resume', arguments: { resumeId: 'p1' } },
-      },
-      ctx,
-      handlers
-    );
-    expect(response && 'result' in response).toBe(true);
-    if (response && 'result' in response) {
-      const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
-      expect(result.isError).toBeUndefined();
-      expect(result.content[0].text).toContain('alex');
-    }
+    const result = await callTool('get_resume', { resumeId: 'p1' });
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain('alex');
   });
 
   it('blocks apply_draft without the apply scope', async () => {
-    const response = await handleMcpMessage(
-      {
-        jsonrpc: '2.0',
-        id: 3,
-        method: 'tools/call',
-        params: { name: 'apply_draft', arguments: { resumeId: 'p1', draftId: 'd1' } },
-      },
-      { ...ctx, scopes: ['follio.read', 'follio.draft'] },
-      handlers
+    const result = await callTool(
+      'apply_draft',
+      { resumeId: 'p1', draftId: 'd1' },
+      { ...ctx, scopes: ['follio.read', 'follio.draft'] }
     );
-    expect(response && 'result' in response).toBe(true);
-    if (response && 'result' in response) {
-      const result = response.result as { isError?: boolean; content: Array<{ text: string }> };
-      expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain('follio.apply');
-    }
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('follio.apply');
   });
 
   it('validates propose_experience arguments', async () => {
-    const response = await handleMcpMessage(
+    const result = await callTool('propose_experience', { resumeId: 'p1', company: 'Acme' });
+    expect(result.isError).toBe(true);
+  });
+
+  it('turns a handler error into a tool error', async () => {
+    const failing = createTestMcp(
       {
-        jsonrpc: '2.0',
-        id: 4,
-        method: 'tools/call',
-        params: {
-          name: 'propose_experience',
-          arguments: { resumeId: 'p1', company: 'Acme' },
+        ...handlers,
+        getResume: async () => {
+          throw new Error('Resume not found');
         },
       },
-      ctx,
-      handlers
+      ctx
     );
-    expect(response && 'result' in response).toBe(true);
-    if (response && 'result' in response) {
-      const result = response.result as { isError?: boolean };
-      expect(result.isError).toBe(true);
-    }
+    const result = await failing.callTool('get_resume', { resumeId: 'p1' });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toBe('Resume not found');
   });
 });
