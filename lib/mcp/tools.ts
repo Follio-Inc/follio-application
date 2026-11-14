@@ -79,6 +79,7 @@ function defineTool(
   };
 }
 
+// our plain list of tools, no MCP code in it. Each entry just describes a tool
 export const MCP_TOOLS: McpToolDefinition[] = [
   defineTool({
     name: 'list_resumes',
@@ -301,16 +302,6 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     readOnly: true,
   }),
 ];
-
-export function listMcpTools() {
-  return MCP_TOOLS.map((tool) => ({
-    name: tool.name,
-    title: tool.title,
-    description: tool.description,
-    inputSchema: tool.inputSchema,
-    annotations: tool.annotations,
-  }));
-}
 
 export const toolInputSchemas = {
   list_resumes: z.object({}).passthrough(),
