@@ -1,5 +1,5 @@
 {
-  "_comment": "Proposed rewrites fed to the real grounding checks. Deliberately mixed: some honest, some inventing things the resume never says. `expect` is a fixture note only — the runner prints what actually happened, which is the point.",
+  "_comment": "Proposed rewrites fed to the real grounding checks. One per ref, because grounding takes the first rewrite it sees for a line. `expect` is a note to the reader — the runner prints the real outcome beside it, and where they disagree the code is right.",
   "request": "Tailor my resume to the Northwind payments posting",
   "changes": [
     {
@@ -21,6 +21,12 @@
       "reason": "Adds scale"
     },
     {
+      "ref": "E1.3",
+      "expect": "ignored — identical to the line already there",
+      "text": "Led the migration from nightly batch settlement to an event-driven pipeline, cutting reconciliation time from 6 hours to 20 minutes",
+      "reason": "No change"
+    },
+    {
       "ref": "E1.4",
       "expect": "refused — the rewrite would lose the 12 the line already states",
       "text": "Shared on-call and wrote the runbooks the team still uses",
@@ -28,21 +34,27 @@
     },
     {
       "ref": "E2.1",
-      "expect": "ignored — identical to the line already there",
-      "text": "Wrote Django REST services backing an inventory product used by 40 warehouse teams",
-      "reason": "No change"
+      "expect": "dropped — appends 'enhancing operational efficiency', an outcome the resume never claims. Verbatim from a live GPT-4o run.",
+      "text": "Developed Django REST services for an inventory product utilized by 40 warehouse teams, enhancing operational efficiency.",
+      "reason": "Live-run regression case"
+    },
+    {
+      "ref": "E2.2",
+      "expect": "dropped — 'though exact numbers are not specified' is commentary about the resume, not a resume line. Verbatim from a live GPT-4o run.",
+      "text": "Implemented a validated pipeline to replace a hand-rolled CSV importer, reducing support tickets by half, though exact numbers are not specified.",
+      "reason": "Live-run regression case"
+    },
+    {
+      "ref": "E2.3",
+      "expect": "kept — ordinary rewording is allowed; the checks police named things, invented outcomes and commentary, not vocabulary",
+      "text": "Authored integration tests for the ordering module, raising coverage from 34% to 81%",
+      "reason": "Shows what grounding does NOT block"
     },
     {
       "ref": "E9.1",
       "expect": "ignored — no such line on this resume",
       "text": "Rebuilt the settlement pipeline in Go",
       "reason": "Invented reference"
-    },
-    {
-      "ref": "E2.3",
-      "expect": "kept — ordinary rewording is allowed; the checks police named things (tools, numbers, titles), not vocabulary",
-      "text": "Authored integration tests for the ordering module, raising coverage from 34% to 81%",
-      "reason": "Shows what grounding does NOT block"
     }
   ]
 }

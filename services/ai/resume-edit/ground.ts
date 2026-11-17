@@ -115,6 +115,98 @@ const COMMON = new Set([
   'end',
 ]);
 
+/**
+ * The model talking about the resume, inside the resume.
+ *
+ * A finished bullet never hedges about its own evidence. These are the shapes
+ * that leak out when a model is told not to invent figures and decides to say
+ * so in the line itself.
+ */
+const EDITORIAL = [
+  /\b(?:exact|specific|precise)\s+(?:numbers?|figures?|metrics?|details?|data)\b[^.]*\b(?:not|aren'?t|weren'?t|unknown|unavailable|unclear|unspecified)\b/i,
+  /\b(?:numbers?|figures?|metrics?|details?|data)\s+(?:are|were|is|was)\s+not\s+(?:specified|provided|given|available|stated|known)\b/i,
+  /\b(?:though|although|while|but)\s+(?:the\s+)?(?:exact|specific|precise)\b[^.]*\b(?:not|unknown|unclear)\b/i,
+  /\b(?:not|no)\s+(?:specified|quantified|provided|documented|stated)\s+(?:in|on)\s+(?:the\s+)?resume\b/i,
+  /\b(?:based|according)\s+(?:on|to)\s+(?:the\s+)?(?:resume|original|provided)\b/i,
+  /\b(?:assumed|presumably|estimated|approximate(?:ly)?\s+value|placeholder|TBD|N\/A)\b/i,
+  /\[(?:insert|add|number|metric|TBD)[^\]]*\]/i,
+  /\((?:if|assuming|note|exact)[^)]*\)/i,
+];
+
+/**
+ * Benefits that sound like an outcome but name nothing measurable. Harmless
+ * when the resume already says them; an invented claim when it does not.
+ */
+const VAGUE_IMPACT = new Set([
+  'efficiency',
+  'productivity',
+  'scalability',
+  'usability',
+  'maintainability',
+  'reliability',
+  'synergy',
+  'value',
+  'outcome',
+  'success',
+  'satisfaction',
+  'engagement',
+  'visibility',
+  'agility',
+  'robustness',
+  'effectiveness',
+]);
+
+/**
+ * Singular, alias-folded form, so "efficiencies" and "efficiency" are one key.
+ *
+ * Matching here is exact rather than through `sameStem`, which calls two words
+ * the same when their first five characters agree. That is right for spotting
+ * a reworded skill, but far too loose for a closed list of benefit nouns: it
+ * lets the "product" in "inventory product" excuse an invented "productivity".
+ */
+function impactKey(word: string): string {
+  const lower = canon(word.toLowerCase());
+  if (lower.endsWith('ies')) return `${lower.slice(0, -3)}y`;
+  if (lower.endsWith('s') && !lower.endsWith('ss')) return lower.slice(0, -1);
+  return lower;
+}
+
+/**
+ * True when the line explains itself instead of stating an achievement.
+ *
+ * Exported so the same rule can be asserted directly in tests rather than
+ * only through a full grounding run.
+ */
+export function hasEditorialAside(text: string): boolean {
+  return EDITORIAL.some((pattern) => pattern.test(text));
+}
+
+/**
+ * Vague benefits the rewrite adds that nothing true already said.
+ *
+ * `unsupportedTerms` deliberately only catches invented proper nouns and
+ * keyword-stuffed posting terms, so an outcome built from ordinary lowercase
+ * words — "enhancing operational efficiency" — passes it. This closes exactly
+ * that gap and nothing wider: a benefit the resume already names is kept, and
+ * concrete results ("reduced support tickets by half") are never touched,
+ * because the words they use are not in this list.
+ */
+export function unsupportedImpact(
+  text: string,
+  facts: { corpus: string; before: string }
+): string[] {
+  const truth = new Set(
+    tokenize(`${facts.corpus}\n${facts.before}`).map((token) => impactKey(token))
+  );
+  const out: string[] = [];
+  for (const match of text.matchAll(WORD)) {
+    const key = impactKey(match[0]);
+    if (!VAGUE_IMPACT.has(key) || truth.has(key)) continue;
+    out.push(match[0]);
+  }
+  return out;
+}
+
 function cleanLine(value: string, multiline: boolean): string {
   const unwrapped = value.replace(/^[\s"'“”‘’•*·–—-]+/, '').replace(/[\s"'“”‘’]+$/, '');
   if (!multiline) return unwrapped.replace(/\s+/g, ' ').trim();
@@ -238,6 +330,10 @@ function groundText(raw: string, line: Line, batch: Batch): string | 'dropped' |
     jobDescription: batch.input.jobDescription,
   });
   if (terms.length > 0) return 'dropped';
+  // A line that hedges about its own evidence is not a finished resume line.
+  if (hasEditorialAside(text)) return 'dropped';
+  // A benefit the resume never claimed is an invented outcome.
+  if (unsupportedImpact(text, { corpus: truth, before: line.before }).length > 0) return 'dropped';
   if (line.target.kind !== 'bullet' && raisesSeniority(text, `${truth}\n${line.before}`)) {
     return 'dropped';
   }

@@ -316,6 +316,8 @@ ${SHARED_RULES}
 9. Rewrite only the summary ("S") and existing experience bullets ("E1.2"). You cannot add bullets, roles, projects or credentials, and you cannot touch employers, titles or dates.
 10. Every rewrite must use only what the resume already states. Follio drops rewrites that add a tool, name, title or number the resume does not show, and blanks invented figures as [__]. Do not try to work around this.
 11. Call propose_resume_edits at most once. Send every rewrite in that one call. Once it saves a proposal, a second call is refused, so there is nothing to gain from splitting them up.
+12. Never add an outcome the resume does not already state. Do not append benefits like "improving efficiency", "enhancing productivity" or "driving business value" to a line that does not claim them. Keep the result the line already has, or state no result at all.
+13. A rewrite is a finished resume line. Never write about the resume inside it: no "exact numbers are not specified", no "based on the resume", no "(assumed)", no bracketed notes to the user. If a figure is missing, leave it out and say so in your summary instead.
 
 RECOMMENDED FLOW
 1. get_resume for the selected resumeId.
