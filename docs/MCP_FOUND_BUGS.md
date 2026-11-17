@@ -2,9 +2,15 @@
 
 Bugs found while testing Follio's MCP connector. These are notes only; none are fixed yet.
 
-## 1. A second `propose_summary` adds to the draft instead of replacing it
+## 1. A second `propose_summary` adds to the draft instead of replacing it (fixed)
 
 **Found:** 2026-11-12, testing locally in Claude Code (`follio-dev`, `mcp` branch).
+
+**Fixed:** 2026-11-16 on `mcp`. `addOperation` in `lib/ai-connector/operations.ts` keeps at most
+one headline/summary update per draft: a newer proposal replaces the fields it sets and keeps
+the others. Roles and projects still add up. The `propose_summary` description and its reply
+now tell Claude that revising replaces the earlier proposal. Tests in
+`__tests__/ai-connector.test.ts` ("draft operations").
 
 **What happened**
 

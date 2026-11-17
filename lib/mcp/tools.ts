@@ -134,7 +134,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     name: 'propose_summary',
     title: 'Propose headline or summary',
     description:
-      'Propose a headline and/or summary update on one resume. Saves to a draft. Does not change the live Follio until apply_draft.',
+      'Propose a headline and/or summary update on one resume. Saves to a draft, replacing any headline or summary proposed earlier in it, so call it again to revise. Does not change the live Follio until apply_draft.',
     inputSchema: withResumeId({
       headline: { type: 'string', description: 'Short professional headline' },
       summary: { type: 'string', description: 'About / summary paragraph' },

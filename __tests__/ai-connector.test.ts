@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { parseFlexibleDate, requireFlexibleDate } from '@/lib/ai-connector/dates';
 import {
+  addOperation,
   describeOperation,
   operationFromExperience,
   operationFromProject,
@@ -90,6 +91,42 @@ describe('draft operations', () => {
 
   it('requires company, role, and start date', () => {
     expect(ProposeExperienceSchema.safeParse({ company: 'Acme' }).success).toBe(false);
+  });
+
+  it('replaces an earlier summary proposal instead of adding a second one', () => {
+    const operations = addOperation(
+      [operationFromSummary({ summary: 'Long version' }), operationFromProject({ title: 'A' })],
+      operationFromSummary({ summary: 'Short version' })
+    );
+    expect(operations).toEqual([
+      { type: 'update_summary', summary: 'Short version' },
+      { type: 'add_project', title: 'A' },
+    ]);
+  });
+
+  it('keeps an earlier headline when only the summary is revised', () => {
+    const operations = addOperation(
+      [operationFromSummary({ headline: 'HR Ops', summary: 'Long version' })],
+      operationFromSummary({ summary: 'Short version' })
+    );
+    expect(operations).toEqual([
+      { type: 'update_summary', headline: 'HR Ops', summary: 'Short version' },
+    ]);
+  });
+
+  it('merges a draft that already holds two summary updates into one', () => {
+    const operations = addOperation(
+      [operationFromSummary({ summary: 'One' }), operationFromSummary({ summary: 'Two' })],
+      operationFromSummary({ headline: 'New headline' })
+    );
+    expect(operations).toEqual([
+      { type: 'update_summary', summary: 'Two', headline: 'New headline' },
+    ]);
+  });
+
+  it('still adds up roles and projects', () => {
+    const first = addOperation([], operationFromProject({ title: 'A' }));
+    expect(addOperation(first, operationFromProject({ title: 'B' }))).toHaveLength(2);
   });
 
   it('parses stored operations and ignores junk', () => {
