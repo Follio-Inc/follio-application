@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { isAIAvailable } from '@/lib/ai-client';
 import { AgentBudgetExceededError, AgentCancelledError, AgentError } from '@/lib/agents/errors';
 import { db } from '@/lib/db';
-import { AppError, ErrorCode, handleApiError } from '@/lib/errors';
+import { AppError, ErrorCode, handleApiError, isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { RESUME_EDIT_LIMITS } from '@/lib/resume-edit/types';
 import { reserveResumeAgentRun } from '@/services/agents/resume/rate-limit';
@@ -148,6 +148,18 @@ export async function POST(request: NextRequest, context: RouteContext) {
           finishedAt: run.finishedAt ?? null,
         },
       });
+    } catch (error) {
+      // The runtime rethrows whatever the model client threw. Those messages
+      // can carry request detail, and handleApiError echoes error.message
+      // outside production, so anything not already curated is normalized to
+      // an AgentError here and logged in full server-side instead.
+      if (error instanceof AgentError || isAppError(error)) throw error;
+      agentLogger.error(
+        'Resume agent run failed unexpectedly',
+        error instanceof Error ? error : new Error(String(error)),
+        { userId: user.id, profileId: profile.id }
+      );
+      throw new AgentError('resume-agent', 'RUN_FAILED', 'Resume agent run failed.', error);
     } finally {
       releaseSlot();
     }

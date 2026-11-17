@@ -400,6 +400,40 @@ describe('failure handling', () => {
     expect(response.status).toBe(401);
   });
 
+  it('normalizes an unwrapped model-client error instead of echoing it', async () => {
+    // Not an AgentError: the runtime rethrows whatever the AI client threw,
+    // and handleApiError echoes error.message outside production.
+    runResumeAgent.mockRejectedValue(
+      new Error('OpenAI request failed: key sk-live-abc123, prompt "Selected resumeId: p1"')
+    );
+
+    const { response, json } = await post({ jobDescription: JOB_DESCRIPTION });
+
+    expect(response.status).toBe(502);
+    expect(JSON.stringify(json)).not.toMatch(/sk-live-abc123/);
+    expect(JSON.stringify(json)).not.toMatch(/Selected resumeId/);
+  });
+
+  it('normalizes a non-Error throw from the agent as well', async () => {
+    runResumeAgent.mockRejectedValue({ raw: 'resume summary: Engineer building payments' });
+
+    const { response, json } = await post({ jobDescription: JOB_DESCRIPTION });
+
+    expect(response.status).toBe(502);
+    expect(JSON.stringify(json)).not.toMatch(/Engineer building payments/);
+  });
+
+  it('still releases the rate-limit slot when the agent throws a raw error', async () => {
+    runResumeAgent.mockRejectedValueOnce(new Error('transient'));
+    const failed = await post({ jobDescription: JOB_DESCRIPTION });
+    expect(failed.response.status).toBe(502);
+
+    runResumeAgent.mockResolvedValue({ output: analysis(), run: agentRun() });
+    const next = await post({ jobDescription: JOB_DESCRIPTION });
+
+    expect(next.response.status).toBe(200);
+  });
+
   it('does not mutate resume data when the agent fails', async () => {
     runResumeAgent.mockRejectedValue(new AgentError('resume-agent', 'MODEL_ERROR', 'boom'));
 

@@ -29,6 +29,7 @@ import {
 } from './jd-tools';
 import {
   MEMORY_PROPOSAL,
+  MEMORY_PROPOSAL_ERROR,
   proposeResumeEditsTool,
   readResumeLinesTool,
   type ProposeResumeEditsResult,
@@ -240,6 +241,15 @@ export const submitResumeResultTool = defineTool({
       );
     }
 
+    // A proposal that threw while saving may have left a row behind that this
+    // run never learned the id of. Say so rather than report a clean analysis.
+    if (ctx.memory.get<string>(MEMORY_PROPOSAL_ERROR)) {
+      notes.push(
+        'A proposed edit could not be saved, and may have left a pending suggestion set. ' +
+          'Check Builder, Edit with AI before proposing again.'
+      );
+    }
+
     return {
       resumeId,
       summary,
@@ -305,6 +315,7 @@ ${SHARED_RULES}
 8. You cannot apply, approve, revert or delete anything. propose_resume_edits only saves a proposal; the user approves it in Follio. Never say an edit has been made.
 9. Rewrite only the summary ("S") and existing experience bullets ("E1.2"). You cannot add bullets, roles, projects or credentials, and you cannot touch employers, titles or dates.
 10. Every rewrite must use only what the resume already states. Follio drops rewrites that add a tool, name, title or number the resume does not show, and blanks invented figures as [__]. Do not try to work around this.
+11. Call propose_resume_edits at most once. Send every rewrite in that one call. Once it saves a proposal, a second call is refused, so there is nothing to gain from splitting them up.
 
 RECOMMENDED FLOW
 1. get_resume for the selected resumeId.
@@ -387,6 +398,26 @@ export const RESUME_AGENT_BUDGET = {
 } as const;
 
 /**
+ * Propose mode needs two extra prerequisite calls before it can propose, and
+ * grounding commonly drops a whole first attempt, so a legitimate run stumbles
+ * more often than an analyze run. These turns restore the same head-room
+ * analyze has.
+ *
+ * `maxTokens` is scaled to hold the per-turn allowance identical to analyze
+ * mode (6,000 x maxSteps) rather than to widen it: a measured clean run peaks
+ * near 3k tokens on its largest request, but each tool result is only capped
+ * at 24,000 characters, so a long resume can push a turn far higher.
+ *
+ * Wall clock is deliberately unchanged, so `maxDurationMs` still bounds how
+ * long a slow run can cost.
+ */
+export const RESUME_PROPOSE_BUDGET = {
+  ...RESUME_AGENT_BUDGET,
+  maxSteps: 14,
+  maxTokens: 84_000,
+} as const;
+
+/**
  * Run the Resume Agent for one authenticated user.
  *
  * `auth` comes from the session at the API boundary. Both identifiers must
@@ -431,7 +462,10 @@ export async function runResumeAgent(
       userId,
       clerkId,
       meta: { ...ctx.meta, [SELECTED_RESUME_META_KEY]: resumeId },
-      budget: { ...RESUME_AGENT_BUDGET, ...ctx.budget },
+      budget: {
+        ...(mode === 'propose' ? RESUME_PROPOSE_BUDGET : RESUME_AGENT_BUDGET),
+        ...ctx.budget,
+      },
     }
   );
 }

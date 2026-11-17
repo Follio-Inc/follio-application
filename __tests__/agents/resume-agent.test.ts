@@ -8,6 +8,8 @@ import {
   resumeAgentResultSchema,
   resumeProposeAgent,
   runResumeAgent,
+  RESUME_AGENT_BUDGET,
+  RESUME_PROPOSE_BUDGET,
   type ResumeAgentOutput,
 } from '@/services/agents/resume/resume.agent';
 
@@ -194,6 +196,9 @@ function idleTurn() {
     },
   };
 }
+
+/** A turn the runtime can consume: tool calls, or plain text. */
+type ModelTurn = ReturnType<typeof turn> | ReturnType<typeof idleTurn>;
 
 const SUBMIT_ARGS = {
   summary: 'Strong on Python and PostgreSQL; Kubernetes is not shown anywhere on the resume.',
@@ -952,5 +957,306 @@ describe('propose mode', () => {
     await expect(runPropose(jd)).rejects.toThrow(/exceeded maxSteps/i);
 
     expect(sessionCreate).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Part 5D
+// ---------------------------------------------------------------------------
+
+describe('one proposal per run', () => {
+  const GOOD = {
+    ref: 'S',
+    text: 'Backend engineer building payment systems in Python and PostgreSQL.',
+  };
+  const ALSO_GOOD = {
+    ref: 'E1.2',
+    text: 'Tuned PostgreSQL queries for a service that handles 2x traffic',
+  };
+  /** Adds Kubernetes, which the resume never shows — grounding drops it. */
+  const INVENTED = { ref: 'E1.1', text: 'Built Python services on Kubernetes clusters.' };
+
+  async function runPropose(jd: string) {
+    return runResumeAgent({ resumeId: RESUME_ID, jobDescription: jd, mode: 'propose' }, AUTH);
+  }
+
+  function proposeCall(changes: Array<Record<string, unknown>>, id: string) {
+    return call(
+      'propose_resume_edits',
+      { resumeId: RESUME_ID, request: 'Tailor the summary', changes },
+      id
+    );
+  }
+
+  /** Everything up to and including read_resume_lines. */
+  function preamble(jd: string) {
+    return [
+      turn(call('analyze_job_description', { jobDescription: jd })),
+      turn(call('score_resume_against_jd', { resumeId: RESUME_ID })),
+      turn(call('read_resume_lines', { resumeId: RESUME_ID })),
+    ];
+  }
+
+  function queue(turns: ModelTurn[]) {
+    for (const t of turns) executeChatCompletion.mockResolvedValueOnce(t);
+  }
+
+  it('refuses a second proposal once one has been saved', async () => {
+    const jd = posting('dup-second-refused');
+    queue([
+      ...preamble(jd),
+      turn(proposeCall([GOOD], 'call-propose-1')),
+      turn(proposeCall([ALSO_GOOD], 'call-propose-2')),
+      turn(call('submit_resume_result', SUBMIT_ARGS)),
+    ]);
+
+    const { output } = await runPropose(jd);
+
+    expect(sessionCreate).toHaveBeenCalledTimes(1);
+    expect(toolMessages().some((m) => /already saved proposal session-1/i.test(m))).toBe(true);
+    expect(output.proposedSessionId).toBe('session-1');
+  });
+
+  it('reports the first saved session, not the refused retry', async () => {
+    const jd = posting('dup-reports-first');
+    sessionCreate.mockImplementationOnce(({ data }: { data: Record<string, unknown> }) =>
+      Promise.resolve({
+        id: 'session-first',
+        profileId: data.profileId,
+        brief: data.brief,
+        changes: data.changes,
+        droppedCount: data.droppedCount,
+        failedSections: data.failedSections,
+        createdAt: new Date('2026-11-16T00:00:00.000Z'),
+      })
+    );
+    queue([
+      ...preamble(jd),
+      turn(proposeCall([GOOD], 'call-propose-1')),
+      turn(proposeCall([ALSO_GOOD], 'call-propose-2')),
+      turn(call('submit_resume_result', SUBMIT_ARGS)),
+    ]);
+
+    const { output } = await runPropose(jd);
+
+    expect(output.proposedSessionId).toBe('session-first');
+    expect(output.proposedChanges).toHaveLength(1);
+  });
+
+  it('lets the model try again when grounding dropped everything', async () => {
+    const jd = posting('dup-retry-after-drop');
+    queue([
+      ...preamble(jd),
+      turn(proposeCall([INVENTED], 'call-propose-1')),
+      turn(proposeCall([GOOD], 'call-propose-2')),
+      turn(call('submit_resume_result', SUBMIT_ARGS)),
+    ]);
+
+    const { output } = await runPropose(jd);
+
+    // Nothing was saved the first time, so there is no second set to create.
+    expect(sessionCreate).toHaveBeenCalledTimes(1);
+    expect(output.proposedSessionId).toBe('session-1');
+    expect(output.proposedChanges).toHaveLength(1);
+  });
+
+  it('stops proposing after a save failure and does not retry', async () => {
+    const jd = posting('dup-save-failed');
+    sessionCreate.mockRejectedValueOnce(new Error('connection reset'));
+    queue([
+      ...preamble(jd),
+      turn(proposeCall([GOOD], 'call-propose-1')),
+      turn(proposeCall([ALSO_GOOD], 'call-propose-2')),
+      turn(call('submit_resume_result', SUBMIT_ARGS)),
+    ]);
+
+    const { output } = await runPropose(jd);
+
+    // One attempt reached the database; the second never did.
+    expect(sessionCreate).toHaveBeenCalledTimes(1);
+    expect(toolMessages().some((m) => /already failed while saving/i.test(m))).toBe(true);
+    expect(output.proposedSessionId).toBeNull();
+    expect(output.proposedChanges).toEqual([]);
+  });
+
+  it('warns in the result that a failed save may have left a pending set', async () => {
+    const jd = posting('dup-save-failed-warns');
+    sessionCreate.mockRejectedValueOnce(new Error('connection reset'));
+    queue([
+      ...preamble(jd),
+      turn(proposeCall([GOOD], 'call-propose-1')),
+      turn(call('submit_resume_result', SUBMIT_ARGS)),
+    ]);
+
+    const { output } = await runPropose(jd);
+
+    expect(output.limitations.join(' ')).toMatch(/may have left a pending suggestion set/i);
+    expect(output.proposedSessionId).toBeNull();
+    expect(resumeAgentResultSchema.safeParse(output).success).toBe(true);
+  });
+
+  it('refuses a duplicate before it touches the database', async () => {
+    const jd = posting('dup-no-db-touch');
+    queue([
+      ...preamble(jd),
+      turn(proposeCall([GOOD], 'call-propose-1')),
+      turn(proposeCall([ALSO_GOOD], 'call-propose-2')),
+      turn(call('submit_resume_result', SUBMIT_ARGS)),
+    ]);
+
+    await runPropose(jd);
+
+    // requireOwnedResume runs per accepted call: get/score/lines/propose = 3
+    // resume-scoped calls here plus the first proposal. The refused duplicate
+    // adds none, because the guard runs before any lookup.
+    const afterFirstProposal = requireOwnedResume.mock.calls.length;
+    expect(afterFirstProposal).toBe(3);
+    expectNoResumeMutations();
+  });
+
+  it('tells the propose-mode model that one proposal is the limit', () => {
+    expect(String(resumeProposeAgent.instructions)).toMatch(
+      /call propose_resume_edits at most once/i
+    );
+  });
+});
+
+describe('propose-mode budget', () => {
+  async function runPropose(jd: string) {
+    return runResumeAgent({ resumeId: RESUME_ID, jobDescription: jd, mode: 'propose' }, AUTH);
+  }
+
+  function queue(turns: ModelTurn[]) {
+    for (const t of turns) executeChatCompletion.mockResolvedValueOnce(t);
+  }
+
+  const GOOD = {
+    ref: 'S',
+    text: 'Backend engineer building payment systems in Python and PostgreSQL.',
+  };
+
+  function proposeCall(changes: Array<Record<string, unknown>>, id: string) {
+    return call(
+      'propose_resume_edits',
+      { resumeId: RESUME_ID, request: 'Tailor the summary', changes },
+      id
+    );
+  }
+
+  it('gives propose mode more turns than analyze mode, at the same wall clock', () => {
+    expect(RESUME_PROPOSE_BUDGET.maxSteps).toBeGreaterThan(RESUME_AGENT_BUDGET.maxSteps);
+    expect(RESUME_PROPOSE_BUDGET.maxDurationMs).toBe(RESUME_AGENT_BUDGET.maxDurationMs);
+    expect(RESUME_AGENT_BUDGET.maxSteps).toBe(10);
+    // Same tokens per turn as analyze mode, not a wider per-turn allowance.
+    const perStep = (b: { maxTokens: number; maxSteps: number }) => b.maxTokens / b.maxSteps;
+    expect(perStep(RESUME_PROPOSE_BUDGET)).toBe(perStep(RESUME_AGENT_BUDGET));
+  });
+
+  it('runs the clean propose flow in six turns', async () => {
+    const jd = posting('budget-clean');
+    queue([
+      turn(call('get_resume', { resumeId: RESUME_ID })),
+      turn(call('analyze_job_description', { jobDescription: jd })),
+      turn(call('score_resume_against_jd', { resumeId: RESUME_ID })),
+      turn(call('read_resume_lines', { resumeId: RESUME_ID })),
+      turn(proposeCall([GOOD], 'call-propose')),
+      turn(call('submit_resume_result', SUBMIT_ARGS)),
+    ]);
+
+    const { output } = await runPropose(jd);
+
+    expect(executeChatCompletion).toHaveBeenCalledTimes(6);
+    expect(output.proposedSessionId).toBe('session-1');
+  });
+
+  it('recovers from an invalid tool call and still finishes', async () => {
+    const jd = posting('budget-recovers');
+    queue([
+      turn(call('analyze_job_description', { jobDescription: jd })),
+      // Proposing before scoring: refused, costs a turn.
+      turn(proposeCall([GOOD], 'call-propose-early')),
+      turn(call('score_resume_against_jd', { resumeId: RESUME_ID })),
+      turn(call('read_resume_lines', { resumeId: RESUME_ID })),
+      turn(proposeCall([GOOD], 'call-propose')),
+      turn(call('submit_resume_result', SUBMIT_ARGS)),
+    ]);
+
+    const { output } = await runPropose(jd);
+
+    expect(executeChatCompletion).toHaveBeenCalledTimes(6);
+    expect(output.proposedSessionId).toBe('session-1');
+  });
+
+  it('finishes a stumbling run that the analyze budget would have cut off', async () => {
+    const jd = posting('budget-stumbles');
+    queue([
+      turn(call('get_resume', { resumeId: RESUME_ID })), // 1
+      turn(call('analyze_job_description', { jobDescription: jd })), // 2
+      turn(call('score_resume_against_jd', { resumeId: RESUME_ID })), // 3
+      turn(call('read_resume_lines', { resumeId: RESUME_ID })), // 4
+      // Grounding drops the whole set: the single most common propose failure.
+      turn(proposeCall([{ ref: 'E1.1', text: 'Ran Kubernetes clusters in production.' }], 'c5')), // 5
+      idleTurn(), // 6
+      // A ref that read_resume_lines never listed: ignored, nothing saved.
+      turn(proposeCall([{ ref: 'E1.9', text: 'Shipped Python services.' }], 'c7')), // 7
+      turn(proposeCall([GOOD], 'c8')), // 8  saved
+      turn(call('submit_resume_result', { recommendations: [] }, 'c9')), // 9  invalid args
+      idleTurn(), // 10
+      turn(call('submit_resume_result', SUBMIT_ARGS, 'c11')), // 11
+    ]);
+
+    const { output, run: record } = await runPropose(jd);
+
+    expect(record.status).toBe('succeeded');
+    expect(output.proposedSessionId).toBe('session-1');
+    expect(sessionCreate).toHaveBeenCalledTimes(1);
+
+    const turnsUsed = executeChatCompletion.mock.calls.length;
+    expect(turnsUsed).toBe(11);
+    // The read-only budget would have thrown before this run could finish.
+    expect(turnsUsed).toBeGreaterThan(RESUME_AGENT_BUDGET.maxSteps);
+    expect(turnsUsed).toBeLessThanOrEqual(RESUME_PROPOSE_BUDGET.maxSteps);
+  });
+
+  it('still stops a model that never finishes', async () => {
+    const jd = posting('budget-never-finishes');
+    executeChatCompletion.mockResolvedValue(idleTurn());
+
+    await expect(runPropose(jd)).rejects.toThrow(/exceeded maxSteps/i);
+
+    expect(executeChatCompletion).toHaveBeenCalledTimes(RESUME_PROPOSE_BUDGET.maxSteps);
+    expect(sessionCreate).not.toHaveBeenCalled();
+  });
+
+  it('keeps the analyze budget unchanged', async () => {
+    const jd = posting('budget-analyze-unchanged');
+    executeChatCompletion.mockResolvedValue(idleTurn());
+
+    await expect(run(jd)).rejects.toThrow(/exceeded maxSteps/i);
+
+    expect(executeChatCompletion).toHaveBeenCalledTimes(RESUME_AGENT_BUDGET.maxSteps);
+  });
+
+  it('measures the transcript a full propose run sends back to the model', async () => {
+    const jd = posting('budget-transcript');
+    queue([
+      turn(call('get_resume', { resumeId: RESUME_ID })),
+      turn(call('analyze_job_description', { jobDescription: jd })),
+      turn(call('score_resume_against_jd', { resumeId: RESUME_ID })),
+      turn(call('read_resume_lines', { resumeId: RESUME_ID })),
+      turn(proposeCall([GOOD], 'call-propose')),
+      turn(call('submit_resume_result', SUBMIT_ARGS)),
+    ]);
+
+    await runPropose(jd);
+
+    const last = executeChatCompletion.mock.calls.at(-1)?.[0] as {
+      messages: Array<{ content?: unknown }>;
+    };
+    const chars = last.messages.reduce((sum, m) => sum + String(m.content ?? '').length, 0);
+    // The final turn carries every earlier tool result. ~4 chars per token puts
+    // the largest single request well inside the token budget, and the budget
+    // is cumulative across turns, so this is what sets the ceiling.
+    expect(chars / 4).toBeLessThan(5_000);
   });
 });

@@ -42,6 +42,14 @@ export const MEMORY_RESUME_LINES = 'resumeLines';
 export const MEMORY_RESUME_LINES_ID = 'resumeLinesId';
 /** Agent-memory key: the result of the proposal this run created. */
 export const MEMORY_PROPOSAL = 'resumeProposal';
+/**
+ * Agent-memory key: set when a proposal attempt threw.
+ *
+ * The session row is written inside `createAssistantResumeEditSession`, so a
+ * throw leaves us unable to tell whether a row exists. Recording it here stops
+ * the run proposing again and makes the terminal result say so.
+ */
+export const MEMORY_PROPOSAL_ERROR = 'resumeProposalError';
 
 /** What `read_resume_lines` returns, as the connector already shapes it. */
 export type ResumeLinesView = ReturnType<typeof toResumeLinesView>;
@@ -171,6 +179,29 @@ export const proposeResumeEditsTool = defineTool({
   execute: async ({ resumeId, request, changes }, ctx): Promise<ProposeResumeEditsResult> => {
     const { userId, clerkId } = requireIdentity(ctx);
 
+    // One saved proposal per run. The state is the tool's own stored result,
+    // which only this tool writes, so a model that forgets it already proposed
+    // cannot create a second review set the user has to untangle. A run that
+    // saved nothing (everything dropped) may try again: no row exists yet.
+    const prior = ctx.memory.get<ProposeResumeEditsResult>(MEMORY_PROPOSAL);
+    if (prior?.sessionId) {
+      throw Errors.badRequest(
+        `This run already saved proposal ${prior.sessionId} with ${prior.proposed} change(s) ` +
+          'for the user to review. Only one proposal per run — call submit_resume_result now.'
+      );
+    }
+
+    // A previous attempt threw somewhere inside the saving service. Whether a
+    // row was written is unknowable from here, so proposing again could leave
+    // the user two sets. Stop and let the result report it.
+    const failedBefore = ctx.memory.get<string>(MEMORY_PROPOSAL_ERROR);
+    if (failedBefore) {
+      throw Errors.badRequest(
+        'A proposal attempt in this run already failed while saving, and may have left a ' +
+          'pending set. Do not propose again in this run — call submit_resume_result and say so.'
+      );
+    }
+
     // The posting is the one already analyzed in this run. The model cannot
     // swap in another after the fact, because it never supplies it here.
     const jobDescription = ctx.memory.get<string>(MEMORY_JOB_DESCRIPTION);
@@ -212,12 +243,21 @@ export const proposeResumeEditsTool = defineTool({
     // Grounding, the session row and the rate limit all stay in the existing
     // service. `userFacts` is deliberately not passed: it is treated as truth
     // by grounding, and the agent has no user-stated facts to put there.
-    const result = await createAssistantResumeEditSession(
-      clerkId,
-      { request, jobDescription, changes },
-      AGENT_VIA,
-      owned.resumeId
-    );
+    let result: Awaited<ReturnType<typeof createAssistantResumeEditSession>>;
+    try {
+      result = await createAssistantResumeEditSession(
+        clerkId,
+        { request, jobDescription, changes },
+        AGENT_VIA,
+        owned.resumeId
+      );
+    } catch (error) {
+      // The row is created inside that call and the id never reaches us, so a
+      // throw here is the one case where a pending set can exist unreported.
+      // Mark the run so no second attempt compounds it and the result says so.
+      ctx.memory.set(MEMORY_PROPOSAL_ERROR, error instanceof Error ? error.message : String(error));
+      throw error;
+    }
 
     const session = result.session;
     const saved = session?.changes.length ?? 0;

@@ -21,7 +21,7 @@ export {
   MEMORY_SCORED_RESUME_ID,
 } from './jd-tools';
 
-// Part 5A: available for composition, deliberately not yet in resumeAgent.tools.
+// Editing tools. Registered on resumeProposeAgent only; analyze mode never sees them.
 export {
   readResumeLinesTool,
   readResumeLinesInputSchema,
@@ -31,6 +31,7 @@ export {
   MEMORY_RESUME_LINES,
   MEMORY_RESUME_LINES_ID,
   MEMORY_PROPOSAL,
+  MEMORY_PROPOSAL_ERROR,
   AGENT_VIA,
 } from './edit-tools';
 export type { ResumeLinesView, ProposeResumeEditsResult } from './edit-tools';
@@ -46,6 +47,7 @@ export {
   submitResumeResultTool,
   resumeAgentResultSchema,
   RESUME_AGENT_BUDGET,
+  RESUME_PROPOSE_BUDGET,
   SELECTED_RESUME_META_KEY,
 } from './resume.agent';
 export type {
