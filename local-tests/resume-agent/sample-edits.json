@@ -1,0 +1,48 @@
+{
+  "_comment": "Proposed rewrites fed to the real grounding checks. Deliberately mixed: some honest, some inventing things the resume never says. `expect` is a fixture note only — the runner prints what actually happened, which is the point.",
+  "request": "Tailor my resume to the Northwind payments posting",
+  "changes": [
+    {
+      "ref": "S",
+      "expect": "kept — adds only PostgreSQL, which the resume already shows",
+      "text": "Backend engineer with six years building payment and billing services in Python and PostgreSQL. Comfortable owning a service end to end, from schema design to on-call.",
+      "reason": "Leads with the stack the posting asks for"
+    },
+    {
+      "ref": "E1.1",
+      "expect": "dropped — Kubernetes appears nowhere on the resume",
+      "text": "Built Python services for checkout and refunds on Kubernetes that cut median latency 30%",
+      "reason": "Posting requires Kubernetes"
+    },
+    {
+      "ref": "E1.2",
+      "expect": "kept, with the invented 500 blanked to [__]",
+      "text": "Tuned PostgreSQL queries and added partial indexes so the billing API absorbed 2x traffic across 500 services without new hardware",
+      "reason": "Adds scale"
+    },
+    {
+      "ref": "E1.4",
+      "expect": "refused — the rewrite would lose the 12 the line already states",
+      "text": "Shared on-call and wrote the runbooks the team still uses",
+      "reason": "Tighter"
+    },
+    {
+      "ref": "E2.1",
+      "expect": "ignored — identical to the line already there",
+      "text": "Wrote Django REST services backing an inventory product used by 40 warehouse teams",
+      "reason": "No change"
+    },
+    {
+      "ref": "E9.1",
+      "expect": "ignored — no such line on this resume",
+      "text": "Rebuilt the settlement pipeline in Go",
+      "reason": "Invented reference"
+    },
+    {
+      "ref": "E2.3",
+      "expect": "kept — ordinary rewording is allowed; the checks police named things (tools, numbers, titles), not vocabulary",
+      "text": "Authored integration tests for the ordering module, raising coverage from 34% to 81%",
+      "reason": "Shows what grounding does NOT block"
+    }
+  ]
+}

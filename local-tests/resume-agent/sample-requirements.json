@@ -1,0 +1,61 @@
+{
+  "_comment": "Offline stand-in for readJobRequirements(). Hand-written to match sample-job-description.txt so the harness runs with no OpenAI key. Run with --live to extract these for real instead. Shape: JobRequirement[] from services/ai/job-requirements/types.ts.",
+  "requirements": [
+    {
+      "term": "Python",
+      "kind": "tool",
+      "importance": "required",
+      "aliases": [],
+      "broader": ["Programming languages"]
+    },
+    {
+      "term": "PostgreSQL",
+      "kind": "tool",
+      "importance": "required",
+      "aliases": ["Postgres"],
+      "broader": ["Relational databases", "SQL"]
+    },
+    {
+      "term": "Kubernetes",
+      "kind": "tool",
+      "importance": "required",
+      "aliases": ["K8s", "EKS"],
+      "broader": ["Container orchestration"]
+    },
+    {
+      "term": "Terraform",
+      "kind": "tool",
+      "importance": "required",
+      "aliases": [],
+      "broader": ["Infrastructure as code"]
+    },
+    {
+      "term": "On-call",
+      "kind": "practice",
+      "importance": "required",
+      "aliases": ["Pager duty", "Carrying a pager"],
+      "broader": ["Operations"]
+    },
+    {
+      "term": "Kafka",
+      "kind": "tool",
+      "importance": "preferred",
+      "aliases": [],
+      "broader": ["Event streaming"]
+    },
+    {
+      "term": "GraphQL",
+      "kind": "tool",
+      "importance": "preferred",
+      "aliases": [],
+      "broader": ["APIs"]
+    },
+    {
+      "term": "Payments",
+      "kind": "domain",
+      "importance": "preferred",
+      "aliases": ["Billing"],
+      "broader": ["Fintech"]
+    }
+  ]
+}

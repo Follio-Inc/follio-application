@@ -1,0 +1,61 @@
+{
+  "_comment": "Fictional. Shaped as EditSourceProfile (services/ai/resume-edit/facts.ts). Bullets are plain strings with bulletsHtml null, which is what makes them editable — see README.",
+  "headline": "Backend Engineer",
+  "summary": "Backend engineer with six years building payment and billing services in Python. Comfortable owning a service end to end, from schema design to on-call.",
+  "workExperiences": [
+    {
+      "id": "exp-northgate",
+      "company": "Northgate Labs",
+      "role": "Senior Backend Engineer",
+      "startDate": "2022-03-01",
+      "endDate": null,
+      "isCurrent": true,
+      "bullets": [
+        "Built Python services for checkout and refunds that cut median latency 30%",
+        "Tuned PostgreSQL queries and added partial indexes so the billing API absorbed 2x traffic without new hardware",
+        "Led the migration from nightly batch settlement to an event-driven pipeline, cutting reconciliation time from 6 hours to 20 minutes",
+        "Shared on-call for 12 services and wrote the runbooks the team still uses"
+      ],
+      "bulletsHtml": null,
+      "isVisible": true
+    },
+    {
+      "id": "exp-riverbend",
+      "company": "Riverbend Software",
+      "role": "Backend Engineer",
+      "startDate": "2019-07-01",
+      "endDate": "2022-02-01",
+      "isCurrent": false,
+      "bullets": [
+        "Wrote Django REST services backing an inventory product used by 40 warehouse teams",
+        "Replaced a hand-rolled CSV importer with a validated pipeline, dropping support tickets about bad uploads by half",
+        "Added integration tests to the ordering module, taking coverage from 34% to 81%"
+      ],
+      "bulletsHtml": null,
+      "isVisible": true
+    }
+  ],
+  "skills": [
+    { "name": "Python" },
+    { "name": "PostgreSQL" },
+    { "name": "Django" },
+    { "name": "REST APIs" },
+    { "name": "Git" },
+    { "name": "pytest" }
+  ],
+  "educations": [
+    {
+      "institution": "Lakeshore State University",
+      "degree": "BS",
+      "fieldOfStudy": "Computer Science"
+    }
+  ],
+  "certifications": [],
+  "projects": [
+    {
+      "title": "ledgerdiff",
+      "description": "Open-source CLI that reconciles two ledger exports and reports the first divergent transaction.",
+      "techStack": ["Python", "PostgreSQL"]
+    }
+  ]
+}

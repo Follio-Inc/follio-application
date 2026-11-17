@@ -1,0 +1,29 @@
+Senior Backend Engineer — Payments Platform
+Northwind Robotics (Remote, US)
+
+About the team
+We keep money moving for a few thousand merchants. The payments platform team
+owns settlement, refunds and the ledger that everything reconciles against.
+
+What you'll do
+Design and run backend services that handle settlement and refunds at volume.
+Own a service end to end: schema, rollout, on-call, and the postmortem when it
+goes wrong. Work with the data team on reporting pipelines.
+
+Requirements
+- Strong Python. Most of the platform is Python and we expect you to be fluent.
+- Production PostgreSQL experience: query tuning, indexing, migrations.
+- Experience with Kubernetes. Our services run on EKS and you will be expected
+  to debug your own deployments.
+- Familiarity with Terraform for infrastructure changes.
+- Comfortable carrying a pager for services you own.
+
+Nice to have
+- Experience with Kafka or another event streaming platform.
+- Exposure to GraphQL — we are migrating parts of the public API.
+- Prior work in payments, billing or another regulated money domain.
+
+Benefits
+Medical, dental and vision from day one. Flexible PTO, a home office stipend,
+and an annual learning budget. We are an equal opportunity employer and
+consider all qualified applicants without regard to protected status.
