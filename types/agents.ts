@@ -9,7 +9,12 @@
 import type { z } from 'zod';
 
 /** Stable IDs for product agents. Extend as new agents ship. */
-export type AgentId = 'portfolio-generation' | 'resume-parse' | 'snap-view' | 'content-transform';
+export type AgentId =
+  | 'portfolio-generation'
+  | 'resume-parse'
+  | 'resume-agent'
+  | 'snap-view'
+  | 'content-transform';
 
 export type AgentRunStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'cancelled';
 
@@ -27,7 +32,15 @@ export interface AgentBudget {
 export interface AgentContext {
   /** Correlation / request id for logs. */
   requestId?: string;
+  /** Follio `User.id`. What ownership queries filter on. */
   userId?: string;
+  /**
+   * Clerk id for the same authenticated user as `userId`. Some services
+   * (getEditableResume) resolve the active profile from Clerk rather than
+   * from the Follio id. Set both from one authenticated session at the API
+   * boundary — never from model-supplied tool arguments.
+   */
+  clerkId?: string;
   profileId?: string;
   signal?: AbortSignal;
   budget?: AgentBudget;
