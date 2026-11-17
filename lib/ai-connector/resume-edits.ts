@@ -153,19 +153,64 @@ function count(n: number, one: string, many = `${one}s`): string {
   return `${n} ${n === 1 ? one : many}`;
 }
 
+/**
+ * What to do with saved suggestions, for a caller that owns an apply tool.
+ *
+ * True for MCP assistants: `apply_resume_edits` is registered for them in
+ * lib/mcp/tools.ts. Not true for every caller — see `REVIEW_IN_FOLLIO`.
+ */
+export const APPLY_VIA_TOOL =
+  'Show the user each before and after. Call apply_resume_edits only after they confirm. They can also review these in Follio under Builder, Edit with AI.';
+
+/**
+ * The same, for a caller that has no way to apply anything.
+ *
+ * The Resume Agent is deliberately built without an apply tool in either
+ * mode, so telling it to call one describes a tool it cannot reach and
+ * implies the edit is one step from being written.
+ */
+export const REVIEW_IN_FOLLIO =
+  'These are pending the user’s review and you cannot apply them. Show the user each before and after, and tell them to approve, edit or reject each one in Follio under Builder, Edit with AI, where anything they keep can also be undone.';
+
+/**
+ * What to do about a `[__]` blank, for a caller that can resubmit the line
+ * with the user's own figures.
+ *
+ * True for MCP assistants: `userFacts` is a field on
+ * `SuggestResumeEditsSchema`, and grounding treats what the user said there
+ * as evidence.
+ */
+export const RESUBMIT_WITH_FACTS =
+  'Ask the user for the real number and suggest that line again with it in userFacts.';
+
+/**
+ * The same, for a caller with no `userFacts` field.
+ *
+ * `propose_resume_edits` deliberately omits it: grounding treats userFacts as
+ * truth, and the agent has no user-stated figures to put there. A blank is
+ * therefore the user's to fill, not the agent's — and a change still holding
+ * one cannot be applied until they do.
+ */
+export const BLANKS_NEED_THE_USER =
+  'You cannot fill a blank in: this tool takes no user-stated figures. Tell the user that line needs a real number, which they can type into the blank themselves when they review it in Follio, or skip that suggestion.';
+
 /** Plain guidance for the assistant after suggest_resume_edits. */
 export function suggestionMessage(result: {
   saved: number;
   needsInput: number;
   dropped: number;
   ignored: number;
+  /** Defaults to the connected-assistant wording, which owns an apply tool. */
+  nextStep?: string;
+  /** Defaults to the connected-assistant wording, which owns a userFacts field. */
+  blankStep?: string;
 }): string {
   return [
     result.saved > 0
       ? `Saved ${count(result.saved, 'suggestion')}. The resume is unchanged.`
       : 'No suggestions were saved. The resume is unchanged.',
     result.needsInput > 0
-      ? `${count(result.needsInput, 'line')} had a number the user never stated, now shown as [__]. Ask the user for the real number and suggest that line again with it in userFacts.`
+      ? `${count(result.needsInput, 'line')} had a number the user never stated, now shown as [__]. ${result.blankStep ?? RESUBMIT_WITH_FACTS}`
       : null,
     result.dropped > 0
       ? `${count(result.dropped, 'rewrite')} removed for adding tools, names, titles, or numbers the resume and the user do not show. Ask the user before claiming them.`
@@ -173,9 +218,7 @@ export function suggestionMessage(result: {
     result.ignored > 0
       ? `${count(result.ignored, 'rewrite')} ignored: unknown or read-only ref, duplicate, or same as the original.`
       : null,
-    result.saved > 0
-      ? 'Show the user each before and after. Call apply_resume_edits only after they confirm. They can also review these in Follio under Builder, Edit with AI.'
-      : null,
+    result.saved > 0 ? (result.nextStep ?? APPLY_VIA_TOOL) : null,
   ]
     .filter(Boolean)
     .join(' ');

@@ -13,6 +13,8 @@ import { z } from 'zod';
 // Deep import: the `@/lib/agents` barrel re-exports runAgent -> persist-run -> lib/db.
 import { defineTool } from '@/lib/agents/define-tool';
 import {
+  BLANKS_NEED_THE_USER,
+  REVIEW_IN_FOLLIO,
   suggestionMessage,
   toAssistantSession,
   toResumeLinesView,
@@ -277,6 +279,12 @@ export const proposeResumeEditsTool = defineTool({
         needsInput,
         dropped: result.dropped,
         ignored: result.ignored,
+        // This agent has no apply tool in either mode, so the default
+        // "call apply_resume_edits" guidance would name a tool it cannot
+        // reach and imply the edit is one step from being written.
+        nextStep: REVIEW_IN_FOLLIO,
+        // No userFacts field on this tool, so a blank is the user's to fill.
+        blankStep: BLANKS_NEED_THE_USER,
       }),
     };
 
