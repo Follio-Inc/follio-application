@@ -171,6 +171,7 @@ describe('POST /api/resumes/[resumeId]/agent — success', () => {
         resumeId: RESUME_ID,
         jobDescription: JOB_DESCRIPTION,
         instruction: 'Where am I weak?',
+        mode: 'analyze',
       },
       { userId: USER_ID, clerkId: CLERK_ID }
     );
@@ -404,6 +405,88 @@ describe('failure handling', () => {
 
     await post({ jobDescription: JOB_DESCRIPTION });
 
+    expectNoResumeMutations();
+  });
+});
+
+describe('execution mode', () => {
+  it('defaults to analyze when the body omits mode', async () => {
+    const { response, json } = await post({ jobDescription: JOB_DESCRIPTION });
+
+    expect(response.status).toBe(200);
+    expect(json.mode).toBe('analyze');
+    expect(runResumeAgent).toHaveBeenCalledWith(expect.objectContaining({ mode: 'analyze' }), {
+      userId: USER_ID,
+      clerkId: CLERK_ID,
+    });
+  });
+
+  it('passes propose mode through and echoes it back', async () => {
+    const { response, json } = await post({ jobDescription: JOB_DESCRIPTION, mode: 'propose' });
+
+    expect(response.status).toBe(200);
+    expect(json.mode).toBe('propose');
+    expect(runResumeAgent).toHaveBeenCalledWith(expect.objectContaining({ mode: 'propose' }), {
+      userId: USER_ID,
+      clerkId: CLERK_ID,
+    });
+  });
+
+  it('returns the proposal session id and changes in propose mode', async () => {
+    runResumeAgent.mockResolvedValue({
+      output: {
+        ...analysis(),
+        proposedSessionId: 'session-1',
+        proposedChanges: [
+          {
+            id: 'S',
+            action: 'rewrite',
+            where: 'Summary',
+            status: 'proposed',
+            before: 'Old summary.',
+            after: 'New summary.',
+            reason: 'Tailored to the posting',
+          },
+        ],
+        proposalMessage: 'Saved 1 suggestion. The resume is unchanged.',
+      },
+      run: agentRun(),
+    });
+
+    const { json } = await post({ jobDescription: JOB_DESCRIPTION, mode: 'propose' });
+    const result = json.analysis as Record<string, unknown>;
+
+    expect(result.proposedSessionId).toBe('session-1');
+    expect(result.proposedChanges).toHaveLength(1);
+    expect(String(result.proposalMessage)).toMatch(/resume is unchanged/i);
+  });
+
+  it.each([['apply'], ['delete'], ['ANALYZE'], ['']])(
+    'rejects the unsupported mode %p without running the agent',
+    async (mode) => {
+      const { response } = await post({ jobDescription: JOB_DESCRIPTION, mode });
+
+      expect(response.status).toBe(400);
+      expect(runResumeAgent).not.toHaveBeenCalled();
+    }
+  );
+
+  it('keeps rate limiting and identity checks in propose mode', async () => {
+    agentRunCount.mockResolvedValue(RESUME_AGENT_LIMITS.dailyRuns);
+
+    const { response } = await post({ jobDescription: JOB_DESCRIPTION, mode: 'propose' });
+
+    expect(response.status).toBe(429);
+    expect(runResumeAgent).not.toHaveBeenCalled();
+  });
+
+  it('still refuses an unowned resume in propose mode', async () => {
+    profileFindFirst.mockResolvedValue(null);
+
+    const { response } = await post({ jobDescription: JOB_DESCRIPTION, mode: 'propose' }, 'other');
+
+    expect(response.status).toBe(404);
+    expect(runResumeAgent).not.toHaveBeenCalled();
     expectNoResumeMutations();
   });
 });

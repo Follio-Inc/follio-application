@@ -27,21 +27,19 @@ import {
   MEMORY_SCORED_RESUME_ID,
   scoreResumeAgainstJdTool,
 } from './jd-tools';
+import {
+  MEMORY_PROPOSAL,
+  proposeResumeEditsTool,
+  readResumeLinesTool,
+  type ProposeResumeEditsResult,
+} from './edit-tools';
+import { pinnedToSelectedResume, selectedResumeId, SELECTED_RESUME_META_KEY } from './pinning';
 
 import type { ResumeEvaluation } from '@/services/ai/evaluate';
-import type {
-  AgentContext,
-  AgentRunResult,
-  AgentTool,
-  AgentToolContext,
-  ToolAgentDefinition,
-} from '@/types/agents';
+import type { AgentContext, AgentRunResult, AgentTool, ToolAgentDefinition } from '@/types/agents';
 
-/**
- * Context key holding the resume the user selected. Set by runResumeAgent from
- * trusted input — never from a tool argument the model wrote.
- */
-export const SELECTED_RESUME_META_KEY = 'selectedResumeId';
+// Re-exported so existing importers of this module keep working.
+export { SELECTED_RESUME_META_KEY };
 
 // ============================================================================
 // RESULT CONTRACT
@@ -70,6 +68,19 @@ const recommendationSchema = z.object({
   suggestion: z.string(),
 });
 
+/** One grounded change, exactly as the proposal tool reported it. */
+const proposedChangeSchema = z.object({
+  id: z.string(),
+  action: z.string(),
+  where: z.string(),
+  status: z.string(),
+  before: z.string(),
+  after: z.string(),
+  reason: z.string(),
+  /** Set when the line still holds a [__] the user must fill. */
+  needsInput: z.string().optional(),
+});
+
 export const resumeAgentResultSchema = z.object({
   resumeId: z.string(),
   summary: z.string(),
@@ -83,9 +94,25 @@ export const resumeAgentResultSchema = z.object({
     writing: z.number().nullable(),
   }),
   limitations: z.array(z.string()),
+  /**
+   * Proposal state, read from the proposal tool's stored result — never from
+   * anything the model wrote. Null and empty in analyze mode, and whenever
+   * nothing survived grounding.
+   */
+  proposedSessionId: z.string().nullable(),
+  proposedChanges: z.array(proposedChangeSchema),
+  proposalMessage: z.string().nullable(),
 });
 
 export type ResumeAgentOutput = z.infer<typeof resumeAgentResultSchema>;
+
+/**
+ * 'analyze' reads and scores only. 'propose' may additionally save a pending
+ * edit session for the user to review. Neither can apply anything.
+ */
+export type ResumeAgentMode = 'analyze' | 'propose';
+
+export const RESUME_AGENT_MODES: readonly ResumeAgentMode[] = ['analyze', 'propose'] as const;
 
 export interface ResumeAgentInput {
   /** The resume the user selected. Authoritative for the whole run. */
@@ -93,6 +120,8 @@ export interface ResumeAgentInput {
   jobDescription: string;
   /** What the user asked for, in their words. */
   instruction?: string;
+  /** Defaults to 'analyze', which keeps the original read-only behaviour. */
+  mode?: ResumeAgentMode;
 }
 
 /** Identifiers for one authenticated session. Never model-supplied. */
@@ -100,43 +129,6 @@ export interface ResumeAgentAuth {
   /** Follio `User.id`. */
   userId: string;
   clerkId: string;
-}
-
-// ============================================================================
-// RESUME PINNING
-// ============================================================================
-
-/**
- * Constrain a resume-scoped tool to the selected resume.
- *
- * The model proposes `resumeId` like any other argument, so the prompt alone
- * cannot stop it naming a different one. This rejects the call instead of
- * quietly rewriting it, so a substitution attempt is visible in the run rather
- * than hidden behind a correct-looking answer.
- */
-function pinnedToSelectedResume(tool: AgentTool): AgentTool {
-  return {
-    ...tool,
-    execute: async (input: unknown, ctx: AgentToolContext) => {
-      const selected =
-        typeof ctx.meta?.[SELECTED_RESUME_META_KEY] === 'string'
-          ? (ctx.meta[SELECTED_RESUME_META_KEY] as string).trim()
-          : '';
-      if (!selected) {
-        throw Errors.badRequest('No resume was selected for this run.');
-      }
-
-      const requested = (input as { resumeId?: unknown }).resumeId;
-      if (typeof requested !== 'string' || requested.trim() !== selected) {
-        throw Errors.badRequest(
-          `This run analyzes only the resume the user selected (${selected}). ` +
-            `Call ${tool.name} with resumeId="${selected}".`
-        );
-      }
-
-      return tool.execute({ ...(input as object), resumeId: selected }, ctx);
-    },
-  };
 }
 
 // ============================================================================
@@ -188,11 +180,7 @@ export const submitResumeResultTool = defineTool({
       };
     }
 
-    const resumeId =
-      ctx.memory.get<string>(MEMORY_SCORED_RESUME_ID) ??
-      (typeof ctx.meta?.[SELECTED_RESUME_META_KEY] === 'string'
-        ? (ctx.meta[SELECTED_RESUME_META_KEY] as string)
-        : '');
+    const resumeId = ctx.memory.get<string>(MEMORY_SCORED_RESUME_ID) ?? selectedResumeId(ctx);
 
     const matches = evaluation.skills?.matches ?? [];
 
@@ -242,6 +230,16 @@ export const submitResumeResultTool = defineTool({
       );
     }
 
+    // Proposal state comes from what propose_resume_edits actually stored.
+    // The model has no argument for it, so it can neither invent a session id
+    // nor hide one it created.
+    const proposal = ctx.memory.get<ProposeResumeEditsResult>(MEMORY_PROPOSAL);
+    if (proposal && proposal.sessionId === null) {
+      notes.push(
+        `No edit was proposed: ${proposal.dropped} dropped, ${proposal.ignored} ignored by grounding.`
+      );
+    }
+
     return {
       resumeId,
       summary,
@@ -254,6 +252,9 @@ export const submitResumeResultTool = defineTool({
         writing: evaluation.writing,
       },
       limitations: notes,
+      proposedSessionId: proposal?.sessionId ?? null,
+      proposedChanges: proposal?.sessionId ? proposal.changes : [],
+      proposalMessage: proposal?.message ?? null,
     };
   },
 });
@@ -262,7 +263,16 @@ export const submitResumeResultTool = defineTool({
 // AGENT
 // ============================================================================
 
-const INSTRUCTIONS = `You are Follio's resume agent. You help one signed-in user understand how their resume stands against one job posting.
+const SHARED_RULES = `HARD RULES
+1. Never invent qualifications, experience, skills, employers, titles, dates or numbers. If the resume does not show something, it is missing.
+2. A missing requirement is missing. Never describe it as met, partly met, or transferable.
+3. Call only the tools listed above. Nothing else exists.
+4. Work only on the resume the user selected, using the resumeId given in the request. Never pass a different one.
+5. Never mention or infer anything about other users or other accounts.
+6. If a tool fails, say so in limitations and do not report the run as if it had succeeded. Do not call submit_resume_result as though the failed step had worked.
+7. Every recommendation must name a requirement the posting actually lists, and must rest on what the resume already shows.`;
+
+const ANALYZE_INSTRUCTIONS = `You are Follio's resume agent. You help one signed-in user understand how their resume stands against one job posting.
 
 TOOLS
 - get_resume: read the selected resume.
@@ -270,15 +280,8 @@ TOOLS
 - score_resume_against_jd: score the resume against those requirements. Scored by code, not by you.
 - submit_resume_result: finish the run.
 
-HARD RULES
-1. Never invent qualifications, experience, skills, employers, titles, dates or numbers. If the resume does not show something, it is missing.
-2. A missing requirement is missing. Never describe it as met, partly met, or transferable.
-3. You are read-only. You cannot change the resume, and you must never imply that you did.
-4. Call only the four tools above. Nothing else exists.
-5. Work only on the resume the user selected, using the resumeId given in the request. Never pass a different one.
-6. Never mention or infer anything about other users or other accounts.
-7. If a tool fails, say so in limitations and do not report an analysis as if it had succeeded. Do not call submit_resume_result as though the failed step had worked.
-8. Every recommendation must name a requirement the posting actually lists, and must rest on what the resume already shows.
+${SHARED_RULES}
+8. You are read-only. You cannot change the resume or propose edits in this run, and you must never imply that you did. If the user asks for rewrites, say that analysis mode does not write proposals.
 
 RECOMMENDED FLOW
 1. get_resume for the selected resumeId.
@@ -288,35 +291,94 @@ RECOMMENDED FLOW
 
 Strengths, gaps and scores are filled in from the scored result, so do not restate them as arguments. Be concise and specific.`;
 
-export const resumeAgent: ToolAgentDefinition<ResumeAgentInput, ResumeAgentOutput> = {
-  kind: 'tool',
-  id: 'resume-agent',
-  version: 'resume-agent-v1',
-  taskType: 'strategy',
-  instructions: INSTRUCTIONS,
-  buildUserMessage: (input) =>
-    [
-      `Selected resumeId: ${input.resumeId}`,
-      input.instruction
-        ? `The user asked: ${input.instruction}`
-        : 'The user asked for an analysis of this resume against the posting below.',
-      '',
-      'JOB POSTING',
-      '"""',
-      input.jobDescription.trim(),
-      '"""',
-    ].join('\n'),
-  tools: [
+const PROPOSE_INSTRUCTIONS = `You are Follio's resume agent. You analyse one signed-in user's resume against one job posting, then propose rewrites for them to review.
+
+TOOLS
+- get_resume: read the selected resume.
+- analyze_job_description: read what the posting asks for. Required before scoring.
+- score_resume_against_jd: score the resume against those requirements. Scored by code, not by you.
+- read_resume_lines: the editable lines and their refs ("S", "E1.2"). Required before proposing.
+- propose_resume_edits: save rewrites for the user to review. Required refs come from read_resume_lines.
+- submit_resume_result: finish the run.
+
+${SHARED_RULES}
+8. You cannot apply, approve, revert or delete anything. propose_resume_edits only saves a proposal; the user approves it in Follio. Never say an edit has been made.
+9. Rewrite only the summary ("S") and existing experience bullets ("E1.2"). You cannot add bullets, roles, projects or credentials, and you cannot touch employers, titles or dates.
+10. Every rewrite must use only what the resume already states. Follio drops rewrites that add a tool, name, title or number the resume does not show, and blanks invented figures as [__]. Do not try to work around this.
+
+RECOMMENDED FLOW
+1. get_resume for the selected resumeId.
+2. analyze_job_description with the posting text.
+3. score_resume_against_jd for the same resumeId.
+4. read_resume_lines for the same resumeId.
+5. propose_resume_edits with rewrites aimed at the gaps the scoring found.
+6. submit_resume_result with a summary and recommendations.
+
+Steps 2, 3 and 4 are prerequisites: proposing before them is refused. Strengths, gaps, scores and the proposal are filled in from the stored results, so do not restate them as arguments. Be concise and specific.`;
+
+const INSTRUCTIONS: Record<ResumeAgentMode, string> = {
+  analyze: ANALYZE_INSTRUCTIONS,
+  propose: PROPOSE_INSTRUCTIONS,
+};
+
+/**
+ * The tools each mode exposes. Analyze mode simply has no editing tool
+ * registered, so no prompt or instruction can reach one.
+ */
+function toolsForMode(mode: ResumeAgentMode): AgentTool[] {
+  const tools: AgentTool[] = [
     pinnedToSelectedResume(getResumeTool),
     analyzeJobDescriptionTool,
     pinnedToSelectedResume(scoreResumeAgainstJdTool),
-    submitResumeResultTool,
-  ],
-  resultToolName: 'submit_resume_result',
-  outputSchema: resumeAgentResultSchema,
-  // No fallback on purpose: a run that could not read the resume or the
-  // posting must fail, not quietly return a plausible-looking analysis.
-};
+  ];
+
+  if (mode === 'propose') {
+    tools.push(
+      pinnedToSelectedResume(readResumeLinesTool),
+      pinnedToSelectedResume(proposeResumeEditsTool)
+    );
+  }
+
+  tools.push(submitResumeResultTool);
+  return tools;
+}
+
+export function buildResumeAgent(
+  mode: ResumeAgentMode
+): ToolAgentDefinition<ResumeAgentInput, ResumeAgentOutput> {
+  return {
+    kind: 'tool',
+    id: 'resume-agent',
+    version: mode === 'propose' ? 'resume-agent-v1-propose' : 'resume-agent-v1',
+    taskType: 'strategy',
+    instructions: INSTRUCTIONS[mode],
+    buildUserMessage: (input) =>
+      [
+        `Selected resumeId: ${input.resumeId}`,
+        input.instruction
+          ? `The user asked: ${input.instruction}`
+          : mode === 'propose'
+            ? 'The user asked for rewrites of this resume for the posting below.'
+            : 'The user asked for an analysis of this resume against the posting below.',
+        '',
+        'JOB POSTING',
+        '"""',
+        input.jobDescription.trim(),
+        '"""',
+      ].join('\n'),
+    tools: toolsForMode(mode),
+    resultToolName: 'submit_resume_result',
+    outputSchema: resumeAgentResultSchema,
+    // No fallback on purpose: a run that could not read the resume or the
+    // posting must fail, not quietly return a plausible-looking analysis.
+  };
+}
+
+/** The read-only agent. Unchanged from before modes existed. */
+export const resumeAgent = buildResumeAgent('analyze');
+
+/** The same agent, plus the two editing tools. Still cannot apply anything. */
+export const resumeProposeAgent = buildResumeAgent('propose');
 
 export const RESUME_AGENT_BUDGET = {
   maxSteps: 10,
@@ -356,9 +418,14 @@ export async function runResumeAgent(
     );
   }
 
+  const mode: ResumeAgentMode = input.mode ?? 'analyze';
+  if (!RESUME_AGENT_MODES.includes(mode)) {
+    throw Errors.badRequest(`Unknown resume agent mode: ${String(mode)}.`);
+  }
+
   return runAgent(
-    resumeAgent,
-    { ...input, resumeId, jobDescription },
+    mode === 'propose' ? resumeProposeAgent : resumeAgent,
+    { ...input, resumeId, jobDescription, mode },
     {
       ...ctx,
       userId,

@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createAgentMemory } from '@/lib/agents/memory';
 import { buildEditFacts, type EditSourceProfile } from '@/services/ai/resume-edit/facts';
 import {
+  buildResumeAgent,
   resumeAgent,
   resumeAgentResultSchema,
+  resumeProposeAgent,
   runResumeAgent,
   type ResumeAgentOutput,
 } from '@/services/agents/resume/resume.agent';
@@ -15,6 +18,11 @@ const {
   getEditableResume,
   getConnectorProfile,
   agentRunUpsert,
+  profileFindUnique,
+  profileFindFirst,
+  userFindUnique,
+  sessionFindMany,
+  sessionCreate,
   mutations,
 } = vi.hoisted(() => ({
   executeChatCompletion: vi.fn(),
@@ -23,6 +31,11 @@ const {
   getEditableResume: vi.fn(),
   getConnectorProfile: vi.fn(),
   agentRunUpsert: vi.fn(),
+  profileFindUnique: vi.fn(),
+  profileFindFirst: vi.fn(),
+  userFindUnique: vi.fn(),
+  sessionFindMany: vi.fn(),
+  sessionCreate: vi.fn(),
   mutations: {
     create: vi.fn(),
     createMany: vi.fn(),
@@ -48,15 +61,33 @@ vi.mock('@/lib/ai-connector/resume-target', async (importOriginal) => ({
   requireOwnedResume,
 }));
 
-vi.mock('@/services/resume-edit-session.service', () => ({ getEditableResume }));
+// `createAssistantResumeEditSession` stays real so propose mode runs the
+// actual grounding; only the facts loader is stubbed.
+vi.mock('@/services/resume-edit-session.service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/services/resume-edit-session.service')>()),
+  getEditableResume,
+}));
 vi.mock('@/services/ai-connector.service', () => ({ getConnectorProfile }));
 
 vi.mock('@/lib/db', () => ({
   db: {
     // AgentRun telemetry is the one write the agent is allowed to cause.
     agentRun: { upsert: agentRunUpsert },
-    profile: { findUnique: vi.fn(), findMany: vi.fn(), findFirst: vi.fn(), ...mutations },
-    user: { findUnique: vi.fn(), findMany: vi.fn(), ...mutations },
+    profile: {
+      ...mutations,
+      findUnique: profileFindUnique,
+      findMany: vi.fn(),
+      findFirst: profileFindFirst,
+    },
+    user: { ...mutations, findUnique: userFindUnique, findMany: vi.fn() },
+    // `create` is its own spy: a pending review row is the only resume-side
+    // write a proposal may cause, so it must not trip the mutation guard.
+    resumeEditSession: {
+      ...mutations,
+      findFirst: vi.fn(),
+      findMany: sessionFindMany,
+      create: sessionCreate,
+    },
     ...mutations,
   },
 }));
@@ -203,6 +234,23 @@ beforeEach(() => {
   getConnectorProfile.mockResolvedValue({ resumeId: RESUME_ID, title: 'Backend', skills: [] });
   executeAICall.mockResolvedValue(modelRequirements());
   agentRunUpsert.mockResolvedValue({});
+
+  // These serve the real createAssistantResumeEditSession in propose mode.
+  userFindUnique.mockResolvedValue({ id: 'user-1', profile: { id: RESUME_ID } });
+  profileFindFirst.mockResolvedValue({ id: RESUME_ID });
+  profileFindUnique.mockResolvedValue(resumeProfile);
+  sessionFindMany.mockResolvedValue([]);
+  sessionCreate.mockImplementation(({ data }: { data: Record<string, unknown> }) =>
+    Promise.resolve({
+      id: 'session-1',
+      profileId: data.profileId,
+      brief: data.brief,
+      changes: data.changes,
+      droppedCount: data.droppedCount,
+      failedSections: data.failedSections,
+      createdAt: new Date('2026-11-16T00:00:00.000Z'),
+    })
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -531,5 +579,378 @@ describe('result shape', () => {
       term: 'Kubernetes',
       importance: 'required',
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Part 5C — execution modes
+// ---------------------------------------------------------------------------
+
+const EDIT_TOOL_NAMES = ['read_resume_lines', 'propose_resume_edits'];
+const MUTATION_TOOL_NAMES = ['apply_resume_edits', 'revert_resume_edits', 'apply_draft'];
+
+describe('execution modes', () => {
+  it('analyze mode registers only the read-only tools', () => {
+    expect(resumeAgent.tools.map((tool) => tool.name)).toEqual([
+      'get_resume',
+      'analyze_job_description',
+      'score_resume_against_jd',
+      'submit_resume_result',
+    ]);
+  });
+
+  it('propose mode registers both editing tools as well', () => {
+    expect(resumeProposeAgent.tools.map((tool) => tool.name)).toEqual([
+      'get_resume',
+      'analyze_job_description',
+      'score_resume_against_jd',
+      'read_resume_lines',
+      'propose_resume_edits',
+      'submit_resume_result',
+    ]);
+  });
+
+  it('never exposes an apply, revert or delete tool in either mode', () => {
+    for (const agent of [resumeAgent, resumeProposeAgent]) {
+      const names = agent.tools.map((tool) => tool.name);
+      for (const forbidden of MUTATION_TOOL_NAMES) {
+        expect(names).not.toContain(forbidden);
+      }
+      expect(names.some((name) => /apply|revert|delete|publish/i.test(name))).toBe(false);
+    }
+  });
+
+  it('keeps editing tools out of analyze mode entirely', () => {
+    const names = resumeAgent.tools.map((tool) => tool.name);
+    for (const editing of EDIT_TOOL_NAMES) {
+      expect(names).not.toContain(editing);
+    }
+  });
+
+  it('pins every resume-scoped tool in propose mode', async () => {
+    const ctx = { runId: 'r', memory: createAgentMemory(), meta: {} };
+    for (const name of ['get_resume', 'score_resume_against_jd', ...EDIT_TOOL_NAMES]) {
+      const tool = resumeProposeAgent.tools.find((item) => item.name === name);
+      // An unpinned tool would fall through to its own auth error instead.
+      await expect(tool?.execute({ resumeId: 'another-resume' }, ctx as never)).rejects.toThrow(
+        /No resume was selected|only the resume the user selected/i
+      );
+    }
+  });
+
+  it('both modes finish through the same terminal tool and have no fallback', () => {
+    for (const agent of [resumeAgent, resumeProposeAgent]) {
+      expect(agent.resultToolName).toBe('submit_resume_result');
+      expect(agent.fallback).toBeUndefined();
+      expect(agent.id).toBe('resume-agent');
+    }
+  });
+
+  it('tells the propose-mode model it cannot apply anything', () => {
+    const text = String(resumeProposeAgent.instructions).toLowerCase();
+    expect(text).toContain('cannot apply');
+    expect(text).toContain('the user approves it in follio');
+    expect(text).toContain('never invent');
+  });
+
+  it('builds a mode from buildResumeAgent and labels the run version', () => {
+    expect(buildResumeAgent('analyze').version).toBe('resume-agent-v1');
+    expect(buildResumeAgent('propose').version).toBe('resume-agent-v1-propose');
+  });
+});
+
+describe('mode selection', () => {
+  it('defaults to analyze when no mode is given', async () => {
+    const jd = posting('mode-default');
+    executeChatCompletion
+      .mockResolvedValueOnce(turn(call('analyze_job_description', { jobDescription: jd })))
+      .mockResolvedValueOnce(turn(call('score_resume_against_jd', { resumeId: RESUME_ID })))
+      .mockResolvedValueOnce(turn(call('submit_resume_result', SUBMIT_ARGS)));
+
+    const { run: record } = await run(jd);
+
+    expect(record.version).toBe('resume-agent-v1');
+    const sent = executeChatCompletion.mock.calls[0][0] as {
+      tools: Array<{ function: { name: string } }>;
+    };
+    expect(sent.tools.map((tool) => tool.function.name)).not.toContain('propose_resume_edits');
+  });
+
+  it('offers the editing tools to the model only in propose mode', async () => {
+    const jd = posting('mode-propose-tools');
+    executeChatCompletion.mockResolvedValue(idleTurn());
+
+    await expect(
+      runResumeAgent({ resumeId: RESUME_ID, jobDescription: jd, mode: 'propose' }, AUTH)
+    ).rejects.toThrow(/exceeded maxSteps/i);
+
+    const sent = executeChatCompletion.mock.calls[0][0] as {
+      tools: Array<{ function: { name: string } }>;
+    };
+    expect(sent.tools.map((tool) => tool.function.name)).toEqual(
+      expect.arrayContaining(['read_resume_lines', 'propose_resume_edits'])
+    );
+  });
+
+  it('rejects an unknown mode before calling the model', async () => {
+    await expect(
+      runResumeAgent(
+        {
+          resumeId: RESUME_ID,
+          jobDescription: posting('bad-mode'),
+          mode: 'delete' as never,
+        },
+        AUTH
+      )
+    ).rejects.toThrow(/Unknown resume agent mode/i);
+
+    expect(executeChatCompletion).not.toHaveBeenCalled();
+  });
+});
+
+describe('analyze mode stays read-only', () => {
+  it('returns empty proposal fields and creates no session', async () => {
+    const jd = posting('analyze-no-proposal');
+    executeChatCompletion
+      .mockResolvedValueOnce(turn(call('analyze_job_description', { jobDescription: jd })))
+      .mockResolvedValueOnce(turn(call('score_resume_against_jd', { resumeId: RESUME_ID })))
+      .mockResolvedValueOnce(turn(call('submit_resume_result', SUBMIT_ARGS)));
+
+    const { output } = await run(jd);
+
+    expect(output.proposedSessionId).toBeNull();
+    expect(output.proposedChanges).toEqual([]);
+    expect(output.proposalMessage).toBeNull();
+    expect(sessionCreate).not.toHaveBeenCalled();
+  });
+
+  it('refuses a propose_resume_edits call even when the model tries it', async () => {
+    const jd = posting('analyze-tries-propose');
+    executeChatCompletion
+      .mockResolvedValueOnce(turn(call('analyze_job_description', { jobDescription: jd })))
+      .mockResolvedValueOnce(
+        turn(
+          call('propose_resume_edits', {
+            resumeId: RESUME_ID,
+            request: 'Tailor it',
+            changes: [{ ref: 'S', text: 'Something new.' }],
+          })
+        )
+      )
+      .mockResolvedValueOnce(turn(call('score_resume_against_jd', { resumeId: RESUME_ID })))
+      .mockResolvedValueOnce(turn(call('submit_resume_result', SUBMIT_ARGS)));
+
+    const { output } = await run(jd);
+
+    expect(toolMessages().some((m) => /Unknown tool: propose_resume_edits/.test(m))).toBe(true);
+    expect(output.proposedSessionId).toBeNull();
+    expect(sessionCreate).not.toHaveBeenCalled();
+  });
+});
+
+describe('propose mode', () => {
+  const SUMMARY_REWRITE = {
+    ref: 'S',
+    text: 'Backend engineer building payment systems in Python and PostgreSQL.',
+  };
+
+  async function runPropose(jd: string) {
+    return runResumeAgent({ resumeId: RESUME_ID, jobDescription: jd, mode: 'propose' }, AUTH);
+  }
+
+  function proposeTurns(jd: string, changes: Array<Record<string, unknown>>) {
+    return [
+      turn(call('analyze_job_description', { jobDescription: jd })),
+      turn(call('score_resume_against_jd', { resumeId: RESUME_ID })),
+      turn(call('read_resume_lines', { resumeId: RESUME_ID })),
+      turn(
+        call('propose_resume_edits', {
+          resumeId: RESUME_ID,
+          request: 'Tailor the summary',
+          changes,
+        })
+      ),
+      turn(call('submit_resume_result', SUBMIT_ARGS)),
+    ];
+  }
+
+  it('creates a pending session and reports its real id', async () => {
+    const jd = posting('propose-happy');
+    for (const t of proposeTurns(jd, [SUMMARY_REWRITE])) {
+      executeChatCompletion.mockResolvedValueOnce(t);
+    }
+
+    const { output, run: record } = await runPropose(jd);
+
+    expect(record.status).toBe('succeeded');
+    expect(output.proposedSessionId).toBe('session-1');
+    expect(output.proposedChanges).toHaveLength(1);
+    expect(output.proposedChanges[0]).toMatchObject({ status: 'proposed' });
+    expect(output.proposalMessage).toMatch(/resume is unchanged/i);
+    expect(sessionCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the grounded analysis alongside the proposal', async () => {
+    const jd = posting('propose-keeps-analysis');
+    for (const t of proposeTurns(jd, [SUMMARY_REWRITE])) {
+      executeChatCompletion.mockResolvedValueOnce(t);
+    }
+
+    const { output } = await runPropose(jd);
+
+    expect(output.missingRequirements.map((gap) => gap.term)).toEqual(['Kubernetes']);
+    expect(output.scores.requirementMatch).not.toBeNull();
+  });
+
+  it('ignores a session id the model tries to supply', async () => {
+    const jd = posting('propose-invented-id');
+    for (const t of proposeTurns(jd, [SUMMARY_REWRITE])) {
+      executeChatCompletion.mockResolvedValueOnce(t);
+    }
+    // The terminal tool has no sessionId argument; a model that sends one is
+    // rejected by its input schema rather than believed.
+    executeChatCompletion.mockReset();
+    for (const t of proposeTurns(jd, [SUMMARY_REWRITE]).slice(0, 4)) {
+      executeChatCompletion.mockResolvedValueOnce(t);
+    }
+    executeChatCompletion
+      .mockResolvedValueOnce(
+        turn(call('submit_resume_result', { ...SUBMIT_ARGS, proposedSessionId: 'session-999' }))
+      )
+      .mockResolvedValueOnce(turn(call('submit_resume_result', SUBMIT_ARGS)));
+
+    const { output } = await runPropose(jd);
+
+    expect(output.proposedSessionId).toBe('session-1');
+  });
+
+  it('reports a no-proposal outcome when grounding drops everything', async () => {
+    const jd = posting('propose-all-dropped');
+    for (const t of proposeTurns(jd, [
+      { ref: 'E1.1', text: 'Built Python services on Kubernetes clusters.' },
+    ])) {
+      executeChatCompletion.mockResolvedValueOnce(t);
+    }
+
+    const { output } = await runPropose(jd);
+
+    expect(output.proposedSessionId).toBeNull();
+    expect(output.proposedChanges).toEqual([]);
+    expect(output.proposalMessage).toMatch(/No suggestions were saved/i);
+    expect(output.limitations.join(' ')).toMatch(/No edit was proposed/i);
+    expect(sessionCreate).not.toHaveBeenCalled();
+    // The analysis still stands.
+    expect(output.missingRequirements).toHaveLength(1);
+  });
+
+  it('refuses to propose before the posting is analyzed', async () => {
+    const jd = posting('propose-before-analyze');
+    executeChatCompletion
+      .mockResolvedValueOnce(
+        turn(
+          call('propose_resume_edits', {
+            resumeId: RESUME_ID,
+            request: 'Tailor it',
+            changes: [SUMMARY_REWRITE],
+          })
+        )
+      )
+      .mockResolvedValue(idleTurn());
+
+    await expect(runPropose(jd)).rejects.toThrow(/exceeded maxSteps/i);
+
+    expect(toolMessages()[0]).toMatch(/analyze_job_description first/i);
+    expect(sessionCreate).not.toHaveBeenCalled();
+  });
+
+  it('refuses to propose before the resume is scored', async () => {
+    const jd = posting('propose-before-score');
+    executeChatCompletion
+      .mockResolvedValueOnce(turn(call('analyze_job_description', { jobDescription: jd })))
+      .mockResolvedValueOnce(turn(call('read_resume_lines', { resumeId: RESUME_ID })))
+      .mockResolvedValueOnce(
+        turn(
+          call('propose_resume_edits', {
+            resumeId: RESUME_ID,
+            request: 'Tailor it',
+            changes: [SUMMARY_REWRITE],
+          })
+        )
+      )
+      .mockResolvedValue(idleTurn());
+
+    await expect(runPropose(jd)).rejects.toThrow(/exceeded maxSteps/i);
+
+    expect(toolMessages().some((m) => /score_resume_against_jd first/i.test(m))).toBe(true);
+    expect(sessionCreate).not.toHaveBeenCalled();
+  });
+
+  it('refuses to propose before the resume lines are read', async () => {
+    const jd = posting('propose-before-lines');
+    executeChatCompletion
+      .mockResolvedValueOnce(turn(call('analyze_job_description', { jobDescription: jd })))
+      .mockResolvedValueOnce(turn(call('score_resume_against_jd', { resumeId: RESUME_ID })))
+      .mockResolvedValueOnce(
+        turn(
+          call('propose_resume_edits', {
+            resumeId: RESUME_ID,
+            request: 'Tailor it',
+            changes: [SUMMARY_REWRITE],
+          })
+        )
+      )
+      .mockResolvedValue(idleTurn());
+
+    await expect(runPropose(jd)).rejects.toThrow(/exceeded maxSteps/i);
+
+    expect(toolMessages().some((m) => /read_resume_lines for this resume first/i.test(m))).toBe(
+      true
+    );
+    expect(sessionCreate).not.toHaveBeenCalled();
+  });
+
+  it('refuses a cross-resume proposal through pinning', async () => {
+    const jd = posting('propose-cross-resume');
+    executeChatCompletion
+      .mockResolvedValueOnce(turn(call('analyze_job_description', { jobDescription: jd })))
+      .mockResolvedValueOnce(turn(call('score_resume_against_jd', { resumeId: RESUME_ID })))
+      .mockResolvedValueOnce(turn(call('read_resume_lines', { resumeId: RESUME_ID })))
+      .mockResolvedValueOnce(
+        turn(
+          call('propose_resume_edits', {
+            resumeId: 'someone-elses-resume',
+            request: 'Tailor it',
+            changes: [SUMMARY_REWRITE],
+          })
+        )
+      )
+      .mockResolvedValue(idleTurn());
+
+    await expect(runPropose(jd)).rejects.toThrow(/exceeded maxSteps/i);
+
+    expect(toolMessages().some((m) => /only the resume the user selected/i.test(m))).toBe(true);
+    expect(sessionCreate).not.toHaveBeenCalled();
+  });
+
+  it('never mutates the resume itself', async () => {
+    const jd = posting('propose-no-mutation');
+    for (const t of proposeTurns(jd, [SUMMARY_REWRITE])) {
+      executeChatCompletion.mockResolvedValueOnce(t);
+    }
+
+    await runPropose(jd);
+
+    expectNoResumeMutations();
+  });
+
+  it('does not report a proposal when the run fails before finishing', async () => {
+    const jd = posting('propose-fails');
+    executeChatCompletion
+      .mockResolvedValueOnce(turn(call('analyze_job_description', { jobDescription: jd })))
+      .mockResolvedValue(idleTurn());
+
+    await expect(runPropose(jd)).rejects.toThrow(/exceeded maxSteps/i);
+
+    expect(sessionCreate).not.toHaveBeenCalled();
   });
 });

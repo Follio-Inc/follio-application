@@ -41,6 +41,12 @@ const agentRequestSchema = z
         'That posting is too long. Paste the job description, not the whole page.'
       ),
     instruction: z.string().trim().max(RESUME_EDIT_LIMITS.instructionsMaxChars).optional(),
+    /**
+     * 'analyze' (the default) is read-only. 'propose' may additionally save a
+     * pending edit session the user reviews in the builder. Neither applies
+     * anything. An unknown value is a 400, not a silent fallback.
+     */
+    mode: z.enum(['analyze', 'propose']).optional(),
   })
   .strict();
 
@@ -103,11 +109,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const releaseSlot = await reserveResumeAgentRun(user.id);
 
     try {
+      const mode = parsed.data.mode ?? 'analyze';
       const { output, run } = await runResumeAgent(
         {
           resumeId: profile.id,
           jobDescription: parsed.data.jobDescription,
           instruction: parsed.data.instruction,
+          mode,
         },
         { userId: user.id, clerkId }
       );
@@ -116,6 +124,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
         runId: run.id,
         userId: user.id,
         profileId: profile.id,
+        mode,
+        proposedSessionId: output.proposedSessionId,
         status: run.status,
         steps: run.stepMetas.length,
         tokensIn: run.totalTokensUsed.input,
@@ -124,6 +134,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
       return NextResponse.json({
         success: true,
+        mode,
         analysis: output,
         // Summary metadata only. Step details and prompts stay server-side.
         run: {
