@@ -68,3 +68,5 @@ logs
 
 # Legacy Chromium pack (no longer downloaded; worker prints PDFs)
 /public/chromium-*-pack.*
+
+/local-tests/resume-agent/output/
