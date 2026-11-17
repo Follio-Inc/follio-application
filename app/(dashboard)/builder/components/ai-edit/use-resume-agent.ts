@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import {
   ResumeAgentRequestError,
@@ -12,6 +12,12 @@ import { listResumeEdits } from '@/lib/resume-edit/client';
 import { RESUME_EDIT_LIMITS, type ResumeEditSessionView } from '@/lib/resume-edit/types';
 
 import { useBuilderStore } from '../builder-store-provider';
+import {
+  clearUncertainProposal,
+  hasUncertainProposal,
+  markUncertainProposal,
+  subscribeUncertainProposals,
+} from './uncertain-proposals';
 
 /**
  * What became of a propose run's suggestion set.
@@ -49,6 +55,8 @@ export interface ResumeAgentRun {
   error: string | null;
   /** A proposal whose fate this screen cannot vouch for. Not an error. */
   warning: string | null;
+  /** Dismiss that warning for the resume on screen. Re-runs nothing. */
+  dismissWarning: () => void;
   running: boolean;
   runningMode: ResumeAgentMode | null;
   analyze: (jobDescription: string, instruction?: string) => void;
@@ -177,14 +185,30 @@ const LOOKUP_ERRORED =
 export function useResumeAgent(options: UseResumeAgentOptions = {}): ResumeAgentRun {
   const resumeId = useBuilderStore((s) => s.draftProfile.id);
   const [state, setState] = useState<ResumeAgentState>({ status: 'idle' });
-  const [warning, setWarning] = useState<string | null>(null);
   const [ranFor, setRanFor] = useState(resumeId);
   const abortRef = useRef<AbortController | null>(null);
+
+  // Read from a store that outlives this component: the builder remounts the
+  // panel on every resume switch, which is precisely when an abandoned
+  // propose needs reporting.
+  const uncertain = useSyncExternalStore(
+    subscribeUncertainProposals,
+    useCallback(() => hasUncertainProposal(resumeId), [resumeId]),
+    () => false
+  );
 
   // Read inside the promise callbacks to tell whether the resume moved on
   // while the request was in the air.
   const resumeRef = useRef(resumeId);
   resumeRef.current = resumeId;
+
+  // The run in flight, so unmount can tell whether it was a propose and which
+  // resume it belonged to.
+  const inFlightRef = useRef<{
+    mode: ResumeAgentMode;
+    resumeId: string;
+    controller: AbortController;
+  } | null>(null);
 
   // Held in a ref so an inline callback from the panel does not re-create the
   // request functions on every render.
@@ -196,26 +220,41 @@ export function useResumeAgent(options: UseResumeAgentOptions = {}): ResumeAgent
   // different document. Same render-phase reset the review provider uses.
   if (ranFor !== resumeId) {
     setRanFor(resumeId);
-    const wasProposing = state.status === 'running' && state.mode === 'propose';
     abortRef.current?.abort();
     abortRef.current = null;
     setState({ status: 'idle' });
-    // The server may well have finished that propose. Say so rather than
-    // silently dropping it.
-    setWarning(wasProposing ? UNKNOWN_PROPOSAL_WARNING : null);
+    // Deliberately no marking here. Writing to the shared store during render
+    // would notify other subscribers mid-render. In this builder the panel is
+    // keyed by resume, so a switch unmounts it and the cleanup below does the
+    // marking instead.
   }
 
-  useEffect(() => () => abortRef.current?.abort(), []);
+  // Unmount is the path a resume switch actually takes, because the builder
+  // mounts the panel as `key={profileId}`.
+  useEffect(
+    () => () => {
+      const inFlight = inFlightRef.current;
+      abortRef.current?.abort();
+      if (inFlight && proposalMayExist(inFlight.mode, 'cancelled')) {
+        markUncertainProposal(inFlight.resumeId);
+      }
+    },
+    []
+  );
 
   const cancel = useCallback(() => {
+    const inFlight = inFlightRef.current;
     abortRef.current?.abort();
     abortRef.current = null;
-    setState((current) => {
-      if (current.status !== 'running') return current;
-      if (proposalMayExist(current.mode, 'cancelled')) setWarning(UNKNOWN_PROPOSAL_WARNING);
-      return { status: 'idle' };
-    });
+    inFlightRef.current = null;
+    if (inFlight && proposalMayExist(inFlight.mode, 'cancelled')) {
+      markUncertainProposal(inFlight.resumeId);
+    }
+    setState((current) => (current.status === 'running' ? { status: 'idle' } : current));
   }, []);
+
+  /** Clear the warning for the resume on screen. Nothing is re-run. */
+  const dismissWarning = useCallback(() => clearUncertainProposal(resumeId), [resumeId]);
 
   const run = useCallback((mode: ResumeAgentMode, jobDescription: string, instruction?: string) => {
     // A run already in flight, in either mode. Starting a second would bill
@@ -226,8 +265,8 @@ export function useResumeAgent(options: UseResumeAgentOptions = {}): ResumeAgent
     const target = resumeRef.current;
     const controller = new AbortController();
     abortRef.current = controller;
+    inFlightRef.current = { mode, resumeId: target, controller };
     setState({ status: 'running', mode });
-    setWarning(null);
 
     /** True while this run is still the one the screen is showing. */
     const current = () => !controller.signal.aborted && resumeRef.current === target;
@@ -290,13 +329,17 @@ export function useResumeAgent(options: UseResumeAgentOptions = {}): ResumeAgent
         onProposalSavedRef.current?.(view);
       })
       .catch((error: unknown) => {
-        if (!current()) return;
         const failure = describeFailure(error);
+        // Marked even if the screen has moved on: the set would still exist.
+        if (proposalMayExist(mode, failure.httpStatus)) markUncertainProposal(target);
+        if (!current()) return;
         setState({ status: 'failed', mode, ...failure });
-        if (proposalMayExist(mode, failure.httpStatus)) setWarning(UNKNOWN_PROPOSAL_WARNING);
       })
       .finally(() => {
         if (abortRef.current === controller) abortRef.current = null;
+        // Identity, not resume: a cancel followed by a new run for the same
+        // resume must not let the old promise clear the new run's marker.
+        if (inFlightRef.current?.controller === controller) inFlightRef.current = null;
       });
   }, []);
 
@@ -319,11 +362,12 @@ export function useResumeAgent(options: UseResumeAgentOptions = {}): ResumeAgent
     proposal,
     proposedSessionId: proposal && proposal.kind !== 'none' ? proposal.sessionId : null,
     error: state.status === 'failed' ? state.message : null,
-    warning,
+    warning: uncertain ? UNKNOWN_PROPOSAL_WARNING : null,
     running: state.status === 'running',
     runningMode: state.status === 'running' ? state.mode : null,
     analyze,
     propose,
     cancel,
+    dismissWarning,
   };
 }

@@ -221,7 +221,16 @@ export function AiEditPanel({ onClose }: AiEditPanelProps) {
       {/* A propose run that stopped without an answer. The set may exist. */}
       {agent.warning && (
         <Banner tone="warning" role="status">
-          {agent.warning}
+          <span className="flex-1">{agent.warning}</span>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={agent.dismissWarning}
+            className="h-7 shrink-0"
+          >
+            Dismiss
+          </Button>
         </Banner>
       )}
 
@@ -261,7 +270,13 @@ export function AiEditPanel({ onClose }: AiEditPanelProps) {
         <>
           <Intro />
           {agent.running && <AnalyzingRow mode={agent.runningMode} onCancel={agent.cancel} />}
-          {agent.analysis && <AgentReport analysis={agent.analysis} proposal={agent.proposal} />}
+          {agent.analysis && (
+            <AgentReport
+              analysis={agent.analysis}
+              proposal={agent.proposal}
+              openSessionId={session?.id ?? null}
+            />
+          )}
           <AiEditComposer
             key={composerKey}
             experiences={experiences}

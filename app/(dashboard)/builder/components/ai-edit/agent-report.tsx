@@ -22,10 +22,18 @@ import type { ProposalOutcome } from './use-resume-agent';
 export function AgentReport({
   analysis,
   proposal = null,
+  openSessionId = null,
 }: {
   analysis: ResumeAgentAnalysis;
   /** Null in analyze mode, which can never propose. */
   proposal?: ProposalOutcome | null;
+  /**
+   * The session the review panel currently has open, from the review state
+   * itself. Compared against the proposal's own id, so "open for review" is
+   * only ever said when this exact set is on screen — closing the review
+   * through "Change request" changes what this says.
+   */
+  openSessionId?: string | null;
 }) {
   const { summary, recommendations, limitations } = analysis;
 
@@ -49,7 +57,7 @@ export function AgentReport({
         </div>
       </div>
 
-      {proposal && <ProposalStatus proposal={proposal} />}
+      {proposal && <ProposalStatus proposal={proposal} openSessionId={openSessionId} />}
 
       <div className="space-y-2">
         <h4 className="text-xs font-semibold text-foreground">What to do next</h4>
@@ -113,7 +121,13 @@ function assurance(proposal: ProposalOutcome | null): string {
   return 'Your resume is unchanged. These are suggestions until you review and keep them.';
 }
 
-function ProposalStatus({ proposal }: { proposal: ProposalOutcome }) {
+function ProposalStatus({
+  proposal,
+  openSessionId,
+}: {
+  proposal: ProposalOutcome;
+  openSessionId: string | null;
+}) {
   if (proposal.kind === 'none') {
     return (
       <div className="space-y-1 rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5">
@@ -157,9 +171,21 @@ function ProposalStatus({ proposal }: { proposal: ProposalOutcome }) {
     );
   }
 
+  // Saved and still on screen.
+  if (openSessionId === proposal.sessionId) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Suggestions saved and opened for review below. Nothing is applied until you keep it.
+      </p>
+    );
+  }
+
+  // Saved, but the review has since been closed — through "Change request",
+  // for instance. The set is still waiting in Recent requests.
   return (
     <p className="text-sm text-muted-foreground">
-      Suggestions saved and opened for review below. Nothing is applied until you keep it.
+      Suggestions saved. Reopen them under Recent requests below. Nothing is applied until you keep
+      it.
     </p>
   );
 }
