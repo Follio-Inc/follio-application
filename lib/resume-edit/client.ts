@@ -27,6 +27,24 @@ const FALLBACK: Record<number, string> = {
   503: 'AI editing is unavailable right now.',
 };
 
+/**
+ * The message out of either error shape Follio's API uses: a flat
+ * `{ error: "..." }` from a route that answers directly, or the nested
+ * `{ error: { code, message } }` that `handleApiError` returns. Null when the
+ * body carries nothing a user could read.
+ */
+export function readErrorMessage(payload: unknown): string | null {
+  const error =
+    payload && typeof payload === 'object' && 'error' in payload
+      ? (payload as { error: unknown }).error
+      : null;
+  const message =
+    error && typeof error === 'object' && 'message' in error
+      ? (error as { message: unknown }).message
+      : error;
+  return typeof message === 'string' && message.trim() ? message : null;
+}
+
 async function request<T>(url: string, init: RequestInit): Promise<T> {
   let response: Response;
   try {
@@ -41,18 +59,10 @@ async function request<T>(url: string, init: RequestInit): Promise<T> {
 
   const payload: unknown = await response.json().catch(() => null);
   if (!response.ok) {
-    const error =
-      payload && typeof payload === 'object' && 'error' in payload
-        ? (payload as { error: unknown }).error
-        : null;
-    const message =
-      error && typeof error === 'object' && 'message' in error
-        ? (error as { message: unknown }).message
-        : error;
     throw new Error(
-      typeof message === 'string' && message.trim()
-        ? message
-        : (FALLBACK[response.status] ?? 'Something went wrong. Try again in a moment.')
+      readErrorMessage(payload) ??
+        FALLBACK[response.status] ??
+        'Something went wrong. Try again in a moment.'
     );
   }
   return payload as T;

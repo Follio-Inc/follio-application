@@ -4,6 +4,7 @@ import {
   Briefcase,
   Check,
   Hash,
+  Loader2,
   Scissors,
   Sparkles,
   Target,
@@ -35,6 +36,7 @@ import { cn } from '@/lib/utils';
 import { JobMatch, ScorePill, WritingScoreHeading } from './ai-edit-scores';
 import { useCurrentScores } from './use-edit-scores';
 import { readyRequirements, useJobRequirements } from './use-job-requirements';
+import { analyzeBlockedReason, canAnalyze } from './use-resume-agent';
 
 export interface ComposerExperience {
   id: string;
@@ -46,6 +48,21 @@ interface AiEditComposerProps {
   /** Prefills the form, e.g. when the user goes back to change their last request. */
   initialBrief?: ResumeEditBrief | null;
   onSubmit: (brief: ResumeEditBrief) => void;
+  /**
+   * Read the resume against the posting without proposing anything. Omit to
+   * hide the action entirely, which is what every caller before the Resume
+   * Agent did.
+   */
+  onAnalyze?: (jobDescription: string, instruction?: string) => void;
+  /**
+   * Ask the agent to save grounded rewrites for the user to review. Nothing
+   * is applied: the existing review panel still needs an explicit approval.
+   */
+  onProposeAgent?: (jobDescription: string, instruction?: string) => void;
+  /** An agent run is already in flight, in either mode, so both are held. */
+  analyzeBusy?: boolean;
+  /** Which run is in flight, so only that button shows a spinner. */
+  agentBusyMode?: 'analyze' | 'propose' | null;
 }
 
 const EXPERIENCE_PREFIX = 'role:';
@@ -159,7 +176,15 @@ function GoalCard({
   );
 }
 
-export function AiEditComposer({ experiences, initialBrief, onSubmit }: AiEditComposerProps) {
+export function AiEditComposer({
+  experiences,
+  initialBrief,
+  onSubmit,
+  onAnalyze,
+  onProposeAgent,
+  analyzeBusy = false,
+  agentBusyMode = null,
+}: AiEditComposerProps) {
   const ids = useId();
   const jobRef = useRef<HTMLTextAreaElement>(null);
   const [instructions, setInstructions] = useState(initialBrief?.instructions ?? '');
@@ -192,6 +217,12 @@ export function AiEditComposer({ experiences, initialBrief, onSubmit }: AiEditCo
     : evaluation.job?.summary;
   const checks = new Map(evaluation.checks.map((check) => [check.id, check]));
   const nearLimit = instructions.length > RESUME_EDIT_LIMITS.instructionsMaxChars * 0.8;
+  // Null when the agent actions can run. Shown as help text rather than a
+  // title, so the reason is readable on a phone and to a screen reader.
+  const analyzeBlocked = analyzeBlockedReason(jobDescription);
+  // Both agent actions share one gate: a run in flight blocks the other mode
+  // too, so an analyze can never race a propose.
+  const agentActionsEnabled = canAnalyze(jobDescription, analyzeBusy);
   const goalCount = presets.length + (brief.jobDescription ? 1 : 0);
 
   const togglePreset = (id: EditPresetId) =>
@@ -292,6 +323,58 @@ export function AiEditComposer({ experiences, initialBrief, onSubmit }: AiEditCo
               of the skills match. It never adds skills your resume does not show.
             </p>
             <JobMatch evaluation={evaluation} requirements={requirements} skillRead={skillRead} />
+            {(onAnalyze || onProposeAgent) && (
+              <div className="space-y-2 border-t border-border/60 pt-3">
+                <p id={`${ids}-agent-help`} className="text-xs text-muted-foreground">
+                  {analyzeBusy
+                    ? 'Reading your resume against this posting…'
+                    : (analyzeBlocked ??
+                      'Get a written read of how you fit. Suggested rewrites are saved for you to review — nothing is changed until you keep it.')}
+                </p>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  {onAnalyze && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={!agentActionsEnabled}
+                      aria-describedby={`${ids}-agent-help`}
+                      onClick={() => onAnalyze(jobDescription, instructions.trim() || undefined)}
+                      className="w-full sm:w-auto"
+                    >
+                      {agentBusyMode === 'analyze' ? (
+                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />
+                      ) : (
+                        <Target className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+                      )}
+                      {agentBusyMode === 'analyze' ? 'Analyzing…' : 'Analyze fit'}
+                    </Button>
+                  )}
+                  {onProposeAgent && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={!agentActionsEnabled}
+                      aria-describedby={`${ids}-agent-help`}
+                      onClick={() =>
+                        onProposeAgent(jobDescription, instructions.trim() || undefined)
+                      }
+                      className="w-full sm:w-auto"
+                    >
+                      {agentBusyMode === 'propose' ? (
+                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />
+                      ) : (
+                        <Sparkles className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+                      )}
+                      {agentBusyMode === 'propose'
+                        ? 'Writing suggestions…'
+                        : 'Suggest improvements'}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </section>

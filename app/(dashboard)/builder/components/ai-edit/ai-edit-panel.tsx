@@ -31,6 +31,7 @@ import { cn } from '@/lib/utils';
 
 import { saveProfileDraft } from '../../lib/save-profile-draft';
 import { useBuilderStore } from '../builder-store-provider';
+import { AgentReport } from './agent-report';
 import { AiEditChangeCard } from './ai-edit-change-card';
 import { AiEditComposer, type ComposerExperience } from './ai-edit-composer';
 import { useAiEditReview } from './ai-edit-review';
@@ -46,6 +47,9 @@ import {
   useJobRequirements,
   type JobRequirementsRead,
 } from './use-job-requirements';
+import { useResumeAgent } from './use-resume-agent';
+
+import type { ResumeAgentMode } from '@/lib/resume-agent/client';
 
 interface AiEditPanelProps {
   onClose: () => void;
@@ -89,6 +93,18 @@ export function AiEditPanel({ onClose }: AiEditPanelProps) {
   const requirements = readyRequirements(jobRequirements);
   const scores = useSessionScores(requirements);
   const jobKeywords = useJobKeywords(jobDescription, requirements);
+
+  // Propose mode hands the saved set straight to the existing review UI, in
+  // the same order the builder's own create path uses. Nothing is applied:
+  // the user still keeps each change from the review panel.
+  const openProposal = useCallback(
+    (view: ResumeEditSessionView) => {
+      openSession(view);
+      rememberSession(view);
+    },
+    [openSession, rememberSession]
+  );
+  const agent = useResumeAgent({ onProposalSaved: openProposal });
 
   const [composerBrief, setComposerBrief] = useState<ResumeEditBrief | null>(null);
   const [composerKey, setComposerKey] = useState(0);
@@ -169,15 +185,43 @@ export function AiEditPanel({ onClose }: AiEditPanelProps) {
     }
   }, [contactDraft, draftProfile, markSaved, savedContact, setError, setSaving, unsaved]);
 
+  // Folded into the panel's one live region rather than adding a second.
+  const agentAnnouncement = agent.running
+    ? agent.runningMode === 'propose'
+      ? 'Writing suggestions for your review.'
+      : 'Analyzing your resume against this posting.'
+    : agent.proposal?.kind === 'opened'
+      ? 'Suggestions ready to review.'
+      : agent.proposal?.kind === 'unopened'
+        ? 'Suggestions were saved but could not be opened.'
+        : agent.proposal?.kind === 'none'
+          ? 'No suggestions were saved. Your resume is unchanged.'
+          : agent.analysis
+            ? 'Analysis ready.'
+            : '';
+
   return (
     <div className="space-y-6">
       <p className="sr-only" role="status" aria-live="polite">
-        {announcement}
+        {[announcement, agentAnnouncement].filter(Boolean).join(' ')}
       </p>
 
       {error && (
         <Banner tone="error" role="alert">
           {error}
+        </Banner>
+      )}
+
+      {agent.error && (
+        <Banner tone="error" role="alert">
+          {agent.error}
+        </Banner>
+      )}
+
+      {/* A propose run that stopped without an answer. The set may exist. */}
+      {agent.warning && (
+        <Banner tone="warning" role="status">
+          {agent.warning}
         </Banner>
       )}
 
@@ -216,11 +260,17 @@ export function AiEditPanel({ onClose }: AiEditPanelProps) {
       ) : !session || !review ? (
         <>
           <Intro />
+          {agent.running && <AnalyzingRow mode={agent.runningMode} onCancel={agent.cancel} />}
+          {agent.analysis && <AgentReport analysis={agent.analysis} proposal={agent.proposal} />}
           <AiEditComposer
             key={composerKey}
             experiences={experiences}
             initialBrief={composerBrief}
             onSubmit={submit}
+            onAnalyze={agent.analyze}
+            onProposeAgent={agent.propose}
+            analyzeBusy={agent.running}
+            agentBusyMode={agent.runningMode}
           />
           {recent.length > 0 && <RecentList sessions={recent} onOpen={openSession} />}
         </>
@@ -420,6 +470,26 @@ function SessionScores({
       jobFit={jobDescription ? jobFit : null}
       requirements={requirements}
     />
+  );
+}
+
+/** Inline busy state for an agent run. The composer stays visible behind it. */
+function AnalyzingRow({ mode, onCancel }: { mode: ResumeAgentMode | null; onCancel: () => void }) {
+  return (
+    <div
+      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/80 px-3.5 py-2.5"
+      aria-busy
+    >
+      <span className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin text-primary" aria-hidden />
+        {mode === 'propose'
+          ? 'Writing grounded suggestions for you to review…'
+          : 'Reading your resume against this posting…'}
+      </span>
+      <Button type="button" size="sm" variant="ghost" onClick={onCancel} className="h-7">
+        Cancel
+      </Button>
+    </div>
   );
 }
 
