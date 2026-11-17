@@ -86,3 +86,63 @@ written beside them. That is the harness working.
 - This exercises the agent's _tools_, not the tool-calling loop, the API
   route, auth, or rate limiting. Those need the full stack and are covered by
   `__tests__/agents/`.
+
+---
+
+# Live agent demo (`live-agent.ts`)
+
+`run.ts` above exercises the agent's _logic_ with no model. This runs the
+**real agent loop against a real OpenAI model**, with the model choosing which
+tools to call.
+
+```bash
+npx tsx local-tests/resume-agent/live-agent.ts --check               # no API call
+npx tsx local-tests/resume-agent/live-agent.ts --live                # propose mode
+npx tsx local-tests/resume-agent/live-agent.ts --live --mode analyze # analyze mode
+```
+
+There is **no mocked-model fallback**. Without `OPENAI_API_KEY` the run fails
+with a clear error rather than quietly producing a fake transcript.
+
+## Production vs test-only
+
+| Piece                                                                                | Source                                                       |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------ |
+| Tool-calling loop, budget, progress, telemetry                                       | production `runAgent`                                        |
+| Instructions                                                                         | production `resumeAgent` / `resumeProposeAgent`              |
+| Result contract                                                                      | production `resumeAgentResultSchema`, `submit_resume_result` |
+| `analyze_job_description`                                                            | production tool, unmodified (needs no database)              |
+| Resume pinning                                                                       | production `pinnedToSelectedResume`                          |
+| Scoring, line view, grounding                                                        | production functions, called inside the adapters             |
+| `get_resume`, `score_resume_against_jd`, `read_resume_lines`, `propose_resume_edits` | **test-only** adapters over `sample-resume.json`             |
+| Edit session storage                                                                 | **test-only**, in memory                                     |
+| Tool-call recording                                                                  | **test-only** wrapper that delegates and changes nothing     |
+
+## Why there is a bootstrap file
+
+`live-agent.ts` only sets `DATABASE_URL` to a dead local address and then
+dynamically imports `live-agent-impl.ts`. It has to: `runAgent` writes one
+`AgentRun` telemetry row through Prisma, and this repo's `.env` currently
+points at a **hosted** database. Claiming the variable before Prisma is
+constructed keeps that write off the hosted database — dotenv does not
+overwrite variables that are already set. `.env` is never modified. The
+preflight prints the effective database target so you can see the guard held.
+
+`persistAgentRun` catches its own failures, so the dead address costs nothing
+but a logged Prisma error.
+
+## Output
+
+A live run writes four files to `local-tests/resume-agent/output/`:
+`live-agent-transcript.json` (tool calls in order, inputs, outputs, progress
+events, token usage), `live-agent-analysis.json` (the structured result),
+`live-agent-proposals.json` (what the model submitted, what grounding did with
+it), and `live-agent-report.md`.
+
+## What this does not prove
+
+Ownership checks, the API route, Clerk auth, rate limiting, and the real
+`ResumeEditSession` write are all absent — there is no database and no second
+user. Those are covered by `__tests__/agents/`. This demo proves the model
+drives the real loop, calls the real tools, and that grounding governs what it
+is allowed to propose.
