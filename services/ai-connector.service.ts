@@ -4,6 +4,7 @@ import { DRAFT_TTL_MS } from '@/lib/ai-connector/constants';
 import { hashSecret } from '@/lib/ai-connector/crypto';
 import { parseFlexibleDate, requireFlexibleDate } from '@/lib/ai-connector/dates';
 import {
+  addOperation,
   describeOperation,
   operationFromExperience,
   operationFromProject,
@@ -53,6 +54,7 @@ export interface ConnectorAuth {
   clientLabel: string | null;
 }
 
+// CHECKING THE TOKEN
 export async function authenticateConnectorToken(token: string): Promise<ConnectorAuth | null> {
   if (!token) return null;
 
@@ -124,6 +126,7 @@ export async function revokeConnectorToken(userId: string, tokenId: string): Pro
   });
 }
 
+// RESUME TOOLS
 async function connectorUser(userId: string) {
   const user = await db.user.findUnique({
     where: { id: userId },
@@ -219,6 +222,7 @@ export async function getConnectorProfile(userId: string, resumeRef: string) {
   };
 }
 
+// DRAFTS
 async function getOrCreatePendingDraft(
   userId: string,
   clientLabel: string | null,
@@ -258,7 +262,10 @@ async function appendOperation(
   operation: DraftOperation
 ) {
   const draft = await getOrCreatePendingDraft(userId, clientLabel, profileId);
-  const operations = [...parseOperations(draft.operations), operation];
+  const previous = parseOperations(draft.operations);
+  const operations = addOperation(previous, operation);
+  const replaced =
+    operation.type === 'update_summary' && previous.some((op) => op.type === 'update_summary');
   const summary = summarizeOperations(operations);
 
   const updated = await db.aiEditDraft.update({
@@ -278,8 +285,11 @@ async function appendOperation(
     summary: updated.summary,
     operations,
     added: describeOperation(operation),
-    message:
-      'Saved to a draft. The live Follio is unchanged. Ask the user to confirm, then call apply_draft with this resumeId.',
+    message: `${
+      replaced
+        ? 'Replaced the earlier headline/summary proposal in this draft.'
+        : 'Saved to a draft.'
+    } The live Follio is unchanged. Ask the user to confirm, then call apply_draft with this resumeId.`,
   };
 }
 
@@ -527,7 +537,7 @@ export async function applyDraft(userId: string, draftId: string, resumeRef?: st
   };
 }
 
-// ── Resume line edits ────────────────────────────────────
+// RESUME LINE EDIT TOOLS
 
 type AssistantContext = { clerkId: string; userId: string; clientLabel: string | null };
 
@@ -631,6 +641,8 @@ async function listResumeEditsForAssistant(ctx: AssistantContext, resumeRef: str
 }
 
 type ResumeToolInput = { resumeId: string };
+
+// HANDLER MAP. connects each tool to one of the functions above. It's what server.ts calls
 
 export const aiConnectorHandlers = {
   listResumes: (ctx: { userId: string }) => listConnectorResumes(ctx.userId),

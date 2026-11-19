@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 
 import {
   corsEmpty,
@@ -8,14 +8,8 @@ import {
 } from '@/lib/ai-connector/cors';
 import { extractBearerToken } from '@/lib/ai-connector/bearer';
 import { publicOriginFromHeaders } from '@/lib/ai-connector/public-origin';
-import {
-  JSON_RPC_INTERNAL_ERROR,
-  JSON_RPC_INVALID_REQUEST,
-  JSON_RPC_PARSE_ERROR,
-  jsonRpcError,
-} from '@/lib/mcp/jsonrpc';
-import { isAllowedMcpOrigin, prefersEventStream } from '@/lib/mcp/origin';
-import { dispatchMcpBody } from '@/lib/mcp/protocol';
+import { isAllowedMcpOrigin } from '@/lib/mcp/origin';
+import { createFollioMcpHandler, toAuthInfo } from '@/lib/mcp/server';
 import { aiConnectorHandlers, authenticateConnectorToken } from '@/services/ai-connector.service';
 import { logger } from '@/lib/logger';
 import { getBaseUrl } from '@/lib/utils';
@@ -24,23 +18,26 @@ const mcpLogger = logger.child({ source: 'mcp' });
 
 export const dynamic = 'force-dynamic';
 
-function mcpHeaders(protocolVersion: string, extra?: HeadersInit) {
-  const headers = new Headers(extra);
-  headers.set('MCP-Protocol-Version', protocolVersion);
+/**
+ * The MCP protocol itself (both the 2026-07-28 revision and the earlier handshake ones) is
+ * served by the official SDK. This route only checks who is calling first.
+ */
+const mcpHandler = createFollioMcpHandler(aiConnectorHandlers, (error) =>
+  mcpLogger.error('MCP request failed', error)
+);
+
+/** Adds the CORS and no-cache headers this endpoint has always sent. */
+function withMcpHeaders(response: Response): Response {
+  const headers = new Headers(response.headers);
+  for (const [key, value] of Object.entries(MCP_CORS_HEADERS)) {
+    headers.set(key, value);
+  }
   headers.set('Cache-Control', 'no-store');
-  return headers;
-}
-
-function mcpJson(body: unknown, status: number, protocolVersion: string) {
-  return corsJson(body, { status, headers: mcpHeaders(protocolVersion) });
-}
-
-function mcpSse(body: unknown, protocolVersion: string) {
-  const headers = mcpHeaders(protocolVersion, MCP_CORS_HEADERS);
-  headers.set('Content-Type', 'text/event-stream; charset=utf-8');
-  headers.set('X-Accel-Buffering', 'no');
-  const stream = `event: message\ndata: ${JSON.stringify(body)}\n\n`;
-  return new NextResponse(stream, { status: 200, headers });
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
 }
 
 export async function OPTIONS() {
@@ -63,9 +60,10 @@ export async function DELETE() {
 
 export async function POST(request: NextRequest) {
   if (!isAllowedMcpOrigin(request.headers.get('origin'), getBaseUrl())) {
-    return corsJson(jsonRpcError(null, JSON_RPC_INVALID_REQUEST, 'Origin is not allowed'), {
-      status: 403,
-    });
+    return corsJson(
+      { jsonrpc: '2.0', id: null, error: { code: -32600, message: 'Origin is not allowed' } },
+      { status: 403 }
+    );
   }
 
   const origin = publicOriginFromHeaders(request.headers);
@@ -82,46 +80,20 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return corsJson(jsonRpcError(null, JSON_RPC_PARSE_ERROR, 'Parse error'), { status: 400 });
-  }
-
-  const ctx = {
+  const authInfo = toAuthInfo(token, {
     userId: auth.userId,
     clerkId: auth.clerkId,
     scopes: auth.scopes,
     clientLabel: auth.clientLabel,
-  };
-
-  const http = {
-    protocolHeader: request.headers.get('mcp-protocol-version'),
-    mcpMethodHeader: request.headers.get('mcp-method'),
-    mcpNameHeader: request.headers.get('mcp-name'),
-  };
+  });
 
   try {
-    const result = await dispatchMcpBody(body, http, ctx, aiConnectorHandlers);
-    if (result.status === 202 || result.payload == null) {
-      const empty = corsEmpty(202);
-      empty.headers.set('MCP-Protocol-Version', result.protocolVersion);
-      empty.headers.set('Cache-Control', 'no-store');
-      return empty;
-    }
-
-    if (result.status === 200 && prefersEventStream(request.headers.get('accept'))) {
-      return mcpSse(result.payload, result.protocolVersion);
-    }
-
-    return mcpJson(result.payload, result.status, result.protocolVersion);
+    return withMcpHeaders(await mcpHandler.fetch(request, { authInfo }));
   } catch (error) {
     mcpLogger.error('MCP request failed', error, { userId: auth.userId });
-    return mcpJson(
-      jsonRpcError(null, JSON_RPC_INTERNAL_ERROR, 'Internal error'),
-      500,
-      request.headers.get('mcp-protocol-version') || '2025-03-26'
+    return corsJson(
+      { jsonrpc: '2.0', id: null, error: { code: -32603, message: 'Internal error' } },
+      { status: 500, headers: { 'Cache-Control': 'no-store' } }
     );
   }
 }
