@@ -19,15 +19,3 @@ export function isAllowedMcpOrigin(origin: string | null, appOrigin: string): bo
   if (given.origin === expected.origin) return true;
   return LOCAL_HOSTS.has(given.hostname);
 }
-
-/**
- * Prefer a single JSON body. Fall back to one SSE event only when the client
- * refuses JSON. Hosts that list both accept either.
- */
-export function prefersEventStream(accept: string | null): boolean {
-  if (!accept) return false;
-  const types = accept.split(',').map((part) => part.split(';')[0]?.trim().toLowerCase() ?? '');
-  const acceptsJson = types.includes('application/json') || types.includes('*/*');
-  const acceptsSse = types.includes('text/event-stream');
-  return acceptsSse && !acceptsJson;
-}
