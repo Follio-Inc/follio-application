@@ -14,6 +14,7 @@ import {
   MoreHorizontal,
   Pencil,
   Share2,
+  Sparkles,
   Star,
   Trash2,
   X,
@@ -26,6 +27,8 @@ import { isPortfolioEnabled } from '@/lib/features';
 import { resumePresentationHref } from '@/lib/resume/presentation';
 import { cn } from '@/lib/utils';
 import type { ResumePageLayout } from '@/types';
+
+import { AnalyzeResumeDialog } from '@/app/(dashboard)/resumes/analyze-resume-dialog';
 
 import { DownloadDialog } from '@/app/(dashboard)/builder/components/download-dialog';
 import { formatRelativeDocumentDate } from '@/components/document-dashboard';
@@ -240,6 +243,12 @@ export function ResumeDashboardClient({
   // Share dialog state
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [sharingResume, setSharingResume] = useState<ResumeItem | null>(null);
+
+  // AI analysis dialog state. Holds the resume the user picked, so the run
+  // always targets that card's id rather than an "active" resume.
+  const [analyzingResume, setAnalyzingResume] = useState<{ id: string; title: string } | null>(
+    null
+  );
 
   const sortedResumes = useMemo(() => sortResumesWithPublicFirst(resumes), [resumes]);
 
@@ -533,6 +542,17 @@ export function ResumeDashboardClient({
                   <Share2 className="mr-2 h-4 w-4" />
                   Share
                 </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() =>
+                    setAnalyzingResume({
+                      id: resume.id,
+                      title: resume.resumeTitle ?? 'Untitled resume',
+                    })
+                  }
+                >
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Analyze with AI
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => startInlineRename(resume)}>
                   <Pencil className="mr-2 h-4 w-4" />
@@ -776,6 +796,14 @@ export function ResumeDashboardClient({
           }}
         />
       )}
+
+      {/* ─── AI analysis (read-only) ──── */}
+      <AnalyzeResumeDialog
+        resume={analyzingResume}
+        onOpenChange={(open) => {
+          if (!open) setAnalyzingResume(null);
+        }}
+      />
 
       {/* ─── Share Dialog (reuses builder's share service) ──── */}
       {sharingResume && (

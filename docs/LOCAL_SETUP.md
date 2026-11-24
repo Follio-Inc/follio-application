@@ -2,6 +2,9 @@
 
 Steps to clone the repo and open it in the browser. Do this once on each machine.
 
+The setup is: **the database runs in Docker, the Next.js app runs on your machine**
+with `npm run dev`. Nothing builds the app itself into a container.
+
 ## What you need
 
 - A GitHub account that has been added to the [Follio-Inc/follio-application](https://github.com/Follio-Inc/follio-application) repo
@@ -17,6 +20,10 @@ node -v    # v20.x
 npm -v     # 10 or higher
 docker -v
 ```
+
+On Windows, Docker Desktop must be **fully started** — open it and wait until the
+dashboard says "Engine running". Docker commands hang silently with no output if the
+engine is still booting.
 
 ## 1. Clone and install
 
@@ -53,17 +60,109 @@ Leave the other values alone for a first run. Resume upload and AI rewriting nee
 
 If you created your own Clerk app, add `http://localhost:3000` as an allowed origin in the Clerk dashboard.
 
+### If your `.env.local` already points at a hosted database
+
+Some machines are set up against hosted Neon Postgres — the `DATABASE_URL` contains
+`neon.tech`. **Do not edit `.env.local`** to switch to Docker, or you lose those
+credentials. Create an override that applies to `npm run dev` only:
+
+```env
+# .env.development.local
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/follio"
+DIRECT_URL="postgresql://postgres:postgres@localhost:5432/follio"
+```
+
+Next.js loads env files in priority order, first match wins:
+
+| Priority | File                     | Read by                        |
+| -------- | ------------------------ | ------------------------------ |
+| 1        | `.env.development.local` | Next.js, dev only              |
+| 2        | `.env.local`             | Next.js — your personal keys   |
+| 3        | `.env.development`       | Next.js in dev                 |
+| 4        | `.env`                   | Next.js **and the Prisma CLI** |
+
+So `.env.development.local` wins for the database, while Clerk and OpenAI keys still
+come from `.env.local`. **To go back to the hosted database, delete
+`.env.development.local` and restart `npm run dev`.** Nothing else changes.
+
+The Prisma CLI never reads `.env.local` or `.env.development.local` — only `.env`.
+Keep the database lines in `.env` identical to the ones in `.env.development.local`,
+or the app and your migrations will quietly target different databases.
+
 ## 3. Database
 
 Start Docker Desktop, then:
 
 ```bash
 docker compose up -d
-npm run db:migrate
+```
+
+This starts **one** container, `follio-postgres` (Postgres 16). Redis and the PDF
+worker sit behind Compose profiles and do not start by default. If you ever need
+them: `docker compose --profile redis up -d` or `--profile pdf`.
+
+Confirm the container is healthy before going further. `up -d` returns as soon as the
+container _starts_, which is a few seconds before Postgres accepts queries:
+
+```bash
+docker compose ps
+```
+
+Wait until `STATUS` reads `Up (healthy)`.
+
+### If port 5432 is already taken
+
+Common on Windows, where a native PostgreSQL service may already own 5432, and on
+Macs with Postgres installed through Homebrew. Rather than stopping that service,
+publish the container on a different host port. Add to `.env`:
+
+```env
+POSTGRES_PORT=5433
+```
+
+and change the port in every database URL — in `.env`, and in
+`.env.development.local` or `.env.local` — to match:
+
+```env
+DATABASE_URL="postgresql://postgres:postgres@localhost:5433/follio"
+DIRECT_URL="postgresql://postgres:postgres@localhost:5433/follio"
+```
+
+Then run `docker compose up -d` again. Only the _host_ port changes; inside Docker,
+Postgres still listens on 5432. That is why the URLs change but the Compose file does
+not.
+
+### Apply the migrations
+
+Check what Prisma sees first. This connects read-only and lists which migrations have
+and have not been applied:
+
+```bash
+npx prisma migrate status
+```
+
+Then apply them:
+
+```bash
+npx prisma migrate deploy
+```
+
+`migrate deploy` runs the files in `prisma/migrations/` in order against whatever
+`DATABASE_URL` in `.env` points to. It applies only the missing ones, never generates
+new migrations, and has no reset path — which makes it the safe command for setting
+up a database.
+
+`npm run db:migrate` (`prisma migrate dev`) is a different tool: it is for _authoring_
+a new migration after you edit `prisma/schema.prisma`. It can offer to reset the
+database when it detects drift, so do not reach for it just to set your machine up.
+
+Finally, optional sample data:
+
+```bash
 npm run db:seed
 ```
 
-`db:migrate` creates the tables. `db:seed` adds a public sample profile.
+This adds a public sample profile. It upserts, so running it twice is harmless.
 
 ## 4. Start the app
 
@@ -75,14 +174,17 @@ Open [http://localhost:3000](http://localhost:3000).
 
 Sign up with the account you will use for the project. After sign-in you land in an empty workspace that belongs to you.
 
+Your user row is created in the database the first time you sign in, so a brand new
+empty database fills itself in. There is no webhook to configure.
+
 The sample profile from the seed is separate from your account. View it at [http://localhost:3000/u/alexchen](http://localhost:3000/u/alexchen).
 
 ## Each time you come back
 
 ```bash
 cd follio-application
-docker compose up -d
-npm run dev
+docker compose up -d     # start the database
+npm run dev              # start the app
 ```
 
 Pull the latest code before you start new work:
@@ -92,14 +194,38 @@ git checkout develop
 git pull origin develop
 ```
 
+If someone added a migration while you were away, run `npx prisma migrate deploy` and
+`npx prisma generate` after pulling.
+
+## Stopping
+
+```bash
+docker compose stop      # stop the container, keep it and the data
+docker compose down      # remove the container, keep the data
+```
+
+Your data lives in a Docker **named volume**, not in this repo folder, so both
+commands above keep it. Only this deletes it:
+
+```bash
+docker compose down -v   # DESTROYS all local database data
+```
+
+After `down -v` you have to run `npx prisma migrate deploy` again to rebuild the
+tables.
+
 ## If something fails
 
-| What you see                                   | What to do                                                                                             |
-| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `node -v` is not v20                           | Install Node 20 and open a new terminal                                                                |
-| `npm install` fails on GitHub packages or auth | Confirm you are signed into the invited GitHub account                                                 |
-| Database connection error                      | Docker Desktop is running, then `docker compose up -d` again                                           |
-| Port 5432 already in use                       | Another Postgres is running. Stop it, or change the port in `docker-compose.yml` and in both env files |
-| Port 3000 already in use                       | Stop the other app, or run `npm run dev -- --port 3001` and set `NEXT_PUBLIC_APP_URL` to that port     |
-| Sign-in screen errors                          | Clerk keys in `.env.local` and `.env` match, and localhost is allowed in Clerk                         |
-| Prisma cannot find `DATABASE_URL`              | `.env` exists and matches `.env.local`                                                                 |
+| What you see                                   | What to do                                                                                     |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `node -v` is not v20                           | Install Node 20 and open a new terminal                                                        |
+| `npm install` fails on GitHub packages or auth | Confirm you are signed into the invited GitHub account                                         |
+| Docker commands hang with no output            | Docker Desktop is not fully started. Open it and wait for "Engine running"                     |
+| Database connection error                      | Docker Desktop is running, then `docker compose up -d` again                                   |
+| Port 5432 already in use                       | Another Postgres owns it. Set `POSTGRES_PORT=5433` in `.env` and update the URLs — see above   |
+| Port 3000 already in use                       | Stop the other app, or run `npm run dev -- --port 3001` and set `NEXT_PUBLIC_APP_URL` to it    |
+| Sign-in screen errors                          | Clerk keys in `.env.local` and `.env` match, and localhost is allowed in Clerk                 |
+| Prisma cannot find `DATABASE_URL`              | `.env` exists and matches `.env.local`                                                         |
+| `P1001: Can't reach database server`           | `docker compose ps` shows `Up (healthy)`, and the port in `DATABASE_URL` matches the host port |
+| The app reads the wrong database               | `.env.development.local` overrides `.env.local`. Check which files define `DATABASE_URL`       |
+| Prisma client missing a field you just added   | `npx prisma generate`, delete `.next`, restart `npm run dev`                                   |

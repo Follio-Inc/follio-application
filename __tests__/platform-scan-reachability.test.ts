@@ -871,12 +871,18 @@ describe('drift report integration', { timeout: 30_000 }, () => {
       // Drift intelligence added a ninth: `platform/drift/analyze`. It is
       // excluded by the same `app/api/admin` entry, so `total` and `excluded`
       // each moved by one and `mapped` did not move at all.
-      total: 164,
-      mapped: 130,
+      //
+      // The Resume Agent added `app/api/resumes/[resumeId]/agent/route.ts`.
+      // Unlike the admin routes above this one IS product surface, claimed by
+      // the `resume-agent` feature, so `total`, `routes` and `mapped` each
+      // moved by one while `excluded` did not. `unmapped` staying at 0 is the
+      // assertion that matters: the new route is claimed, not merely counted.
+      total: 165,
+      mapped: 131,
       excluded: 34,
       unmapped: 0,
       pages: 49,
-      routes: 115,
+      routes: 116,
     });
     expect(pathways?.signal === 'live-qa-pathways' && pathways.summary).toMatchObject({
       total: 9,
@@ -886,7 +892,11 @@ describe('drift report integration', { timeout: 30_000 }, () => {
       orphanSpecs: 0,
     });
     expect(tests?.signal === 'test-attribution' && tests.summary).toMatchObject({
-      mapped: 79,
+      // 82 since the Resume Agent's evaluation modes: its three test files
+      // (`resume-agent-api`, `resume-agent-tools`, `resume-agent-integration`)
+      // are all claimed by the `resume-agent` feature, so they land in
+      // `mapped` rather than moving `unlisted`, which stays at 1.
+      mapped: 82,
       unlisted: 1,
       misattributed: 0,
       deadCode: 8,

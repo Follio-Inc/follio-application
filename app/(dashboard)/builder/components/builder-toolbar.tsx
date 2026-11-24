@@ -1,11 +1,14 @@
 'use client';
 
-import { Eye } from 'lucide-react';
+import { Eye, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
+
+import { AnalyzeResumeDialog } from '@/app/(dashboard)/resumes/analyze-resume-dialog';
 
 import { useBuilderStore } from './builder-store-provider';
 import { DownloadDialog } from './download-dialog';
@@ -20,18 +23,23 @@ interface ToolbarButtonProps {
   text?: string;
   onClick?: () => void;
   disabled?: boolean;
+  /** Extra classes, for a button that needs its own accent. */
+  className?: string;
 }
 
 // ─── Toolbar Button ───────────────────────────────────────────────
 
-function ToolbarButton({ icon, label, text, onClick, disabled }: ToolbarButtonProps) {
+function ToolbarButton({ icon, label, text, onClick, disabled, className }: ToolbarButtonProps) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
           variant="ghost"
           size="sm"
-          className="h-8 gap-1.5 rounded-md px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground disabled:opacity-40"
+          className={cn(
+            'h-8 gap-1.5 rounded-md px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground disabled:opacity-40',
+            className
+          )}
           onClick={onClick}
           disabled={disabled}
         >
@@ -57,6 +65,7 @@ export function BuilderToolbar() {
   const profile = useBuilderStore((s) => s.draftProfile);
   const commitInlineChange = useBuilderStore((s) => s.commitInlineChange);
   const [shareOpen, setShareOpen] = useState(false);
+  const [analyzeOpen, setAnalyzeOpen] = useState(false);
 
   const resumeTitle = profile.resumeTitle || 'Untitled Resume';
   const handle = profile.handle;
@@ -81,6 +90,17 @@ export function BuilderToolbar() {
 
           <ToolbarSeparator />
 
+          {/* Analyze with AI — read-only summary of the resume being edited.
+              Reuses the same dialog as the /resumes list, so there is one
+              implementation of the Resume Agent UI. */}
+          <ToolbarButton
+            icon={<Sparkles className="h-4 w-4" />}
+            label="Analyze this resume with AI"
+            text="Analyze with AI"
+            onClick={() => setAnalyzeOpen(true)}
+            className="text-purple-700 hover:bg-purple-500/10 hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-300"
+          />
+
           {/* View — opens the resume as an external visitor would see it */}
           <ToolbarButton
             icon={<Eye className="h-4 w-4" />}
@@ -102,6 +122,14 @@ export function BuilderToolbar() {
           />
         </div>
       </div>
+
+      {/* Read-only analysis of the resume currently open in the editor. */}
+      <AnalyzeResumeDialog
+        resume={analyzeOpen ? { id: profile.id, title: resumeTitle } : null}
+        onOpenChange={(open) => {
+          if (!open) setAnalyzeOpen(false);
+        }}
+      />
     </>
   );
 }

@@ -527,6 +527,35 @@ export const COVERAGE_MAP: PlatformFeature[] = [
     notes:
       'Shipped on two paths: the resume lens on the public resume page (app/u/[handle]/resume-shell.tsx) and the extension match-jd endpoint. `aiStages` is deliberately unset: it has no MAX_TOKENS key because it imports no AI client at all — the matching is lexical. A drift signal keyed on MAX_TOKENS alone would miss this feature entirely, which is why the scan reports it under "AI-category features that call no AI client" rather than as a gap.',
   },
+  {
+    id: 'resume-agent',
+    name: 'Resume analysis agent',
+    userDescription:
+      'Asks for a read of one of their resumes and gets back a plain summary of what it contains, or a comparison against a job description they paste or a target role they pick — nothing is changed.',
+    codeLocations: [
+      'app/api/resumes/[resumeId]/agent',
+      'app/(dashboard)/resumes/analyze-resume-dialog.tsx',
+      'services/agents/resume',
+      'lib/role-profiles',
+      // `lib/jd-match` and `lib/resume-lens` are deliberately NOT claimed: the
+      // extension's match-jd endpoint and the public resume lens own them, and
+      // this feature only calls them.
+      // `lib/agents` is deliberately NOT claimed, for the same reason
+      // `resume-import-ai` leaves it out: the portfolio, snap-view and
+      // resume-parse agents run on that runtime too. A feature owns what
+      // implements it, not the shared machinery it runs on.
+    ],
+    category: 'AI',
+    status: 'shipped',
+    unitTests: [
+      '__tests__/resume-agent-api.test.ts',
+      '__tests__/resume-agent-tools.test.ts',
+      '__tests__/resume-agent-integration.test.ts',
+    ],
+    pathways: [],
+    notes:
+      'Read-only by construction: the agent registers one data tool (get_resume), three deterministic read-only evaluators (score_against_jd, find_missing_keywords, evaluate_against_role) and the terminal result tool, so no prompt can reach an editing path. The evaluators call no AI client — the figures come from lib/jd-match and lib/role-profiles — so the model chooses which to run and explains the output but never produces a score itself. The pasted job description and the chosen role are carried in agent meta, not in the model context, so the model can only learn about them through a tool result. `aiStages` is unset deliberately — the only MAX_TOKENS key this feature runs under is `agentTurn`, whose call site is lib/agents/runtime.ts, which this feature does not claim; declaring it here would produce a stale drift entry pointing outside the feature. `prismaModels` is unset for the same reason the rest of the map leaves Profile and User undeclared: the agent reads Profile, which seventeen features already query. Billable-request protection is process-local (app/api/resumes/[resumeId]/agent/rate-limit.ts): 5 runs per 10 minutes and one in flight per user, which resets on restart and does not span serverless instances. A durable limit needs a shared store. The developer harness at local-tests/resume-agent/run-live.ts exercises the same agent against a local database and is not product code.',
+  },
 
   // ── Integrations ────────────────────────────────────────────────────────
   {
