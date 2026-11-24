@@ -20,6 +20,8 @@ import { RESUME_EDIT_LIMITS } from '@/lib/resume-edit/types';
 
 import type { AiConnectorScope } from '@/lib/ai-connector/scopes';
 
+import { RESUME_LIST_VIEW_URI } from './apps/pages';
+
 export type JsonSchema = Record<string, unknown>;
 
 export interface McpToolAnnotations {
@@ -37,6 +39,8 @@ export interface McpToolDefinition {
   inputSchema: JsonSchema;
   annotations: McpToolAnnotations;
   requiredScope: AiConnectorScope;
+  /** The ui:// page hosts like claude.ai show with this tool's result (see lib/mcp/apps). */
+  ui?: string;
 }
 
 function objectSchema(properties: Record<string, JsonSchema>, required: string[] = []): JsonSchema {
@@ -89,6 +93,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     inputSchema: objectSchema({}),
     requiredScope: 'follio.read',
     readOnly: true,
+    ui: RESUME_LIST_VIEW_URI,
   }),
   defineTool({
     name: 'get_resume',
