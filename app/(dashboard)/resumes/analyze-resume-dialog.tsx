@@ -46,7 +46,29 @@ import { MIN_JD_CHARS } from '@/lib/resume-lens/validate-jd';
 import { ROLE_PROFILE_OPTIONS } from '@/lib/role-profiles/profiles';
 import { cn } from '@/lib/utils';
 
+/** What the API is asked for. Mirrors `RESUME_AGENT_MODES` on the agent. */
 type AnalysisMode = 'general' | 'jd' | 'role';
+
+/**
+ * What the user picked in this dialog.
+ *
+ * 'keywords' is not a separate agent mode and deliberately not a separate
+ * endpoint: it is a job-description run whose results are presented
+ * keyword-first, steered by `instruction` so the agent prefers
+ * `find_missing_keywords`. Adding an agent mode for it would duplicate the
+ * JD path for a presentation difference.
+ */
+export type AnalysisFocus = AnalysisMode | 'keywords';
+
+/** The agent mode a focus actually runs as. Exported so the wiring is testable. */
+export function apiModeFor(focus: AnalysisFocus): AnalysisMode {
+  return focus === 'keywords' ? 'jd' : focus;
+}
+
+/** Steer tool choice for the keyword-first view without hardcoding a chain. */
+const KEYWORD_INSTRUCTION =
+  'Focus on which keywords and skills from this job description are missing from the resume, ' +
+  'and which are present but not listed as skills.';
 
 /** Mirrors `resumeAgentResultSchema` in services/agents/resume/resume.agent.ts. */
 interface ResumeAnalysis {
@@ -106,6 +128,12 @@ interface AnalyzeResumeDialogProps {
   /** The resume to analyze, or null when the dialog is closed. */
   resume: { id: string; title: string } | null;
   onOpenChange: (open: boolean) => void;
+  /**
+   * Which view to open on. Defaults to 'general', which is the only focus
+   * that runs on open — the others need input from the user first, so they
+   * never spend a billable call just because the dialog appeared.
+   */
+  initialMode?: AnalysisFocus;
 }
 
 const COUNT_LABELS: Array<[keyof ResumeAnalysis['counts'], string]> = [
@@ -115,10 +143,11 @@ const COUNT_LABELS: Array<[keyof ResumeAnalysis['counts'], string]> = [
   ['projects', 'Projects'],
 ];
 
-const MODE_TABS: Array<[AnalysisMode, string]> = [
+const MODE_TABS: Array<[AnalysisFocus, string]> = [
   ['general', 'General'],
   ['jd', 'Job description'],
   ['role', 'Target role'],
+  ['keywords', 'Keywords'],
 ];
 
 function bandTone(band: string): string {
@@ -173,8 +202,12 @@ function KeywordGroup({
   );
 }
 
-export function AnalyzeResumeDialog({ resume, onOpenChange }: AnalyzeResumeDialogProps) {
-  const [mode, setMode] = useState<AnalysisMode>('general');
+export function AnalyzeResumeDialog({
+  resume,
+  onOpenChange,
+  initialMode = 'general',
+}: AnalyzeResumeDialogProps) {
+  const [mode, setMode] = useState<AnalysisFocus>(initialMode);
   const [jobDescription, setJobDescription] = useState('');
   const [targetRole, setTargetRole] = useState<string>(ROLE_PROFILE_OPTIONS[0]?.id ?? '');
 
@@ -241,27 +274,36 @@ export function AnalyzeResumeDialog({ resume, onOpenChange }: AnalyzeResumeDialo
 
   const runCurrentMode = useCallback(() => {
     if (!resume) return;
-    if (mode === 'jd') {
-      void runAnalysis(resume.id, 'jd', { jobDescription });
-    } else if (mode === 'role') {
-      void runAnalysis(resume.id, 'role', { targetRole });
-    } else {
-      void runAnalysis(resume.id, 'general', {});
-    }
+
+    // Keywords runs as a job-description request; the instruction is the only
+    // difference, so there is one request path for both JD focuses.
+    const apiMode = apiModeFor(mode);
+    const payload: Record<string, unknown> =
+      apiMode === 'jd'
+        ? { jobDescription, ...(mode === 'keywords' ? { instruction: KEYWORD_INSTRUCTION } : {}) }
+        : apiMode === 'role'
+          ? { targetRole }
+          : {};
+
+    void runAnalysis(resume.id, apiMode, payload);
   }, [resume, mode, jobDescription, targetRole, runAnalysis]);
 
-  // One general run per opened resume, matching the behaviour before the other
-  // modes existed. Nothing runs while the dialog is closed, and switching mode
-  // does not start a run — the user chooses when with the button.
+  // Opening the dialog runs exactly one analysis, and only for the general
+  // focus — the behaviour that existed before the other focuses did. The JD,
+  // keyword and role focuses need input from the user, so they wait for the
+  // button and never spend a billable call just because the dialog opened.
+  // Switching focus afterwards never starts a run on its own.
   useEffect(() => {
     if (!resume) {
       latestRunId.current += 1;
       return;
     }
-    setMode('general');
+    setMode(initialMode);
     setJobDescription('');
-    void runAnalysis(resume.id, 'general', {});
-  }, [resume, runAnalysis]);
+    if (initialMode === 'general') {
+      void runAnalysis(resume.id, 'general', {});
+    }
+  }, [resume, initialMode, runAnalysis]);
 
   const handleOpenChange = (open: boolean) => {
     if (!open) {
@@ -274,8 +316,91 @@ export function AnalyzeResumeDialog({ resume, onOpenChange }: AnalyzeResumeDialo
     onOpenChange(open);
   };
 
+  /**
+   * Switching focus discards the previous result rather than leaving a general
+   * summary sitting under the Keywords tab. It starts nothing: the user still
+   * has to press Analyze, so changing tabs never spends a call.
+   */
+  const switchMode = (next: AnalysisFocus) => {
+    setMode(next);
+    setAnalysis(null);
+    setError(null);
+  };
+
+  /** Both JD-backed focuses need a pasted posting before they can run. */
+  const needsJobDescription = mode === 'jd' || mode === 'keywords';
   const jdTooShort = jobDescription.trim().length < MIN_JD_CHARS;
-  const canRun = !isLoading && (mode !== 'jd' || !jdTooShort) && (mode !== 'role' || !!targetRole);
+  const canRun =
+    !isLoading && (!needsJobDescription || !jdTooShort) && (mode !== 'role' || !!targetRole);
+
+  /**
+   * Job-description results. Same blocks in both focuses — only the order
+   * changes, so the Keywords view leads with the keyword breakdown and the
+   * overall score follows it rather than the other way round.
+   */
+  const renderJdResults = (result: ResumeAnalysis) => {
+    const scoreCard = result.jdMatch ? (
+      <div key="score" className="space-y-4">
+        <div className="rounded-md border border-border p-3">
+          <div className="flex items-baseline justify-between gap-3">
+            <h4 className="font-medium">{result.jdMatch.jobTitleHint ?? 'Job description'}</h4>
+            <span className={cn('text-sm font-semibold', bandTone(result.jdMatch.band))}>
+              {result.jdMatch.score}/100 · {result.jdMatch.label}
+            </span>
+          </div>
+          <p className="mt-1 text-muted-foreground">{result.jdMatch.summary}</p>
+          <p className="mt-2 text-xs text-muted-foreground">{result.jdMatch.basis}</p>
+        </div>
+
+        {result.jdMatch.matchedSkills.length > 0 && (
+          <KeywordGroup
+            title="Matched skills"
+            hint="Listed on your resume and asked for in the posting."
+            items={result.jdMatch.matchedSkills}
+            variant="default"
+          />
+        )}
+      </div>
+    ) : null;
+
+    const breakdown = result.keywords ? (
+      <div key="keywords" className="space-y-3">
+        <KeywordGroup
+          title="Already listed as skills"
+          hint="Evidence found in your skills section."
+          items={result.keywords.matchedInSkills}
+          variant="default"
+        />
+        <KeywordGroup
+          title="In your resume, but not listed as skills"
+          hint="These appear in your experience or projects. Adding them to your skills section is usually a wording fix."
+          items={result.keywords.presentButNotListedAsSkill}
+          variant="secondary"
+        />
+        <KeywordGroup
+          title="Not found in your resume"
+          hint="These appear in the posting but nowhere in this resume. That does not mean you lack the experience — only that it is not written here."
+          items={result.keywords.absentFromResume}
+          variant="outline"
+        />
+      </div>
+    ) : result.jdMatch && result.jdMatch.missingKeywords.length > 0 ? (
+      // The keyword tool did not run, so fall back to the coarser list the
+      // scorer already produced rather than showing nothing.
+      <KeywordGroup
+        key="keywords"
+        title="Not found in your resume"
+        hint="Present in the posting but not written in this resume."
+        items={result.jdMatch.missingKeywords}
+        variant="outline"
+      />
+    ) : null;
+
+    if (!scoreCard && !breakdown) return null;
+
+    const blocks = mode === 'keywords' ? [breakdown, scoreCard] : [scoreCard, breakdown];
+    return <div className="space-y-4">{blocks}</div>;
+  };
 
   return (
     <Dialog open={Boolean(resume)} onOpenChange={handleOpenChange}>
@@ -290,8 +415,8 @@ export function AnalyzeResumeDialog({ resume, onOpenChange }: AnalyzeResumeDialo
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs value={mode} onValueChange={(value) => setMode(value as AnalysisMode)}>
-          <TabsList className="grid w-full grid-cols-3">
+        <Tabs value={mode} onValueChange={(value) => switchMode(value as AnalysisFocus)}>
+          <TabsList className="grid w-full grid-cols-4">
             {MODE_TABS.map(([value, label]) => (
               <TabsTrigger key={value} value={value} disabled={isLoading}>
                 {label}
@@ -300,7 +425,7 @@ export function AnalyzeResumeDialog({ resume, onOpenChange }: AnalyzeResumeDialo
           </TabsList>
         </Tabs>
 
-        {mode === 'jd' && (
+        {needsJobDescription && (
           <div className="space-y-2">
             <Textarea
               value={jobDescription}
@@ -312,7 +437,9 @@ export function AnalyzeResumeDialog({ resume, onOpenChange }: AnalyzeResumeDialo
             <p className="text-xs text-muted-foreground">
               {jdTooShort
                 ? `Paste at least ${MIN_JD_CHARS} characters of the posting.`
-                : 'Matching runs on your device data in Follio — the posting is not stored.'}
+                : mode === 'keywords'
+                  ? 'Keywords are compared against the posting you paste. The posting is not stored.'
+                  : 'Matching runs on your device data in Follio — the posting is not stored.'}
             </p>
           </div>
         )}
@@ -379,65 +506,8 @@ export function AnalyzeResumeDialog({ resume, onOpenChange }: AnalyzeResumeDialo
 
               <p className="leading-relaxed text-foreground">{analysis.summary}</p>
 
-              {/* ─── Job-description match ──── */}
-              {analysis.jdMatch && (
-                <div className="rounded-md border border-border p-3">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <h4 className="font-medium">
-                      {analysis.jdMatch.jobTitleHint ?? 'Job description'}
-                    </h4>
-                    <span className={cn('text-sm font-semibold', bandTone(analysis.jdMatch.band))}>
-                      {analysis.jdMatch.score}/100 · {analysis.jdMatch.label}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-muted-foreground">{analysis.jdMatch.summary}</p>
-                  <p className="mt-2 text-xs text-muted-foreground">{analysis.jdMatch.basis}</p>
-                </div>
-              )}
-
-              {analysis.jdMatch && analysis.jdMatch.matchedSkills.length > 0 && (
-                <KeywordGroup
-                  title="Matched skills"
-                  hint="Listed on your resume and asked for in the posting."
-                  items={analysis.jdMatch.matchedSkills}
-                  variant="default"
-                />
-              )}
-
-              {/* ─── Keyword breakdown ──── */}
-              {analysis.keywords && (
-                <div className="space-y-3">
-                  <KeywordGroup
-                    title="Already listed as skills"
-                    hint="Evidence found in your skills section."
-                    items={analysis.keywords.matchedInSkills}
-                    variant="default"
-                  />
-                  <KeywordGroup
-                    title="In your resume, but not listed as skills"
-                    hint="These appear in your experience or projects. Adding them to your skills section is usually a wording fix."
-                    items={analysis.keywords.presentButNotListedAsSkill}
-                    variant="secondary"
-                  />
-                  <KeywordGroup
-                    title="Not found in your resume"
-                    hint="These appear in the posting but nowhere in this resume. That does not mean you lack the experience — only that it is not written here."
-                    items={analysis.keywords.absentFromResume}
-                    variant="outline"
-                  />
-                </div>
-              )}
-
-              {!analysis.keywords &&
-                analysis.jdMatch &&
-                analysis.jdMatch.missingKeywords.length > 0 && (
-                  <KeywordGroup
-                    title="Not found in your resume"
-                    hint="Present in the posting but not written in this resume."
-                    items={analysis.jdMatch.missingKeywords}
-                    variant="outline"
-                  />
-                )}
+              {/* ─── Job-description results (keyword-first in Keywords) ──── */}
+              {renderJdResults(analysis)}
 
               {/* ─── Target-role coverage ──── */}
               {analysis.roleCoverage && (

@@ -45,6 +45,7 @@ import { cn } from '@/lib/utils';
 
 import { saveProfileDraft } from '../lib/save-profile-draft';
 import { AddSectionDialog } from './add-section-dialog';
+import { AiResumeAssistant } from './ai-resume-assistant';
 import { useBuilderStore } from './builder-store-provider';
 import { FormSaveBar } from './form-save-bar';
 
@@ -1433,6 +1434,10 @@ export function AllSectionsEditor() {
         </AlertDialogContent>
       </AlertDialog>
       <div className="space-y-4 pl-5">
+        {/* AI analysis entry points — above Header, not draggable, not a
+            ProfileSection (it edits nothing, so it has no row to reorder). */}
+        <AiResumeAssistant />
+
         {/* Pinned sections (BASIC_INFO) — always at top, not draggable */}
         {pinnedSections.map((section) => renderSectionCard(section))}
 

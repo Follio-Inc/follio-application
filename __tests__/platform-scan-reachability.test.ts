@@ -892,11 +892,12 @@ describe('drift report integration', { timeout: 30_000 }, () => {
       orphanSpecs: 0,
     });
     expect(tests?.signal === 'test-attribution' && tests.summary).toMatchObject({
-      // 82 since the Resume Agent's evaluation modes: its three test files
-      // (`resume-agent-api`, `resume-agent-tools`, `resume-agent-integration`)
-      // are all claimed by the `resume-agent` feature, so they land in
-      // `mapped` rather than moving `unlisted`, which stays at 1.
-      mapped: 82,
+      // 83 since the Builder's AI Resume Assistant: the Resume Agent's four
+      // test files (`resume-agent-api`, `resume-agent-tools`,
+      // `resume-agent-integration`, `builder-ai-assistant`) are all claimed by
+      // the `resume-agent` feature, so they land in `mapped` rather than
+      // moving `unlisted`, which stays at 1.
+      mapped: 83,
       unlisted: 1,
       misattributed: 0,
       deadCode: 8,

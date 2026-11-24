@@ -551,6 +551,7 @@ export const COVERAGE_MAP: PlatformFeature[] = [
       '__tests__/resume-agent-api.test.ts',
       '__tests__/resume-agent-tools.test.ts',
       '__tests__/resume-agent-integration.test.ts',
+      '__tests__/builder-ai-assistant.test.ts',
     ],
     pathways: [],
     notes:
