@@ -14,6 +14,7 @@ import {
 } from '@/lib/ai-connector/constants';
 import { hasScope } from '@/lib/ai-connector/scopes';
 
+import { registerFollioAppPages, toolUiMeta } from './apps/pages';
 import { MCP_TOOLS, toolInputSchemas, type JsonSchema, type McpToolName } from './tools';
 
 /** Who is calling, from their Follio connector token (checked in the route). */
@@ -108,6 +109,8 @@ export function createFollioMcpServer(ctx: McpAuthContext, handlers: McpToolHand
         description: tool.description,
         inputSchema: toolInput(toolInputSchemas[name], tool.inputSchema),
         annotations: tool.annotations,
+        // NOTE: Tools with a page (an MCP App) point to it here; see lib/mcp/apps/pages.ts.
+        ...(tool.ui ? { _meta: toolUiMeta(tool.ui) } : {}), // toolUIMeta is located in lib/mcp/apps/pages.ts:19
       },
       // The SDK has already checked the input against the schema.
       async (args: unknown) => {
@@ -125,6 +128,9 @@ export function createFollioMcpServer(ctx: McpAuthContext, handlers: McpToolHand
       }
     );
   }
+
+  // The ui:// pages those tools point to, for hosts that show MCP Apps.
+  registerFollioAppPages(server);
 
   return server;
 }

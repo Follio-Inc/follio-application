@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { claudeCustomConnectorUrl } from '@/lib/ai-connector/connect-links';
 import { MCP_INSTRUCTIONS } from '@/lib/ai-connector/constants';
 import { isMcpResource } from '@/lib/ai-connector/oauth-metadata';
+import { MCP_APP_MIME_TYPE, RESUME_LIST_VIEW_URI } from '@/lib/mcp/apps/pages';
 import { isAllowedMcpOrigin } from '@/lib/mcp/origin';
 import type { McpAuthContext, McpToolHandlers } from '@/lib/mcp/server';
 import { MCP_TOOLS } from '@/lib/mcp/tools';
@@ -108,6 +109,51 @@ describe('handshake revisions (2025)', () => {
       { headers: legacy }
     );
     expect(reply.body?.error).toBeDefined();
+  });
+});
+
+describe('MCP Apps', () => {
+  it('points list_resumes, and only list_resumes, at its page', async () => {
+    const reply = await send({ jsonrpc: '2.0', id: 2, method: 'tools/list' }, { headers: legacy });
+    const tools = reply.body?.result.tools as Array<{
+      name: string;
+      _meta?: { ui?: { resourceUri?: string } };
+    }>;
+    const withPages = tools.filter((tool) => tool._meta?.ui?.resourceUri);
+    expect(withPages.map((tool) => tool.name)).toEqual(['list_resumes']);
+    expect(withPages[0]._meta).toEqual({
+      ui: { resourceUri: RESUME_LIST_VIEW_URI },
+      'ui/resourceUri': RESUME_LIST_VIEW_URI,
+    });
+  });
+
+  it('lists the page as an MCP App resource', async () => {
+    const reply = await send(
+      { jsonrpc: '2.0', id: 3, method: 'resources/list' },
+      { headers: legacy }
+    );
+    expect(reply.body?.result.resources).toContainEqual(
+      expect.objectContaining({ uri: RESUME_LIST_VIEW_URI, mimeType: MCP_APP_MIME_TYPE })
+    );
+  });
+
+  it('serves the page as one HTML document', async () => {
+    const reply = await send(
+      {
+        jsonrpc: '2.0',
+        id: 4,
+        method: 'resources/read',
+        params: { uri: RESUME_LIST_VIEW_URI },
+      },
+      { headers: legacy }
+    );
+    const [page] = reply.body?.result.contents as Array<Record<string, string>>;
+    expect(page).toMatchObject({ uri: RESUME_LIST_VIEW_URI, mimeType: MCP_APP_MIME_TYPE });
+    expect(page.text).toMatch(/^<!doctype html>/);
+    expect(page.text).toContain('<div id="app">');
+    // The script is inline, and nothing inside it can close the <script> tag early.
+    const script = page.text.slice(page.text.indexOf('<script>') + '<script>'.length);
+    expect(script.indexOf('</script')).toBe(script.lastIndexOf('</script'));
   });
 });
 
