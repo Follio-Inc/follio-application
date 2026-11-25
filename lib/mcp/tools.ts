@@ -13,7 +13,10 @@ import {
 import {
   CloneResumeSchema,
   CreateResumeSchema,
+  DeleteResumesSchema,
+  MAX_RESUMES_PER_DELETE,
   RESUME_ID_DESCRIPTION,
+  RenameResumeSchema,
   ResumeRefSchema,
 } from '@/lib/ai-connector/resume-target';
 import { RESUME_EDIT_LIMITS } from '@/lib/resume-edit/types';
@@ -93,7 +96,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     inputSchema: objectSchema({}),
     requiredScope: 'follio.read',
     readOnly: true,
-    ui: RESUME_LIST_VIEW_URI,
+    ui: RESUME_LIST_VIEW_URI, // where we define the tool.ui
   }),
   defineTool({
     name: 'get_resume',
@@ -125,6 +128,50 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     }),
     requiredScope: 'follio.draft',
     readOnly: false,
+  }),
+  defineTool({
+    name: 'rename_resume',
+    title: 'Rename a resume',
+    description:
+      "Change the title of one resume. Requires resumeId from list_resumes and the new title. Only the title changes: the content, handle, and links stay the same. Titles must be unique among the user's resumes; if the title is taken, nothing changes, so ask the user for a different one.",
+    inputSchema: withResumeId(
+      {
+        title: { type: 'string', description: 'The new title, e.g. "Stripe PM".' },
+      },
+      ['title']
+    ),
+    requiredScope: 'follio.apply',
+    readOnly: false,
+  }),
+  defineTool({
+    name: 'delete_resumes',
+    title: 'Delete resumes',
+    description: `Permanently delete one or more of the user's resumes and everything in them. This cannot be undone. ONLY call this after the user explicitly confirms, in this conversation, exactly which resumes to delete. Pass each resume's resumeId from list_resumes and its exact title as confirmTitle; if any title does not match, nothing is deleted. Up to ${MAX_RESUMES_PER_DELETE} at a time, and the user always keeps at least one resume. If the resume open in the builder or the portfolio's resume is deleted, the result says which resume replaced it: tell the user.`,
+    inputSchema: objectSchema(
+      {
+        resumes: {
+          type: 'array',
+          minItems: 1,
+          maxItems: MAX_RESUMES_PER_DELETE,
+          description: 'The resumes to delete, each with its exact title.',
+          items: objectSchema(
+            {
+              resumeId: resumeIdProperty,
+              confirmTitle: {
+                type: 'string',
+                description:
+                  'The exact title of this resume, as list_resumes shows it and the user confirmed.',
+              },
+            },
+            ['resumeId', 'confirmTitle']
+          ),
+        },
+      },
+      ['resumes']
+    ),
+    requiredScope: 'follio.apply',
+    readOnly: false,
+    destructive: true,
   }),
   defineTool({
     name: 'list_drafts',
@@ -266,7 +313,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     readOnly: false,
   }),
   defineTool({
-    name: 'apply_resume_edits',
+    name: 'apply_resume_edits', //apply/undo resume edits are for editing just 1 line/bullet, but apply draft is for adding a whole new section.
     title: 'Apply line edits',
     description:
       'Write suggested line edits to that resume. ONLY call this after the user confirms in this conversation. Omit changeIds to apply every open suggestion in the session. Lines with a [__] blank are not applied. Every applied change can be undone.',
@@ -313,6 +360,8 @@ export const toolInputSchemas = {
   get_resume: ResumeRefSchema,
   create_resume: CreateResumeSchema,
   clone_resume: CloneResumeSchema,
+  rename_resume: RenameResumeSchema,
+  delete_resumes: DeleteResumesSchema,
   list_drafts: ResumeRefSchema,
   propose_summary: ProposeSummarySchema.and(ResumeRefSchema),
   propose_experience: ProposeExperienceSchema.and(ResumeRefSchema),

@@ -58,6 +58,7 @@ export async function DELETE() {
   );
 }
 
+// checks which website sends the request to the MCP server. Allows claude to and localhost to send requests (claude's server send no origin)
 export async function POST(request: NextRequest) {
   if (!isAllowedMcpOrigin(request.headers.get('origin'), getBaseUrl())) {
     return corsJson(
@@ -66,12 +67,14 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // get the tolken from claude's request header
   const origin = publicOriginFromHeaders(request.headers);
   const token = extractBearerToken(request);
   if (!token) {
     return unauthorizedMcpResponse('Connect Follio with OAuth, then retry.', origin);
   }
 
+  // authenticate the token
   const auth = await authenticateConnectorToken(token);
   if (!auth) {
     return unauthorizedMcpResponse(
@@ -80,6 +83,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // formatting the auth info into expected SDK format
   const authInfo = toAuthInfo(token, {
     userId: auth.userId,
     clerkId: auth.clerkId,
@@ -87,6 +91,7 @@ export async function POST(request: NextRequest) {
     clientLabel: auth.clientLabel,
   });
 
+  // give the next task to the SDK, which will check the inout shape, the give to handler map to pick the correct function
   try {
     return withMcpHeaders(await mcpHandler.fetch(request, { authInfo }));
   } catch (error) {

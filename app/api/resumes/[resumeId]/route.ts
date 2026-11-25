@@ -2,11 +2,12 @@ import { auth } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-import { makeProfilePortfolioReady } from '@/lib/active-profile';
 import { db } from '@/lib/db';
-import { handleApiError } from '@/lib/errors';
+import { AppError, handleApiError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { setExclusiveResumeVisibility } from '@/lib/public-resume';
+import { deleteResumes } from '@/services/resume-delete.service';
+import { renameResume } from '@/services/resume-rename.service';
 
 const resumeLogger = logger.child({ source: 'api-resume-crud' });
 
@@ -71,52 +72,29 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       replacedPublicResume = result.replacedPublicResume;
     }
 
-    // Uniqueness check: no two non-archived resumes for the same user can share a title
-    if (parsed.data.resumeTitle && parsed.data.resumeTitle !== profile.resumeTitle) {
-      const duplicate = await db.profile.findFirst({
-        where: {
-          userId: user.id,
-          resumeTitle: parsed.data.resumeTitle,
-          isArchived: false,
-          id: { not: profile.id },
-        },
-        select: { id: true },
-      });
-
-      if (duplicate) {
-        return NextResponse.json(
-          { error: 'A resume with this name already exists. Please choose a different name.' },
-          { status: 409 }
-        );
+    // Shared with the MCP rename_resume tool: no two non-archived resumes can share a title.
+    // the website's rename functionality call renmeResume, which is also used by the MCP
+    if (parsed.data.resumeTitle !== undefined) {
+      try {
+        await renameResume(user.id, profile.id, parsed.data.resumeTitle);
+      } catch (error) {
+        if (error instanceof AppError && error.statusCode === 409) {
+          // The rename boxes read `error` as text, so keep this reply's shape.
+          return NextResponse.json({ error: error.message }, { status: 409 });
+        }
+        throw error;
       }
     }
 
-    const hasMetaUpdate =
-      parsed.data.resumeTitle !== undefined || parsed.data.isArchived !== undefined;
-
-    const updated = hasMetaUpdate
-      ? await db.profile.update({
-          where: { id: profile.id },
-          data: {
-            ...(parsed.data.resumeTitle !== undefined && { resumeTitle: parsed.data.resumeTitle }),
-            ...(parsed.data.isArchived !== undefined && { isArchived: parsed.data.isArchived }),
-          },
-          select: {
-            id: true,
-            resumeTitle: true,
-            handle: true,
-            isArchived: true,
-          },
-        })
-      : await db.profile.findUniqueOrThrow({
-          where: { id: profile.id },
-          select: {
-            id: true,
-            resumeTitle: true,
-            handle: true,
-            isArchived: true,
-          },
-        });
+    const select = { id: true, resumeTitle: true, handle: true, isArchived: true } as const;
+    const updated =
+      parsed.data.isArchived !== undefined
+        ? await db.profile.update({
+            where: { id: profile.id },
+            data: { isArchived: parsed.data.isArchived },
+            select,
+          })
+        : await db.profile.findUniqueOrThrow({ where: { id: profile.id }, select });
 
     resumeLogger.info('Updated resume', {
       userId: user.id,
@@ -149,78 +127,16 @@ export async function DELETE(_request: Request, context: RouteContext) {
 
     const user = await db.user.findUnique({
       where: { clerkId },
-      select: {
-        id: true,
-        profile: { select: { id: true } },
-        primaryProfile: { select: { id: true } },
-      },
+      select: { id: true },
     });
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    // Verify ownership
-    const profile = await db.profile.findFirst({
-      where: { id: resumeId, userId: user.id },
-      select: { id: true },
-    });
-
-    if (!profile) {
-      return NextResponse.json({ error: 'Resume not found' }, { status: 404 });
-    }
-
-    // Prevent deleting the last resume
-    const resumeCount = await db.profile.count({
-      where: { userId: user.id },
-    });
-
-    if (resumeCount <= 1) {
-      return NextResponse.json({ error: 'Cannot delete your only resume' }, { status: 400 });
-    }
-
-    const wasActive = user.profile?.id === profile.id;
-    const wasPrimary = user.primaryProfile?.id === profile.id;
-
-    // Delete the profile (cascades to all related data via Prisma schema)
-    await db.profile.delete({
-      where: { id: profile.id },
-    });
-
-    // If the deleted resume was active and/or the portfolio (primary), re-point
-    // those pointers at the oldest remaining resume so the dashboard and
-    // builder always resolve to a valid profile.
-    if (wasActive || wasPrimary) {
-      const nextProfile = await db.profile.findFirst({
-        where: { userId: user.id },
-        orderBy: { createdAt: 'asc' },
-        select: { id: true },
-      });
-
-      if (nextProfile) {
-        // The replacement portfolio profile may be a DRAFT resume with no
-        // generated portfolio — make it renderable before it becomes primary so
-        // the portfolio link keeps working after deletion.
-        if (wasPrimary) {
-          await makeProfilePortfolioReady(nextProfile.id);
-        }
-
-        await db.user.update({
-          where: { id: user.id },
-          data: {
-            ...(wasActive && { profile: { connect: { id: nextProfile.id } } }),
-            ...(wasPrimary && { primaryProfile: { connect: { id: nextProfile.id } } }),
-          },
-        });
-      }
-    }
-
-    resumeLogger.info('Deleted resume', {
-      userId: user.id,
-      profileId: resumeId,
-      wasActive,
-      wasPrimary,
-    });
+    // Ownership, the last-resume rule, and re-pointing the builder and portfolio all live in the
+    // shared service, so the MCP delete_resumes tool follows the same rules.
+    await deleteResumes(user.id, [resumeId]);
 
     return NextResponse.json({ success: true });
   } catch (error) {
