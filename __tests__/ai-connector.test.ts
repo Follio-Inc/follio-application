@@ -210,6 +210,8 @@ describe('MCP protocol', () => {
     getResume: async () => ({ handle: 'alex' }),
     createResume: async () => ({ resumeId: 'p2', title: 'New' }),
     cloneResume: async () => ({ resumeId: 'p3', title: 'Stripe PM' }),
+    renameResume: async (_ctx, input) => ({ renamed: true, input }),
+    deleteResumes: async (_ctx, input) => ({ deleted: [], input }),
     listDrafts: async () => [],
     proposeSummary: async () => ({ draftId: 'd1' }),
     proposeExperience: async () => ({ draftId: 'd1' }),
@@ -232,6 +234,8 @@ describe('MCP protocol', () => {
       'get_resume',
       'create_resume',
       'clone_resume',
+      'rename_resume',
+      'delete_resumes',
       'list_drafts',
       'propose_summary',
       'propose_experience',
@@ -246,9 +250,10 @@ describe('MCP protocol', () => {
     ]);
   });
 
-  it('requires resumeId on every tool except list and create', () => {
+  it('requires resumeId on every tool except list, create, and delete', () => {
     for (const tool of MCP_TOOLS) {
-      if (tool.name === 'list_resumes' || tool.name === 'create_resume') continue;
+      // delete_resumes takes a list of resumes, each with its own resumeId.
+      if (['list_resumes', 'create_resume', 'delete_resumes'].includes(tool.name)) continue;
       expect(tool.inputSchema.required).toEqual(expect.arrayContaining(['resumeId']));
     }
   });
@@ -294,6 +299,46 @@ describe('MCP protocol', () => {
     const result = await callTool('clone_resume', { title: 'Copy' });
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('list_resumes');
+  });
+
+  it('renames a resume when given resumeId and a title', async () => {
+    const result = await callTool('rename_resume', { resumeId: 'p1', title: 'Stripe PM' });
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain('Stripe PM');
+  });
+
+  it('refuses to rename without a new title', async () => {
+    const result = await callTool('rename_resume', { resumeId: 'p1' });
+    expect(result.isError).toBe(true);
+  });
+
+  it('needs the apply permission to rename a resume', async () => {
+    const limited = { ...ctx, scopes: ['follio.read', 'follio.draft'] };
+    const result = await callTool('rename_resume', { resumeId: 'p1', title: 'New' }, limited);
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('follio.apply');
+  });
+
+  it('needs the apply permission to delete resumes', async () => {
+    const limited = { ...ctx, scopes: ['follio.read', 'follio.draft'] };
+    const result = await callTool(
+      'delete_resumes',
+      { resumes: [{ resumeId: 'p1', confirmTitle: 'Product PM' }] },
+      limited
+    );
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('follio.apply');
+  });
+
+  it('refuses to delete a resume without its title', async () => {
+    const result = await callTool('delete_resumes', { resumes: [{ resumeId: 'p1' }] });
+    expect(result.isError).toBe(true);
+  });
+
+  it('marks delete_resumes as destructive', () => {
+    const tool = MCP_TOOLS.find((t) => t.name === 'delete_resumes');
+    expect(tool?.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true });
+    expect(tool?.requiredScope).toBe('follio.apply');
   });
 
   it('refuses get_resume without a resumeId', async () => {

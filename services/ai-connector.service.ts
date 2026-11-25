@@ -27,7 +27,13 @@ import {
   type ResumeEditSelectionInput,
   type SuggestResumeEditsInput,
 } from '@/lib/ai-connector/resume-edits';
-import { listOwnedResumes, requireOwnedResume } from '@/lib/ai-connector/resume-target';
+import {
+  checkResumesToDelete,
+  listOwnedResumes,
+  requireOwnedResume,
+  type DeleteResumesInput,
+  type RenameResumeInput,
+} from '@/lib/ai-connector/resume-target';
 import { db } from '@/lib/db';
 import { interactiveTransactionOptions } from '@/lib/db-transaction';
 import { Errors } from '@/lib/errors';
@@ -42,6 +48,8 @@ import {
   listResumeEditSessions,
   revertResumeEdits,
 } from '@/services/resume-edit-session.service';
+import { deleteResumes } from '@/services/resume-delete.service';
+import { renameResume } from '@/services/resume-rename.service';
 import { createResume, type CreatedResume } from '@/services/resume-library.service';
 
 const connectorLogger = logger.child({ source: 'ai-connector' });
@@ -181,6 +189,48 @@ export async function cloneConnectorResume(userId: string, resumeRef: string, ti
     `Cloned “${source.title}”. Pass this resumeId on later tools. The original is unchanged. The copy is private and was not switched in the Follio builder.`,
     { sourceResumeId: source.resumeId, sourceTitle: source.title }
   );
+}
+
+/** Renames one resume with the website's shared renameResume (titles stay unique). */
+export async function renameConnectorResume(userId: string, input: RenameResumeInput) {
+  const resume = await requireOwnedResume(userId, input.resumeId);
+  const renamed = await renameResume(userId, resume.resumeId, input.title);
+  const message =
+    renamed.oldTitle === renamed.title
+      ? `This resume is already titled “${renamed.title}”. Nothing changed.`
+      : `Renamed “${renamed.oldTitle}” to “${renamed.title}”. Only the title changed; the resume's content and its link are the same.`;
+  return { resumeId: renamed.id, oldTitle: renamed.oldTitle, title: renamed.title, message };
+}
+
+/**
+ * Permanently deletes resumes, after the title check (checkResumesToDelete). The deleting itself
+ * is the website's shared deleteResumes, so the same rules apply (always keep one resume, re-point
+ * the builder and portfolio).
+ */
+export async function deleteConnectorResumes(userId: string, input: DeleteResumesInput) {
+  const check = checkResumesToDelete(await listOwnedResumes(userId), input.resumes); //listOwnedResumes loads your resumes
+  if (!check.ok) throw Errors.badRequest(check.message);
+
+  const result = await deleteResumes(
+    userId,
+    check.resumes.map((resume) => resume.resumeId)
+  );
+
+  const titles = result.deleted.map((resume) => `“${resume.title}”`).join(', ');
+  const notes = [
+    `Permanently deleted ${result.deleted.length === 1 ? 'this resume' : `these ${result.deleted.length} resumes`}: ${titles}. This cannot be undone.`,
+  ];
+  if (result.newActive) {
+    notes.push(`“${result.newActive.title}” is now the resume open in the Follio builder.`);
+  }
+  if (result.newPrimary) {
+    notes.push(`The public portfolio now uses “${result.newPrimary.title}”. Tell the user.`);
+  }
+
+  return {
+    deleted: result.deleted.map((resume) => ({ resumeId: resume.id, title: resume.title })),
+    message: notes.join(' '),
+  };
 }
 
 export async function listConnectorResumes(userId: string) {
@@ -656,6 +706,10 @@ export const aiConnectorHandlers = {
       (input as ResumeToolInput).resumeId,
       (input as { title?: string }).title
     ),
+  renameResume: (ctx: { userId: string }, input: unknown) =>
+    renameConnectorResume(ctx.userId, input as RenameResumeInput),
+  deleteResumes: (ctx: { userId: string }, input: unknown) =>
+    deleteConnectorResumes(ctx.userId, input as DeleteResumesInput),
   listDrafts: (ctx: { userId: string }, input: unknown) =>
     listDrafts(ctx.userId, false, (input as ResumeToolInput).resumeId),
   proposeSummary: (ctx: { userId: string; clientLabel: string | null }, input: unknown) =>
