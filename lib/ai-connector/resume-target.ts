@@ -24,7 +24,34 @@ export const CloneResumeSchema = ResumeRefSchema.extend({
   title: z.string().trim().min(1).max(120).optional(),
 });
 
+export const RenameResumeSchema = ResumeRefSchema.extend({
+  title: z
+    .string({ required_error: 'Pass the new title as title.' })
+    .trim()
+    .min(1, 'Pass the new title as title.')
+    .max(120),
+});
+
+export const MAX_RESUMES_PER_DELETE = 10;
+
+export const DeleteResumesSchema = z.object({
+  resumes: z
+    .array(
+      ResumeRefSchema.extend({
+        confirmTitle: z
+          .string({ required_error: 'Pass the exact title of each resume as confirmTitle.' })
+          .trim()
+          .min(1, 'Pass the exact title of each resume as confirmTitle.')
+          .max(120),
+      })
+    )
+    .min(1, 'Name at least one resume to delete.')
+    .max(MAX_RESUMES_PER_DELETE, `Delete at most ${MAX_RESUMES_PER_DELETE} resumes at a time.`),
+});
+
 export type ResumeRef = z.infer<typeof ResumeRefSchema>;
+export type RenameResumeInput = z.infer<typeof RenameResumeSchema>;
+export type DeleteResumesInput = z.infer<typeof DeleteResumesSchema>;
 
 export interface ResumeCatalogItem {
   resumeId: string;
@@ -74,6 +101,47 @@ export function matchOwnedResume(resumes: ResumeCatalogItem[], resumeRef: string
     ok: false,
     message: `No resume matches “${ref}”. Call list_resumes and pass resumeId.`,
   };
+}
+
+export type DeleteCheck =
+  | { ok: true; resumes: ResumeCatalogItem[] }
+  | { ok: false; message: string };
+
+/**
+ * The safety check before deleting: each resume must be found AND its title must match
+ * confirmTitle exactly (only spaces at the ends are ignored). If any one fails, nothing is
+ * deleted. The real title is never echoed back, so a wrong guess can't just be retried with it:
+ * the assistant has to check with the user.
+ */
+export function checkResumesToDelete(
+  resumes: ResumeCatalogItem[],
+  requests: DeleteResumesInput['resumes']
+): DeleteCheck {
+  const problems: string[] = [];
+  const matched = new Map<string, ResumeCatalogItem>();
+
+  for (const request of requests) {
+    const match = matchOwnedResume(resumes, request.resumeId);
+    if (!match.ok) {
+      problems.push(match.message);
+      continue;
+    }
+    if (match.resume.title.trim() !== request.confirmTitle.trim()) {
+      problems.push(
+        `“${request.confirmTitle}” is not the exact title of resume ${match.resume.resumeId}.`
+      );
+      continue;
+    }
+    matched.set(match.resume.resumeId, match.resume);
+  }
+
+  if (problems.length > 0) {
+    return {
+      ok: false,
+      message: `Nothing was deleted. ${problems.join(' ')} Ask the user which resumes they mean and their exact titles, then try again.`,
+    };
+  }
+  return { ok: true, resumes: Array.from(matched.values()) };
 }
 
 export async function listOwnedResumes(userId: string): Promise<ResumeCatalogItem[]> {

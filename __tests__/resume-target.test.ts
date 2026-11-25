@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  checkResumesToDelete,
   CloneResumeSchema,
   CreateResumeSchema,
+  DeleteResumesSchema,
   matchOwnedResume,
   type ResumeCatalogItem,
 } from '@/lib/ai-connector/resume-target';
@@ -80,5 +82,58 @@ describe('create and clone schemas', () => {
   it('requires a source resume to clone', () => {
     expect(CloneResumeSchema.safeParse({ title: 'Copy' }).success).toBe(false);
     expect(CloneResumeSchema.safeParse({ resumeId: 'p1', title: 'Copy' }).success).toBe(true);
+  });
+});
+
+describe('delete safety check', () => {
+  const catalog = [
+    resume({ resumeId: 'p1', title: 'Product PM', handle: 'alex-pm' }),
+    resume({ resumeId: 'p2', title: 'Stripe PM', handle: 'alex-stripe' }),
+  ];
+
+  it('passes when every id and exact title match', () => {
+    const check = checkResumesToDelete(catalog, [
+      { resumeId: 'p1', confirmTitle: 'Product PM' },
+      { resumeId: 'p2', confirmTitle: ' Stripe PM ' },
+    ]);
+    expect(check.ok).toBe(true);
+    if (check.ok) expect(check.resumes.map((r) => r.resumeId)).toEqual(['p1', 'p2']);
+  });
+
+  it('deletes nothing when one title is wrong, and does not reveal the real title', () => {
+    const check = checkResumesToDelete(catalog, [
+      { resumeId: 'p1', confirmTitle: 'Product PM' },
+      { resumeId: 'p2', confirmTitle: 'Product PM' },
+    ]);
+    expect(check.ok).toBe(false);
+    if (!check.ok) {
+      expect(check.message).toContain('Nothing was deleted');
+      expect(check.message).not.toContain('Stripe PM');
+    }
+  });
+
+  it('treats the title as exact, including capital letters', () => {
+    const check = checkResumesToDelete(catalog, [{ resumeId: 'p2', confirmTitle: 'stripe pm' }]);
+    expect(check.ok).toBe(false);
+  });
+
+  it('refuses an unknown resume', () => {
+    const check = checkResumesToDelete(catalog, [{ resumeId: 'p9', confirmTitle: 'Backend' }]);
+    expect(check.ok).toBe(false);
+    if (!check.ok) expect(check.message).toContain('list_resumes');
+  });
+
+  it('counts the same resume named twice once', () => {
+    const check = checkResumesToDelete(catalog, [
+      { resumeId: 'p1', confirmTitle: 'Product PM' },
+      { resumeId: 'alex-pm', confirmTitle: 'Product PM' },
+    ]);
+    expect(check.ok).toBe(true);
+    if (check.ok) expect(check.resumes).toHaveLength(1);
+  });
+
+  it('needs at least one resume, each with a title', () => {
+    expect(DeleteResumesSchema.safeParse({ resumes: [] }).success).toBe(false);
+    expect(DeleteResumesSchema.safeParse({ resumes: [{ resumeId: 'p1' }] }).success).toBe(false);
   });
 });
