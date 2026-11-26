@@ -64,6 +64,15 @@ function evictIdle(now: number): void {
 export const RUN_COST = {
   singleAgent: 1,
   multiAgent: 2,
+  /**
+   * A rewrite run is the most expensive thing Follio does: an orchestrator,
+   * an analysis specialist, a rewrite specialist and a verifier, plus up to
+   * two more rewrite/verify rounds. Charging it three of the five slots means
+   * one rewrite per window per user, which is the right guard for a billable
+   * run a user is meant to think about before asking for — and it leaves two
+   * slots so an ordinary analysis still works afterwards.
+   */
+  rewrite: 3,
 } as const;
 
 /**

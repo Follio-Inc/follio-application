@@ -39,7 +39,9 @@ import {
 } from '@/_admin-panel/platform/scan';
 
 /** Counts on the current tree. Item 7: adding one must be a visible diff. */
-const EXPECTED = { stages: 11, flags: 2, models: 31 } as const;
+// `models` is every model in prisma/schema.prisma: 33 since Phase 3B.1 added
+// `ResumeProposalBatch` and `ResumeEditProposal`.
+const EXPECTED = { stages: 11, flags: 2, models: 33 } as const;
 
 function feature(overrides: Partial<PlatformFeature>): PlatformFeature {
   return {
@@ -696,12 +698,16 @@ describe('drift report integration', { timeout: 30_000 }, () => {
       // the `resume-agent` feature, so `total`, `routes` and `mapped` each
       // moved by one while `excluded` did not. `unmapped` staying at 0 is the
       // assertion that matters: the new route is claimed, not merely counted.
-      total: 165,
-      mapped: 131,
+      //
+      // Phase 3B.1 added the five `rewrite-proposals` routes, claimed by
+      // `resume-rewrite-loop`, so `total`, `routes` and `mapped` each moved
+      // by five and `unmapped` again stayed at 0.
+      total: 170,
+      mapped: 136,
       excluded: 34,
       unmapped: 0,
       pages: 49,
-      routes: 116,
+      routes: 121,
     });
   });
 

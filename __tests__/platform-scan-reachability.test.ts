@@ -877,12 +877,19 @@ describe('drift report integration', { timeout: 30_000 }, () => {
       // the `resume-agent` feature, so `total`, `routes` and `mapped` each
       // moved by one while `excluded` did not. `unmapped` staying at 0 is the
       // assertion that matters: the new route is claimed, not merely counted.
-      total: 165,
-      mapped: 131,
+      // 170 since Phase 3B.1 added five product routes under
+      // `app/api/resumes/[resumeId]/rewrite-proposals`: generate and list, one
+      // batch, one proposal, and the two that act on a proposal. They are
+      // claimed by `resume-rewrite-loop` rather than falling into the broad
+      // `app/api/resumes` claim, the same way the `/agent` subtree is claimed
+      // by `resume-agent`. `unmapped` staying at 0 is the assertion that
+      // matters: the write path is owned, not merely counted.
+      total: 170,
+      mapped: 136,
       excluded: 34,
       unmapped: 0,
       pages: 49,
-      routes: 116,
+      routes: 121,
     });
     expect(pathways?.signal === 'live-qa-pathways' && pathways.summary).toMatchObject({
       total: 9,
@@ -915,7 +922,11 @@ describe('drift report integration', { timeout: 30_000 }, () => {
       // 91 since Phase 3A.1 added `resume-rewrite-outcomes`, the regression
       // suite for the unsupported-outcome failure, claimed by the same
       // `resume-rewrite-loop` feature.
-      mapped: 91,
+      // 94 since Phase 3B.1 added three more to that feature:
+      // `resume-proposal-state`, `resume-proposals-service` and
+      // `resume-proposals-api`. `unlisted` and `misattributed` holding at 2
+      // and 0 is again the assertion that matters.
+      mapped: 94,
       // 2 since Phase 2A: `__tests__/agents/runtime.test.ts` and
       // `__tests__/agents/delegation.test.ts`, both of which test the shared
       // lib/agents runtime that no feature claims. Deliberately unlisted —
@@ -928,7 +939,10 @@ describe('drift report integration', { timeout: 30_000 }, () => {
     expect(tests?.signal === 'test-attribution' && tests.stale).toEqual([]);
     expect(aiStages?.signal === 'ai-stages' && aiStages.summary.total).toBe(11);
     expect(flags?.signal === 'feature-flags' && flags.summary.total).toBe(2);
-    expect(prisma?.signal === 'prisma-models' && prisma.summary.total).toBe(31);
+    // 33 since Phase 3B.1: `ResumeProposalBatch` and `ResumeEditProposal`,
+    // declared by `resume-rewrite-loop`, which is the only feature that
+    // queries them.
+    expect(prisma?.signal === 'prisma-models' && prisma.summary.total).toBe(33);
   });
 
   it('reports no drift on the current tree', () => {

@@ -44,8 +44,9 @@ function createPrismaClient(): PrismaClient {
  * DocumentPdfCache → generation 5.
  * Profile.totalExperience / totalExperienceVisible → generation 6.
  * Profile.totalExperienceShowYears / ShowMonths → generation 7.
+ * ResumeProposalBatch / ResumeEditProposal → generation 8.
  */
-const PRISMA_CLIENT_GENERATION = 7;
+const PRISMA_CLIENT_GENERATION = 8;
 
 function schemaFieldFingerprint(): string {
   const modelNames = [
@@ -54,6 +55,7 @@ function schemaFieldFingerprint(): string {
     'CoverLetter',
     'AiEditDraft',
     'DocumentPdfCache',
+    'ResumeEditProposal',
   ] as const;
   return modelNames
     .map((name) => {
