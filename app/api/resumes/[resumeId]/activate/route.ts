@@ -2,11 +2,8 @@ import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 
 import { db } from '@/lib/db';
-import { interactiveTransactionOptions } from '@/lib/db-transaction';
-import { handleApiError } from '@/lib/errors';
-import { logger } from '@/lib/logger';
-
-const resumeActivationLogger = logger.child({ source: 'api-resume-activation' });
+import { AppError, handleApiError } from '@/lib/errors';
+import { activateResume } from '@/services/resume-activate.service';
 
 interface RouteContext {
   params: Promise<{ resumeId: string }>;
@@ -30,36 +27,18 @@ export async function PATCH(_request: Request, context: RouteContext) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    const targetProfile = await db.profile.findFirst({
-      where: {
-        id: resumeId,
-        userId: user.id,
-        isArchived: false,
-      },
-      select: { id: true },
-    });
-
-    if (!targetProfile) {
-      return NextResponse.json({ error: 'Resume not found' }, { status: 404 });
+    // Shared with the MCP open_in_builder tool.
+    let activated;
+    try {
+      activated = await activateResume(user.id, resumeId);
+    } catch (error) {
+      if (error instanceof AppError && error.statusCode === 404) {
+        return NextResponse.json({ error: 'Resume not found' }, { status: 404 });
+      }
+      throw error;
     }
 
-    await db.$transaction(async (tx) => {
-      await tx.user.update({
-        where: { id: user.id },
-        data: {
-          profile: {
-            connect: { id: targetProfile.id },
-          },
-        },
-      });
-    }, interactiveTransactionOptions);
-
-    resumeActivationLogger.info('Activated resume', {
-      userId: user.id,
-      profileId: targetProfile.id,
-    });
-
-    return NextResponse.json({ success: true, activeProfileId: targetProfile.id });
+    return NextResponse.json({ success: true, activeProfileId: activated.id });
   } catch (error) {
     return handleApiError(error, {
       method: 'PATCH',
