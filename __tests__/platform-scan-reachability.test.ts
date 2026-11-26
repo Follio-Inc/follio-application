@@ -904,7 +904,18 @@ describe('drift report integration', { timeout: 30_000 }, () => {
       // two before it came with Phase 2B's `resume-multi-agent` feature:
       // `__tests__/agents/resume-orchestrator.test.ts` and
       // `__tests__/resume-quality.test.ts`.
-      mapped: 87,
+      // 90 since Phase 3A added three: `resume-rewrite-guards` and
+      // `resume-rewrite`, claimed by the new `resume-rewrite-loop` feature,
+      // and `resume-rewrite-orchestration`, claimed by `resume-multi-agent`
+      // because it enters through `runResumeOrchestrator` and the attribution
+      // follows the import graph rather than the file name. `unlisted` and
+      // `misattributed` staying where they are is the assertion that matters:
+      // the new tests are claimed, and claimed by the feature that owns the
+      // code they actually reach.
+      // 91 since Phase 3A.1 added `resume-rewrite-outcomes`, the regression
+      // suite for the unsupported-outcome failure, claimed by the same
+      // `resume-rewrite-loop` feature.
+      mapped: 91,
       // 2 since Phase 2A: `__tests__/agents/runtime.test.ts` and
       // `__tests__/agents/delegation.test.ts`, both of which test the shared
       // lib/agents runtime that no feature claims. Deliberately unlisted —

@@ -203,7 +203,7 @@ const KEYWORD_INTERPRETATION =
  * the classification against two haystacks: the skills list, and the whole
  * resume body.
  */
-function classifyKeywords(corpus: ResumeCorpus, jobDescription: string) {
+export function classifyKeywords(corpus: ResumeCorpus, jobDescription: string) {
   const candidates = extractKeywordCandidates(jobDescription, corpus.skills);
 
   const skillsHaystack = normalizeToken(corpus.skills.join(' \n '));

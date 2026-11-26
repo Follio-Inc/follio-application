@@ -26,7 +26,12 @@ export type AgentId =
   // tools, output schema and budget, and its own AgentRun rows.
   | 'resume-orchestrator'
   | 'resume-evaluation'
-  | 'resume-jd-match';
+  | 'resume-jd-match'
+  // Phase 3A rewrite loop. The Rewrite Agent proposes edits; the Verification
+  // Agent independently checks them before the orchestrator may present any
+  // as verified. Both are read-only with respect to resume data.
+  | 'resume-rewrite'
+  | 'resume-verification';
 
 export type AgentRunStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'cancelled';
 

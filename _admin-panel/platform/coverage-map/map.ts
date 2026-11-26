@@ -585,12 +585,48 @@ export const COVERAGE_MAP: PlatformFeature[] = [
     flag: 'FOLLIO_MULTI_AGENT_ENABLED',
     unitTests: [
       '__tests__/agents/resume-orchestrator.test.ts',
+      '__tests__/agents/resume-rewrite-orchestration.test.ts',
       '__tests__/resume-quality.test.ts',
       '__tests__/analysis-engine.test.ts',
     ],
     pathways: [],
     notes:
       'Phase 2B. Three independent agents on the shared runtime: `resume-orchestrator` delegates to `resume-evaluation` and `resume-jd-match` through lib/agents/agent-as-tool, and each specialist runs its own tool-calling loop with its own Zod output schema, its own budget and its own AgentRun row (correlated by parentRunId/rootRunId). Deliberately `unshipped`: no route and no UI reaches it, and the Phase 1 `resume-agent` still serves /api/resumes/[resumeId]/agent and the Builder unchanged. The matching specialist reuses the Phase 1 tools verbatim rather than reimplementing them, so the two cannot drift apart. The evaluation specialist is grounded on lib/resume-quality, which calls no AI client — every count, percentage and finding is computed, copied out of run memory into the result, and copied again off the namespaced blackboard into the orchestrated report, so no model in the tree can state a figure it did not compute. `aiStages` is unset for the same reason as `resume-agent`: the only MAX_TOKENS key is `agentTurn`, whose call site is in the shared runtime this feature does not claim. Tree-wide limits live in ORCHESTRATOR_DELEGATION_LIMITS (depth 1, 3 child runs, 2 calls per specialist, 200k tokens, 240s).',
+  },
+
+  {
+    id: 'resume-rewrite-loop',
+    name: 'Resume rewrite and verification',
+    userDescription:
+      'Nothing yet — this is the part that proposes better wording for specific resume bullets and checks each suggestion before showing it. When it ships, a user will see suggested edits side by side with their own text, each marked verified, rejected or needing an answer from them, and nothing changes until they accept it.',
+    codeLocations: [
+      'services/agents/resume/rewrite.agent.ts',
+      'services/agents/resume/rewrite-tools.ts',
+      'services/agents/resume/verification.agent.ts',
+      'services/agents/resume/verification-tools.ts',
+      'services/agents/resume/shared-keys.ts',
+      'lib/resume-rewrite',
+      // `services/agents/resume/orchestrator.agent.ts` is NOT claimed here: it
+      // belongs to `resume-multi-agent`, which this feature extends rather
+      // than replaces.
+    ],
+    category: 'AI',
+    // No route and no UI passes `rewrite: true`, so no user can reach this.
+    // Phase 3B adds the approval surface; until then `unshipped` is the
+    // accurate word, and it is not gated by a flag because there is nothing
+    // to gate.
+    status: 'unshipped',
+    unitTests: [
+      '__tests__/agents/resume-rewrite-guards.test.ts',
+      '__tests__/agents/resume-rewrite-outcomes.test.ts',
+      '__tests__/agents/resume-rewrite.test.ts',
+      // `resume-rewrite-orchestration.test.ts` exercises this feature too, but
+      // it enters through `runResumeOrchestrator`, so the import graph
+      // attributes it to `resume-multi-agent` and it is listed there.
+    ],
+    pathways: [],
+    notes:
+      'Phase 3A, hardened in 3A.1. Two more independent agents on the shared runtime: `resume-rewrite` proposes addressed edits and `resume-verification` rules on them, each with its own tool-calling loop, Zod output schema, budget and AgentRun row. Proposals never touch the database — they name a stable record id and field path (lib/resume-rewrite/targets.ts) so Phase 3B can apply one as a field write rather than a string search, and Phase 3A performs no writes at all. Factual grounding is deterministic and runs twice: `propose_rewrite` refuses to store a proposal carrying a blocking issue, and the verifier re-runs every guard against the live resume and merges the model’s verdicts with the result in code, taking the stricter of the two — so an approving model cannot clear a proposal the guards rejected, and a proposal the verifier skipped defaults to needs_user_input rather than approved. The revision loop is bounded by MAX_REWRITE_REVISIONS and per-tool counters in orchestrator.agent.ts, not by the prompt; REWRITE_DELEGATION_LIMITS widens the tree-wide ceilings only for runs that requested a rewrite, so an evaluation request keeps the Phase 2B limits exactly. `aiStages` is unset for the same reason as `resume-agent` and `resume-multi-agent`: the only MAX_TOKENS key is `agentTurn`, whose call site is in the shared runtime no feature claims. Phase 3A.1 closed the gap the first live run exposed: the guards only understood named entities and figures, so a benefit clause appended to a true sentence ("…, enhancing data retrieval speed") passed every check and the verifier approved it. lib/resume-rewrite/outcomes.ts now detects introduced result constructions and tests what they claim against the whole resume, `propose_rewrite` refuses them outright, and the verifier must classify every proposition as a supported fact, a faithful paraphrase, a reasonable inference or an unsupported new claim — with the last two disqualifying approval in code, because a plausible inference asserted as fact is the failure mode.',
   },
 
   // ── Integrations ────────────────────────────────────────────────────────
