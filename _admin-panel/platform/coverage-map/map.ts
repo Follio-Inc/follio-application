@@ -38,9 +38,12 @@ import type { ExcludedPath, PlatformFeature } from './types';
  *   `lib/utils.ts` to one feature would be a fiction every other feature pays
  *   for the next time the drift scan runs.
  *
- * Separately, `__tests__/agents/runtime.test.ts` stays `unlisted`: it tests the
- * shared `lib/agents` runtime and reaches `portfolio` only because it uses
- * portfolio agents as fixtures. Listing it under portfolio would claim coverage
+ * Separately, `__tests__/agents/runtime.test.ts` and
+ * `__tests__/agents/delegation.test.ts` stay `unlisted`: both test the shared
+ * `lib/agents` runtime — the second covers the Phase 2A `agentAsTool`
+ * delegation primitive, the shared-state blackboard and the delegation limits
+ * — and they reach `portfolio` and `resume-agent` only because they use those
+ * agents' ids as fixtures. Listing either under a feature would claim coverage
  * the test does not provide.
  *
  * Rules for `aiStages` and `prismaModels` (item 7). Both are *declarations*,
@@ -552,10 +555,42 @@ export const COVERAGE_MAP: PlatformFeature[] = [
       '__tests__/resume-agent-tools.test.ts',
       '__tests__/resume-agent-integration.test.ts',
       '__tests__/builder-ai-assistant.test.ts',
+      '__tests__/analyze-dialog-response.test.ts',
     ],
     pathways: [],
     notes:
       'Read-only by construction: the agent registers one data tool (get_resume), three deterministic read-only evaluators (score_against_jd, find_missing_keywords, evaluate_against_role) and the terminal result tool, so no prompt can reach an editing path. The evaluators call no AI client — the figures come from lib/jd-match and lib/role-profiles — so the model chooses which to run and explains the output but never produces a score itself. The pasted job description and the chosen role are carried in agent meta, not in the model context, so the model can only learn about them through a tool result. `aiStages` is unset deliberately — the only MAX_TOKENS key this feature runs under is `agentTurn`, whose call site is lib/agents/runtime.ts, which this feature does not claim; declaring it here would produce a stale drift entry pointing outside the feature. `prismaModels` is unset for the same reason the rest of the map leaves Profile and User undeclared: the agent reads Profile, which seventeen features already query. Billable-request protection is process-local (app/api/resumes/[resumeId]/agent/rate-limit.ts): 5 runs per 10 minutes and one in flight per user, which resets on restart and does not span serverless instances. A durable limit needs a shared store. The developer harness at local-tests/resume-agent/run-live.ts exercises the same agent against a local database and is not product code.',
+  },
+  {
+    id: 'resume-multi-agent',
+    name: 'Resume multi-agent analysis',
+    userDescription:
+      'Nothing yet — this is the orchestrated version of resume analysis, built but not reachable from the product. When it ships, a user will get one report combining a writing review with a job-description or target-role comparison.',
+    codeLocations: [
+      'services/agents/resume/engine.ts',
+      'services/agents/resume/orchestrator.agent.ts',
+      'services/agents/resume/evaluation.agent.ts',
+      'services/agents/resume/jd-match.agent.ts',
+      'services/agents/resume/quality-tools.ts',
+      'lib/resume-quality',
+      // `lib/agents` is deliberately NOT claimed, for the same reason
+      // `resume-agent` leaves it out: the delegation primitive and the runtime
+      // are shared machinery, not this feature's implementation.
+    ],
+    category: 'AI',
+    // 'flagged' as of Phase 2C: the orchestrator now serves
+    // /api/resumes/[resumeId]/agent when FOLLIO_MULTI_AGENT_ENABLED=true, and
+    // the single-agent Resume Agent serves it otherwise.
+    status: 'flagged',
+    flag: 'FOLLIO_MULTI_AGENT_ENABLED',
+    unitTests: [
+      '__tests__/agents/resume-orchestrator.test.ts',
+      '__tests__/resume-quality.test.ts',
+      '__tests__/analysis-engine.test.ts',
+    ],
+    pathways: [],
+    notes:
+      'Phase 2B. Three independent agents on the shared runtime: `resume-orchestrator` delegates to `resume-evaluation` and `resume-jd-match` through lib/agents/agent-as-tool, and each specialist runs its own tool-calling loop with its own Zod output schema, its own budget and its own AgentRun row (correlated by parentRunId/rootRunId). Deliberately `unshipped`: no route and no UI reaches it, and the Phase 1 `resume-agent` still serves /api/resumes/[resumeId]/agent and the Builder unchanged. The matching specialist reuses the Phase 1 tools verbatim rather than reimplementing them, so the two cannot drift apart. The evaluation specialist is grounded on lib/resume-quality, which calls no AI client — every count, percentage and finding is computed, copied out of run memory into the result, and copied again off the namespaced blackboard into the orchestrated report, so no model in the tree can state a figure it did not compute. `aiStages` is unset for the same reason as `resume-agent`: the only MAX_TOKENS key is `agentTurn`, whose call site is in the shared runtime this feature does not claim. Tree-wide limits live in ORCHESTRATOR_DELEGATION_LIMITS (depth 1, 3 child runs, 2 calls per specialist, 200k tokens, 240s).',
   },
 
   // ── Integrations ────────────────────────────────────────────────────────

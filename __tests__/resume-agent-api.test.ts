@@ -18,6 +18,8 @@ const userFindUnique = vi.fn();
 const profileFindFirst = vi.fn();
 const isAIAvailableMock = vi.fn(() => true);
 const runResumeAgentMock = vi.fn();
+const runResumeOrchestratorMock = vi.fn();
+const isMultiAgentEnabledMock = vi.fn(() => false);
 
 vi.mock('@clerk/nextjs/server', () => ({
   auth: () => authMock(),
@@ -32,6 +34,14 @@ vi.mock('@/lib/db', () => ({
 
 vi.mock('@/lib/ai-client', () => ({
   isAIAvailable: () => isAIAvailableMock(),
+}));
+
+vi.mock('@/lib/features', () => ({
+  isMultiAgentResumeEnabled: () => isMultiAgentEnabledMock(),
+}));
+
+vi.mock('@/services/agents/resume/orchestrator.agent', () => ({
+  runResumeOrchestrator: (...args: unknown[]) => runResumeOrchestratorMock(...args),
 }));
 
 vi.mock('@/services/agents/resume/resume.agent', async () => {
@@ -49,6 +59,7 @@ vi.mock('@/services/agents/resume/resume.agent', async () => {
 import { POST } from '@/app/api/resumes/[resumeId]/agent/route';
 import {
   RATE_LIMIT,
+  RUN_COST,
   acquireAgentRun,
   releaseAgentRun,
   resetAgentRateLimit,
@@ -78,6 +89,9 @@ function callRoute(options: CallOptions = {}) {
 
   const request = {
     method: 'POST',
+    // Next gives route handlers an AbortSignal that fires when the client
+    // disconnects; the route forwards it into the agent context.
+    signal: new AbortController().signal,
     headers: {
       get: (name: string) =>
         name.toLowerCase() === 'content-length' ? (contentLength ?? String(text.length)) : null,
@@ -112,19 +126,62 @@ function agentResult() {
   };
 }
 
+/** What `runResumeOrchestrator` resolves to. A different shape on purpose. */
+function orchestratorResult() {
+  return {
+    output: {
+      resumeId: RESUME_ID,
+      mode: 'general',
+      summary: 'Readable, but under-evidenced.',
+      recommendations: ['Add figures where you have them.'],
+      agentsUsed: ['resume-evaluation'],
+      evaluation: {
+        assessment: 'Bullets lean on filler.',
+        recommendations: ['Replace "responsible for".'],
+        counts: {
+          experiences: 3,
+          education: 2,
+          skills: 26,
+          projects: 2,
+          totalBullets: 8,
+          bulletsWithMetrics: 2,
+        },
+        metricCoveragePercent: 25,
+        missingSections: [],
+        findings: [],
+        basis: 'Computed from the text of this resume.',
+        limitations: [],
+      },
+      limitations: [],
+    },
+    run: {
+      id: 'run_orchestrated',
+      agentId: 'resume-orchestrator',
+      version: 'resume-orchestrator-v1',
+      status: 'succeeded',
+      stepMetas: [],
+      totalTokensUsed: { input: 4000, output: 900 },
+      startedAt: new Date().toISOString(),
+    },
+  };
+}
+
 /** Signed in, user row present, resume owned, AI configured. */
 function happyPath() {
   authMock.mockResolvedValue({ userId: CLERK_ID });
   userFindUnique.mockResolvedValue({ id: USER_ID });
   profileFindFirst.mockResolvedValue({ id: RESUME_ID });
   isAIAvailableMock.mockReturnValue(true);
+  isMultiAgentEnabledMock.mockReturnValue(false);
   runResumeAgentMock.mockResolvedValue(agentResult());
+  runResumeOrchestratorMock.mockResolvedValue(orchestratorResult());
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
   resetAgentRateLimit();
   isAIAvailableMock.mockReturnValue(true);
+  isMultiAgentEnabledMock.mockReturnValue(false);
 });
 
 describe('POST /api/resumes/[resumeId]/agent — authentication', () => {
@@ -484,5 +541,158 @@ describe('agent rate limiter', () => {
 
     // user_a is in flight; user_b must be unaffected.
     expect(acquireAgentRun('user_b').allowed).toBe(true);
+  });
+
+  it('charges a costly run more than one slot', () => {
+    const start = 1_000_000;
+
+    // Two multi-agent runs spend 4 of the 5 slots in the window.
+    expect(acquireAgentRun(USER_ID, start, RUN_COST.multiAgent).allowed).toBe(true);
+    releaseAgentRun(USER_ID);
+    expect(acquireAgentRun(USER_ID, start, RUN_COST.multiAgent).allowed).toBe(true);
+    releaseAgentRun(USER_ID);
+
+    // A third would need 6, so it is refused outright rather than part-charged.
+    expect(acquireAgentRun(USER_ID, start, RUN_COST.multiAgent)).toMatchObject({
+      allowed: false,
+      reason: 'quota',
+    });
+
+    // A cheaper run still fits in the one slot that remains.
+    expect(acquireAgentRun(USER_ID, start, RUN_COST.singleAgent).allowed).toBe(true);
+  });
+
+  it('ages a costly run out of the window like any other', () => {
+    const start = 1_000_000;
+
+    expect(acquireAgentRun(USER_ID, start, RUN_COST.multiAgent).allowed).toBe(true);
+    releaseAgentRun(USER_ID);
+    expect(acquireAgentRun(USER_ID, start, RUN_COST.multiAgent).allowed).toBe(true);
+    releaseAgentRun(USER_ID);
+    expect(acquireAgentRun(USER_ID, start, RUN_COST.multiAgent).allowed).toBe(false);
+
+    const afterWindow = start + RATE_LIMIT.windowMs + 1;
+    expect(acquireAgentRun(USER_ID, afterWindow, RUN_COST.multiAgent).allowed).toBe(true);
+  });
+});
+
+describe('POST /api/resumes/[resumeId]/agent — execution engine', () => {
+  it('runs the single-agent Resume Agent when the flag is off', async () => {
+    happyPath();
+    isMultiAgentEnabledMock.mockReturnValue(false);
+
+    const response = await callRoute();
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(runResumeAgentMock).toHaveBeenCalledTimes(1);
+    expect(runResumeOrchestratorMock).not.toHaveBeenCalled();
+    expect(body.engine).toBe('single-agent');
+  });
+
+  it('runs the orchestrator when the flag is on', async () => {
+    happyPath();
+    isMultiAgentEnabledMock.mockReturnValue(true);
+
+    const response = await callRoute();
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(runResumeOrchestratorMock).toHaveBeenCalledTimes(1);
+    expect(runResumeAgentMock).not.toHaveBeenCalled();
+    expect(body.engine).toBe('multi-agent');
+    // The richer payload is returned as-is, not flattened into the old shape.
+    expect(body.analysis.agentsUsed).toEqual(['resume-evaluation']);
+    expect(body.analysis.evaluation.metricCoveragePercent).toBe(25);
+  });
+
+  it('runs exactly one engine per request, in both settings', async () => {
+    happyPath();
+
+    isMultiAgentEnabledMock.mockReturnValue(false);
+    await callRoute();
+    isMultiAgentEnabledMock.mockReturnValue(true);
+    await callRoute();
+
+    expect(runResumeAgentMock).toHaveBeenCalledTimes(1);
+    expect(runResumeOrchestratorMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not fall back to the other engine when one fails', async () => {
+    happyPath();
+    isMultiAgentEnabledMock.mockReturnValue(true);
+    runResumeOrchestratorMock.mockRejectedValueOnce(new Error('orchestrator exploded'));
+
+    const response = await callRoute();
+
+    expect(response.status).toBeGreaterThanOrEqual(500);
+    // A silent retry would hide the failure and bill for a second run.
+    expect(runResumeAgentMock).not.toHaveBeenCalled();
+  });
+
+  it('passes the same validated input and trusted identity to either engine', async () => {
+    happyPath();
+    isMultiAgentEnabledMock.mockReturnValue(true);
+
+    await callRoute({ body: { mode: 'role', targetRole: 'Technical Program Manager' } });
+
+    const [input, auth] = runResumeOrchestratorMock.mock.calls[0] as [
+      Record<string, unknown>,
+      Record<string, unknown>,
+    ];
+    expect(input).toMatchObject({
+      resumeId: RESUME_ID,
+      mode: 'role',
+      targetRole: 'technical-program-manager',
+    });
+    expect(auth).toEqual({ userId: USER_ID });
+  });
+
+  it('forwards the request signal so a disconnect stops the run', async () => {
+    happyPath();
+    isMultiAgentEnabledMock.mockReturnValue(true);
+
+    await callRoute();
+
+    const [, , ctx] = runResumeOrchestratorMock.mock.calls[0] as [
+      unknown,
+      unknown,
+      { signal?: AbortSignal },
+    ];
+    expect(ctx?.signal).toBeDefined();
+  });
+
+  it('refuses a client that tries to choose the engine itself', async () => {
+    happyPath();
+
+    const response = await callRoute({ body: { mode: 'general', engine: 'multi-agent' } });
+
+    expect(response.status).toBe(400);
+    expect(runResumeAgentMock).not.toHaveBeenCalled();
+    expect(runResumeOrchestratorMock).not.toHaveBeenCalled();
+  });
+
+  it('charges a multi-agent run more quota than a single-agent one', async () => {
+    happyPath();
+    isMultiAgentEnabledMock.mockReturnValue(true);
+
+    // RUN_COST.multiAgent is 2 and the window allows 5, so the third run is
+    // refused where a single-agent user would still have budget.
+    expect((await callRoute()).status).toBe(200);
+    expect((await callRoute()).status).toBe(200);
+    const blocked = await callRoute();
+
+    expect(blocked.status).toBe(429);
+    expect(runResumeOrchestratorMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('still allows the full single-agent allowance when the flag is off', async () => {
+    happyPath();
+    isMultiAgentEnabledMock.mockReturnValue(false);
+
+    for (let i = 0; i < RATE_LIMIT.maxRunsPerWindow; i++) {
+      expect((await callRoute()).status).toBe(200);
+    }
+    expect((await callRoute()).status).toBe(429);
   });
 });

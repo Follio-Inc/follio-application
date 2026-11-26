@@ -37,14 +37,28 @@ import { handleApiError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { validateJobDescription } from '@/lib/resume-lens/validate-jd';
 import { ROLE_PROFILE_OPTIONS, resolveRoleProfile } from '@/lib/role-profiles/profiles';
+import { selectAnalysisEngine } from '@/services/agents/resume/engine';
+import { runResumeOrchestrator } from '@/services/agents/resume/orchestrator.agent';
 import { RESUME_AGENT_MODES, runResumeAgent } from '@/services/agents/resume/resume.agent';
 
-import { acquireAgentRun, releaseAgentRun } from './rate-limit';
+import { acquireAgentRun, releaseAgentRun, RUN_COST } from './rate-limit';
 
-import type { ResumeAgentInput } from '@/services/agents/resume/resume.agent';
+import type { ResumeAgentInput, ResumeAgentMode } from '@/services/agents/resume/resume.agent';
 
-/** The agent's own wall-clock budget is 90s (RESUME_AGENT_BUDGET). */
-export const maxDuration = 120;
+/**
+ * Route deadline, in seconds.
+ *
+ * Sized for the slower of the two engines: the orchestrated path's tree-wide
+ * ceiling is 240s (ORCHESTRATOR_DELEGATION_LIMITS.maxTotalDurationMs), so the
+ * route has to outlive it or the function is killed mid-run and the user sees
+ * a timeout instead of the budget message. 300 is already in use by several
+ * routes in this repo (the platform test runners and the resume-import labs),
+ * so it is supported by this deployment target rather than assumed.
+ *
+ * This is a ceiling, not a reservation: single-agent runs still finish in
+ * seconds, and the measured orchestrated runs took 9-12s.
+ */
+export const maxDuration = 300;
 
 /**
  * Hard cap before the body is parsed at all. The job-description validator
@@ -75,9 +89,17 @@ interface RouteContext {
   params: Promise<{ resumeId: string }>;
 }
 
-type BodyResult =
-  | { ok: true; input: Omit<ResumeAgentInput, 'resumeId'> }
-  | { ok: false; error: string };
+/**
+ * `mode` is required here even though it is optional on `ResumeAgentInput`:
+ * `readBody` always resolves one (defaulting to 'general'), and the
+ * orchestrator requires it. Tightening the type here is what lets both
+ * engines take the same object without a cast.
+ */
+type ValidatedAgentInput = Omit<ResumeAgentInput, 'resumeId' | 'mode'> & {
+  mode: ResumeAgentMode;
+};
+
+type BodyResult = { ok: true; input: ValidatedAgentInput } | { ok: false; error: string };
 
 /**
  * Read and validate the request body.
@@ -196,7 +218,17 @@ export async function POST(request: NextRequest, context: RouteContext) {
       );
     }
 
-    const slot = acquireAgentRun(user.id);
+    // Decided server-side from the feature flag. Nothing in the request can
+    // influence it, and exactly one engine runs per request: there is no
+    // fallback to the other if it fails, because a silent retry would hide
+    // the failure and bill for a second run.
+    const engine = selectAnalysisEngine();
+
+    const slot = acquireAgentRun(
+      user.id,
+      Date.now(),
+      engine === 'multi-agent' ? RUN_COST.multiAgent : RUN_COST.singleAgent
+    );
     if (!slot.allowed) {
       return NextResponse.json(
         {
@@ -210,19 +242,32 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     try {
-      const { output, run } = await runResumeAgent(
-        { ...body.input, resumeId: resume.id },
-        { userId: user.id }
-      );
+      const agentInput = { ...body.input, resumeId: resume.id };
+      const auth = { userId: user.id };
+      // Propagating the request's signal means a browser that navigates away
+      // or closes the dialog stops the run — and because the signal is
+      // inherited by every delegated child (lib/agents/agent-as-tool.ts), it
+      // stops the specialists too, not just the agent the route called.
+      const agentCtx = { signal: request.signal };
+
+      const { output, run } =
+        engine === 'multi-agent'
+          ? await runResumeOrchestrator(agentInput, auth, agentCtx)
+          : await runResumeAgent(agentInput, auth, agentCtx);
 
       agentLogger.info('Resume agent run finished', {
         resumeId: resume.id,
+        engine,
         mode: body.input.mode,
         status: run.status,
         tokens: run.totalTokensUsed.input + run.totalTokensUsed.output,
       });
 
+      // `engine` is the discriminator the client branches on: the two agents
+      // return structurally different payloads, and guessing from which
+      // fields happen to be present would break the moment either changes.
       return NextResponse.json({
+        engine,
         analysis: output,
         run: {
           status: run.status,

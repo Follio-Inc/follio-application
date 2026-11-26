@@ -703,6 +703,14 @@ model GeneratedPortfolio {
 model AgentRun {
   id                   String    @id @default(cuid())
   agentId              String
+  /// Run that delegated to this one. Null for a top-level run.
+  parentRunId          String?
+  /// Root of this execution tree. Equals `id` for a top-level run, so every
+  /// run in one multi-agent execution shares a value and can be fetched in a
+  /// single query. Not a relation: these are ids of rows in this same table
+  /// and a self-relation would add cascade semantics we do not want on a
+  /// telemetry table that is allowed to lose rows.
+  rootRunId            String?
   version              String
   status               String
   stepMetas            Json      @default("[]")
@@ -725,6 +733,8 @@ model AgentRun {
   @@index([profileId])
   @@index([userId])
   @@index([startedAt])
+  @@index([parentRunId])
+  @@index([rootRunId])
 }
 
 enum PortfolioStatus {

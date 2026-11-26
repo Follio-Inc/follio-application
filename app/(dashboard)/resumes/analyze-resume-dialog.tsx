@@ -124,6 +124,171 @@ interface ResumeAnalysis {
   };
 }
 
+/** Which implementation produced a result. Sent by the server, never to it. */
+export type AnalysisEngine = 'single-agent' | 'multi-agent';
+
+/** One deterministic writing finding, from lib/resume-quality. */
+interface QualityFinding {
+  code: string;
+  severity: string;
+  location: string;
+  detail: string;
+  evidence?: string;
+}
+
+/** Mirrors `evaluationAgentResultSchema` in evaluation.agent.ts. */
+interface EvaluationResult {
+  assessment: string;
+  recommendations: string[];
+  counts: {
+    experiences: number;
+    education: number;
+    skills: number;
+    projects: number;
+    totalBullets: number;
+    bulletsWithMetrics: number;
+  };
+  metricCoveragePercent: number;
+  missingSections: string[];
+  findings: QualityFinding[];
+  basis: string;
+  limitations: string[];
+}
+
+/** Mirrors `jdMatchAgentResultSchema` in jd-match.agent.ts. */
+interface MatchingResult {
+  target: 'jd' | 'role';
+  assessment: string;
+  recommendations: string[];
+  jdMatch?: ResumeAnalysis['jdMatch'];
+  keywords?: ResumeAnalysis['keywords'];
+  roleCoverage?: ResumeAnalysis['roleCoverage'];
+  limitations: string[];
+}
+
+/** Mirrors `orchestratorResultSchema` in orchestrator.agent.ts. */
+interface OrchestratedAnalysis {
+  resumeId: string;
+  mode: AnalysisMode;
+  summary: string;
+  recommendations: string[];
+  agentsUsed: string[];
+  evaluation?: EvaluationResult;
+  matching?: MatchingResult;
+  limitations: string[];
+}
+
+/**
+ * What the dialog renders.
+ *
+ * The two engines return structurally different payloads, so rather than
+ * teaching the JSX about both, each is normalised into this once. Every field
+ * the single-agent engine does not produce is optional and simply absent —
+ * nothing is defaulted to zero, because a fabricated count reads exactly like
+ * a real one.
+ */
+export interface AnalysisView {
+  engine: AnalysisEngine;
+  /** Agent ids that contributed, for the details section. */
+  agentsUsed: string[];
+  summary: string;
+  /** The Evaluation Agent's prose. Multi-agent only. */
+  assessment?: string;
+  /** Phase 1 only. */
+  highlights?: string[];
+  recommendations?: string[];
+  counts?: { experiences: number; education: number; skills: number; projects: number };
+  totalBullets?: number;
+  metricCoveragePercent?: number;
+  missingSections?: string[];
+  qualityFindings?: QualityFinding[];
+  jdMatch?: ResumeAnalysis['jdMatch'];
+  keywords?: ResumeAnalysis['keywords'];
+  roleCoverage?: ResumeAnalysis['roleCoverage'];
+  limitations: string[];
+}
+
+/** De-duplicate while keeping first-seen order. */
+function unique(items: string[]): string[] {
+  return [...new Set(items.filter(Boolean))];
+}
+
+/**
+ * Normalise either engine's payload into one view.
+ *
+ * Discriminated on `engine`, which the server sends, rather than sniffed from
+ * which fields happen to be present: the two schemas overlap, and guessing
+ * would break the first time either one gains a field.
+ */
+export function toAnalysisView(engine: AnalysisEngine, analysis: unknown): AnalysisView | null {
+  if (!analysis || typeof analysis !== 'object') return null;
+
+  if (engine === 'multi-agent') {
+    const result = analysis as OrchestratedAnalysis;
+    if (typeof result.summary !== 'string') return null;
+
+    const { evaluation, matching } = result;
+
+    return {
+      engine,
+      // The orchestrator itself always ran; `agentsUsed` names the
+      // specialists that actually produced findings.
+      agentsUsed: unique(['resume-orchestrator', ...(result.agentsUsed ?? [])]),
+      summary: result.summary,
+      assessment: evaluation?.assessment,
+      recommendations: unique([
+        ...(result.recommendations ?? []),
+        ...(evaluation?.recommendations ?? []),
+        ...(matching?.recommendations ?? []),
+      ]),
+      counts: evaluation?.counts,
+      totalBullets: evaluation?.counts.totalBullets,
+      metricCoveragePercent: evaluation?.metricCoveragePercent,
+      missingSections: evaluation?.missingSections,
+      qualityFindings: evaluation?.findings,
+      jdMatch: matching?.jdMatch,
+      keywords: matching?.keywords,
+      roleCoverage: matching?.roleCoverage,
+      limitations: unique([
+        ...(result.limitations ?? []),
+        ...(evaluation?.limitations ?? []),
+        ...(matching?.limitations ?? []),
+      ]),
+    };
+  }
+
+  const result = analysis as ResumeAnalysis;
+  if (typeof result.summary !== 'string') return null;
+
+  return {
+    engine,
+    agentsUsed: ['resume-agent'],
+    summary: result.summary,
+    highlights: result.highlights,
+    recommendations: result.recommendations,
+    counts: result.counts,
+    missingSections: result.missingSections,
+    jdMatch: result.jdMatch,
+    keywords: result.keywords,
+    roleCoverage: result.roleCoverage,
+    limitations: result.limitations ?? [],
+  };
+}
+
+/** Human labels for the agent ids shown in the details section. */
+const AGENT_LABELS: Record<string, string> = {
+  'resume-agent': 'Resume Agent',
+  'resume-orchestrator': 'Orchestrator',
+  'resume-evaluation': 'Evaluation Agent',
+  'resume-jd-match': 'JD / Role Matching Agent',
+};
+
+const SEVERITY_TONE: Record<string, string> = {
+  high: 'text-destructive',
+  medium: 'text-amber-600 dark:text-amber-400',
+  low: 'text-muted-foreground',
+};
+
 interface AnalyzeResumeDialogProps {
   /** The resume to analyze, or null when the dialog is closed. */
   resume: { id: string; title: string } | null;
@@ -212,7 +377,7 @@ export function AnalyzeResumeDialog({
   const [targetRole, setTargetRole] = useState<string>(ROLE_PROFILE_OPTIONS[0]?.id ?? '');
 
   const [isLoading, setIsLoading] = useState(false);
-  const [analysis, setAnalysis] = useState<ResumeAnalysis | null>(null);
+  const [analysis, setAnalysis] = useState<AnalysisView | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // A slow run that finishes after the dialog closes, or after a newer run
@@ -220,10 +385,23 @@ export function AnalyzeResumeDialog({
   // different question. Only the newest run id may write.
   const latestRunId = useRef(0);
 
+  /**
+   * The in-flight request, so closing the dialog or starting another run can
+   * abort it. The route forwards this to the agent context, and Phase 2A's
+   * delegation passes the same signal to every child, so aborting here stops
+   * the specialists too rather than leaving them spending tokens for a result
+   * nobody will see.
+   */
+  const inFlight = useRef<AbortController | null>(null);
+
   const runAnalysis = useCallback(
     async (resumeId: string, requestedMode: AnalysisMode, payload: Record<string, unknown>) => {
       const runId = latestRunId.current + 1;
       latestRunId.current = runId;
+
+      inFlight.current?.abort();
+      const controller = new AbortController();
+      inFlight.current = controller;
 
       setIsLoading(true);
       setError(null);
@@ -235,6 +413,7 @@ export function AnalyzeResumeDialog({
           cache: 'no-store',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ mode: requestedMode, ...payload }),
+          signal: controller.signal,
         });
 
         const body: unknown = await response.json().catch(() => null);
@@ -256,13 +435,19 @@ export function AnalyzeResumeDialog({
           return;
         }
 
-        const result = (body as { analysis?: ResumeAnalysis } | null)?.analysis;
-        if (!result) {
+        // The server says which engine ran; the payload shape follows from it.
+        const payloadBody = body as { engine?: AnalysisEngine; analysis?: unknown } | null;
+        const view = toAnalysisView(payloadBody?.engine ?? 'single-agent', payloadBody?.analysis);
+
+        if (!view) {
           setError('The analysis came back empty.');
           return;
         }
-        setAnalysis(result);
-      } catch {
+        setAnalysis(view);
+      } catch (caught) {
+        // An abort is this component cancelling its own request, not a failure
+        // to show the user.
+        if (caught instanceof DOMException && caught.name === 'AbortError') return;
         if (latestRunId.current !== runId) return;
         setError('Could not reach the server. Check your connection and try again.');
       } finally {
@@ -296,6 +481,7 @@ export function AnalyzeResumeDialog({
   useEffect(() => {
     if (!resume) {
       latestRunId.current += 1;
+      inFlight.current?.abort();
       return;
     }
     setMode(initialMode);
@@ -307,8 +493,10 @@ export function AnalyzeResumeDialog({
 
   const handleOpenChange = (open: boolean) => {
     if (!open) {
-      // Invalidate any run still in flight.
+      // Invalidate any run still in flight, and stop the server doing work
+      // for a result that will never be shown.
       latestRunId.current += 1;
+      inFlight.current?.abort();
       setAnalysis(null);
       setError(null);
       setIsLoading(false);
@@ -338,7 +526,7 @@ export function AnalyzeResumeDialog({
    * changes, so the Keywords view leads with the keyword breakdown and the
    * overall score follows it rather than the other way round.
    */
-  const renderJdResults = (result: ResumeAnalysis) => {
+  const renderJdResults = (result: AnalysisView) => {
     const scoreCard = result.jdMatch ? (
       <div key="score" className="space-y-4">
         <div className="rounded-md border border-border p-3">
@@ -496,15 +684,30 @@ export function AnalyzeResumeDialog({
         {analysis && !isLoading && (
           <ScrollArea className="max-h-[60vh] pr-3">
             <div className="space-y-4 text-sm">
-              <div className="flex flex-wrap gap-1.5">
-                {COUNT_LABELS.map(([key, label]) => (
-                  <Badge key={key} variant="secondary">
-                    {label}: {analysis.counts[key]}
-                  </Badge>
-                ))}
-              </div>
+              {/* Counts only when a run actually produced them — a JD-only
+                  orchestrated run has none, and a zero would read as real. */}
+              {(analysis.counts || analysis.metricCoveragePercent !== undefined) && (
+                <div className="flex flex-wrap gap-1.5">
+                  {analysis.counts &&
+                    COUNT_LABELS.map(([key, label]) => (
+                      <Badge key={key} variant="secondary">
+                        {label}: {analysis.counts![key]}
+                      </Badge>
+                    ))}
+                  {analysis.metricCoveragePercent !== undefined && (
+                    <Badge variant="outline">
+                      Bullets with a number: {analysis.metricCoveragePercent}%
+                      {analysis.totalBullets !== undefined ? ` of ${analysis.totalBullets}` : ''}
+                    </Badge>
+                  )}
+                </div>
+              )}
 
               <p className="leading-relaxed text-foreground">{analysis.summary}</p>
+
+              {analysis.assessment && analysis.assessment !== analysis.summary && (
+                <p className="leading-relaxed text-muted-foreground">{analysis.assessment}</p>
+              )}
 
               {/* ─── Job-description results (keyword-first in Keywords) ──── */}
               {renderJdResults(analysis)}
@@ -569,7 +772,43 @@ export function AnalyzeResumeDialog({
                 </div>
               )}
 
-              {analysis.highlights.length > 0 && (
+              {/* ─── Writing quality findings (multi-agent) ──── */}
+              {analysis.qualityFindings && analysis.qualityFindings.length > 0 && (
+                <div>
+                  <h4 className="font-medium">Writing findings</h4>
+                  <p className="mb-1.5 text-xs text-muted-foreground">
+                    Computed from the text of this resume, most important first.
+                  </p>
+                  <ul className="space-y-1.5">
+                    {analysis.qualityFindings.map((finding, index) => (
+                      <li
+                        key={`${finding.code}-${finding.location}-${index}`}
+                        className="rounded-md border border-border/60 p-2.5"
+                      >
+                        <div className="flex items-baseline justify-between gap-3">
+                          <span className="font-medium">{finding.location}</span>
+                          <span
+                            className={cn(
+                              'text-xs font-medium capitalize',
+                              SEVERITY_TONE[finding.severity] ?? 'text-muted-foreground'
+                            )}
+                          >
+                            {finding.severity}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-xs text-muted-foreground">{finding.detail}</p>
+                        {finding.evidence && (
+                          <p className="mt-1 text-xs italic text-muted-foreground">
+                            “{finding.evidence}”
+                          </p>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {analysis.highlights && analysis.highlights.length > 0 && (
                 <div>
                   <h4 className="mb-1.5 font-medium">Highlights</h4>
                   <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
@@ -595,23 +834,51 @@ export function AnalyzeResumeDialog({
                 </div>
               )}
 
-              {analysis.missingSections.length > 0 && (
+              {analysis.missingSections && analysis.missingSections.length > 0 && (
                 <div>
                   <h4 className="mb-1.5 font-medium">Missing sections</h4>
                   <p className="text-muted-foreground">{analysis.missingSections.join(', ')}</p>
                 </div>
               )}
 
-              {analysis.limitations.length > 0 && (
-                <div>
-                  <h4 className="mb-1.5 font-medium">Limitations</h4>
-                  <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
-                    {analysis.limitations.map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+              {/* ─── AI Analysis Details ────
+                  Which agents ran, which engine served it, and anything that
+                  could not be checked. Deliberately only these: no prompts,
+                  no reasoning, no internal execution metadata. */}
+              <div className="rounded-md border border-border/60 p-3">
+                <h4 className="font-medium">AI Analysis Details</h4>
+                <dl className="mt-1.5 space-y-1 text-xs text-muted-foreground">
+                  <div className="flex gap-2">
+                    <dt className="shrink-0">Engine:</dt>
+                    <dd>
+                      {analysis.engine === 'multi-agent'
+                        ? 'Multi-agent (orchestrated specialists)'
+                        : 'Single agent'}
+                    </dd>
+                  </div>
+                  <div className="flex gap-2">
+                    <dt className="shrink-0">Agents:</dt>
+                    <dd className="flex flex-wrap gap-1">
+                      {analysis.agentsUsed.map((agentId) => (
+                        <Badge key={agentId} variant="outline" className="font-normal">
+                          {AGENT_LABELS[agentId] ?? agentId}
+                        </Badge>
+                      ))}
+                    </dd>
+                  </div>
+                </dl>
+
+                {analysis.limitations.length > 0 && (
+                  <div className="mt-2.5">
+                    <h5 className="text-xs font-medium text-foreground">Limitations</h5>
+                    <ul className="mt-1 list-disc space-y-1 pl-4 text-xs text-muted-foreground">
+                      {analysis.limitations.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
             </div>
           </ScrollArea>
         )}

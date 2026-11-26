@@ -59,17 +59,11 @@ export { SELECTED_RESUME_META_KEY };
 export { JOB_DESCRIPTION_META_KEY, TARGET_ROLE_META_KEY };
 
 /**
- * TODO(one-line follow-up): add `| 'resume-agent'` to the `AgentId` union in
- * types/agents.ts and drop this assertion.
- *
- * The cast is confined to this constant on purpose. It is safe at runtime —
- * `AgentId` is a documentation union, not a validated one: the runtime passes
- * the id straight through (`summarizeInput(agentId: string, …)` has a default
- * branch) and `AgentRun.agentId` is a plain `String` column. Reusing an
- * existing id such as 'resume-parse' would be the unsafe choice, because it
- * would merge this agent's telemetry with the resume parser's.
+ * Registered in the `AgentId` union (types/agents.ts) as of Phase 2A, so this
+ * is no longer a cast. Its own id rather than a reused one, because sharing
+ * e.g. 'resume-parse' would merge this agent's telemetry with the parser's.
  */
-const RESUME_AGENT_ID = 'resume-agent' as AgentId;
+const RESUME_AGENT_ID: AgentId = 'resume-agent';
 
 // ============================================================================
 // INPUT CONTRACT

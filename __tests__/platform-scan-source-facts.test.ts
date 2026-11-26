@@ -39,7 +39,7 @@ import {
 } from '@/_admin-panel/platform/scan';
 
 /** Counts on the current tree. Item 7: adding one must be a visible diff. */
-const EXPECTED = { stages: 11, flags: 1, models: 31 } as const;
+const EXPECTED = { stages: 11, flags: 2, models: 31 } as const;
 
 function feature(overrides: Partial<PlatformFeature>): PlatformFeature {
   return {
@@ -165,12 +165,18 @@ describe('MAX_TOKENS discovery', () => {
 describe('feature flag discovery', () => {
   const flags = discoverFeatureFlags();
 
-  it('reads the real flag and the helpers that gate on it', () => {
+  it('reads the real flags and the helpers that gate on them', () => {
     expect(flags).toHaveLength(EXPECTED.flags);
-    expect(flags[0].flag).toBe('NEXT_PUBLIC_PORTFOLIO_ENABLED');
+
+    const portfolio = flags.find((entry) => entry.flag === 'NEXT_PUBLIC_PORTFOLIO_ENABLED');
     // `assertPortfolioEnabled` reads no env var itself — it calls
     // `isPortfolioEnabled`. Both must resolve to the flag.
-    expect(flags[0].helpers).toEqual(['assertPortfolioEnabled', 'isPortfolioEnabled']);
+    expect(portfolio?.helpers).toEqual(['assertPortfolioEnabled', 'isPortfolioEnabled']);
+
+    // Phase 2C. Server-side on purpose: no NEXT_PUBLIC_ prefix, because
+    // nothing in the browser may choose which agent engine runs.
+    const multiAgent = flags.find((entry) => entry.flag === 'FOLLIO_MULTI_AGENT_ENABLED');
+    expect(multiAgent?.helpers).toEqual(['isMultiAgentResumeEnabled']);
   });
 
   it('comes from the flag module, not from this scanner', () => {
@@ -434,7 +440,7 @@ describe('scanAiStages on synthetic input', () => {
 describe('scanFeatureFlags on the real tree', () => {
   const report = scanFeatureFlags();
 
-  it('finds the one declared flag and no drift', () => {
+  it('finds every declared flag and no drift', () => {
     expect(report.summary.total).toBe(EXPECTED.flags);
     expect(report.stale).toEqual([]);
     expect(report.summary.unenforced).toBe(0);

@@ -51,13 +51,37 @@ function evictIdle(now: number): void {
 }
 
 /**
- * Reserve a run slot for `userId`.
+ * Slots one run consumes from the window.
+ *
+ * A multi-agent request runs an orchestrator plus one or two specialists, so
+ * it costs roughly two to three times a single-agent request in tokens and
+ * wall-clock. Charging it one slot would let the orchestrated path spend
+ * several times the budget the limit was sized for, so it is charged two.
+ *
+ * This is still a guard against accidental repetition, not a billing system —
+ * see the note at the top of this file about it being process-local.
+ */
+export const RUN_COST = {
+  singleAgent: 1,
+  multiAgent: 2,
+} as const;
+
+/**
+ * Reserve run slots for `userId`.
  *
  * On `{ allowed: true }` the caller MUST eventually call `releaseAgentRun`,
  * including when the run throws — otherwise the user is stuck behind their own
  * in-flight flag until the process restarts.
+ *
+ * `cost` is how many slots this run takes. A request that cannot afford its
+ * full cost is refused outright rather than part-charged, so an expensive run
+ * never starts on a budget sized for a cheap one.
  */
-export function acquireAgentRun(userId: string, now: number = Date.now()): RateLimitRejection {
+export function acquireAgentRun(
+  userId: string,
+  now: number = Date.now(),
+  cost: number = RUN_COST.singleAgent
+): RateLimitRejection {
   evictIdle(now);
 
   const entry = entries.get(userId) ?? { starts: [], inFlight: false, lastSeen: now };
@@ -71,15 +95,19 @@ export function acquireAgentRun(userId: string, now: number = Date.now()): RateL
     return { allowed: false, reason: 'concurrent', retryAfterSeconds: 5 };
   }
 
-  if (entry.starts.length >= MAX_RUNS_PER_WINDOW) {
+  const charge = Math.max(1, Math.floor(cost));
+
+  if (entry.starts.length + charge > MAX_RUNS_PER_WINDOW) {
     entries.set(userId, entry);
     // The oldest run is what frees up the next slot.
-    const oldest = Math.min(...entry.starts);
+    const oldest = entry.starts.length > 0 ? Math.min(...entry.starts) : now;
     const retryAfterSeconds = Math.max(1, Math.ceil((WINDOW_MS - (now - oldest)) / 1000));
     return { allowed: false, reason: 'quota', retryAfterSeconds };
   }
 
-  entry.starts.push(now);
+  // One timestamp per slot charged, so the cost ages out of the window the
+  // same way a single run's does.
+  for (let i = 0; i < charge; i++) entry.starts.push(now);
   entry.inFlight = true;
   entries.set(userId, entry);
   return { allowed: true };

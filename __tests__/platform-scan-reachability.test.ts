@@ -897,15 +897,26 @@ describe('drift report integration', { timeout: 30_000 }, () => {
       // `resume-agent-integration`, `builder-ai-assistant`) are all claimed by
       // the `resume-agent` feature, so they land in `mapped` rather than
       // moving `unlisted`, which stays at 1.
-      mapped: 83,
-      unlisted: 1,
+      // 87 since Phase 2C added `__tests__/analyze-dialog-response.test.ts`
+      // (claimed by `resume-agent`) and `__tests__/analysis-engine.test.ts`
+      // (claimed by `resume-multi-agent`, which owns the flag),
+      // claimed by `resume-agent` (it tests the shared analysis dialog). The
+      // two before it came with Phase 2B's `resume-multi-agent` feature:
+      // `__tests__/agents/resume-orchestrator.test.ts` and
+      // `__tests__/resume-quality.test.ts`.
+      mapped: 87,
+      // 2 since Phase 2A: `__tests__/agents/runtime.test.ts` and
+      // `__tests__/agents/delegation.test.ts`, both of which test the shared
+      // lib/agents runtime that no feature claims. Deliberately unlisted —
+      // see the note in _admin-panel/platform/coverage-map/map.ts.
+      unlisted: 2,
       misattributed: 0,
       deadCode: 8,
       unresolvable: 0,
     });
     expect(tests?.signal === 'test-attribution' && tests.stale).toEqual([]);
     expect(aiStages?.signal === 'ai-stages' && aiStages.summary.total).toBe(11);
-    expect(flags?.signal === 'feature-flags' && flags.summary.total).toBe(1);
+    expect(flags?.signal === 'feature-flags' && flags.summary.total).toBe(2);
     expect(prisma?.signal === 'prisma-models' && prisma.summary.total).toBe(31);
   });
 

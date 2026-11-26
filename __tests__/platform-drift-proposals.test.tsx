@@ -879,10 +879,15 @@ describe('the real repository, through the page’s own path', () => {
 
   it('proposes only what the real evidence supports', () => {
     // The tree is clean, so there is no contradiction to act on. What remains
-    // is the one test the graph attributes to a feature that does not list it,
+    // are the tests the graph attributes to a feature that does not list them,
     // and the features with no unit test at all.
+    //
+    // Two since Phase 2A: `__tests__/agents/runtime.test.ts` and
+    // `__tests__/agents/delegation.test.ts`. Both test the shared lib/agents
+    // runtime, which no feature claims, and both are deliberately unlisted —
+    // see the note in _admin-panel/platform/coverage-map/map.ts.
     expect(view.ok).toBe(true);
-    expect(view.proposals.mapEntries).toBe(1);
+    expect(view.proposals.mapEntries).toBe(2);
     expect(view.proposals.testDrafts).toBe(
       COVERAGE_MAP.filter((entry) => entry.unitTests.length === 0).length
     );

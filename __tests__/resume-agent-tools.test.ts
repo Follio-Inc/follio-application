@@ -106,6 +106,7 @@ function buildContext(options: {
 
   return {
     runId: 'run_1',
+    agentId: 'resume-agent',
     userId: 'user_1',
     memory,
     meta: {
