@@ -210,6 +210,7 @@ describe('MCP protocol', () => {
     getResume: async () => ({ handle: 'alex' }),
     createResume: async () => ({ resumeId: 'p2', title: 'New' }),
     cloneResume: async () => ({ resumeId: 'p3', title: 'Stripe PM' }),
+    openInBuilder: async () => ({ builderUrl: 'https://follio.app/builder' }),
     renameResume: async (_ctx, input) => ({ renamed: true, input }),
     deleteResumes: async (_ctx, input) => ({ deleted: [], input }),
     listDrafts: async () => [],
@@ -234,6 +235,7 @@ describe('MCP protocol', () => {
       'get_resume',
       'create_resume',
       'clone_resume',
+      'open_in_builder',
       'rename_resume',
       'delete_resumes',
       'list_drafts',
@@ -299,6 +301,17 @@ describe('MCP protocol', () => {
     const result = await callTool('clone_resume', { title: 'Copy' });
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('list_resumes');
+  });
+
+  it('opens a resume in the builder and returns the link', async () => {
+    const result = await callTool('open_in_builder', { resumeId: 'p1' });
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain('/builder');
+  });
+
+  it('refuses to open in the builder without a resumeId', async () => {
+    const result = await callTool('open_in_builder', {});
+    expect(result.isError).toBe(true);
   });
 
   it('renames a resume when given resumeId and a title', async () => {

@@ -114,8 +114,8 @@ function label(value: string): string {
   return value.charAt(0) + value.slice(1).toLowerCase();
 }
 
-// SCREEN 1: one card per resume.
-function showList(resumes: ResumeItem[]) {
+// SCREEN 1: one card per resume. `notice` is a line shown above the cards (e.g. after a delete).
+function showList(resumes: ResumeItem[], notice?: string) {
   if (resumes.length === 0) {
     showMessage('No resumes yet. Create one in Follio, or ask Claude to create one.');
     return;
@@ -143,7 +143,144 @@ function showList(resumes: ResumeItem[]) {
     cards.append(card);
   }
 
-  root.replaceChildren(el('h1', undefined, 'Your resumes'), cards);
+  root.replaceChildren(
+    el('h1', undefined, 'Your resumes'),
+    ...(notice ? [el('p', 'notice', notice)] : []),
+    cards
+  );
+}
+
+/** Reloads the list with list_resumes, e.g. after a resume was deleted. */
+async function refreshList(notice?: string) {
+  try {
+    const result = (await app.callServerTool({
+      name: 'list_resumes',
+      arguments: {},
+    })) as ToolResult;
+    if (result.isError) throw new Error(textOf(result));
+    const { resumes } = JSON.parse(textOf(result)) as { resumes: ResumeItem[] };
+    showList(resumes, notice);
+  } catch {
+    showMessage(
+      `${notice ?? ''} Ask Claude to list your resumes again to see the new list.`.trim()
+    );
+  }
+}
+
+/**
+ * Tells the AI what the user did in the page, so it doesn't rely on the old list. The host sends
+ * this with the user's next message. Not every host supports it, so a failure is ignored.
+ */
+async function tellModel(text: string) {
+  try {
+    await app.updateModelContext({ content: [{ type: 'text', text }] });
+  } catch {
+    // The host doesn't support model context updates; the delete still happened.
+  }
+}
+
+// OPEN IN FOLLIO: open_in_builder makes this the resume the builder shows (the builder has no
+// per-resume link) and returns the builder link; then the host opens it in a new tab. The iframe
+// can't open tabs itself, so app.openLink asks the host (which may ask the user first).
+function openButton(resume: Resume, resumes: ResumeItem[]): HTMLElement {
+  const button = el('button', 'button', 'Open in Follio ↗');
+  button.setAttribute('type', 'button');
+  const status = el('p', 'small muted');
+  const wrapper = el('div', 'open');
+  wrapper.append(button, status);
+
+  button.addEventListener('click', async () => {
+    button.setAttribute('disabled', '');
+    status.className = 'small muted';
+    status.textContent = 'Opening…';
+    try {
+      const result = (await app.callServerTool({
+        name: 'open_in_builder',
+        arguments: { resumeId: resume.resumeId },
+      })) as ToolResult;
+      if (result.isError) throw new Error(textOf(result) || 'Could not open this resume.');
+      const { builderUrl } = JSON.parse(textOf(result)) as { builderUrl: string };
+
+      // The builder now shows this resume, so move the "In builder" badge in our list too.
+      for (const item of resumes) item.isActive = item.resumeId === resume.resumeId;
+      await tellModel(
+        `The user opened “${resume.title}” in the Follio builder from the Follio app; it is now the resume open in the builder.`
+      );
+
+      const opened = await app.openLink({ url: builderUrl });
+      status.textContent = opened.isError
+        ? `Couldn't open a new tab. Go to ${builderUrl} — “${resume.title}” is open there.`
+        : `Opened “${resume.title}” in the Follio builder.`;
+    } catch (failure) {
+      status.className = 'error';
+      status.textContent = failure instanceof Error ? failure.message : String(failure);
+    } finally {
+      button.removeAttribute('disabled');
+    }
+  });
+  return wrapper;
+}
+
+// DELETE: the button shows a confirm box inside the page (the iframe may block window.confirm).
+// Clicking "Delete" there is the user's own confirmation, so the page passes the resume's real
+// title as confirmTitle. delete_resumes still does every server check (owner, permission, keep one).
+function deleteButton(resume: Resume): HTMLElement {
+  const wrapper = el('div', 'danger-zone');
+  const start = el('button', 'button danger', 'Delete resume');
+  start.setAttribute('type', 'button');
+  start.addEventListener('click', () =>
+    wrapper.replaceChildren(confirmBox(resume, wrapper, start))
+  );
+  wrapper.append(start);
+  return wrapper;
+}
+
+function confirmBox(resume: Resume, wrapper: HTMLElement, start: HTMLElement): HTMLElement {
+  const box = el('div', 'confirm');
+  const question = el('p');
+  question.append(
+    'Permanently delete ',
+    el('strong', undefined, `“${resume.title}”`),
+    '? This deletes everything in it and cannot be undone.'
+  );
+  const error = el('p', 'error');
+
+  const cancel = el('button', 'button', 'Cancel');
+  cancel.setAttribute('type', 'button');
+  cancel.addEventListener('click', () => wrapper.replaceChildren(start));
+
+  const confirm = el('button', 'button danger solid', 'Delete');
+  confirm.setAttribute('type', 'button');
+  confirm.addEventListener('click', async () => {
+    confirm.setAttribute('disabled', '');
+    cancel.setAttribute('disabled', '');
+    confirm.textContent = 'Deleting…';
+    error.textContent = '';
+    try {
+      const result = (await app.callServerTool({
+        // if user asks to delete, the delete_resumes tool is called, which does the actual deletion on the server
+        name: 'delete_resumes',
+        arguments: { resumes: [{ resumeId: resume.resumeId, confirmTitle: resume.title }] },
+      })) as ToolResult;
+      if (result.isError) throw new Error(textOf(result) || 'Could not delete this resume.');
+
+      const { message } = JSON.parse(textOf(result)) as { message: string };
+      await tellModel(
+        `The user deleted a resume with the Delete button in the Follio app. ${message}`
+      );
+      await refreshList(message);
+    } catch (failure) {
+      error.textContent = failure instanceof Error ? failure.message : String(failure);
+      confirm.removeAttribute('disabled');
+      cancel.removeAttribute('disabled');
+      confirm.textContent = 'Delete';
+    }
+  });
+
+  const buttons = el('div', 'buttons');
+  buttons.append(cancel, confirm);
+  box.append(question, error, buttons);
+  return box;
 }
 
 /** A section with a heading, or nothing when it has no items. */
@@ -229,8 +366,11 @@ async function showResume(resumeId: string, resumes: ResumeItem[]) {
   const skills = el('div', 'chips');
   for (const skill of resume.skills) skills.append(el('span', 'chip', skill));
 
+  const top = el('div', 'detail-top');
+  top.append(back, openButton(resume, resumes));
+
   root.replaceChildren(
-    back,
+    top,
     el('p', 'small muted', resume.title),
     el('h1', undefined, resume.name || resume.title),
     ...[el('p', 'headline', resume.headline), el('p', 'muted', resume.location)].filter(
@@ -240,7 +380,8 @@ async function showResume(resumeId: string, resumes: ResumeItem[]) {
     ...section('Experience', experiences),
     ...section('Education', education),
     ...section('Projects', projects),
-    ...section('Skills', resume.skills.length > 0 ? [skills] : [])
+    ...section('Skills', resume.skills.length > 0 ? [skills] : []),
+    deleteButton(resume)
   );
 }
 

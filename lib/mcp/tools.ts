@@ -130,6 +130,15 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     readOnly: false,
   }),
   defineTool({
+    name: 'open_in_builder',
+    title: 'Open a resume in Follio',
+    description:
+      'Make one resume the resume the Follio website builder shows, and get the builder link (builderUrl). Use when the user wants to open or edit a resume on Follio themselves. Requires resumeId from list_resumes. Does not change the resume itself.',
+    inputSchema: withResumeId(),
+    requiredScope: 'follio.draft',
+    readOnly: false,
+  }),
+  defineTool({
     name: 'rename_resume',
     title: 'Rename a resume',
     description:
@@ -360,6 +369,7 @@ export const toolInputSchemas = {
   get_resume: ResumeRefSchema,
   create_resume: CreateResumeSchema,
   clone_resume: CloneResumeSchema,
+  open_in_builder: ResumeRefSchema,
   rename_resume: RenameResumeSchema,
   delete_resumes: DeleteResumesSchema,
   list_drafts: ResumeRefSchema,
