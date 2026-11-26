@@ -39,6 +39,7 @@ import { interactiveTransactionOptions } from '@/lib/db-transaction';
 import { Errors } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { hasPlaceholder } from '@/lib/resume-edit/types';
+import { absoluteUrl } from '@/lib/utils';
 import { normalizeCurrentDates } from '@/lib/validations';
 import {
   applyResumeEdits,
@@ -50,6 +51,7 @@ import {
 } from '@/services/resume-edit-session.service';
 import { deleteResumes } from '@/services/resume-delete.service';
 import { renameResume } from '@/services/resume-rename.service';
+import { activateResume } from '@/services/resume-activate.service';
 import { createResume, type CreatedResume } from '@/services/resume-library.service';
 
 const connectorLogger = logger.child({ source: 'ai-connector' });
@@ -189,6 +191,21 @@ export async function cloneConnectorResume(userId: string, resumeRef: string, ti
     `Cloned “${source.title}”. Pass this resumeId on later tools. The original is unchanged. The copy is private and was not switched in the Follio builder.`,
     { sourceResumeId: source.resumeId, sourceTitle: source.title }
   );
+}
+
+/**
+ * Makes a resume the one the Follio builder shows (the website's shared activateResume) and returns
+ * the builder link. The MCP App's "Open in Follio" button opens that link.
+ */
+export async function openConnectorResumeInBuilder(userId: string, resumeRef: string) {
+  const resume = await requireOwnedResume(userId, resumeRef);
+  const activated = await activateResume(userId, resume.resumeId);
+  return {
+    resumeId: activated.id,
+    title: activated.title,
+    builderUrl: absoluteUrl('/builder'),
+    message: `“${activated.title}” is now the resume open in the Follio builder. Give the user builderUrl to open it.`,
+  };
 }
 
 /** Renames one resume with the website's shared renameResume (titles stay unique). */
@@ -706,6 +723,8 @@ export const aiConnectorHandlers = {
       (input as ResumeToolInput).resumeId,
       (input as { title?: string }).title
     ),
+  openInBuilder: (ctx: { userId: string }, input: unknown) =>
+    openConnectorResumeInBuilder(ctx.userId, (input as ResumeToolInput).resumeId),
   renameResume: (ctx: { userId: string }, input: unknown) =>
     renameConnectorResume(ctx.userId, input as RenameResumeInput),
   deleteResumes: (ctx: { userId: string }, input: unknown) =>

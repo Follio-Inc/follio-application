@@ -31,6 +31,7 @@ export interface McpToolHandlers {
   getResume: (ctx: McpAuthContext, input: unknown) => Promise<unknown>;
   createResume: (ctx: McpAuthContext, input: unknown) => Promise<unknown>;
   cloneResume: (ctx: McpAuthContext, input: unknown) => Promise<unknown>;
+  openInBuilder: (ctx: McpAuthContext, input: unknown) => Promise<unknown>;
   renameResume: (ctx: McpAuthContext, input: unknown) => Promise<unknown>;
   deleteResumes: (ctx: McpAuthContext, input: unknown) => Promise<unknown>;
   listDrafts: (ctx: McpAuthContext, input: unknown) => Promise<unknown>;
@@ -56,6 +57,7 @@ const TOOL_CALLS: Record<
   get_resume: (handlers, ctx, args) => handlers.getResume(ctx, args),
   create_resume: (handlers, ctx, args) => handlers.createResume(ctx, args),
   clone_resume: (handlers, ctx, args) => handlers.cloneResume(ctx, args),
+  open_in_builder: (handlers, ctx, args) => handlers.openInBuilder(ctx, args),
   rename_resume: (handlers, ctx, args) => handlers.renameResume(ctx, args),
   delete_resumes: (handlers, ctx, args) => handlers.deleteResumes(ctx, args),
   list_drafts: (handlers, ctx, args) => handlers.listDrafts(ctx, args),

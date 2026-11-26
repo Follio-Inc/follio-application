@@ -23,6 +23,7 @@ const handlers: McpToolHandlers = {
   getResume: async () => ({ handle: 'alex' }),
   createResume: async () => ({ resumeId: 'p2' }),
   cloneResume: async () => ({ resumeId: 'p3' }),
+  openInBuilder: async () => ({ builderUrl: 'https://follio.app/builder' }),
   renameResume: async () => ({ title: 'New' }),
   deleteResumes: async () => ({ deleted: [] }),
   listDrafts: async () => [],

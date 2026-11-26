@@ -52,6 +52,7 @@ const STYLES = `
     --border: var(--color-border-primary, #dedcd6);
     --accent: var(--color-ring-primary, #2563eb);
     --radius: var(--border-radius-lg, 10px);
+    --danger: var(--color-text-danger, #b42318);
   }
   [data-theme='dark'] {
     color-scheme: dark;
@@ -61,6 +62,7 @@ const STYLES = `
     --muted: var(--color-text-secondary, #a6a39b);
     --border: var(--color-border-primary, #45443f);
     --accent: var(--color-ring-primary, #60a5fa);
+    --danger: var(--color-text-danger, #f87171);
   }
   * { box-sizing: border-box; }
   body { margin: 0; padding: 16px; background: var(--bg); color: var(--text);
@@ -89,6 +91,25 @@ const STYLES = `
           border: 1px solid var(--border); font-size: 12px; }
   .link { border: 0; background: none; padding: 0; margin-bottom: 12px; color: var(--accent);
           cursor: pointer; font: inherit; }
+  .notice { margin-top: 8px; padding: 8px 12px; border: 1px solid var(--border);
+            border-radius: var(--radius); background: var(--card); }
+  .button { padding: 6px 14px; border: 1px solid var(--border); border-radius: var(--radius);
+            background: var(--bg); color: var(--text); font: inherit; cursor: pointer; }
+  .button:disabled { opacity: 0.6; cursor: default; }
+  .button.danger { color: var(--danger); border-color: var(--danger); }
+  .button.danger.solid { background: var(--danger); color: #fff; }
+  .danger-zone { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border); }
+  .confirm { padding: 12px; border: 1px solid var(--danger); border-radius: var(--radius); }
+  .buttons { display: flex; gap: 8px; justify-content: flex-end; }
+  .error { color: var(--danger); font-size: 12px; }
+  .error:empty { display: none; }
+  .detail-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+                margin-bottom: 12px; }
+  .detail-top .link { margin-bottom: 0; }
+  .open { display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
+          text-align: right; max-width: 60%; }
+  .open p { margin: 0; }
+  .open p:empty { display: none; }
 `;
 
 /**
@@ -117,7 +138,8 @@ export function registerFollioAppPages(server: McpServer) {
     RESUME_LIST_VIEW_URI,
     {
       title: 'Follio resumes',
-      description: 'Interactive list of the Follio resumes. Click one to view it.',
+      description:
+        'Interactive list of the Follio resumes. Click one to view it, open it in Follio, or delete it.',
       mimeType: MCP_APP_MIME_TYPE,
     },
     async () => ({
