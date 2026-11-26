@@ -926,7 +926,12 @@ describe('drift report integration', { timeout: 30_000 }, () => {
       // `resume-proposal-state`, `resume-proposals-service` and
       // `resume-proposals-api`. `unlisted` and `misattributed` holding at 2
       // and 0 is again the assertion that matters.
-      mapped: 94,
+      // 97 since Phase 3B.2 added the Builder surface's three:
+      // `rewrite-proposals-client`, `rewrite-proposals-ui` and
+      // `builder-apply-proposal-sync`. The UI suite imports the dialog it
+      // describes rather than only reading its source, so the graph links it
+      // to the feature instead of leaving a declared-but-unlinked entry.
+      mapped: 97,
       // 2 since Phase 2A: `__tests__/agents/runtime.test.ts` and
       // `__tests__/agents/delegation.test.ts`, both of which test the shared
       // lib/agents runtime that no feature claims. Deliberately unlisted —

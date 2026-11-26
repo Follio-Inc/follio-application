@@ -330,6 +330,7 @@ export function AllSectionsEditor() {
   const markSaved = useBuilderStore((s) => s.markSaved);
   const discardChanges = useBuilderStore((s) => s.discardChanges);
   const setSaving = useBuilderStore((s) => s.setSaving);
+  const isApplyingProposal = useBuilderStore((s) => s.isApplyingProposal);
   const setInlineEditing = useBuilderStore((s) => s.setInlineEditing);
 
   // ── Derived state ──
@@ -468,6 +469,13 @@ export function AllSectionsEditor() {
   );
 
   const handleSave = useCallback(async (): Promise<boolean> => {
+    // An AI suggestion is mid-flight against this resume's text on the
+    // server. The draft here may be a moment behind it, so saving now could
+    // write the older text back over the applied one. Refusing for the
+    // handful of milliseconds the apply takes is the narrowest fix that
+    // actually closes the window.
+    if (isApplyingProposal) return false;
+
     setSaving(true);
     try {
       await saveProfileDraft({
@@ -486,7 +494,15 @@ export function AllSectionsEditor() {
     } finally {
       setSaving(false);
     }
-  }, [profileChanged, contactChanged, draftProfile, contactDraft, markSaved, setSaving]);
+  }, [
+    profileChanged,
+    contactChanged,
+    draftProfile,
+    contactDraft,
+    markSaved,
+    setSaving,
+    isApplyingProposal,
+  ]);
 
   const handleDiscard = useCallback(() => {
     discardChanges();

@@ -612,19 +612,25 @@ export const COVERAGE_MAP: PlatformFeature[] = [
       // More specific than the `app/api/resumes` claim on the `resumes`
       // feature, the same way `resume-agent` claims its own `/agent` subtree.
       'app/api/resumes/[resumeId]/rewrite-proposals',
+      // Phase 3B.2: the review surface, and the Builder-side coordination
+      // that stops an applied suggestion being saved over. Claimed file by
+      // file rather than by directory, because `app/(dashboard)/builder`
+      // belongs to the Builder feature and this only adds to it.
+      'app/(dashboard)/builder/components/rewrite-proposals-dialog.tsx',
+      'app/(dashboard)/builder/lib/apply-proposal-sync.ts',
       // `services/agents/resume/orchestrator.agent.ts` is NOT claimed here: it
       // belongs to `resume-multi-agent`, which this feature extends rather
       // than replaces.
     ],
     category: 'AI',
-    // Phase 3B.1 added routes, but no UI calls them and nothing links to
-    // them, so no user can reach this yet — `unshipped` stays the accurate
-    // word until Phase 3B.2 ships the approval surface. The generation
-    // endpoint additionally refuses unless FOLLIO_MULTI_AGENT_ENABLED is on,
-    // which is recorded in the notes rather than in `flag`, because only part
-    // of the feature is gated: review and application of an already-stored
-    // batch work regardless.
-    status: 'unshipped',
+    // Reachable since Phase 3B.2: the Builder's AI Resume Assistant offers
+    // "Generate AI Improvements", and the review dialog behind it lists,
+    // approves, rejects and applies. `flag` is deliberately unset even though
+    // generation refuses without FOLLIO_MULTI_AGENT_ENABLED, following this
+    // file's own rule — only part of the feature is gated, and marking the
+    // whole thing flagged would wrongly imply that reviewing and applying an
+    // already-stored batch stops working too. The notes say which part.
+    status: 'shipped',
     prismaModels: ['ResumeEditProposal', 'ResumeProposalBatch'],
     unitTests: [
       '__tests__/agents/resume-rewrite-guards.test.ts',
@@ -633,13 +639,16 @@ export const COVERAGE_MAP: PlatformFeature[] = [
       '__tests__/resume-proposal-state.test.ts',
       '__tests__/resume-proposals-service.test.ts',
       '__tests__/resume-proposals-api.test.ts',
+      '__tests__/rewrite-proposals-client.test.ts',
+      '__tests__/rewrite-proposals-ui.test.ts',
+      '__tests__/builder-apply-proposal-sync.test.ts',
       // `resume-rewrite-orchestration.test.ts` exercises this feature too, but
       // it enters through `runResumeOrchestrator`, so the import graph
       // attributes it to `resume-multi-agent` and it is listed there.
     ],
     pathways: [],
     notes:
-      'Phase 3A, hardened in 3A.1. Two more independent agents on the shared runtime: `resume-rewrite` proposes addressed edits and `resume-verification` rules on them, each with its own tool-calling loop, Zod output schema, budget and AgentRun row. Proposals never touch the database — they name a stable record id and field path (lib/resume-rewrite/targets.ts) so Phase 3B can apply one as a field write rather than a string search, and Phase 3A performs no writes at all. Factual grounding is deterministic and runs twice: `propose_rewrite` refuses to store a proposal carrying a blocking issue, and the verifier re-runs every guard against the live resume and merges the model’s verdicts with the result in code, taking the stricter of the two — so an approving model cannot clear a proposal the guards rejected, and a proposal the verifier skipped defaults to needs_user_input rather than approved. The revision loop is bounded by MAX_REWRITE_REVISIONS and per-tool counters in orchestrator.agent.ts, not by the prompt; REWRITE_DELEGATION_LIMITS widens the tree-wide ceilings only for runs that requested a rewrite, so an evaluation request keeps the Phase 2B limits exactly. `aiStages` is unset for the same reason as `resume-agent` and `resume-multi-agent`: the only MAX_TOKENS key is `agentTurn`, whose call site is in the shared runtime no feature claims. Phase 3B.1 added persistence and the approval path: a batch records what an authorized run produced, and only a verifier-approved proposal is even offered for review — everything else is stored UNAVAILABLE. Applying needs the AI verdict and the human decision to agree, and is a single conditional UPDATE (`SET bullets[n] = $new WHERE bullets[n] = $original`), so a concurrent edit is refused rather than lost and a repeated apply matches zero rows. The agents still have no database write tool. Phase 3A.1 closed the gap the first live run exposed: the guards only understood named entities and figures, so a benefit clause appended to a true sentence ("…, enhancing data retrieval speed") passed every check and the verifier approved it. lib/resume-rewrite/outcomes.ts now detects introduced result constructions and tests what they claim against the whole resume, `propose_rewrite` refuses them outright, and the verifier must classify every proposition as a supported fact, a faithful paraphrase, a reasonable inference or an unsupported new claim — with the last two disqualifying approval in code, because a plausible inference asserted as fact is the failure mode.',
+      'Phase 3A, hardened in 3A.1. Two more independent agents on the shared runtime: `resume-rewrite` proposes addressed edits and `resume-verification` rules on them, each with its own tool-calling loop, Zod output schema, budget and AgentRun row. Proposals never touch the database — they name a stable record id and field path (lib/resume-rewrite/targets.ts) so Phase 3B can apply one as a field write rather than a string search, and Phase 3A performs no writes at all. Factual grounding is deterministic and runs twice: `propose_rewrite` refuses to store a proposal carrying a blocking issue, and the verifier re-runs every guard against the live resume and merges the model’s verdicts with the result in code, taking the stricter of the two — so an approving model cannot clear a proposal the guards rejected, and a proposal the verifier skipped defaults to needs_user_input rather than approved. The revision loop is bounded by MAX_REWRITE_REVISIONS and per-tool counters in orchestrator.agent.ts, not by the prompt; REWRITE_DELEGATION_LIMITS widens the tree-wide ceilings only for runs that requested a rewrite, so an evaluation request keeps the Phase 2B limits exactly. `aiStages` is unset for the same reason as `resume-agent` and `resume-multi-agent`: the only MAX_TOKENS key is `agentTurn`, whose call site is in the shared runtime no feature claims. Phase 3B.1 added persistence and the approval path: a batch records what an authorized run produced, and only a verifier-approved proposal is even offered for review — everything else is stored UNAVAILABLE. Applying needs the AI verdict and the human decision to agree, and is a single conditional UPDATE (`SET bullets[n] = $new WHERE bullets[n] = $original`), so a concurrent edit is refused rather than lost and a repeated apply matches zero rows. The agents still have no database write tool. Phase 3B.2 added the Builder surface: a fifth AI Resume Assistant action opening a review dialog that is deliberately separate from the evaluation dialog, so running an evaluation can never become a rewrite. Approving and applying are separate presses, the apply request carries no body, and the client offers Apply only from the server’s own `applicable` flag. The Builder is not autosaved (`builder-client.tsx` contains an unused debounced autosave; the live surface is AllSectionsEditor’s explicit Save), so the lost-update risk is a stale draft saved after an apply — closed by an apply gate that refuses while a save is in flight, while an inline form is open, or when the draft holds an unsaved edit to the same field, plus a `commitInlineChange` of the applied text into both draft and saved baseline. Phase 3A.1 closed the gap the first live run exposed: the guards only understood named entities and figures, so a benefit clause appended to a true sentence ("…, enhancing data retrieval speed") passed every check and the verifier approved it. lib/resume-rewrite/outcomes.ts now detects introduced result constructions and tests what they claim against the whole resume, `propose_rewrite` refuses them outright, and the verifier must classify every proposition as a supported fact, a faithful paraphrase, a reasonable inference or an unsupported new claim — with the last two disqualifying approval in code, because a plausible inference asserted as fact is the failure mode.',
   },
 
   // ── Integrations ────────────────────────────────────────────────────────

@@ -58,7 +58,12 @@ describe('analysis focus → agent mode', () => {
 describe('AI Resume Assistant panel', () => {
   const source = readSource(ASSISTANT_PATH);
 
-  it('offers exactly the four requested actions', () => {
+  it('keeps exactly four evaluation actions, with rewriting outside the list', () => {
+    // Phase 3B.2 added a fifth action, "Generate AI Improvements". It is
+    // deliberately NOT an `AnalysisFocus` and not in ACTIONS: running an
+    // evaluation must never be a route into rewriting. This assertion is what
+    // stops the two being merged later for tidiness.
+
     for (const label of [
       'General Resume Evaluation',
       'Job Description Evaluation',
@@ -99,8 +104,12 @@ describe('AI Resume Assistant panel', () => {
     expect(source).toContain('resume={analyzingResume}');
   });
 
-  it('is read-only and says so', () => {
-    expect(source).toMatch(/Read-only/i);
+  it('says which actions are read-only, now that one of them is not', () => {
+    // Before Phase 3B.2 the whole panel was read-only. It is not any more, so
+    // a blanket "Read-only" claim would be false: the copy has to distinguish
+    // the four evaluations from the action that can change the resume.
+    expect(source).toMatch(/four evaluations are read-only/i);
+    expect(source).toMatch(/nothing changes until you apply/i);
   });
 });
 
