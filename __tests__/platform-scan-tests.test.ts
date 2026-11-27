@@ -343,7 +343,13 @@ describe('scanTestAttribution on the real tree', () => {
       }
     }
   });
-});
+  // `scanTestAttribution()` walks the whole source tree with the TypeScript
+  // compiler, and the determinism check above deliberately does it a second
+  // time without the memo. Under CI's v8 coverage instrumentation that single
+  // call measures just under the 5s default on its own, so any contention from
+  // a sibling worker tips it over. The timeout is sized for the work, not for
+  // the machine.
+}, 60_000);
 
 describe('scanTestAttribution on synthetic features', () => {
   const resumeParserTest = '__tests__/resume-parser-helpers.test.ts';

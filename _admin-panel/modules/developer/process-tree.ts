@@ -19,7 +19,13 @@ import type { ChildProcess, SpawnOptions } from 'node:child_process';
  * - **Windows**: `taskkill /PID <pid> /T /F`, which walks the tree. `taskkill`
  *   ships with Windows, so this adds no dependency.
  * - **Everything else**: the child is spawned into its own process group
- *   (`detached`), and a signal to the negative pid reaches the whole group.
+ *   (`detached`), and a signal to the negative pid reaches that group — *and*
+ *   the real parent/child tree is read from `ps` and signalled pid by pid,
+ *   because a group is not a tree. `detached` works by calling `setsid()`, so
+ *   any descendant spawned detached in turn leaves the child's group for one
+ *   of its own, and the group signal never reaches it. Playwright's browser
+ *   launcher and a re-forked worker both do this. Without the tree walk such a
+ *   descendant survives the cancel and keeps holding its port.
  *
  * No pid ever leaves the server. The browser cancels a run by its opaque run
  * id; the id is matched against the owned run, and the pid is read from the
@@ -93,6 +99,103 @@ function killGroup(pid: number, signal: NodeJS.Signals, kill = process.kill): vo
 }
 
 /**
+ * Every descendant of `pid`, deepest first, from a `ps -A -o pid=,ppid=` table.
+ *
+ * Pure so the parsing and the walk can be asserted without a process tree:
+ * `killProcessTree` supplies the real table.
+ */
+export function descendantsFromProcessTable(table: string, pid: number): number[] {
+  const childrenOf = new Map<number, number[]>();
+
+  for (const line of table.split('\n')) {
+    const row = /^\s*(\d+)\s+(\d+)\s*$/.exec(line);
+    if (!row) continue;
+
+    const child = Number(row[1]);
+    const parent = Number(row[2]);
+    // A process is not its own child; `ps` reports ppid 0 for the roots, and
+    // treating that as an edge would make every root a descendant of pid 0.
+    if (child === parent) continue;
+
+    const siblings = childrenOf.get(parent);
+    if (siblings) siblings.push(child);
+    else childrenOf.set(parent, [child]);
+  }
+
+  // Breadth-first from the child. `seen` carries the root so a table captured
+  // while processes were exiting cannot send the walk round a cycle.
+  const seen = new Set<number>([pid]);
+  const found: number[] = [];
+  const queue: number[] = [pid];
+
+  while (queue.length > 0) {
+    const current = queue.shift() as number;
+    for (const child of childrenOf.get(current) ?? []) {
+      if (seen.has(child)) continue;
+      seen.add(child);
+      found.push(child);
+      queue.push(child);
+    }
+  }
+
+  // Deepest first, so a process cannot outlive the signal by being handed a
+  // replacement child from a parent that has not been signalled yet.
+  return found.reverse();
+}
+
+/**
+ * The process table, or an empty string when it cannot be read.
+ *
+ * `ps -A -o pid=,ppid=` is the one spelling POSIX, Linux procps and BSD/macOS
+ * all accept. A missing or refusing `ps` is not a failure: the group signal
+ * below still runs, so the tree walk only ever adds reach, never removes it.
+ */
+function readProcessTable(spawner: typeof spawn): Promise<string> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (table: string) => {
+      if (settled) return;
+      settled = true;
+      resolve(table);
+    };
+
+    try {
+      const ps = spawner('ps', ['-A', '-o', 'pid=,ppid='], {
+        windowsHide: true,
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+
+      let out = '';
+      ps.stdout?.on('data', (chunk: Buffer) => {
+        out += chunk.toString('utf8');
+      });
+      ps.on('error', () => finish(''));
+      ps.on('close', () => finish(out));
+    } catch {
+      finish('');
+    }
+  });
+}
+
+/**
+ * Signals each pid, ignoring the ones already gone.
+ *
+ * The pids come from a table read moments earlier, so one may have exited
+ * since. `ESRCH` is then the outcome that was asked for. (A pid could in
+ * principle have been reused by then; that window is sub-second and wrapping
+ * the pid space inside it is not a reachable state for a cancel.)
+ */
+function signalEach(pids: readonly number[], signal: NodeJS.Signals, kill: typeof process.kill) {
+  for (const target of pids) {
+    try {
+      kill(target, signal);
+    } catch {
+      // Already gone, or not ours to signal. Nothing to do either way.
+    }
+  }
+}
+
+/**
  * Terminates a spawned child and every process it started.
  *
  * Resolves when the kill has been issued and accepted; rejects when the
@@ -110,11 +213,14 @@ export async function killProcessTree(
     spawner = spawn,
     kill = process.kill,
     graceMs = SIGKILL_GRACE_MS,
+    readTree = readProcessTable,
   }: {
     platform?: NodeJS.Platform;
     spawner?: typeof spawn;
     kill?: typeof process.kill;
     graceMs?: number;
+    /** The POSIX process table, injectable so a test needs no real tree. */
+    readTree?: (spawner: typeof spawn) => Promise<string>;
   } = {}
 ): Promise<void> {
   const pid = child.pid;
@@ -127,20 +233,36 @@ export async function killProcessTree(
     return;
   }
 
+  // Read the tree *before* anything is signalled. Once the child dies its own
+  // children are reparented to init, and the ppid links that identify them as
+  // this run's processes are gone with it.
+  const descendants = descendantsFromProcessTable(await readTree(spawner), pid);
+
+  let groupLeader = true;
   try {
     killGroup(pid, 'SIGTERM', kill);
   } catch {
     // Not a group leader after all — the child alone is better than nothing.
+    groupLeader = false;
     child.kill('SIGTERM');
-    return;
   }
 
-  // Escalate only if the group is still there. The timer is unref'd so a
-  // pending escalation can never hold the server process open.
+  // The descendants that stayed in the group have already had the signal; the
+  // ones that called `setsid()` are reached only here, and signalling a
+  // process twice costs nothing.
+  signalEach(descendants, 'SIGTERM', kill);
+
+  // Escalate whatever is still there. The timer is unref'd so a pending
+  // escalation can never hold the server process open.
   const escalation = setTimeout(() => {
+    // A descendant in its own session outlives the child, so its escalation
+    // cannot be conditioned on the child having exited.
+    signalEach(descendants, 'SIGKILL', kill);
+
     if (hasExited(child)) return;
     try {
-      killGroup(pid, 'SIGKILL', kill);
+      if (groupLeader) killGroup(pid, 'SIGKILL', kill);
+      else child.kill('SIGKILL');
     } catch {
       // Already gone between the check and the signal.
     }

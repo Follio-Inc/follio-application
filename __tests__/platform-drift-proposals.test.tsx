@@ -871,7 +871,12 @@ describe('nothing can be applied', () => {
     // The page may say what it does *not* do; it must offer no way to do it.
     expect(html).not.toMatch(/Apply|Accept|Merge|Quarantine|Save to source/);
   });
-});
+  // Two of these drive `buildDriftView()` against the real repository, which
+  // parses the whole source tree with the TypeScript compiler — a second or so
+  // here, several under CI's v8 coverage instrumentation on a shared runner.
+  // The default 5s is sized for a unit test, not for a full-tree scan, which is
+  // why the sibling real-repository block below already carries this timeout.
+}, 60_000);
 
 describe('the real repository, through the page’s own path', () => {
   const view = buildDriftView();

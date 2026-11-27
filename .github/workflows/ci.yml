@@ -46,6 +46,16 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          # The Developer Platform's change analysis reads the latest commit
+          # against its parent (`git rev-parse HEAD^`, then a diff), and
+          # `__tests__/platform-drift-change.test.tsx` runs it against this
+          # checkout. The action's default `fetch-depth: 1` produces a repo
+          # with exactly one commit, where HEAD has no parent and the analysis
+          # correctly reports a first commit — so the test sees `hasParent:
+          # false` on CI and `true` everywhere else. Two commits is all the
+          # analysis ever looks at.
+          fetch-depth: 2
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

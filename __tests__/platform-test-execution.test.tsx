@@ -35,6 +35,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { canRunDeveloperSuites } from '@/_admin-panel/modules/developer/guard';
 import { runLiveQa } from '@/_admin-panel/modules/developer/live-qa';
 import {
+  descendantsFromProcessTable,
   killProcessTree,
   treeKillableSpawnOptions,
 } from '@/_admin-panel/modules/developer/process-tree';
@@ -1219,6 +1220,9 @@ describe('stopping a process tree', () => {
         return true;
       }) as unknown as typeof process.kill,
       graceMs: 10_000,
+      // An empty table, so this asserts the group signal on its own rather
+      // than whatever happens to be running on the machine under pid 99.
+      readTree: async () => '',
     });
 
     // The negative pid is the group, which is why the child is spawned
@@ -1243,11 +1247,86 @@ describe('stopping a process tree', () => {
       kill: (() => {
         throw new Error('ESRCH');
       }) as unknown as typeof process.kill,
+      readTree: async () => '',
+      // Far enough out that the escalation cannot fire mid-run and append a
+      // SIGKILL to `killed` after this test has already read it.
+      graceMs: 600_000,
     });
 
     expect(killed).toEqual(['SIGTERM']);
   });
 
+  it('signals a descendant that left the group for its own session', async () => {
+    // The bug this covers: `detached: true` works by calling `setsid()`, so a
+    // descendant spawned that way is a group leader in a new session and a
+    // signal to the child's negative pid never reaches it. It survived the
+    // cancel still holding whatever port it had opened. Reproduced on Linux;
+    // Windows never had it, because `taskkill /t` walks the real tree.
+    const signals: { pid: number; signal: string | number }[] = [];
+    const child = { pid: 100, exitCode: null, signalCode: null } as ChildProcess;
+
+    await killProcessTree(child, {
+      platform: 'linux',
+      kill: ((pid: number, signal: string | number) => {
+        signals.push({ pid, signal });
+        return true;
+      }) as unknown as typeof process.kill,
+      graceMs: 600_000,
+      //   100 — the child
+      //   200 — its child
+      //   300 — the grandchild that called setsid()
+      readTree: async () => ' 100     1\n 200   100\n 300   200\n 400     1\n',
+    });
+
+    // The group, then the tree. 400 is unrelated and is never touched.
+    expect(signals).toEqual([
+      { pid: -100, signal: 'SIGTERM' },
+      { pid: 300, signal: 'SIGTERM' },
+      { pid: 200, signal: 'SIGTERM' },
+    ]);
+  });
+
+  it('escalates a descendant even once the child itself has gone', async () => {
+    // A process in its own session outlives the child, so its escalation
+    // cannot be conditioned on the child having exited.
+    const signals: { pid: number; signal: string | number }[] = [];
+    const child = { pid: 100, exitCode: null, signalCode: null } as ChildProcess;
+
+    await killProcessTree(child, {
+      platform: 'linux',
+      kill: ((pid: number, signal: string | number) => {
+        signals.push({ pid, signal });
+        return true;
+      }) as unknown as typeof process.kill,
+      graceMs: 0,
+      readTree: async () => ' 100     1\n 300   100\n',
+    });
+
+    // The child reports as exited before the escalation runs.
+    (child as { exitCode: number | null }).exitCode = 0;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(signals).toContainEqual({ pid: 300, signal: 'SIGKILL' });
+    // The group is not re-signalled: that process is accounted for.
+    expect(signals).not.toContainEqual({ pid: -100, signal: 'SIGKILL' });
+  });
+
+  it('still signals the group when the process table cannot be read', async () => {
+    // `ps` missing or refusing must not turn a cancel into a no-op.
+    const signals: number[] = [];
+
+    await killProcessTree({ pid: 100, exitCode: null, signalCode: null } as ChildProcess, {
+      platform: 'linux',
+      kill: ((pid: number) => {
+        signals.push(pid);
+        return true;
+      }) as unknown as typeof process.kill,
+      graceMs: 600_000,
+      readTree: async () => '',
+    });
+
+    expect(signals).toEqual([-100]);
+  });
   it('does nothing for a child that has already exited', async () => {
     let spawned = 0;
     await killProcessTree({ pid: 5, exitCode: 0, signalCode: null } as ChildProcess, {
@@ -1276,6 +1355,57 @@ describe('stopping a process tree', () => {
     }
     // One implementation, shared — not a copy per runner.
     expect(read(PROCESS_TREE).match(/export async function killProcessTree/g)).toHaveLength(1);
+  });
+});
+
+describe('reading a descendant tree out of the process table', () => {
+  const TABLE = [
+    '    1     0',
+    '  100     1',
+    '  200   100',
+    '  300   200',
+    '  400   100',
+    '  500     1',
+  ].join('\n');
+
+  it('finds every descendant, deepest first', () => {
+    // Deepest first so a parent cannot hand over a replacement child for one
+    // that has already been signalled.
+    expect(descendantsFromProcessTable(TABLE, 100)).toEqual([300, 400, 200]);
+  });
+
+  it('excludes the process itself and anything above or beside it', () => {
+    const found = descendantsFromProcessTable(TABLE, 100);
+
+    expect(found).not.toContain(100);
+    expect(found).not.toContain(1);
+    expect(found).not.toContain(500);
+  });
+
+  it('returns nothing for a leaf or an absent pid', () => {
+    expect(descendantsFromProcessTable(TABLE, 300)).toEqual([]);
+    expect(descendantsFromProcessTable(TABLE, 999)).toEqual([]);
+  });
+
+  it('ignores headers, blank lines and anything that is not two numbers', () => {
+    const noisy = ['  PID  PPID', '', '  100     1', '  200   100', 'garbage', '   '].join('\n');
+
+    expect(descendantsFromProcessTable(noisy, 100)).toEqual([200]);
+  });
+
+  it('terminates on a table that contradicts itself', () => {
+    // A table read while processes were exiting can describe a cycle. The walk
+    // must end rather than loop; this is the guard for that.
+    const cyclic = ['  100   200', '  200   100'].join('\n');
+
+    expect(descendantsFromProcessTable(cyclic, 100)).toEqual([200]);
+  });
+
+  it('does not make every root a descendant of pid 0', () => {
+    // `ps` reports ppid 0 for the roots, and on some systems pid 0 is listed
+    // as its own parent. Treating that as an edge would return the entire
+    // table for a tree of nothing.
+    expect(descendantsFromProcessTable(['    0     0', '    1     0'].join('\n'), 0)).toEqual([1]);
   });
 });
 
