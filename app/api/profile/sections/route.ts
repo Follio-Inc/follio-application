@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { AppError, ErrorCode, handleApiError } from '@/lib/errors';
+import { scheduleResumeRefresh } from '@/lib/resume/schedule-refresh';
 
 import type { SectionType } from '@prisma/client';
 
@@ -202,6 +203,8 @@ export async function PATCH(request: NextRequest) {
       where: { profileId: context.profileId },
       orderBy: { sortOrder: 'asc' },
     });
+
+    scheduleResumeRefresh(context.profileId);
 
     return NextResponse.json(updatedSections);
   } catch (error) {

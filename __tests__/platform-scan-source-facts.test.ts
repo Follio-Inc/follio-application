@@ -41,7 +41,10 @@ import {
 /** Counts on the current tree. Item 7: adding one must be a visible diff. */
 // `models` is every model in prisma/schema.prisma: 33 since Phase 3B.1 added
 // `ResumeProposalBatch` and `ResumeEditProposal`.
-const EXPECTED = { stages: 11, flags: 2, models: 33 } as const;
+// `stages` and `models` grew when main's job-fit, resume-glance,
+// resume-skills and resume-edit work merged in: six new MAX_TOKENS keys
+// and the ResumeEditSession model.
+const EXPECTED = { stages: 17, flags: 2, models: 34 } as const;
 
 function feature(overrides: Partial<PlatformFeature>): PlatformFeature {
   return {
@@ -126,21 +129,34 @@ describe('MAX_TOKENS discovery', () => {
       'designBrief',
       'evidenceExtraction',
       'follioVoice',
+      'jdAlign',
+      'jdExpert',
+      'jobRequirements',
       'narrativeGeneration',
       'portfolioStrategy',
       'profileUnderstanding',
+      'resumeEdit',
+      'resumeGlance',
       'resumeParse',
+      'resumeSkills',
       'snapViewGeneration',
       'validation',
     ]);
   });
 
   it('invents nothing the budget does not define', () => {
-    // These two have been proposed and do not exist on this branch. If the
-    // scanner ever reports one, it stopped reading the source.
-    expect(stages).not.toContain('resumeGlance');
-    expect(stages).not.toContain('jdAlign');
-    expect(stages.filter((stage) => /glance/i.test(stage))).toEqual([]);
+    // This test used to assert `resumeGlance` and `jdAlign` were absent,
+    // because at the time they had only been proposed. Main shipped both, so
+    // the premise inverted: the point was never that those two names are
+    // forbidden, it was that the scanner reads the budget instead of
+    // guessing. Stated that way it still holds, and it still fails if the
+    // scanner starts inventing.
+    expect(stages).toContain('resumeGlance');
+    expect(stages).toContain('jdAlign');
+    // Names that have never existed in the budget, in any branch.
+    expect(stages).not.toContain('zebraStage');
+    expect(stages).not.toContain('resumeTelepathy');
+    expect(stages.filter((stage) => /telepathy|zebra/i.test(stage))).toEqual([]);
   });
 
   it('comes from the source file, not from this scanner', () => {
@@ -702,12 +718,19 @@ describe('drift report integration', { timeout: 30_000 }, () => {
       // Phase 3B.1 added the five `rewrite-proposals` routes, claimed by
       // `resume-rewrite-loop`, so `total`, `routes` and `mapped` each moved
       // by five and `unmapped` again stayed at 0.
-      total: 170,
-      mapped: 136,
+      //
+      // The merge with main added nine product surfaces: the `/match` page and
+      // the jd-align, job-fit, job-requirements, resume-edits (×3),
+      // profile/glance and profile/skill-profile routes. All nine are claimed —
+      // the first seven by the new `job-fit` and `resume-edit-sessions`
+      // entries, the two profile ones by the existing `app/api/profile` claim —
+      // so `unmapped` stays at 0, which is the assertion that matters.
+      total: 179,
+      mapped: 145,
       excluded: 34,
       unmapped: 0,
-      pages: 49,
-      routes: 121,
+      pages: 50,
+      routes: 129,
     });
   });
 

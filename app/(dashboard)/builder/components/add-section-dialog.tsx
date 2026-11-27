@@ -148,16 +148,14 @@ export function AddSectionDialog({ existingSections, onAdd }: AddSectionDialogPr
   return (
     <>
       {/* Controlled open — avoid DialogTrigger aria-controls SSR/client useId mismatch */}
-      <Button
+      <button
         type="button"
-        variant="outline"
-        size="sm"
-        className="w-full gap-2"
+        className="builder-add-btn w-full justify-center"
         onClick={() => setOpen(true)}
       >
         <Plus className="h-4 w-4" />
-        Add Section
-      </Button>
+        Add section
+      </button>
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="max-w-md">
           <DialogHeader>

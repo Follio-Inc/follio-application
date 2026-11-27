@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { AppError, ErrorCode, handleApiError } from '@/lib/errors';
+import { scheduleResumeRefresh } from '@/lib/resume/schedule-refresh';
 import { CertificationSchema } from '@/lib/validations';
 
 // GET /api/profile/certifications - Get all certifications
@@ -66,6 +67,8 @@ export async function POST(request: NextRequest) {
         source: 'MANUAL',
       },
     });
+
+    scheduleResumeRefresh(profileId);
 
     return NextResponse.json({ certification }, { status: 201 });
   } catch (error) {

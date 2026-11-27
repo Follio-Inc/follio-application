@@ -4,6 +4,7 @@ import { useClerk, useUser } from '@clerk/nextjs';
 import {
   Check,
   ChevronDown,
+  Columns2,
   Copy,
   ExternalLink,
   FileText,
@@ -255,6 +256,22 @@ export function UserMenu() {
                       <span className="text-sm font-medium">Resumes</span>
                       <span className="text-[11px] text-muted-foreground">
                         Create and manage resumes
+                      </span>
+                    </div>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link
+                    href="/match"
+                    className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 transition-colors"
+                  >
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/50">
+                      <Columns2 className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium">Compare to a job</span>
+                      <span className="text-[11px] text-muted-foreground">
+                        See what a posting asks for
                       </span>
                     </div>
                   </Link>

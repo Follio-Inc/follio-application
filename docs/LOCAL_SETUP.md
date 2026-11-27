@@ -9,15 +9,15 @@ with `npm run dev`. Nothing builds the app itself into a container.
 
 - A GitHub account that has been added to the [Follio-Inc/follio-application](https://github.com/Follio-Inc/follio-application) repo
 - [Git](https://git-scm.com/downloads)
-- [Node.js 20](https://nodejs.org/) (20 LTS) and npm 10 or newer
+- [Node.js 26](https://nodejs.org/) (26 LTS). npm 11 comes with it.
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/), running before the database step
 - Clerk development keys (`pk_test_...` and `sk_test_...`). Ask for the shared keys, or create a free app at [dashboard.clerk.com](https://dashboard.clerk.com) and copy the keys from API keys
 
 Check the versions:
 
 ```bash
-node -v    # v20.x
-npm -v     # 10 or higher
+node -v    # v26.x
+npm -v     # 11 or higher
 docker -v
 ```
 
@@ -45,6 +45,8 @@ cp .env.local .env
 Next.js reads `.env.local`. Prisma reads `.env`. Keep the two files the same: when you change one, copy it over the other.
 
 Open `.env.local` and set these. The database lines can stay as they are if you use the Docker database below.
+
+Keep those database URLs on localhost. Do not paste the production Neon URL into `.env` or `.env.local`. localhost and follio.me would then share one database, and signing in locally can delete the live profile. Production on follio.me keeps its own Neon URL in the host's environment settings.
 
 ```env
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/follio"
@@ -179,6 +181,39 @@ empty database fills itself in. There is no webhook to configure.
 
 The sample profile from the seed is separate from your account. View it at [http://localhost:3000/u/alexchen](http://localhost:3000/u/alexchen).
 
+### Optional: the multi-agent resume assistant
+
+Resume analysis runs on a single agent by default. The orchestrated five-agent
+version — and the "Generate AI Improvements" rewrite flow that depends on it —
+is off unless you ask for it. Add this to `.env.local` and restart `npm run dev`:
+
+```bash
+FOLLIO_MULTI_AGENT_ENABLED=true
+```
+
+The flag is read server-side only (`lib/features.ts`); nothing in the browser
+can turn it on. With it off, analysis still works and the rewrite endpoint
+answers 503 rather than silently falling back to an engine that cannot produce
+verified proposals.
+
+Both need `OPENAI_API_KEY` set. A rewrite run spends real tokens — roughly
+35k–155k across the agent tree depending on how many revision rounds the
+verifier asks for — so the button is deliberately an explicit click, and
+previously generated suggestions are re-openable from history without paying
+again.
+
+To exercise the agents without the UI:
+
+```bash
+# read-only, no model call, prints the execution tree
+npx tsx local-tests/resume-rewrite/run-live.ts --email you@example.com
+
+# proposal storage and approval against a disposable resume, no model call
+npx tsx local-tests/resume-proposals/run-live.ts --demo --email you@example.com --write
+```
+
+Both refuse to run against anything but a local database.
+
 ## Each time you come back
 
 ```bash
@@ -218,7 +253,7 @@ tables.
 
 | What you see                                   | What to do                                                                                     |
 | ---------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `node -v` is not v20                           | Install Node 20 and open a new terminal                                                        |
+| `node -v` is not v26                           | Install Node 26 and open a new terminal                                                        |
 | `npm install` fails on GitHub packages or auth | Confirm you are signed into the invited GitHub account                                         |
 | Docker commands hang with no output            | Docker Desktop is not fully started. Open it and wait for "Engine running"                     |
 | Database connection error                      | Docker Desktop is running, then `docker compose up -d` again                                   |

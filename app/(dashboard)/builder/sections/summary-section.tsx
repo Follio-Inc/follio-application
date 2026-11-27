@@ -40,12 +40,7 @@ export function SummarySection({ profile, onUpdate, embedded }: SummarySectionPr
   );
 
   if (embedded) {
-    return (
-      <div className="space-y-3">
-        <p className="text-sm text-muted-foreground">{descriptionText}</p>
-        {content}
-      </div>
-    );
+    return content;
   }
 
   return (

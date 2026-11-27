@@ -241,12 +241,14 @@ describe('scanTestAttribution on the real tree', () => {
       // facts about a file, and the no-second-runner guarantee is a fact
       // about module source. Both can only be checked by reading them.
       '__tests__/platform-watch.test.ts',
+      // From main: it reads shipped source to pin how a resume is presented.
+      '__tests__/resume-presentation.test.ts',
       // Phase 4's: the two unscoped internal queries it pins are facts about
       // how the service composes its `where` clauses, which only reading the
       // source can check.
       '__tests__/resume-proposals-security.test.ts',
     ]);
-    expect(report.summary.sourceText).toBe(17);
+    expect(report.summary.sourceText).toBe(18);
   });
 
   it('classifies every test exactly once', () => {

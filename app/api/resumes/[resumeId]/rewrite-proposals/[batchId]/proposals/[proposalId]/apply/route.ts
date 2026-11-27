@@ -23,6 +23,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 
 import { handleApiError } from '@/lib/errors';
+import { scheduleResumeRefresh } from '@/lib/resume/schedule-refresh';
 import { applyProposal } from '@/services/resume-proposals.service';
 
 import { authorizeResume, readJsonBody } from '../../../../authorize';
@@ -55,6 +56,14 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     const proposal = await applyProposal(authorized.context.userId, resumeId, batchId, proposalId);
+
+    // Main's convention for every route that changes resume content: the
+    // recruiter glance and the skill read are derived from it and go stale
+    // otherwise. This route writes resume text directly rather than through
+    // `/api/profile`, so it has to say so itself — without this, applying a
+    // suggestion would leave both derived reads describing the old wording
+    // until some unrelated save happened to refresh them.
+    scheduleResumeRefresh(resumeId);
 
     return NextResponse.json({ proposal, applied: true });
   } catch (error) {

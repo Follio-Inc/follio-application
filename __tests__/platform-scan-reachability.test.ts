@@ -884,12 +884,19 @@ describe('drift report integration', { timeout: 30_000 }, () => {
       // `app/api/resumes` claim, the same way the `/agent` subtree is claimed
       // by `resume-agent`. `unmapped` staying at 0 is the assertion that
       // matters: the write path is owned, not merely counted.
-      total: 170,
-      mapped: 136,
+      //
+      // The merge with main added nine product surfaces: the `/match` page and
+      // the jd-align, job-fit, job-requirements, resume-edits (×3),
+      // profile/glance and profile/skill-profile routes. All nine are claimed —
+      // the first seven by the new `job-fit` and `resume-edit-sessions`
+      // entries, the two profile ones by the existing `app/api/profile` claim —
+      // so `unmapped` stays at 0, which is the assertion that matters.
+      total: 179,
+      mapped: 145,
       excluded: 34,
       unmapped: 0,
-      pages: 49,
-      routes: 121,
+      pages: 50,
+      routes: 129,
     });
     expect(pathways?.signal === 'live-qa-pathways' && pathways.summary).toMatchObject({
       total: 9,
@@ -935,7 +942,12 @@ describe('drift report integration', { timeout: 30_000 }, () => {
       // because it asserts on that feature's layout.
       // 102 since Phase 4 also added the integration, security, save-sync and
       // budget-invariant suites, all claimed by `resume-rewrite-loop`.
-      mapped: 102,
+      // 119 after the merge with main, which brought seventeen more suites —
+      // MCP, OAuth, resume editing, job fit, skills — registered against the
+      // features the import graph attributes them to. `unlisted` holding at 2
+      // and `misattributed` at 0 is the assertion that matters: every one of
+      // them is claimed, and claimed by the feature whose code it reaches.
+      mapped: 119,
       // 2 since Phase 2A: `__tests__/agents/runtime.test.ts` and
       // `__tests__/agents/delegation.test.ts`, both of which test the shared
       // lib/agents runtime that no feature claims. Deliberately unlisted —
@@ -946,12 +958,15 @@ describe('drift report integration', { timeout: 30_000 }, () => {
       unresolvable: 0,
     });
     expect(tests?.signal === 'test-attribution' && tests.stale).toEqual([]);
-    expect(aiStages?.signal === 'ai-stages' && aiStages.summary.total).toBe(11);
+    // 17 after the merge: main added jdAlign, jdExpert, jobRequirements,
+    // resumeGlance, resumeSkills and resumeEdit to the token budget.
+    expect(aiStages?.signal === 'ai-stages' && aiStages.summary.total).toBe(17);
     expect(flags?.signal === 'feature-flags' && flags.summary.total).toBe(2);
     // 33 since Phase 3B.1: `ResumeProposalBatch` and `ResumeEditProposal`,
     // declared by `resume-rewrite-loop`, which is the only feature that
     // queries them.
-    expect(prisma?.signal === 'prisma-models' && prisma.summary.total).toBe(33);
+    // 34 after the merge: main added `ResumeEditSession`.
+    expect(prisma?.signal === 'prisma-models' && prisma.summary.total).toBe(34);
   });
 
   it('reports no drift on the current tree', () => {

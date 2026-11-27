@@ -73,9 +73,9 @@ follio-app/
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 26
 - PostgreSQL 15+
-- npm 10+
+- npm 11+
 
 ### Setup
 

@@ -16,9 +16,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { notifyProfileUpdated } from '@/lib/events';
+import { isSubHeadingsEnabled } from '@/lib/section-subheadings';
 import { cn } from '@/lib/utils';
 
-import { SortableCardList } from '../components/sortable-card-list';
+import { SubheadingAddButton, SubheadingGroupedCards } from '../components/subheading-grouped-list';
 
 import type { ProfileSection, PublicationItem, PublicationsSectionContent } from '@/types';
 import type { DateExtractor } from '../components/sortable-card-list';
@@ -180,28 +181,41 @@ export function PublicationsSection({ section, embedded }: PublicationsSectionPr
   };
 
   const addButton = (
-    <Button onClick={() => handleOpenDialog()} size={embedded ? 'sm' : 'default'} className="gap-2">
-      <Plus className="h-4 w-4" />
-      Add Publication
-    </Button>
+    <div className="flex flex-wrap items-center gap-1">
+      {embedded ? (
+        <button type="button" onClick={() => handleOpenDialog()} className="builder-add-btn">
+          <Plus className="h-3.5 w-3.5" />
+          Add publication
+        </button>
+      ) : (
+        <Button onClick={() => handleOpenDialog()} className="gap-2">
+          <Plus className="h-4 w-4" />
+          Add Publication
+        </Button>
+      )}
+      <SubheadingAddButton section={section} disabled={isLoading} />
+    </div>
   );
 
   const publicationsList = (
     <div className={cn(!embedded && 'rounded-xl bg-muted/40 p-4')}>
-      {items.length === 0 ? (
-        <div className="rounded-lg border border-dashed p-8 text-center">
-          <BookOpen className="mx-auto h-12 w-12 text-muted-foreground/50" />
-          <h3 className="mt-4 font-medium">No publications added yet</h3>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Add your research papers, articles, and other publications
-          </p>
-          <Button onClick={() => handleOpenDialog()} className="mt-4 gap-2">
-            <Plus className="h-4 w-4" />
-            Add Publication
-          </Button>
-        </div>
+      {items.length === 0 && !isSubHeadingsEnabled(section?.subHeadings) ? (
+        embedded ? null : (
+          <div className="rounded-lg border border-dashed p-8 text-center">
+            <BookOpen className="mx-auto h-12 w-12 text-muted-foreground/50" />
+            <h3 className="mt-4 font-medium">No publications added yet</h3>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Add your research papers, articles, and other publications
+            </p>
+            <Button onClick={() => handleOpenDialog()} className="mt-4 gap-2">
+              <Plus className="h-4 w-4" />
+              Add Publication
+            </Button>
+          </div>
+        )
       ) : (
-        <SortableCardList
+        <SubheadingGroupedCards
+          section={section}
           items={items}
           onReorder={handleReorder}
           dateExtractor={publicationDateExtractor}
@@ -209,13 +223,10 @@ export function PublicationsSection({ section, embedded }: PublicationsSectionPr
           renderItem={(item) => (
             <div
               className={cn(
-                'group flex items-start gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50',
+                'group flex items-start gap-3 rounded-xl px-1 py-2.5 transition-colors hover:bg-foreground/[0.04]',
                 item.isVisible === false && 'opacity-50'
               )}
             >
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                <BookOpen className="h-5 w-5 text-primary" />
-              </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-start justify-between gap-2">
                   <div>
@@ -229,7 +240,7 @@ export function PublicationsSection({ section, embedded }: PublicationsSectionPr
                       </p>
                     )}
                   </div>
-                  <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                  <div className="flex items-center gap-0.5">
                     <Button
                       variant="ghost"
                       size="icon"
@@ -397,13 +408,8 @@ export function PublicationsSection({ section, embedded }: PublicationsSectionPr
   if (embedded) {
     return (
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">
-            Add papers, articles, books, and other publications
-          </p>
-          {addButton}
-        </div>
         {publicationsList}
+        {addButton}
         {dialog}
       </div>
     );

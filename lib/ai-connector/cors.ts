@@ -1,14 +1,12 @@
 import { NextResponse } from 'next/server';
 
-import { absoluteUrl } from '@/lib/utils';
-
-import { MCP_PATH } from './constants';
+import { oauthIssuer } from './oauth-metadata';
 
 export const MCP_CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
   'Access-Control-Allow-Headers':
-    'Authorization, Content-Type, MCP-Protocol-Version, MCP-Session-Id, Last-Event-ID',
+    'Authorization, Content-Type, MCP-Protocol-Version, Mcp-Method, Mcp-Name, MCP-Session-Id, Last-Event-ID',
   'Access-Control-Expose-Headers': 'WWW-Authenticate, MCP-Session-Id, MCP-Protocol-Version',
   'Access-Control-Max-Age': '86400',
 };
@@ -26,16 +24,12 @@ export function corsEmpty(status = 204) {
   return new NextResponse(null, { status, headers: MCP_CORS_HEADERS });
 }
 
-export function unauthorizedMcpResponse(message = 'Authentication required') {
-  const resourceMetadata = absoluteUrl('/.well-known/oauth-protected-resource');
+export function unauthorizedMcpResponse(message = 'Authentication required', origin?: string) {
+  const resourceMetadata = `${oauthIssuer(origin)}/.well-known/oauth-protected-resource`;
   const headers = new Headers(MCP_CORS_HEADERS);
   headers.set(
     'WWW-Authenticate',
     `Bearer realm="mcp", resource_metadata="${resourceMetadata}", error="invalid_token", error_description="${message}"`
   );
   return corsJson({ error: 'unauthorized', error_description: message }, { status: 401, headers });
-}
-
-export function mcpResourceUrl(): string {
-  return absoluteUrl(MCP_PATH);
 }

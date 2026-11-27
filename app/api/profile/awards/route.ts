@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { AppError, ErrorCode, handleApiError } from '@/lib/errors';
+import { scheduleResumeRefresh } from '@/lib/resume/schedule-refresh';
 import { AwardSchema } from '@/lib/validations';
 
 // GET /api/profile/awards - Get all awards
@@ -64,6 +65,8 @@ export async function POST(request: NextRequest) {
         source: 'MANUAL',
       },
     });
+
+    scheduleResumeRefresh(profileId);
 
     return NextResponse.json({ award }, { status: 201 });
   } catch (error) {

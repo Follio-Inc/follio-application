@@ -90,6 +90,30 @@ export function operationFromProject(input: ProposeProjectInput): DraftOperation
   };
 }
 
+type SummaryOperation = Extract<DraftOperation, { type: 'update_summary' }>;
+
+/**
+ * Adds a proposal to a draft's operations. Roles and projects add up, but a draft holds at
+ * most one headline/summary update: a newer proposal replaces the fields it sets
+ * headline will stay the same though, unless explicity edited/replaced
+ */
+export function addOperation(
+  operations: DraftOperation[],
+  operation: DraftOperation
+): DraftOperation[] {
+  if (operation.type !== 'update_summary') return [...operations, operation];
+
+  const earlier = operations.filter((op): op is SummaryOperation => op.type === 'update_summary');
+  if (earlier.length === 0) return [...operations, operation];
+
+  const merged: SummaryOperation = Object.assign({}, ...earlier, operation);
+  const index = operations.indexOf(earlier[0]);
+  return operations.flatMap<DraftOperation>((op, i) => {
+    if (i === index) return [merged];
+    return op.type === 'update_summary' ? [] : [op];
+  });
+}
+
 export function describeOperation(operation: DraftOperation): string {
   switch (operation.type) {
     case 'update_summary':

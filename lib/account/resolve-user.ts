@@ -11,6 +11,7 @@ import { clerkClient } from '@clerk/nextjs/server';
 import type { MainPurpose, Profile, User } from '@prisma/client';
 
 import { deleteLocalAccountData } from '@/lib/account/delete-account';
+import { canPurgeOrphanedAccount } from '@/lib/database-target';
 import { db } from '@/lib/db';
 
 export class EmailConflictError extends Error {
@@ -23,6 +24,26 @@ export class EmailConflictError extends Error {
       'This email is already associated with another account. Please sign in with your original account or use a different email.'
     );
     this.name = 'EmailConflictError';
+    this.email = email;
+    this.existingUserId = existingUserId;
+  }
+}
+
+/**
+ * The email already has a row, but this process must not delete it.
+ * A Clerk 404 here usually means localhost is signed into a different Clerk
+ * app than the one that created the row, while both share one database.
+ */
+export class RemoteDatabaseProtectedError extends Error {
+  readonly code = 'REMOTE_DATABASE_PROTECTED' as const;
+  readonly email: string;
+  readonly existingUserId: string;
+
+  constructor(email: string, existingUserId: string) {
+    super(
+      'This email already has a profile in this database. Local development cannot delete it. Use the local Docker database, not production.'
+    );
+    this.name = 'RemoteDatabaseProtectedError';
     this.email = email;
     this.existingUserId = existingUserId;
   }
@@ -105,6 +126,22 @@ export async function getOrCreateUserForClerk(
         clerkId
       );
       throw new EmailConflictError(email, existingByEmail.id);
+    }
+
+    if (
+      !canPurgeOrphanedAccount({
+        nodeEnv: process.env.NODE_ENV,
+        databaseUrl: process.env.DATABASE_URL,
+      })
+    ) {
+      console.error(
+        '[getOrCreateUserForClerk] Refusing to delete user',
+        existingByEmail.id,
+        'for email',
+        email,
+        'because this process is pointed at a remote database'
+      );
+      throw new RemoteDatabaseProtectedError(email, existingByEmail.id);
     }
 
     console.warn(

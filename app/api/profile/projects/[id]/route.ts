@@ -3,7 +3,13 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
-import { normalizeCurrentDates, ProjectSchema } from '@/lib/validations';
+import { scheduleResumeRefresh } from '@/lib/resume/schedule-refresh';
+import {
+  firstValidationError,
+  normalizeCurrentDates,
+  PROJECT_FIELD_LABELS,
+  ProjectSchema,
+} from '@/lib/validations';
 
 /**
  * PATCH /api/profile/projects/[id]
@@ -23,7 +29,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     if (!validatedData.success) {
       return NextResponse.json(
-        { error: 'Validation failed', details: validatedData.error.flatten() },
+        {
+          error: firstValidationError(validatedData.error, PROJECT_FIELD_LABELS),
+          details: validatedData.error.flatten(),
+        },
         { status: 400 }
       );
     }
@@ -53,6 +62,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         updatedAt: new Date(),
       },
     });
+
+    scheduleResumeRefresh(profileId);
 
     return NextResponse.json({ success: true, project });
   } catch (error) {
@@ -99,6 +110,8 @@ export async function DELETE(
     await db.project.delete({
       where: { id },
     });
+
+    scheduleResumeRefresh(profileId);
 
     return NextResponse.json({ success: true });
   } catch (error) {

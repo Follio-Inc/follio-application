@@ -30,6 +30,8 @@ const loadBatchMock = vi.fn();
 const loadProposalMock = vi.fn();
 const decideProposalMock = vi.fn();
 const applyProposalMock = vi.fn();
+const scheduleResumeRefreshMock = vi.fn();
+const scheduleSkillProfileRefreshMock = vi.fn();
 
 vi.mock('@clerk/nextjs/server', () => ({ auth: () => authMock() }));
 
@@ -56,6 +58,21 @@ vi.mock('@/services/agents/resume/orchestrator.agent', async () => {
     runResumeOrchestrator: (...args: unknown[]) => runResumeOrchestratorMock(...args),
   };
 });
+
+/**
+ * The route schedules a background refresh of the derived recruiter glance and
+ * skill read after a successful apply, the same way every other route that
+ * changes resume content does.
+ *
+ * Mocked here because this suite is about the route's gate, not about that
+ * refresh: left real, it starts detached dynamic imports that outlive the
+ * test and reject into Vitest's teardown. The call itself is still asserted
+ * below, so the production behaviour stays covered rather than mocked away.
+ */
+vi.mock('@/lib/resume/schedule-refresh', () => ({
+  scheduleResumeRefresh: (...args: unknown[]) => scheduleResumeRefreshMock(...args),
+  scheduleSkillProfileRefresh: (...args: unknown[]) => scheduleSkillProfileRefreshMock(...args),
+}));
 
 vi.mock('@/services/resume-proposals.service', () => ({
   persistProposalBatch: (...args: unknown[]) => persistProposalBatchMock(...args),
@@ -272,6 +289,55 @@ describe('the apply endpoint accepts no content whatsoever', () => {
     expect(applyProposalMock).toHaveBeenCalledTimes(2);
     // Ids only. There is no parameter through which text could arrive.
     expect(applyProposalMock).toHaveBeenCalledWith(USER_ID, RESUME_ID, BATCH_ID, PROPOSAL_ID);
+  });
+});
+
+// ============================================================================
+// DERIVED READS AFTER A WRITE
+// ============================================================================
+
+describe('applying refreshes what is derived from the resume', () => {
+  it('schedules the refresh once the server confirms the write', async () => {
+    // Main's convention for every route that changes resume content: the
+    // recruiter glance and the skill read are derived from it and go stale
+    // otherwise. This route writes resume text without going through
+    // /api/profile, so it has to say so itself.
+    const response = await apply(request({}), proposalParams);
+
+    expect(response.status).toBe(200);
+    expect(scheduleResumeRefreshMock).toHaveBeenCalledTimes(1);
+    expect(scheduleResumeRefreshMock).toHaveBeenCalledWith(RESUME_ID);
+  });
+
+  it('does not schedule one when the apply was refused', async () => {
+    applyProposalMock.mockRejectedValue(
+      Errors.conflict('Your resume changed after this suggestion was written.')
+    );
+
+    const response = await apply(request({}), proposalParams);
+
+    expect(response.status).toBe(409);
+    // Nothing was written, so nothing derived from it has moved.
+    expect(scheduleResumeRefreshMock).not.toHaveBeenCalled();
+  });
+
+  it('does not schedule one when the body was rejected', async () => {
+    const response = await apply(request({ proposedText: 'smuggled' }), proposalParams);
+
+    expect(response.status).toBe(400);
+    expect(applyProposalMock).not.toHaveBeenCalled();
+    expect(scheduleResumeRefreshMock).not.toHaveBeenCalled();
+  });
+
+  it('does not schedule one for a read or a decision', async () => {
+    // Only a write to resume text should move the derived reads.
+    await listBatches(getRequest(), resumeParams);
+    await getBatch(getRequest(), batchParams);
+    await getProposal(getRequest(), proposalParams);
+    await decide(request({ decision: 'approve' }), proposalParams);
+    await decide(request({ decision: 'reject' }), proposalParams);
+
+    expect(scheduleResumeRefreshMock).not.toHaveBeenCalled();
   });
 });
 

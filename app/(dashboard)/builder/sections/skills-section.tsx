@@ -241,14 +241,7 @@ export function SkillsSection({
   );
 
   if (embedded) {
-    return (
-      <div className="space-y-3">
-        <p className="text-sm text-muted-foreground">
-          Optional categories with a full text editor — bold, bullets, and justified by default.
-        </p>
-        {skillsContent}
-      </div>
-    );
+    return skillsContent;
   }
 
   return (

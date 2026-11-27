@@ -980,13 +980,25 @@ describe('the Turbopack limitation is contained and disclosed', () => {
   it('ships a webpack dev script without replacing the default one (item 23a)', () => {
     const pkg = JSON.parse(read('package.json')) as { scripts: Record<string, string> };
 
+    // Asserted by substance rather than by exact string. Main later put
+    // `npm run build:mcp-apps &&` in front of `dev`, `dev:webpack` and the
+    // build scripts, which says nothing about item 23a — pinning the whole
+    // command would make this test fail for an unrelated reason, which is
+    // what it did on the merge.
+    //
     // The documented fallback: `next dev` with no --turbo, running the whole
     // app rather than one route.
-    expect(pkg.scripts['dev:webpack']).toBe('next dev');
-    // And the repository's default dev command is untouched.
-    expect(pkg.scripts.dev).toBe('next dev --turbo');
+    expect(pkg.scripts['dev:webpack']).toContain('next dev');
+    expect(pkg.scripts['dev:webpack']).not.toContain('--turbo');
+    // And the repository's default dev command is still the Turbopack one.
+    expect(pkg.scripts.dev).toContain('next dev --turbo');
+    // The fallback does not skip setup the default does, or it would run a
+    // differently-built app and stop being a like-for-like comparison.
+    expect(pkg.scripts['dev:webpack']).toContain('build:mcp-apps');
+    expect(pkg.scripts.dev).toContain('build:mcp-apps');
     // Build and production are not involved in the workaround at all.
-    expect(pkg.scripts['build:ci']).toBe('prisma generate && next build');
+    expect(pkg.scripts['build:ci']).toContain('next build');
+    expect(pkg.scripts['build:ci']).not.toContain('--turbo');
     expect(pkg.scripts.start).toBe('next start');
   });
 

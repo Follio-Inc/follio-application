@@ -58,6 +58,18 @@ const MAX_TOKENS = {
   resumeParse: 4096,
   /** Distill résumé copy into Follio headline + about */
   follioVoice: 800,
+  /** Recruiter glance: short structured sticky notes */
+  resumeGlance: 1800,
+  /** Resume ↔ job description evidence alignment */
+  jdAlign: 2400,
+  /** Recruiter-style holistic resume ↔ job read */
+  jdExpert: 900,
+  /** What a job posting asks for, without company and legal text */
+  jobRequirements: 2000,
+  /** Skills each resume line names or shows, saved after edits */
+  resumeSkills: 3000,
+  /** AI resume edits: rewrites for one section per call */
+  resumeEdit: 2000,
 } as const;
 
 export type AITaskType = 'extraction' | 'strategy' | 'creative';
@@ -296,6 +308,12 @@ export function getStageConfig(stage: PipelineStage): {
     agentTurn: 'strategy',
     resumeParse: 'extraction',
     follioVoice: 'strategy',
+    resumeGlance: 'strategy',
+    jdAlign: 'strategy',
+    jdExpert: 'strategy',
+    jobRequirements: 'extraction',
+    resumeSkills: 'extraction',
+    resumeEdit: 'strategy',
   };
 
   const taskType = stageTaskMap[stage];

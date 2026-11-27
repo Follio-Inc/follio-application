@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { parseFlexibleDate, requireFlexibleDate } from '@/lib/ai-connector/dates';
 import {
+  addOperation,
   describeOperation,
   operationFromExperience,
   operationFromProject,
@@ -16,9 +17,10 @@ import { isAllowedRedirectUri, redirectUriMatches } from '@/lib/ai-connector/oau
 import { toConnectorProfileView } from '@/lib/ai-connector/profile-view';
 import { verifyPkceS256 } from '@/lib/ai-connector/pkce';
 import { hasScope, parseScopeString } from '@/lib/ai-connector/scopes';
-import { handleMcpMessage } from '@/lib/mcp/protocol';
+import type { McpAuthContext, McpToolHandlers } from '@/lib/mcp/server';
 import { MCP_TOOLS } from '@/lib/mcp/tools';
-import type { McpAuthContext, McpToolHandlers } from '@/lib/mcp/protocol';
+
+import { createTestMcp } from './utils/mcp-client';
 
 describe('PKCE S256', () => {
   it('accepts a matching verifier', () => {
@@ -89,6 +91,42 @@ describe('draft operations', () => {
 
   it('requires company, role, and start date', () => {
     expect(ProposeExperienceSchema.safeParse({ company: 'Acme' }).success).toBe(false);
+  });
+
+  it('replaces an earlier summary proposal instead of adding a second one', () => {
+    const operations = addOperation(
+      [operationFromSummary({ summary: 'Long version' }), operationFromProject({ title: 'A' })],
+      operationFromSummary({ summary: 'Short version' })
+    );
+    expect(operations).toEqual([
+      { type: 'update_summary', summary: 'Short version' },
+      { type: 'add_project', title: 'A' },
+    ]);
+  });
+
+  it('keeps an earlier headline when only the summary is revised', () => {
+    const operations = addOperation(
+      [operationFromSummary({ headline: 'HR Ops', summary: 'Long version' })],
+      operationFromSummary({ summary: 'Short version' })
+    );
+    expect(operations).toEqual([
+      { type: 'update_summary', headline: 'HR Ops', summary: 'Short version' },
+    ]);
+  });
+
+  it('merges a draft that already holds two summary updates into one', () => {
+    const operations = addOperation(
+      [operationFromSummary({ summary: 'One' }), operationFromSummary({ summary: 'Two' })],
+      operationFromSummary({ headline: 'New headline' })
+    );
+    expect(operations).toEqual([
+      { type: 'update_summary', summary: 'Two', headline: 'New headline' },
+    ]);
+  });
+
+  it('still adds up roles and projects', () => {
+    const first = addOperation([], operationFromProject({ title: 'A' }));
+    expect(addOperation(first, operationFromProject({ title: 'B' }))).toHaveLength(2);
   });
 
   it('parses stored operations and ignores junk', () => {
@@ -162,110 +200,199 @@ describe('oauth redirect URIs', () => {
 describe('MCP protocol', () => {
   const ctx: McpAuthContext = {
     userId: 'user_1',
+    clerkId: 'clerk_1',
     scopes: ['follio.read', 'follio.draft', 'follio.apply'],
     clientLabel: 'Claude',
   };
 
   const handlers: McpToolHandlers = {
-    getProfile: async () => ({ handle: 'alex' }),
+    listResumes: async () => ({ resumes: [{ resumeId: 'p1', title: 'Product PM' }] }),
+    getResume: async () => ({ handle: 'alex' }),
+    createResume: async () => ({ resumeId: 'p2', title: 'New' }),
+    cloneResume: async () => ({ resumeId: 'p3', title: 'Stripe PM' }),
+    openInBuilder: async () => ({ builderUrl: 'https://follio.app/builder' }),
+    renameResume: async (_ctx, input) => ({ renamed: true, input }),
+    deleteResumes: async (_ctx, input) => ({ deleted: [], input }),
     listDrafts: async () => [],
     proposeSummary: async () => ({ draftId: 'd1' }),
     proposeExperience: async () => ({ draftId: 'd1' }),
     proposeProject: async () => ({ draftId: 'd1' }),
     applyDraft: async () => ({ status: 'APPLIED' }),
     discardDraft: async () => ({ status: 'DISCARDED' }),
+    getResumeLines: async () => ({ headline: { ref: 'H', text: 'Designer' } }),
+    suggestResumeEdits: async (_ctx, input) => ({ saved: true, input }),
+    applyResumeEdits: async () => ({ message: 'Applied 1 change' }),
+    undoResumeEdits: async () => ({ message: 'Undid 1 change' }),
+    listResumeEdits: async () => ({ sessions: [] }),
   };
 
-  it('lists the core Follio tools', () => {
+  // Through the real SDK handler, as /api/mcp serves it after the token check.
+  const { callTool } = createTestMcp(handlers, ctx);
+
+  it('lists the Follio tools', () => {
     expect(MCP_TOOLS.map((tool) => tool.name)).toEqual([
-      'get_profile',
+      'list_resumes',
+      'get_resume',
+      'create_resume',
+      'clone_resume',
+      'open_in_builder',
+      'rename_resume',
+      'delete_resumes',
       'list_drafts',
       'propose_summary',
       'propose_experience',
       'propose_project',
       'apply_draft',
       'discard_draft',
+      'get_resume_lines',
+      'suggest_resume_edits',
+      'apply_resume_edits',
+      'undo_resume_edits',
+      'list_resume_edits',
     ]);
   });
 
-  it('handles initialize', async () => {
-    const response = await handleMcpMessage(
-      { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-03-26' } },
-      ctx,
-      handlers
-    );
-    expect(response).toMatchObject({
-      jsonrpc: '2.0',
-      id: 1,
-      result: {
-        protocolVersion: '2025-03-26',
-        serverInfo: { name: 'follio' },
-      },
-    });
-  });
-
-  it('returns no body for initialized notifications', async () => {
-    const response = await handleMcpMessage(
-      { jsonrpc: '2.0', method: 'notifications/initialized' },
-      ctx,
-      handlers
-    );
-    expect(response).toBeNull();
-  });
-
-  it('calls get_profile', async () => {
-    const response = await handleMcpMessage(
-      {
-        jsonrpc: '2.0',
-        id: 2,
-        method: 'tools/call',
-        params: { name: 'get_profile', arguments: {} },
-      },
-      ctx,
-      handlers
-    );
-    expect(response && 'result' in response).toBe(true);
-    if (response && 'result' in response) {
-      const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
-      expect(result.isError).toBeUndefined();
-      expect(result.content[0].text).toContain('alex');
+  it('requires resumeId on every tool except list, create, and delete', () => {
+    for (const tool of MCP_TOOLS) {
+      // delete_resumes takes a list of resumes, each with its own resumeId.
+      if (['list_resumes', 'create_resume', 'delete_resumes'].includes(tool.name)) continue;
+      expect(tool.inputSchema.required).toEqual(expect.arrayContaining(['resumeId']));
     }
   });
 
-  it('blocks apply_draft without the apply scope', async () => {
-    const response = await handleMcpMessage(
-      {
-        jsonrpc: '2.0',
-        id: 3,
-        method: 'tools/call',
-        params: { name: 'apply_draft', arguments: { draftId: 'd1' } },
-      },
-      { ...ctx, scopes: ['follio.read', 'follio.draft'] },
-      handlers
-    );
-    expect(response && 'result' in response).toBe(true);
-    if (response && 'result' in response) {
-      const result = response.result as { isError?: boolean; content: Array<{ text: string }> };
+  it('passes valid line edits through to the handler', async () => {
+    const result = await callTool('suggest_resume_edits', {
+      resumeId: 'p1',
+      request: 'Tighten my bullets',
+      changes: [{ ref: 'E1.2', text: 'Cut deploy time 40% with CI caching' }],
+    });
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain('E1.2');
+  });
+
+  it('rejects line edits that do not point at a resume line', async () => {
+    const result = await callTool('suggest_resume_edits', {
+      resumeId: 'p1',
+      request: 'Tighten my bullets',
+      changes: [{ ref: 'experience 1', text: 'Something' }],
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('get_resume_lines');
+  });
+
+  it('needs the apply permission to write or undo line edits', async () => {
+    const limited = { ...ctx, scopes: ['follio.read', 'follio.draft'] };
+    for (const name of ['apply_resume_edits', 'undo_resume_edits']) {
+      const result = await callTool(name, { resumeId: 'p1', sessionId: 's1' }, limited);
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain('follio.apply');
     }
   });
 
-  it('validates propose_experience arguments', async () => {
-    const response = await handleMcpMessage(
-      {
-        jsonrpc: '2.0',
-        id: 4,
-        method: 'tools/call',
-        params: { name: 'propose_experience', arguments: { company: 'Acme' } },
-      },
-      ctx,
-      handlers
+  // initialize and notifications are covered in mcp-protocol.test.ts.
+
+  it('creates a blank resume without resumeId', async () => {
+    const result = await callTool('create_resume', { title: 'Stripe PM' });
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain('p2');
+  });
+
+  it('refuses to clone without a source resumeId', async () => {
+    const result = await callTool('clone_resume', { title: 'Copy' });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('list_resumes');
+  });
+
+  it('opens a resume in the builder and returns the link', async () => {
+    const result = await callTool('open_in_builder', { resumeId: 'p1' });
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain('/builder');
+  });
+
+  it('refuses to open in the builder without a resumeId', async () => {
+    const result = await callTool('open_in_builder', {});
+    expect(result.isError).toBe(true);
+  });
+
+  it('renames a resume when given resumeId and a title', async () => {
+    const result = await callTool('rename_resume', { resumeId: 'p1', title: 'Stripe PM' });
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain('Stripe PM');
+  });
+
+  it('refuses to rename without a new title', async () => {
+    const result = await callTool('rename_resume', { resumeId: 'p1' });
+    expect(result.isError).toBe(true);
+  });
+
+  it('needs the apply permission to rename a resume', async () => {
+    const limited = { ...ctx, scopes: ['follio.read', 'follio.draft'] };
+    const result = await callTool('rename_resume', { resumeId: 'p1', title: 'New' }, limited);
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('follio.apply');
+  });
+
+  it('needs the apply permission to delete resumes', async () => {
+    const limited = { ...ctx, scopes: ['follio.read', 'follio.draft'] };
+    const result = await callTool(
+      'delete_resumes',
+      { resumes: [{ resumeId: 'p1', confirmTitle: 'Product PM' }] },
+      limited
     );
-    expect(response && 'result' in response).toBe(true);
-    if (response && 'result' in response) {
-      const result = response.result as { isError?: boolean };
-      expect(result.isError).toBe(true);
-    }
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('follio.apply');
+  });
+
+  it('refuses to delete a resume without its title', async () => {
+    const result = await callTool('delete_resumes', { resumes: [{ resumeId: 'p1' }] });
+    expect(result.isError).toBe(true);
+  });
+
+  it('marks delete_resumes as destructive', () => {
+    const tool = MCP_TOOLS.find((t) => t.name === 'delete_resumes');
+    expect(tool?.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true });
+    expect(tool?.requiredScope).toBe('follio.apply');
+  });
+
+  it('refuses get_resume without a resumeId', async () => {
+    const result = await callTool('get_resume', {});
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('list_resumes');
+  });
+
+  it('calls get_resume', async () => {
+    const result = await callTool('get_resume', { resumeId: 'p1' });
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain('alex');
+  });
+
+  it('blocks apply_draft without the apply scope', async () => {
+    const result = await callTool(
+      'apply_draft',
+      { resumeId: 'p1', draftId: 'd1' },
+      { ...ctx, scopes: ['follio.read', 'follio.draft'] }
+    );
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('follio.apply');
+  });
+
+  it('validates propose_experience arguments', async () => {
+    const result = await callTool('propose_experience', { resumeId: 'p1', company: 'Acme' });
+    expect(result.isError).toBe(true);
+  });
+
+  it('turns a handler error into a tool error', async () => {
+    const failing = createTestMcp(
+      {
+        ...handlers,
+        getResume: async () => {
+          throw new Error('Resume not found');
+        },
+      },
+      ctx
+    );
+    const result = await failing.callTool('get_resume', { resumeId: 'p1' });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toBe('Resume not found');
   });
 });

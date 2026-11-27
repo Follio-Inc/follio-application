@@ -15,6 +15,7 @@ import { db } from '@/lib/db';
 import { interactiveTransactionOptions } from '@/lib/db-transaction';
 import { AppError, handleApiError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { scheduleResumeRefresh } from '@/lib/resume/schedule-refresh';
 import { parseDateFlexible } from '@/lib/utils';
 import {
   importResumeWithAI,
@@ -300,6 +301,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     await replaceImportedResumeData(profile.id, result.data);
+    scheduleResumeRefresh(profile.id);
 
     importLogger.info('Resume import completed', {
       profileId: profile.id,

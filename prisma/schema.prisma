@@ -27,6 +27,9 @@ model User {
   aiConnectorAuthCodes  AiConnectorAuthCode[]
   aiConnectorTokens     AiConnectorToken[]
   aiEditDrafts          AiEditDraft[]
+  /// main: the AI resume-editing session workflow.
+  resumeEditSessions    ResumeEditSession[]
+  /// multi-agent: verified rewrite proposals and the batches they came in.
   resumeProposalBatches ResumeProposalBatch[]
   resumeEditProposals   ResumeEditProposal[]
 
@@ -100,6 +103,10 @@ model Profile {
   avatarUrlSource           DataSource             @default(MANUAL)
   resumeShowPhoto           Boolean                @default(false)
   resumeDesign              Json?
+  /// Recruiter glance written by the highlights prompt. Opening Highlights only reads this.
+  resumeGlance              Json?
+  /// Skills the model read from each resume line, with the line text it read. Rewritten after saves.
+  resumeSkillProfile        Json?
   location                  String?
   locationSource            DataSource             @default(MANUAL)
   unlistedKey               String?                @unique @default(cuid())
@@ -130,6 +137,7 @@ model Profile {
   agentRuns                 AgentRun[]
   linkedCoverLetters        CoverLetter[]
   aiEditDrafts              AiEditDraft[]
+  resumeEditSessions        ResumeEditSession[]
   resumeProposalBatches     ResumeProposalBatch[]
   resumeEditProposals       ResumeEditProposal[]
 
@@ -180,6 +188,13 @@ model ProfileSection {
   isVisible     Boolean           @default(true)
   customContent Json?
   contentType   CustomContentType @default(STRUCTURED)
+  /// Optional small-font groups inside the section (Sub-heading 1 / Sub-heading 2 by default).
+  /// Null or empty = off. Groups store entry ids so items can move within or across groups.
+  subHeadings   Json?
+  /// Consecutive same-organization grouping on the resume.
+  /// Null = off. "REPEATS" = only orgs with 2+ consecutive entries.
+  /// "ALL" = every entry uses org-on-top + vertical line (different orgs stay separate).
+  entryGrouping String?
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
   profile       Profile           @relation(fields: [profileId], references: [id], onDelete: Cascade)
@@ -228,27 +243,31 @@ model Link {
 }
 
 model WorkExperience {
-  id             String          @id @default(cuid())
-  profileId      String
-  company        String
-  companyUrl     String?
-  companyLogo    String?
-  role           String
-  location       String?
-  locationType   LocationType?
-  employmentType EmploymentType?
-  startDate      DateTime
-  endDate        DateTime?
-  isCurrent      Boolean         @default(false)
-  bullets        String[]
-  bulletsHtml    String? /// Complete rich-text editor HTML for bullets (preserves alignment, bullet style, etc.)
-  metrics        Json?
-  isVisible      Boolean         @default(true)
-  source         DataSource      @default(MANUAL)
-  sortOrder      Int             @default(0)
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  profile        Profile         @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  id              String          @id @default(cuid())
+  profileId       String
+  company         String
+  companyUrl      String?
+  companyLogo     String?
+  role            String
+  location        String?
+  locationType    LocationType?
+  employmentType  EmploymentType?
+  /// Capsule tags beside the role heading (Full Time, Internship, …).
+  headingTags     Json            @default("[]")
+  /// Per-role tenure tag beside the company subheading. Hidden by default.
+  durationVisible Boolean         @default(false)
+  startDate       DateTime
+  endDate         DateTime?
+  isCurrent       Boolean         @default(false)
+  bullets         String[]
+  bulletsHtml     String? /// Complete rich-text editor HTML for bullets (preserves alignment, bullet style, etc.)
+  metrics         Json?
+  isVisible       Boolean         @default(true)
+  source          DataSource      @default(MANUAL)
+  sortOrder       Int             @default(0)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  profile         Profile         @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
   @@index([profileId])
   @@index([startDate])
@@ -263,6 +282,10 @@ model Education {
   degree          String?
   fieldOfStudy    String?
   location        String?
+  /// Capsule tags beside the degree heading (Online, Pursuing, …).
+  headingTags     Json       @default("[]")
+  /// Per-school tenure tag beside the institution subheading. Hidden by default.
+  durationVisible Boolean    @default(false)
   startDate       DateTime?
   endDate         DateTime?
   isCurrent       Boolean    @default(false)
@@ -328,6 +351,8 @@ model Project {
   images            String[]
   techStack         String[]
   highlights        String[]
+  /// Capsule tags beside the project title (Open Source, Team, …).
+  headingTags       Json       @default("[]")
   // GitHub-specific fields
   githubStars       Int?
   githubForks       Int?
@@ -1021,6 +1046,31 @@ model ResumeProposalBatch {
   proposals        ResumeEditProposal[]
 
   @@unique([profileId, idempotencyKey])
+  @@index([userId, createdAt])
+  @@index([profileId, createdAt])
+}
+
+/// One AI edit request from the builder ("tailor to this job", "add numbers")
+/// and the changes it proposed. Applied changes keep what they replaced so
+/// they can be undone. Shapes live in lib/resume-edit/types.ts.
+///
+/// Separate from ResumeProposalBatch on purpose: this is main's single-shot
+/// edit workflow, that one is the multi-agent verified-rewrite workflow. They
+/// write through different code paths and neither supersedes the other.
+model ResumeEditSession {
+  id             String    @id @default(cuid())
+  userId         String
+  profileId      String
+  brief          Json
+  changes        Json
+  droppedCount   Int       @default(0)
+  failedSections String[]
+  appliedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profile        Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
   @@index([userId, createdAt])
   @@index([profileId, createdAt])
 }

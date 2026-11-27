@@ -29,6 +29,8 @@ interface PreviewFloatingActionsProps {
    * dialogs.
    */
   kebabContainer?: HTMLElement | null;
+  /** Public page for the presentation currently open in the preview. */
+  visitorHref?: string;
   className?: string;
 }
 
@@ -51,6 +53,7 @@ export function PreviewFloatingActions({
   onZoom,
   resumeRef,
   kebabContainer,
+  visitorHref,
   className,
 }: PreviewFloatingActionsProps) {
   const profile = useBuilderStore((s) => s.draftProfile);
@@ -64,7 +67,7 @@ export function PreviewFloatingActions({
   const { copied, copy: handleCopyText } = useCopyElementText(resumeRef);
 
   const handleViewExternal = () => {
-    window.open(`/u/${handle}/resume`, '_blank', 'noopener,noreferrer');
+    window.open(visitorHref ?? `/u/${handle}/resume`, '_blank', 'noopener,noreferrer');
   };
 
   // Single source of truth for action descriptors so the floating
@@ -103,7 +106,7 @@ export function PreviewFloatingActions({
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [copied, handleCopyText, onZoom]
+    [copied, handleCopyText, onZoom, visitorHref, handle]
   );
 
   return (

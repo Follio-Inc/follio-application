@@ -3,7 +3,6 @@
 import { Check, Eye, EyeOff } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { Button } from '@/components/ui/button';
 import { notifyProfileUpdated } from '@/lib/events';
 import {
   calculateTotalExperienceMonths,
@@ -93,6 +92,7 @@ export function TotalExperienceField({
   const persistSeq = useRef(0);
   const visibilitySeq = useRef(0);
   const unitsSeq = useRef(0);
+  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const visibleRef = useRef(isVisible);
   visibleRef.current = isVisible;
   const unitsRef = useRef(units);
@@ -120,6 +120,9 @@ export function TotalExperienceField({
     if (next === current) {
       setYears(String(normalizedYears));
       setMonths(String(normalizedMonths));
+      // Preview updates draft immediately; keep saved in sync so the header
+      // does not sit on "Unsaved changes" with no save control.
+      onPersisted(current);
       return;
     }
 
@@ -148,6 +151,29 @@ export function TotalExperienceField({
     }
   };
 
+  const flushPersist = (nextYears = years, nextMonths = months) => {
+    if (persistTimerRef.current) {
+      clearTimeout(persistTimerRef.current);
+      persistTimerRef.current = null;
+    }
+    void persistValue(nextYears, nextMonths);
+  };
+
+  const schedulePersist = (nextYears: string, nextMonths: string) => {
+    if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+    persistTimerRef.current = setTimeout(() => {
+      persistTimerRef.current = null;
+      void persistValue(nextYears, nextMonths);
+    }, 400);
+  };
+
+  useEffect(
+    () => () => {
+      if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+    },
+    []
+  );
+
   const updateValue = (kind: 'years' | 'months', value: string) => {
     const numericValue = value.replace(/\D/g, '');
     const nextYears = kind === 'years' ? numericValue : years;
@@ -157,6 +183,7 @@ export function TotalExperienceField({
 
     const raw = formatExperienceParts(toNumber(nextYears), toNumber(nextMonths, 11));
     onPreviewChange(raw);
+    schedulePersist(nextYears, nextMonths);
   };
 
   const persistVisibility = async (next: boolean) => {
@@ -226,13 +253,11 @@ export function TotalExperienceField({
 
   return (
     <div className="inline-block max-w-full">
-      <div className="inline-flex max-w-full items-center gap-1.5">
-        <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
-          Total experience
-        </span>
+      <div className="inline-flex max-w-full flex-wrap items-center gap-2">
+        <span className="shrink-0 text-xs font-medium text-muted-foreground">Total experience</span>
         <div
           className={cn(
-            'flex h-7 items-center rounded-md bg-muted/60 px-1 transition-colors',
+            'flex h-7 items-center px-0.5 transition-colors',
             !isVisible && 'opacity-50'
           )}
         >
@@ -259,7 +284,7 @@ export function TotalExperienceField({
               onChange={(event) => updateValue('years', event.target.value)}
               onBlur={() => {
                 setEditing(false);
-                void persistValue();
+                flushPersist();
               }}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') {
@@ -294,7 +319,7 @@ export function TotalExperienceField({
               onChange={(event) => updateValue('months', event.target.value)}
               onBlur={() => {
                 setEditing(false);
-                void persistValue();
+                flushPersist();
               }}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') {
@@ -333,11 +358,9 @@ export function TotalExperienceField({
           </span>
           Show months
         </button>
-        <Button
+        <button
           type="button"
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 shrink-0 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="builder-quiet-btn h-7 w-7"
           onClick={() => void persistVisibility(!isVisible)}
           title={isVisible ? 'Hide from resume' : 'Show on resume'}
           aria-label={isVisible ? 'Hide total experience' : 'Show total experience'}
@@ -348,7 +371,7 @@ export function TotalExperienceField({
           ) : (
             <EyeOff className="h-4 w-4 text-muted-foreground" />
           )}
-        </Button>
+        </button>
       </div>
       {error ? <p className="mt-1 text-[11px] text-destructive">{error}</p> : null}
     </div>

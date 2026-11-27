@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
+import { scheduleResumeRefresh } from '@/lib/resume/schedule-refresh';
 import { EducationSchema, normalizeCurrentDates } from '@/lib/validations';
 
 /**
@@ -54,6 +55,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       },
     });
 
+    scheduleResumeRefresh(profileId);
+
     return NextResponse.json({ success: true, education });
   } catch (error) {
     console.error('Error updating education:', error);
@@ -99,6 +102,8 @@ export async function DELETE(
     await db.education.delete({
       where: { id },
     });
+
+    scheduleResumeRefresh(profileId);
 
     return NextResponse.json({ success: true });
   } catch (error) {

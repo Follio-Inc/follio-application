@@ -6,6 +6,7 @@ import { db } from '@/lib/db';
 import { interactiveTransactionOptions } from '@/lib/db-transaction';
 import { bulletsToHtml, isHtmlFullyJustified, justifyHtmlContent } from '@/lib/html-utils';
 import { logger } from '@/lib/logger';
+import { scheduleResumeRefresh } from '@/lib/resume/schedule-refresh';
 
 /**
  * POST /api/profile/justify-all
@@ -162,6 +163,8 @@ export async function POST() {
         });
       }
     }, interactiveTransactionOptions);
+
+    scheduleResumeRefresh(profileId);
 
     return NextResponse.json({ success: true });
   } catch (error) {

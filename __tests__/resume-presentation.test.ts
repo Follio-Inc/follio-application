@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -23,5 +26,22 @@ describe('resume presentation', () => {
   it('opens highlights on their own path, including unlisted access', () => {
     expect(resumeHighlightsPath('ada')).toBe('/u/ada/highlights');
     expect(resumeHighlightsHref('ada', 'key=k')).toBe('/u/ada/highlights?key=k');
+  });
+
+  it('offers the Follio view from the public resume and the builder preview', () => {
+    const shell = readFileSync(resolve(process.cwd(), 'app/u/[handle]/resume-shell.tsx'), 'utf8');
+    const preview = readFileSync(
+      resolve(process.cwd(), 'app/(dashboard)/builder/components/resume-preview-panel.tsx'),
+      'utf8'
+    );
+    const cards = readFileSync(
+      resolve(process.cwd(), 'app/(dashboard)/dashboard/dashboard-resumes-section.tsx'),
+      'utf8'
+    );
+
+    expect(shell).toContain('current="resume"');
+    expect(preview).toContain('FollioPage');
+    expect(preview).toContain('ResumePresentationSwitch');
+    expect(cards).not.toContain('ResumePresentationSwitch');
   });
 });

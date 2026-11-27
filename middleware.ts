@@ -28,6 +28,7 @@ const isProtectedRoute = createRouteMatcher([
   '/resume-preview(.*)',
   '/cover-letter-preview(.*)',
   '/resumes(.*)',
+  '/match(.*)',
   '/oauth(.*)',
 ]);
 

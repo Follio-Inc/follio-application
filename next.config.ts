@@ -75,6 +75,8 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     '/api/export/[handle]/pdf': ['./node_modules/@sparticuz/chromium/**'],
     '/api/cover-letters/[id]/pdf': ['./node_modules/@sparticuz/chromium/**'],
+    // MCP App pages (built by `npm run build:mcp-apps`), read from disk by lib/mcp/apps/pages.ts.
+    '/api/mcp': ['./lib/mcp/apps/dist/**'],
   },
 
   // Headers for security and SEO
@@ -159,7 +161,7 @@ const nextConfig: NextConfig = {
           {
             key: 'Access-Control-Allow-Headers',
             value:
-              'Authorization, Content-Type, MCP-Protocol-Version, MCP-Session-Id, Last-Event-ID',
+              'Authorization, Content-Type, MCP-Protocol-Version, Mcp-Method, Mcp-Name, MCP-Session-Id, Last-Event-ID',
           },
           {
             key: 'Access-Control-Expose-Headers',

@@ -7,6 +7,7 @@ import { db } from '@/lib/db';
 import { interactiveTransactionOptions } from '@/lib/db-transaction';
 import { AppError, ErrorCode, handleApiError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { scheduleResumeRefresh } from '@/lib/resume/schedule-refresh';
 
 /**
  * Allowed models for reordering.
@@ -124,6 +125,8 @@ export async function PATCH(request: NextRequest) {
       model: parsed.model,
       count: parsed.items.length,
     });
+
+    scheduleResumeRefresh(context.profileId);
 
     return NextResponse.json({ success: true });
   } catch (error) {

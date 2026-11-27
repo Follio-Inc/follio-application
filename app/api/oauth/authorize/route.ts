@@ -1,21 +1,14 @@
 import { auth } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { oauthSeeOther } from '@/lib/ai-connector/oauth-redirect';
+import { redirectUriMatches } from '@/lib/ai-connector/oauth-register';
 import { parseScopeString } from '@/lib/ai-connector/scopes';
 import { db } from '@/lib/db';
 import { isAppError } from '@/lib/errors';
 import { createAuthorizationCode, getOauthClient } from '@/services/ai-connector-oauth.service';
-import { redirectUriMatches } from '@/lib/ai-connector/oauth-register';
 
 export const dynamic = 'force-dynamic';
-
-function redirectWithParams(redirectUri: string, params: Record<string, string>) {
-  const url = new URL(redirectUri);
-  for (const [key, value] of Object.entries(params)) {
-    url.searchParams.set(key, value);
-  }
-  return NextResponse.redirect(url);
-}
 
 export async function POST(request: NextRequest) {
   const { userId: clerkId } = await auth();
@@ -37,14 +30,14 @@ export async function POST(request: NextRequest) {
   }
 
   if (decision !== 'allow') {
-    return redirectWithParams(redirectUri, {
+    return oauthSeeOther(redirectUri, {
       error: 'access_denied',
       ...(state ? { state } : {}),
     });
   }
 
   if (!codeChallenge) {
-    return redirectWithParams(redirectUri, {
+    return oauthSeeOther(redirectUri, {
       error: 'invalid_request',
       error_description: 'code_challenge is required',
       ...(state ? { state } : {}),
@@ -57,7 +50,7 @@ export async function POST(request: NextRequest) {
   });
 
   if (!user?.profile) {
-    return NextResponse.redirect(new URL('/onboarding', request.url));
+    return NextResponse.redirect(new URL('/onboarding', request.url), 303);
   }
 
   try {
@@ -69,13 +62,13 @@ export async function POST(request: NextRequest) {
       scopes: parseScopeString(scope),
     });
 
-    return redirectWithParams(redirectUri, {
+    return oauthSeeOther(redirectUri, {
       code,
       ...(state ? { state } : {}),
     });
   } catch (error) {
     const description = isAppError(error) ? error.message : 'Could not complete authorization';
-    return redirectWithParams(redirectUri, {
+    return oauthSeeOther(redirectUri, {
       error: 'server_error',
       error_description: description,
       ...(state ? { state } : {}),

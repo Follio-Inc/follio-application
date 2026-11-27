@@ -89,6 +89,7 @@ export default async function HighlightsPage({ params, searchParams }: Highlight
       profile={profile}
       authState={authState}
       profileHandle={handle}
+      resumeVisibility={resumeVisibility}
       accessQuery={resumeAccessQuery({ token, key })}
     />
   );

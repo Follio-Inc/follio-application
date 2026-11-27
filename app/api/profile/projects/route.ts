@@ -3,7 +3,13 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
-import { normalizeCurrentDates, ProjectSchema } from '@/lib/validations';
+import { scheduleResumeRefresh } from '@/lib/resume/schedule-refresh';
+import {
+  firstValidationError,
+  normalizeCurrentDates,
+  PROJECT_FIELD_LABELS,
+  ProjectSchema,
+} from '@/lib/validations';
 
 /**
  * GET /api/profile/projects
@@ -52,7 +58,10 @@ export async function POST(request: NextRequest) {
 
     if (!validatedData.success) {
       return NextResponse.json(
-        { error: 'Validation failed', details: validatedData.error.flatten() },
+        {
+          error: firstValidationError(validatedData.error, PROJECT_FIELD_LABELS),
+          details: validatedData.error.flatten(),
+        },
         { status: 400 }
       );
     }
@@ -77,6 +86,8 @@ export async function POST(request: NextRequest) {
         source: 'MANUAL',
       },
     });
+
+    scheduleResumeRefresh(profileId);
 
     return NextResponse.json({ success: true, project }, { status: 201 });
   } catch (error) {

@@ -367,6 +367,18 @@ describe('the console renders the whole inventory', () => {
   const html = renderToStaticMarkup(<TestConsole inventory={inventory} />);
   const text = html.replace(/<[^>]*>/g, ' ');
 
+  /**
+   * The same text with test file paths removed.
+   *
+   * The inventory lists the names of real files, and a name is data, not a
+   * claim. `__tests__/entry-duration.test.ts` arrived with main and contains
+   * the word "duration", which tripped the "invents no result, duration or
+   * verdict" check below — a check about fabricated metrics, not about what
+   * somebody called a file. Asserting the prose keeps that check meaning what
+   * it was written to mean, and the file names are still asserted present.
+   */
+  const prose = text.replace(/[\w./-]*__tests__[\w./-]*/g, ' ');
+
   it('shows every test file on disk somewhere on the page', () => {
     // The done condition, asserted against the markup rather than the data.
     for (const testFile of everyTestFileOnDisk()) {
@@ -440,9 +452,11 @@ describe('the console renders the whole inventory', () => {
   });
 
   it('invents no result, duration or verdict', () => {
-    expect(text).not.toMatch(/\b(passed|passing|failed|failing|flaky|skipped)\b/i);
-    expect(text).not.toMatch(/\b\d+\s*m?s\b/);
-    expect(text).not.toMatch(/last run|duration|coverage %|\bpass rate\b/i);
+    expect(prose).not.toMatch(/\b(passed|passing|failed|failing|flaky|skipped)\b/i);
+    expect(prose).not.toMatch(/\b\d+\s*m?s\b/);
+    expect(prose).not.toMatch(/last run|duration|coverage %|\bpass rate\b/i);
+    // The file names themselves are still rendered — that is the inventory.
+    expect(text).toContain('__tests__/');
   });
 
   it('offers no way to run anything', () => {

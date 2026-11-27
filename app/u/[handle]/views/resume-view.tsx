@@ -33,6 +33,8 @@ import {
   resumeEntryBodyHtml,
   sanitizeRichHtml,
 } from '@/lib/html-utils';
+import { displayEntryDurationFrom } from '@/lib/entry-duration';
+import { parseHeadingTags } from '@/lib/heading-tags';
 import { cleanPhoneDisplay } from '@/lib/phone';
 import { formatDate } from '@/lib/utils';
 import { applyVisibilityFilter } from '@/lib/visibility';
@@ -329,6 +331,9 @@ export function ResumeView({ profile: rawProfile }: ResumeViewProps) {
                         <p className="text-muted-foreground">
                           {exp.company}
                           {exp.location && <span> · {exp.location}</span>}
+                          {displayEntryDurationFrom(exp) ? (
+                            <span> · {displayEntryDurationFrom(exp)}</span>
+                          ) : null}
                         </p>
                       </div>
                       <div className="flex items-center gap-1 text-sm text-muted-foreground">
@@ -388,6 +393,9 @@ export function ResumeView({ profile: rawProfile }: ResumeViewProps) {
                         <p className="text-muted-foreground">
                           {edu.degree}
                           {edu.fieldOfStudy && ` in ${edu.fieldOfStudy}`}
+                          {displayEntryDurationFrom(edu) ? (
+                            <span> · {displayEntryDurationFrom(edu)}</span>
+                          ) : null}
                         </p>
                       </div>
                       <div className="flex items-center gap-1 text-sm text-muted-foreground">
@@ -739,9 +747,9 @@ export function ResumeView({ profile: rawProfile }: ResumeViewProps) {
                           )}
                           {item.tags && item.tags.length > 0 && (
                             <div className="mt-3 flex flex-wrap gap-1">
-                              {item.tags.map((tag) => (
-                                <Badge key={tag} variant="outline" className="text-xs">
-                                  {tag}
+                              {parseHeadingTags(item.tags).map((tag) => (
+                                <Badge key={tag.label} variant="outline" className="text-xs">
+                                  {tag.label}
                                 </Badge>
                               ))}
                             </div>

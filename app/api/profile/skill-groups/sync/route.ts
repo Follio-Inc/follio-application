@@ -6,6 +6,7 @@ import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { interactiveTransactionOptions } from '@/lib/db-transaction';
 import { isHtmlEmpty } from '@/lib/html-utils';
+import { scheduleResumeRefresh } from '@/lib/resume/schedule-refresh';
 import {
   extractSkillNamesFromHtml,
   parseCommaSeparatedSkills,
@@ -199,6 +200,8 @@ export async function PUT(request: NextRequest) {
 
       return { skills, skillGroups };
     }, interactiveTransactionOptions);
+
+    scheduleResumeRefresh(profileId);
 
     return NextResponse.json({ success: true, ...result });
   } catch (error) {

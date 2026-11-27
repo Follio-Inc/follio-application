@@ -212,6 +212,9 @@ export const COVERAGE_MAP: PlatformFeature[] = [
     category: 'Public surfaces',
     status: 'shipped',
     unitTests: [
+      // From main: the Follio/resume view switch and highlight rendering.
+      '__tests__/follio-view-switch.test.tsx',
+      '__tests__/resume-highlights-render.test.tsx',
       '__tests__/public-profile-chrome.test.ts',
       '__tests__/follio-peek.test.ts',
       '__tests__/resume-highlights.test.ts',
@@ -258,6 +261,8 @@ export const COVERAGE_MAP: PlatformFeature[] = [
     category: 'Account',
     status: 'shipped',
     unitTests: [
+      // From main: deleting a resume is an ownership-scoped operation.
+      '__tests__/resume-delete.test.ts',
       '__tests__/middleware.test.ts',
       '__tests__/clerk-env.test.ts',
       '__tests__/active-profile.test.ts',
@@ -660,6 +665,61 @@ export const COVERAGE_MAP: PlatformFeature[] = [
       'Phase 3A, hardened in 3A.1. Two more independent agents on the shared runtime: `resume-rewrite` proposes addressed edits and `resume-verification` rules on them, each with its own tool-calling loop, Zod output schema, budget and AgentRun row. Proposals never touch the database — they name a stable record id and field path (lib/resume-rewrite/targets.ts) so Phase 3B can apply one as a field write rather than a string search, and Phase 3A performs no writes at all. Factual grounding is deterministic and runs twice: `propose_rewrite` refuses to store a proposal carrying a blocking issue, and the verifier re-runs every guard against the live resume and merges the model’s verdicts with the result in code, taking the stricter of the two — so an approving model cannot clear a proposal the guards rejected, and a proposal the verifier skipped defaults to needs_user_input rather than approved. The revision loop is bounded by MAX_REWRITE_REVISIONS and per-tool counters in orchestrator.agent.ts, not by the prompt; REWRITE_DELEGATION_LIMITS widens the tree-wide ceilings only for runs that requested a rewrite, so an evaluation request keeps the Phase 2B limits exactly. `aiStages` is unset for the same reason as `resume-agent` and `resume-multi-agent`: the only MAX_TOKENS key is `agentTurn`, whose call site is in the shared runtime no feature claims. Phase 3B.1 added persistence and the approval path: a batch records what an authorized run produced, and only a verifier-approved proposal is even offered for review — everything else is stored UNAVAILABLE. Applying needs the AI verdict and the human decision to agree, and is a single conditional UPDATE (`SET bullets[n] = $new WHERE bullets[n] = $original`), so a concurrent edit is refused rather than lost and a repeated apply matches zero rows. The agents still have no database write tool. Phase 3B.2 added the Builder surface: a fifth AI Resume Assistant action opening a review dialog that is deliberately separate from the evaluation dialog, so running an evaluation can never become a rewrite. Approving and applying are separate presses, the apply request carries no body, and the client offers Apply only from the server’s own `applicable` flag. The Builder is not autosaved (`builder-client.tsx` contains an unused debounced autosave; the live surface is AllSectionsEditor’s explicit Save), so the lost-update risk is a stale draft saved after an apply — closed by an apply gate that refuses while a save is in flight, while an inline form is open, or when the draft holds an unsaved edit to the same field, plus a `commitInlineChange` of the applied text into both draft and saved baseline. Phase 3A.1 closed the gap the first live run exposed: the guards only understood named entities and figures, so a benefit clause appended to a true sentence ("…, enhancing data retrieval speed") passed every check and the verifier approved it. lib/resume-rewrite/outcomes.ts now detects introduced result constructions and tests what they claim against the whole resume, `propose_rewrite` refuses them outright, and the verifier must classify every proposition as a supported fact, a faithful paraphrase, a reasonable inference or an unsupported new claim — with the last two disqualifying approval in code, because a plausible inference asserted as fact is the failure mode.',
   },
 
+  {
+    id: 'resume-edit-sessions',
+    name: 'AI resume editing',
+    userDescription:
+      'Asks for a change in their own words — "tailor this to the job", "add numbers" — and gets the rewritten sections back to apply or undo in one go.',
+    codeLocations: [
+      'app/api/resume-edits',
+      'lib/resume-edit',
+      'services/ai/resume-edit',
+      'services/resume-edit-session.service.ts',
+      'services/resume-edit-source.ts',
+    ],
+    category: 'AI',
+    status: 'shipped',
+    aiStages: ['resumeEdit'],
+    prismaModels: ['ResumeEditSession'],
+    unitTests: [
+      '__tests__/resume-edit.test.ts',
+      '__tests__/resume-edit-ops.test.ts',
+      '__tests__/ai-edit-scores.test.tsx',
+      '__tests__/resume-skill-profile.test.ts',
+    ],
+    pathways: [],
+    notes:
+      'Arrived on main while the multi-agent branch was in flight, and the two are deliberately separate implementations rather than one merged path. This is a single-shot edit: one brief produces one ResumeEditSession holding the changes it proposed, applied or reverted as a unit, with what each change replaced kept so it can be undone. `resume-rewrite-loop` is the other one: many independently verified proposals, each approved and applied on its own, with deterministic fabrication guards and a rewrite/verification feedback loop behind it. Neither supersedes the other and neither writes through the other’s code path; the merge preserved both.',
+  },
+
+  {
+    id: 'job-fit',
+    name: 'Job fit and alignment',
+    userDescription:
+      'Pastes a job posting and sees what it actually asks for, how their resume lines up against it, and a recruiter-style read of the fit.',
+    codeLocations: [
+      'app/(dashboard)/match/page.tsx',
+      'app/api/jd-align',
+      'app/api/job-fit',
+      'app/api/job-requirements',
+      'services/ai/jd-align',
+      'services/ai/job-requirements',
+      'services/ai/judge',
+    ],
+    category: 'AI',
+    status: 'shipped',
+    aiStages: ['jdAlign', 'jdExpert', 'jobRequirements'],
+    unitTests: [
+      '__tests__/jd-align.test.ts',
+      '__tests__/job-requirements.test.ts',
+      '__tests__/jd-match-metrics.test.tsx',
+      '__tests__/skills-match.test.ts',
+    ],
+    pathways: [],
+    notes:
+      'Distinct from `jd-match`, which is lexical and calls no AI client: this one reads the posting with a model (`jobRequirements`), aligns resume evidence against it (`jdAlign`) and produces a holistic read (`jdExpert`). All three MAX_TOKENS keys are declared here because the call sites are in this feature’s own services. Separate again from the multi-agent JD/Role Matching Agent, which scores the same comparison deterministically inside an agent tree.',
+  },
+
   // ── Integrations ────────────────────────────────────────────────────────
   {
     id: 'ai-connector-mcp',
@@ -688,7 +748,17 @@ export const COVERAGE_MAP: PlatformFeature[] = [
     status: 'shipped',
     // The four connector tables are queried nowhere else.
     prismaModels: ['AiConnectorAuthCode', 'AiConnectorClient', 'AiConnectorToken', 'AiEditDraft'],
-    unitTests: ['__tests__/ai-connector.test.ts'],
+    unitTests: [
+      '__tests__/ai-connector.test.ts',
+      // From main: the MCP server, its route and origin handling, the OAuth
+      // redirect, and the resume tools the connector exposes.
+      '__tests__/mcp-protocol.test.ts',
+      '__tests__/mcp-public-origin.test.ts',
+      '__tests__/mcp-route.test.ts',
+      '__tests__/oauth-redirect.test.ts',
+      '__tests__/resume-evaluate.test.ts',
+      '__tests__/resume-target.test.ts',
+    ],
     pathways: [],
     notes:
       "The three app/.well-known handlers are this feature's own code: each one imports only lib/ai-connector/oauth-metadata and lib/ai-connector/cors, and returns the authorization-server or protected-resource metadata an AI assistant reads before connecting. They were outside signal 1 until item 8a widened route discovery from app/api to all of app/.",

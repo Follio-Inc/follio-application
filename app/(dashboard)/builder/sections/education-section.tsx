@@ -23,7 +23,18 @@ import { useReorderPersist } from '@/lib/hooks/use-reorder-persist';
 import { emptyToNull } from '@/lib/validations';
 import { cn, parseMonthInput, toMonthInputValue } from '@/lib/utils';
 
+import { HeadingTagPicker } from '@/components/heading-tags/heading-tag-picker';
+import { ResumeHeadingTags } from '@/components/heading-tags/resume-heading-tags';
+import { formatEntryDuration } from '@/lib/entry-duration';
+import {
+  EDUCATION_HEADING_TAG_GROUPS,
+  EDUCATION_HEADING_TAG_PRESETS,
+  headingTagsToJson,
+  parseHeadingTags,
+} from '@/lib/heading-tags';
+
 import { EntryInlineForm } from '../components/entry-inline-form';
+import { EntryDurationField } from './entry-duration-field';
 import { SortableCardList } from '../components/sortable-card-list';
 import { useEntryFormDirty, type RegisterEntryEditGuard } from '../lib/entry-edit-guard';
 
@@ -57,6 +68,8 @@ const emptyEducation: Partial<Education> = {
   startDate: null,
   endDate: null,
   isCurrent: false,
+  headingTags: [],
+  durationVisible: false,
   gpa: '',
   description: '',
   activities: [],
@@ -189,6 +202,8 @@ export function EducationSection({
         startDate: formData.startDate,
         endDate: formData.isCurrent ? null : formData.endDate,
         isCurrent: formData.isCurrent || false,
+        headingTags: parseHeadingTags(formData.headingTags),
+        durationVisible: formData.durationVisible === true,
         gpa: emptyToNull(formData.gpa),
         description: isHtmlEmpty(formData.description) ? null : (formData.description ?? null),
         activities: formData.activities || [],
@@ -316,6 +331,15 @@ export function EducationSection({
         </div>
       </div>
 
+      <HeadingTagPicker
+        value={parseHeadingTags(formData.headingTags)}
+        onChange={(headingTags) =>
+          setFormData((prev) => ({ ...prev, headingTags: headingTagsToJson(headingTags) }))
+        }
+        presets={EDUCATION_HEADING_TAG_PRESETS}
+        exclusiveGroups={EDUCATION_HEADING_TAG_GROUPS}
+      />
+
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label>Location</Label>
@@ -373,6 +397,14 @@ export function EducationSection({
           </div>
         )}
       </div>
+
+      <EntryDurationField
+        startDate={formData.startDate}
+        endDate={formData.endDate}
+        isCurrent={formData.isCurrent}
+        visible={formData.durationVisible}
+        onVisibleChange={(durationVisible) => setFormData((prev) => ({ ...prev, durationVisible }))}
+      />
 
       <div className="space-y-2">
         <Label>Highlights</Label>
@@ -460,6 +492,15 @@ export function EducationSection({
             </div>
           </div>
 
+          <HeadingTagPicker
+            value={parseHeadingTags(formData.headingTags)}
+            onChange={(headingTags) =>
+              setFormData((prev) => ({ ...prev, headingTags: headingTagsToJson(headingTags) }))
+            }
+            presets={EDUCATION_HEADING_TAG_PRESETS}
+            exclusiveGroups={EDUCATION_HEADING_TAG_GROUPS}
+          />
+
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Location</Label>
@@ -520,6 +561,16 @@ export function EducationSection({
             )}
           </div>
 
+          <EntryDurationField
+            startDate={formData.startDate}
+            endDate={formData.endDate}
+            isCurrent={formData.isCurrent}
+            visible={formData.durationVisible}
+            onVisibleChange={(durationVisible) =>
+              setFormData((prev) => ({ ...prev, durationVisible }))
+            }
+          />
+
           <div className="space-y-2">
             <Label>Highlights</Label>
             <RichTextEditor
@@ -569,80 +620,87 @@ export function EducationSection({
             onReorder={handleReorder}
             dateExtractor={educationDateExtractor}
             disabled={isLoading}
-            renderItem={(edu) => (
-              <div
-                className={cn(
-                  'group flex items-start gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50',
-                  edu.isVisible === false && 'opacity-50'
-                )}
-              >
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                  <GraduationCap className="h-5 w-5 text-primary" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <h4 className="font-medium">
-                        {edu.degree} {edu.fieldOfStudy && `in ${edu.fieldOfStudy}`}
-                      </h4>
-                      <p className="text-sm text-muted-foreground">{edu.institution}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {edu.startDate &&
-                          new Date(edu.startDate).toLocaleDateString('en-US', {
-                            month: 'short',
-                            year: 'numeric',
-                          })}
-                        {edu.startDate && ' - '}
-                        {edu.isCurrent
-                          ? 'Present'
-                          : edu.endDate
-                            ? new Date(edu.endDate).toLocaleDateString('en-US', {
-                                month: 'short',
-                                year: 'numeric',
-                              })
-                            : ''}
-                        {edu.gpa && ` • GPA: ${edu.gpa}`}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => toggleVisibility(edu)}
-                        title={edu.isVisible === false ? 'Show on resume' : 'Hide from resume'}
-                      >
-                        {edu.isVisible === false ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => handleOpenDialog(edu)}
-                        disabled={isLoading}
-                        title="Edit"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive"
-                        onClick={() => handleDelete(edu.id)}
-                        disabled={isLoading}
-                        title="Delete"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+            renderItem={(edu) => {
+              const durationLabel = formatEntryDuration(edu.startDate, edu.endDate, edu.isCurrent);
+              return (
+                <div
+                  className={cn(
+                    'group flex items-start gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50',
+                    edu.isVisible === false && 'opacity-50'
+                  )}
+                >
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                    <GraduationCap className="h-5 w-5 text-primary" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h4 className="font-medium">
+                            {edu.degree} {edu.fieldOfStudy && `in ${edu.fieldOfStudy}`}
+                          </h4>
+                          <ResumeHeadingTags tags={parseHeadingTags(edu.headingTags)} />
+                        </div>
+                        <p className="text-sm text-muted-foreground">{edu.institution}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {edu.startDate &&
+                            new Date(edu.startDate).toLocaleDateString('en-US', {
+                              month: 'short',
+                              year: 'numeric',
+                            })}
+                          {edu.startDate && ' - '}
+                          {edu.isCurrent
+                            ? 'Present'
+                            : edu.endDate
+                              ? new Date(edu.endDate).toLocaleDateString('en-US', {
+                                  month: 'short',
+                                  year: 'numeric',
+                                })
+                              : ''}
+                          {durationLabel ? ` · ${durationLabel}` : ''}
+                          {edu.gpa && ` • GPA: ${edu.gpa}`}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => toggleVisibility(edu)}
+                          title={edu.isVisible === false ? 'Show on resume' : 'Hide from resume'}
+                        >
+                          {edu.isVisible === false ? (
+                            <EyeOff className="h-4 w-4" />
+                          ) : (
+                            <Eye className="h-4 w-4" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => handleOpenDialog(edu)}
+                          disabled={isLoading}
+                          title="Edit"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          onClick={() => handleDelete(edu.id)}
+                          disabled={isLoading}
+                          title="Delete"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            )}
+              );
+            }}
           />
         </div>
       )}

@@ -31,8 +31,18 @@ import { Label } from '@/components/ui/label';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { Switch } from '@/components/ui/switch';
 import { notifyProfileUpdated } from '@/lib/events';
+import { isHtmlEmpty } from '@/lib/html-utils';
 import { useReorderPersist } from '@/lib/hooks/use-reorder-persist';
 import { cn } from '@/lib/utils';
+import { emptyToNull } from '@/lib/validations';
+
+import { HeadingTagPicker } from '@/components/heading-tags/heading-tag-picker';
+import { ResumeHeadingTags } from '@/components/heading-tags/resume-heading-tags';
+import {
+  PROJECT_HEADING_TAG_PRESETS,
+  headingTagsToJson,
+  parseHeadingTags,
+} from '@/lib/heading-tags';
 
 import { EntryInlineForm } from '../components/entry-inline-form';
 import { SortableCardList } from '../components/sortable-card-list';
@@ -67,6 +77,7 @@ const emptyProject: Partial<Project> = {
   imageUrl: '',
   techStack: [],
   highlights: [],
+  headingTags: [],
   startDate: null,
   endDate: null,
   isCurrent: false,
@@ -141,16 +152,17 @@ export function ProjectsSection({
 
     try {
       const payload = {
-        title: formData.title,
-        description: formData.description || undefined,
-        shortDesc: formData.shortDesc || undefined,
-        url: formData.url || undefined,
-        repoUrl: formData.repoUrl || undefined,
-        imageUrl: formData.imageUrl || undefined,
+        title: formData.title?.trim() ?? '',
+        description: isHtmlEmpty(formData.description) ? null : (formData.description ?? null),
+        shortDesc: emptyToNull(formData.shortDesc),
+        url: emptyToNull(formData.url),
+        repoUrl: emptyToNull(formData.repoUrl),
+        imageUrl: emptyToNull(formData.imageUrl),
         techStack: formData.techStack || [],
         highlights: formData.highlights || [],
-        startDate: formData.startDate,
-        endDate: formData.isCurrent ? null : formData.endDate,
+        headingTags: parseHeadingTags(formData.headingTags),
+        startDate: formData.startDate || null,
+        endDate: formData.isCurrent ? null : formData.endDate || null,
         isCurrent: formData.isCurrent || false,
         featured: formData.featured || false,
       };
@@ -270,7 +282,7 @@ export function ProjectsSection({
       error={error}
       onSave={handleSave}
       onDiscard={() => onEditComplete?.()}
-      canSave={Boolean(formData.title)}
+      canSave={Boolean(formData.title?.trim())}
       isSaving={isLoading}
       actionsRef={actionsRef}
       attentionKey={attentionKey}
@@ -284,6 +296,14 @@ export function ProjectsSection({
           placeholder="My Awesome Project"
         />
       </div>
+
+      <HeadingTagPicker
+        value={parseHeadingTags(formData.headingTags)}
+        onChange={(headingTags) =>
+          setFormData((prev) => ({ ...prev, headingTags: headingTagsToJson(headingTags) }))
+        }
+        presets={PROJECT_HEADING_TAG_PRESETS}
+      />
 
       <div className="space-y-2">
         <Label>Short Description</Label>
@@ -478,6 +498,14 @@ export function ProjectsSection({
             />
           </div>
 
+          <HeadingTagPicker
+            value={parseHeadingTags(formData.headingTags)}
+            onChange={(headingTags) =>
+              setFormData((prev) => ({ ...prev, headingTags: headingTagsToJson(headingTags) }))
+            }
+            presets={PROJECT_HEADING_TAG_PRESETS}
+          />
+
           <div className="space-y-2">
             <Label>Short Description</Label>
             <Input
@@ -593,7 +621,7 @@ export function ProjectsSection({
           <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isLoading}>
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={!formData.title || isLoading}>
+          <Button onClick={handleSave} disabled={!formData.title?.trim() || isLoading}>
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {isLoading ? 'Saving...' : 'Save'}
           </Button>
@@ -636,8 +664,9 @@ export function ProjectsSection({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <h4 className="font-medium">{project.title}</h4>
+                        <ResumeHeadingTags tags={parseHeadingTags(project.headingTags)} />
                         {project.featured && (
                           <Badge variant="default" className="gap-1 text-xs">
                             <Star className="h-3 w-3" />

@@ -1,0 +1,654 @@
+import { Prisma } from '@prisma/client';
+import { z } from 'zod';
+
+import { ensurePrimaryProfile } from '@/lib/active-profile';
+import { db } from '@/lib/db';
+import { interactiveTransactionOptions } from '@/lib/db-transaction';
+import { Errors } from '@/lib/errors';
+import { logger } from '@/lib/logger';
+import { NEW_RESUME_DEFAULTS } from '@/lib/resume/new-resume-defaults';
+import {
+  getResumeTemplateId,
+  getTemplateDefaultShowPhoto,
+  sanitizeResumeDesign,
+} from '@/lib/resume/templates';
+import { generateUniqueResumeTitle, suggestCloneResumeTitle } from '@/lib/resume-title';
+import { remapSubHeadingEntryIds } from '@/lib/section-subheadings';
+import type { ResumeDesign } from '@/types';
+
+const resumeLogger = logger.child({ source: 'resume-library' });
+
+function nullableJson(value: Prisma.JsonValue): Prisma.InputJsonValue | typeof Prisma.JsonNull {
+  return value === null ? Prisma.JsonNull : (value as Prisma.InputJsonValue);
+}
+
+function cloneEntryIdMap(ids: string[]): Map<string, string> {
+  return new Map(ids.map((id) => [id, crypto.randomUUID()]));
+}
+
+const DEFAULT_SECTION_CONFIGS = [
+  { type: 'BASIC_INFO', title: 'Header' },
+  { type: 'PHOTOS', title: 'Photos' },
+  { type: 'SUMMARY', title: 'Summary' },
+  { type: 'EXPERIENCE', title: 'Experience' },
+  { type: 'EDUCATION', title: 'Education' },
+  { type: 'SKILLS', title: 'Skills' },
+  { type: 'PROJECTS', title: 'Projects' },
+  { type: 'LINKS', title: 'Links' },
+  { type: 'AWARDS', title: 'Awards' },
+  { type: 'CERTIFICATIONS', title: 'Certifications' },
+] as const;
+
+const createResumeSchema = z.object({
+  strategy: z.enum(['BLANK', 'CLONE', 'UPLOAD']).default('BLANK'),
+  title: z.string().trim().min(1).max(120).optional(),
+  sourceProfileId: z.string().trim().optional(),
+  /** Selected during creation template gallery (blank / upload shell). */
+  resumeDesign: z.unknown().optional(),
+});
+
+const cloneProfileInclude = {
+  contactInfo: true,
+  links: { orderBy: { sortOrder: 'asc' } },
+  workExperiences: { orderBy: { sortOrder: 'asc' } },
+  educations: { orderBy: { sortOrder: 'asc' } },
+  skills: { orderBy: { sortOrder: 'asc' } },
+  skillGroups: { orderBy: { sortOrder: 'asc' } },
+  projects: { orderBy: { sortOrder: 'asc' } },
+  awards: { orderBy: { sortOrder: 'asc' } },
+  certifications: { orderBy: { sortOrder: 'asc' } },
+  blogPosts: { orderBy: { createdAt: 'desc' } },
+  youtubeVideos: { orderBy: { createdAt: 'desc' } },
+  photos: { orderBy: { sortOrder: 'asc' } },
+  sections: { orderBy: { sortOrder: 'asc' } },
+  githubProfile: true,
+} satisfies Prisma.ProfileInclude;
+
+type CloneSourceProfile = Prisma.ProfileGetPayload<{ include: typeof cloneProfileInclude }>;
+
+function slugify(input: string): string {
+  return input
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40);
+}
+
+async function setActiveProfile(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  profileId: string
+): Promise<void> {
+  await tx.user.update({
+    where: { id: userId },
+    data: {
+      profile: {
+        connect: { id: profileId },
+      },
+    },
+  });
+}
+
+/**
+ * Resolve a human-friendly base for a new resume's handle.
+ *
+ * Resumes are keyed by a globally-unique `handle`. Prefer the user's name (taken from their
+ * oldest existing profile) so additional resumes read like
+ * `shobhit-srivastava-hw81h`, falling back to the email local-part.
+ */
+async function resolveHandleBase(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  email: string
+): Promise<string> {
+  const existing = await tx.profile.findFirst({
+    where: { userId },
+    orderBy: { createdAt: 'asc' },
+    select: { firstName: true, lastName: true },
+  });
+
+  const nameBase = [existing?.firstName, existing?.lastName].filter(Boolean).join(' ').trim();
+  if (nameBase) return nameBase;
+
+  return email.split('@')[0] ?? 'resume';
+}
+
+async function generateUniqueHandle(
+  tx: Prisma.TransactionClient,
+  base: string,
+  fallbackPrefix: string
+): Promise<string> {
+  const normalizedBase = slugify(base) || slugify(fallbackPrefix) || 'resume';
+  const firstTry = `${normalizedBase}-${Math.random().toString(36).slice(2, 7)}`;
+
+  const firstExists = await tx.profile.findUnique({
+    where: { handle: firstTry },
+    select: { id: true },
+  });
+
+  if (!firstExists) return firstTry;
+
+  for (let index = 0; index < 15; index += 1) {
+    const candidate = `${normalizedBase}-${Math.random().toString(36).slice(2, 9)}`;
+    const exists = await tx.profile.findUnique({
+      where: { handle: candidate },
+      select: { id: true },
+    });
+
+    if (!exists) return candidate;
+  }
+
+  return `${fallbackPrefix}-${Date.now()}`;
+}
+
+async function createDefaultSections(
+  tx: Prisma.TransactionClient,
+  profileId: string
+): Promise<void> {
+  await tx.profileSection.createMany({
+    data: DEFAULT_SECTION_CONFIGS.map((config, index) => ({
+      profileId,
+      type: config.type,
+      title: config.title,
+      sortOrder: index,
+      isVisible: true,
+    })),
+  });
+}
+
+async function createBlankProfile(
+  tx: Prisma.TransactionClient,
+  user: { id: string; email: string },
+  title: string | undefined,
+  resumeDesign?: ResumeDesign
+): Promise<{ id: string; handle: string; resumeTitle: string }> {
+  const emailPrefix = user.email.split('@')[0] ?? 'resume';
+  const resumeTitle = await generateUniqueResumeTitle(tx, user.id, title);
+  const handleBase = await resolveHandleBase(tx, user.id, user.email);
+  const generatedHandle = await generateUniqueHandle(tx, handleBase, emailPrefix);
+  const showPhoto = resumeDesign
+    ? getTemplateDefaultShowPhoto(getResumeTemplateId(resumeDesign.templateId))
+    : undefined;
+
+  const profile = await tx.profile.create({
+    data: {
+      userId: user.id,
+      handle: generatedHandle,
+      resumeTitle,
+      status: NEW_RESUME_DEFAULTS.status,
+      resumeVisibility: NEW_RESUME_DEFAULTS.resumeVisibility,
+      ...(resumeDesign ? { resumeDesign: resumeDesign as object } : {}),
+      ...(typeof showPhoto === 'boolean' ? { resumeShowPhoto: showPhoto } : {}),
+    },
+    select: {
+      id: true,
+      handle: true,
+      resumeTitle: true,
+    },
+  });
+
+  await tx.contactInfo.create({
+    data: { profileId: profile.id },
+  });
+
+  await createDefaultSections(tx, profile.id);
+
+  return profile;
+}
+
+async function cloneProfile(
+  tx: Prisma.TransactionClient,
+  user: { id: string; email: string },
+  source: CloneSourceProfile,
+  title: string | undefined
+): Promise<{ id: string; handle: string; resumeTitle: string }> {
+  const requestedTitle = title?.trim() || suggestCloneResumeTitle(source.resumeTitle);
+  const cloneTitle = await generateUniqueResumeTitle(tx, user.id, requestedTitle);
+  const handleBase = await resolveHandleBase(tx, user.id, user.email);
+  const generatedHandle = await generateUniqueHandle(
+    tx,
+    handleBase,
+    user.email.split('@')[0] ?? 'resume'
+  );
+
+  const profile = await tx.profile.create({
+    data: {
+      userId: user.id,
+      handle: generatedHandle,
+      resumeTitle: cloneTitle,
+      // Never inherit publish state — every new resume (including clones) starts private.
+      status: NEW_RESUME_DEFAULTS.status,
+      resumeVisibility: NEW_RESUME_DEFAULTS.resumeVisibility,
+      // Content fields are deep-copied onto this new profileId; nothing is shared by FK.
+      firstName: source.firstName,
+      firstNameSource: source.firstNameSource,
+      middleName: source.middleName,
+      middleNameSource: source.middleNameSource,
+      lastName: source.lastName,
+      lastNameSource: source.lastNameSource,
+      headline: source.headline,
+      headlineSource: source.headlineSource,
+      summary: source.summary,
+      summarySource: source.summarySource,
+      summarySuggestion: source.summarySuggestion,
+      avatarUrl: source.avatarUrl,
+      avatarUrlSource: source.avatarUrlSource,
+      resumeShowPhoto: source.resumeShowPhoto,
+      // Value-copy design JSON so edits on the clone cannot mutate the source row.
+      resumeDesign:
+        source.resumeDesign === null || source.resumeDesign === undefined
+          ? undefined
+          : (JSON.parse(JSON.stringify(source.resumeDesign)) as Prisma.InputJsonValue),
+      location: source.location,
+      locationSource: source.locationSource,
+      totalExperience: source.totalExperience,
+      totalExperienceVisible: source.totalExperienceVisible,
+      totalExperienceShowYears: source.totalExperienceShowYears,
+      totalExperienceShowMonths: source.totalExperienceShowMonths,
+      autoGeneratedDismissed: source.autoGeneratedDismissed,
+    },
+    select: {
+      id: true,
+      handle: true,
+      resumeTitle: true,
+    },
+  });
+
+  if (source.contactInfo) {
+    await tx.contactInfo.create({
+      data: {
+        profileId: profile.id,
+        email: source.contactInfo.email,
+        emailSource: source.contactInfo.emailSource,
+        emailPublic: source.contactInfo.emailPublic,
+        additionalEmails: nullableJson(source.contactInfo.additionalEmails),
+        phone: source.contactInfo.phone,
+        phoneCountryCode: source.contactInfo.phoneCountryCode,
+        phoneNumber: source.contactInfo.phoneNumber,
+        phoneSource: source.contactInfo.phoneSource,
+        phonePublic: source.contactInfo.phonePublic,
+        additionalPhones: nullableJson(source.contactInfo.additionalPhones),
+        locationPublic: source.contactInfo.locationPublic,
+        website: source.contactInfo.website,
+        websiteSource: source.contactInfo.websiteSource,
+        headerFieldsOrder: nullableJson(source.contactInfo.headerFieldsOrder),
+      },
+    });
+  } else {
+    await tx.contactInfo.create({ data: { profileId: profile.id } });
+  }
+
+  const entryIdMap = cloneEntryIdMap([
+    ...source.workExperiences.map((item) => item.id),
+    ...source.educations.map((item) => item.id),
+    ...source.projects.map((item) => item.id),
+    ...source.awards.map((item) => item.id),
+    ...source.certifications.map((item) => item.id),
+  ]);
+
+  if (source.sections.length > 0) {
+    await tx.profileSection.createMany({
+      data: source.sections.map((section) => {
+        const remapped = remapSubHeadingEntryIds(section.subHeadings, entryIdMap);
+        return {
+          profileId: profile.id,
+          type: section.type,
+          customName: section.customName,
+          title: section.title,
+          sortOrder: section.sortOrder,
+          isVisible: section.isVisible,
+          customContent: nullableJson(section.customContent),
+          contentType: section.contentType,
+          subHeadings: remapped ? (remapped as unknown as Prisma.InputJsonValue) : Prisma.JsonNull,
+          entryGrouping: section.entryGrouping ?? null,
+        };
+      }),
+    });
+  } else {
+    await createDefaultSections(tx, profile.id);
+  }
+
+  if (source.links.length > 0) {
+    await tx.link.createMany({
+      data: source.links.map((link) => ({
+        profileId: profile.id,
+        type: link.type,
+        url: link.url,
+        label: link.label,
+        isVisible: link.isVisible,
+        source: link.source,
+        sortOrder: link.sortOrder,
+      })),
+    });
+  }
+
+  if (source.workExperiences.length > 0) {
+    await tx.workExperience.createMany({
+      data: source.workExperiences.map((item) => ({
+        id: entryIdMap.get(item.id) ?? crypto.randomUUID(),
+        profileId: profile.id,
+        company: item.company,
+        companyUrl: item.companyUrl,
+        companyLogo: item.companyLogo,
+        role: item.role,
+        location: item.location,
+        locationType: item.locationType,
+        employmentType: item.employmentType,
+        headingTags: nullableJson(item.headingTags),
+        durationVisible: item.durationVisible,
+        startDate: item.startDate,
+        endDate: item.endDate,
+        isCurrent: item.isCurrent,
+        bullets: item.bullets,
+        bulletsHtml: item.bulletsHtml,
+        metrics: nullableJson(item.metrics),
+        isVisible: item.isVisible,
+        source: item.source,
+        sortOrder: item.sortOrder,
+      })),
+    });
+  }
+
+  if (source.educations.length > 0) {
+    await tx.education.createMany({
+      data: source.educations.map((item) => ({
+        id: entryIdMap.get(item.id) ?? crypto.randomUUID(),
+        profileId: profile.id,
+        institution: item.institution,
+        institutionUrl: item.institutionUrl,
+        institutionLogo: item.institutionLogo,
+        degree: item.degree,
+        fieldOfStudy: item.fieldOfStudy,
+        location: item.location,
+        headingTags: nullableJson(item.headingTags),
+        durationVisible: item.durationVisible,
+        startDate: item.startDate,
+        endDate: item.endDate,
+        isCurrent: item.isCurrent,
+        gpa: item.gpa,
+        description: item.description,
+        activities: item.activities,
+        honors: item.honors,
+        isVisible: item.isVisible,
+        source: item.source,
+        sortOrder: item.sortOrder,
+      })),
+    });
+  }
+
+  const skillGroupIdMap = new Map<string, string>();
+  for (const group of source.skillGroups) {
+    const createdGroup = await tx.skillGroup.create({
+      data: {
+        profileId: profile.id,
+        name: group.name,
+        sortOrder: group.sortOrder,
+        skillsHtml: group.skillsHtml,
+      },
+      select: { id: true },
+    });
+    skillGroupIdMap.set(group.id, createdGroup.id);
+  }
+
+  if (source.skills.length > 0) {
+    await tx.skill.createMany({
+      data: source.skills.map((skill) => ({
+        profileId: profile.id,
+        name: skill.name,
+        level: skill.level,
+        yearsOfExp: skill.yearsOfExp,
+        groupId: skill.groupId ? (skillGroupIdMap.get(skill.groupId) ?? null) : null,
+        isVisible: skill.isVisible,
+        source: skill.source,
+        sortOrder: skill.sortOrder,
+      })),
+    });
+  }
+
+  if (source.projects.length > 0) {
+    await tx.project.createMany({
+      data: source.projects.map((project) => ({
+        id: entryIdMap.get(project.id) ?? crypto.randomUUID(),
+        profileId: profile.id,
+        title: project.title,
+        description: project.description,
+        shortDesc: project.shortDesc,
+        url: project.url,
+        repoUrl: project.repoUrl,
+        imageUrl: project.imageUrl,
+        images: project.images,
+        techStack: project.techStack,
+        highlights: project.highlights,
+        headingTags: nullableJson(project.headingTags),
+        githubStars: project.githubStars,
+        githubForks: project.githubForks,
+        githubLanguage: project.githubLanguage,
+        githubTopics: project.githubTopics,
+        githubOwner: project.githubOwner,
+        githubRepo: project.githubRepo,
+        githubReadme: project.githubReadme,
+        githubPinned: project.githubPinned,
+        githubLastPush: project.githubLastPush,
+        githubLicense: project.githubLicense,
+        githubWatchers: project.githubWatchers,
+        isVisible: project.isVisible,
+        showOnPortfolio: project.showOnPortfolio,
+        showOnResume: project.showOnResume,
+        showStats: project.showStats,
+        showReadme: project.showReadme,
+        customDescription: project.customDescription,
+        startDate: project.startDate,
+        endDate: project.endDate,
+        isCurrent: project.isCurrent,
+        featured: project.featured,
+        source: project.source,
+        sortOrder: project.sortOrder,
+      })),
+    });
+  }
+
+  if (source.awards.length > 0) {
+    await tx.award.createMany({
+      data: source.awards.map((item) => ({
+        id: entryIdMap.get(item.id) ?? crypto.randomUUID(),
+        profileId: profile.id,
+        title: item.title,
+        issuer: item.issuer,
+        date: item.date,
+        description: item.description,
+        url: item.url,
+        isVisible: item.isVisible,
+        source: item.source,
+        sortOrder: item.sortOrder,
+      })),
+    });
+  }
+
+  if (source.certifications.length > 0) {
+    await tx.certification.createMany({
+      data: source.certifications.map((item) => ({
+        id: entryIdMap.get(item.id) ?? crypto.randomUUID(),
+        profileId: profile.id,
+        name: item.name,
+        issuer: item.issuer,
+        issuerLogo: item.issuerLogo,
+        credentialId: item.credentialId,
+        credentialUrl: item.credentialUrl,
+        issueDate: item.issueDate,
+        expirationDate: item.expirationDate,
+        isVisible: item.isVisible,
+        source: item.source,
+        sortOrder: item.sortOrder,
+      })),
+    });
+  }
+
+  if (source.blogPosts.length > 0) {
+    await tx.blogPost.createMany({
+      data: source.blogPosts.map((item) => ({
+        profileId: profile.id,
+        title: item.title,
+        url: item.url,
+        slug: item.slug,
+        excerpt: item.excerpt,
+        content: item.content,
+        thumbnail: item.thumbnail,
+        author: item.author,
+        publishedAt: item.publishedAt,
+        tags: item.tags,
+        readTimeMin: item.readTimeMin,
+        claps: item.claps,
+        platform: item.platform,
+        platformIcon: item.platformIcon,
+        isVisible: item.isVisible,
+        isFeatured: item.isFeatured,
+        source: item.source,
+        sortOrder: item.sortOrder,
+      })),
+    });
+  }
+
+  if (source.youtubeVideos.length > 0) {
+    await tx.youTubeVideo.createMany({
+      data: source.youtubeVideos.map((item) => ({
+        profileId: profile.id,
+        videoId: item.videoId,
+        title: item.title,
+        description: item.description,
+        url: item.url,
+        thumbnail: item.thumbnail,
+        channelId: item.channelId,
+        channelTitle: item.channelTitle,
+        publishedAt: item.publishedAt,
+        duration: item.duration,
+        viewCount: item.viewCount,
+        likeCount: item.likeCount,
+        commentCount: item.commentCount,
+        tags: item.tags,
+        isVisible: item.isVisible,
+        isFeatured: item.isFeatured,
+        showOnPortfolio: item.showOnPortfolio,
+        source: item.source,
+        sortOrder: item.sortOrder,
+      })),
+    });
+  }
+
+  if (source.photos.length > 0) {
+    await tx.profilePhoto.createMany({
+      data: source.photos.map((item) => ({
+        profileId: profile.id,
+        url: item.url,
+        caption: item.caption,
+        category: item.category,
+        source: item.source,
+        sortOrder: item.sortOrder,
+        isVisible: item.isVisible,
+      })),
+    });
+  }
+
+  if (source.githubProfile) {
+    await tx.gitHubProfile.create({
+      data: {
+        profileId: profile.id,
+        username: source.githubProfile.username,
+        githubId: source.githubProfile.githubId,
+        avatarUrl: source.githubProfile.avatarUrl,
+        htmlUrl: source.githubProfile.htmlUrl,
+        bio: source.githubProfile.bio,
+        company: source.githubProfile.company,
+        blog: source.githubProfile.blog,
+        location: source.githubProfile.location,
+        hireable: source.githubProfile.hireable,
+        publicRepos: source.githubProfile.publicRepos,
+        publicGists: source.githubProfile.publicGists,
+        followers: source.githubProfile.followers,
+        following: source.githubProfile.following,
+        accountCreatedAt: source.githubProfile.accountCreatedAt,
+        totalStars: source.githubProfile.totalStars,
+        totalForks: source.githubProfile.totalForks,
+        primaryLanguages: source.githubProfile.primaryLanguages,
+        languageStats: nullableJson(source.githubProfile.languageStats),
+        contributionStats: nullableJson(source.githubProfile.contributionStats),
+        organizations: nullableJson(source.githubProfile.organizations),
+        showOnPortfolio: source.githubProfile.showOnPortfolio,
+        showStats: source.githubProfile.showStats,
+        showOrganizations: source.githubProfile.showOrganizations,
+        showLanguageChart: source.githubProfile.showLanguageChart,
+        showContributions: source.githubProfile.showContributions,
+        hiddenLanguages: source.githubProfile.hiddenLanguages,
+        hiddenOrganizations: source.githubProfile.hiddenOrganizations,
+        lastSyncAt: source.githubProfile.lastSyncAt,
+        syncStatus: source.githubProfile.syncStatus,
+        syncError: source.githubProfile.syncError,
+      },
+    });
+  }
+
+  return profile;
+}
+
+export const createResumeBodySchema = createResumeSchema;
+export type CreateResumeBody = z.infer<typeof createResumeSchema>;
+
+export type CreatedResume = { id: string; handle: string; resumeTitle: string };
+
+export async function createResume(options: {
+  userId: string;
+  email: string;
+  strategy: CreateResumeBody['strategy'];
+  title?: string;
+  sourceProfileId?: string;
+  resumeDesign?: unknown;
+  activate: boolean;
+}): Promise<CreatedResume> {
+  const user = { id: options.userId, email: options.email };
+
+  const result = await db.$transaction(async (tx) => {
+    let created: CreatedResume;
+
+    if (options.strategy === 'CLONE') {
+      const sourceProfileId = options.sourceProfileId?.trim();
+      if (!sourceProfileId) {
+        throw Errors.badRequest('sourceProfileId is required to clone a resume');
+      }
+
+      const source = await tx.profile.findFirst({
+        where: { id: sourceProfileId, userId: user.id, isArchived: false },
+        include: cloneProfileInclude,
+      });
+      if (!source) {
+        throw Errors.notFound('Resume');
+      }
+      created = await cloneProfile(tx, user, source, options.title);
+    } else {
+      created = await createBlankProfile(
+        tx,
+        user,
+        options.title,
+        sanitizeResumeDesign(options.resumeDesign)
+      );
+    }
+
+    if (options.activate) {
+      await setActiveProfile(tx, user.id, created.id);
+    }
+
+    await ensurePrimaryProfile(tx, user.id, created.id);
+    return created;
+  }, interactiveTransactionOptions);
+
+  const { refreshResumeGlance } = await import('@/services/resume-glance.service');
+  await refreshResumeGlance(result.id);
+
+  resumeLogger.info('Created resume', {
+    strategy: options.strategy,
+    profileId: result.id,
+    userId: user.id,
+    activate: options.activate,
+  });
+
+  return result;
+}

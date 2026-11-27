@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 import { DashboardResumesSection, type DashboardResumeItem } from './dashboard-resumes-section';
 
 export interface DashboardData {
@@ -23,7 +25,13 @@ export function DashboardClient({ data }: DashboardClientProps) {
     <div className="space-y-4">
       <h1 className="sr-only">Resumes</h1>
       <p className="max-w-xl text-sm text-muted-foreground">
-        Each resume opens as a traditional resume or a Follio view.
+        Each resume opens as a traditional resume or a Follio view.{' '}
+        <Link
+          href="/match"
+          className="text-foreground/80 underline decoration-border underline-offset-4 transition-colors hover:text-foreground hover:decoration-foreground/30"
+        >
+          Compare one to a job
+        </Link>
       </p>
       <DashboardResumesSection
         initialResumes={resumes}

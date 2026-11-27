@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { resolveActiveProfileContext } from '@/lib/active-profile';
 import { db } from '@/lib/db';
 import { AppError, ErrorCode, handleApiError } from '@/lib/errors';
+import { scheduleResumeRefresh } from '@/lib/resume/schedule-refresh';
 import { AwardSchema } from '@/lib/validations';
 
 /** PATCH body: award fields plus an optional reorder hint. */
@@ -83,6 +84,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       },
     });
 
+    scheduleResumeRefresh(profileId);
+
     return NextResponse.json({ award });
   } catch (error) {
     return handleApiError(error);
@@ -110,6 +113,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
         profileId,
       },
     });
+
+    scheduleResumeRefresh(profileId);
 
     return NextResponse.json({ success: true });
   } catch (error) {
