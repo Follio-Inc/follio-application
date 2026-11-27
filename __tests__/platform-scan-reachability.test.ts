@@ -931,7 +931,11 @@ describe('drift report integration', { timeout: 30_000 }, () => {
       // `builder-apply-proposal-sync`. The UI suite imports the dialog it
       // describes rather than only reading its source, so the graph links it
       // to the feature instead of leaving a declared-but-unlinked entry.
-      mapped: 97,
+      // 98 since Phase 4 added `no-debug-egress`, claimed by `resume-builder`
+      // because it asserts on that feature's layout.
+      // 102 since Phase 4 also added the integration, security, save-sync and
+      // budget-invariant suites, all claimed by `resume-rewrite-loop`.
+      mapped: 102,
       // 2 since Phase 2A: `__tests__/agents/runtime.test.ts` and
       // `__tests__/agents/delegation.test.ts`, both of which test the shared
       // lib/agents runtime that no feature claims. Deliberately unlisted —

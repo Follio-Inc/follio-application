@@ -243,16 +243,49 @@ export async function POST(request: NextRequest, context: RouteContext) {
         { signal: request.signal }
       );
 
-      const stored = await persistProposalBatch({
-        userId,
-        resumeId,
-        // Validated by the orchestrator's own output schema before it got
-        // here. Nothing from the request body reaches the persistence layer
-        // except the idempotency key.
-        output,
-        rootRunId: run.rootRunId ?? run.id,
-        idempotencyKey: body.input.idempotencyKey,
-      });
+      let stored;
+      try {
+        stored = await persistProposalBatch({
+          userId,
+          resumeId,
+          // Validated by the orchestrator's own output schema before it got
+          // here. Nothing from the request body reaches the persistence layer
+          // except the idempotency key.
+          output,
+          rootRunId: run.rootRunId ?? run.id,
+          idempotencyKey: body.input.idempotencyKey,
+        });
+      } catch (error) {
+        // Two requests carrying the same key both passed the pre-check above
+        // and both ran. The pre-check cannot prevent that on its own: the
+        // in-flight guard is process-local, so two serverless instances do
+        // not see each other.
+        //
+        // The unique index catches it, and losing that race must not cost the
+        // user an error on a run they paid for — the key's whole promise is
+        // that a retry returns the first result. So recover by handing back
+        // the batch that won.
+        const duplicate =
+          body.input.idempotencyKey &&
+          typeof error === 'object' &&
+          error !== null &&
+          (error as { code?: unknown }).code === 'P2002';
+
+        if (!duplicate) throw error;
+
+        const winner = await findBatchByIdempotencyKey(
+          userId,
+          resumeId,
+          body.input.idempotencyKey as string
+        );
+        if (!winner) throw error;
+
+        proposalsLogger.warn('Idempotent rewrite race; returning the stored batch', {
+          resumeId,
+          batchId: winner.batch.id,
+        });
+        return NextResponse.json({ ...winner, reused: true });
+      }
 
       proposalsLogger.info('Stored a rewrite proposal batch', {
         resumeId,

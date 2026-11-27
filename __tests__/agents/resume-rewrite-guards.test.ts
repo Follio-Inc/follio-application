@@ -128,6 +128,35 @@ describe('addressing resume text', () => {
     expect(parseTargetRef('nonsense')).toBeNull();
   });
 
+  it('accepts exactly the index forms it emits, and no others', () => {
+    // `Number()` alone accepts `1e3`, `0x10`, `+5`, `5.0` and ` 5`, none of
+    // which `formatTargetRef` can produce. Accepting them would mean a ref
+    // that parses to an index the formatter would never write, breaking the
+    // round trip the whole addressing scheme rests on.
+    for (const raw of ['1e3', '0x10', '+5', '5.0', ' 5', '5 ', '', '-0']) {
+      expect(parseTargetRef(`experience:exp1:bullets:${raw}`), raw).toBeNull();
+    }
+
+    for (const index of [0, 1, 7, 42, 100]) {
+      const ref = formatTargetRef({
+        section: 'experience',
+        recordId: 'exp1',
+        field: 'bullets',
+        index,
+      });
+      expect(parseTargetRef(ref)?.index).toBe(index);
+    }
+  });
+
+  it('round-trips every rewritable target on a real resume', () => {
+    // The property, stated directly: anything the formatter emits, the parser
+    // reads back unchanged.
+    for (const target of listRewriteTargets(RESUME)) {
+      expect(parseTargetRef(target.targetRef), target.targetRef).toEqual(target.target);
+      expect(formatTargetRef(target.target)).toBe(target.targetRef);
+    }
+  });
+
   it('gives the same target the same proposal id every time', () => {
     expect(proposalIdForTarget(WEAK_TARGET)).toBe(proposalIdForTarget({ ...WEAK_TARGET }));
     expect(proposalIdForTarget(WEAK_TARGET)).not.toBe(proposalIdForTarget(METRIC_TARGET));

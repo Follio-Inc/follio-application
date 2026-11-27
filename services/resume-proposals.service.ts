@@ -168,10 +168,21 @@ interface ResumeSnapshot {
   projects: Array<{ id: string; description: string | null; highlights: string[] }>;
 }
 
-/** Load just enough of the resume to tell whether each target still matches. */
-async function loadResumeSnapshot(resumeId: string): Promise<ResumeSnapshot | null> {
-  const profile = await db.profile.findUnique({
-    where: { id: resumeId },
+/**
+ * Load just enough of the resume to tell whether each target still matches.
+ *
+ * Scoped by owner even though every caller has already proved ownership
+ * through a batch or proposal lookup. That makes it true of the function
+ * rather than of its current call sites: this reads a user's resume text, and
+ * the next caller to be added should not have to know that the scoping lives
+ * somewhere further up.
+ */
+async function loadResumeSnapshot(
+  userId: string,
+  resumeId: string
+): Promise<ResumeSnapshot | null> {
+  const profile = await db.profile.findFirst({
+    where: { id: resumeId, userId },
     select: {
       id: true,
       summary: true,
@@ -418,7 +429,7 @@ export async function listProposalBatches(
     include: { proposals: true },
   });
 
-  const snapshot = batches.length > 0 ? await loadResumeSnapshot(resumeId) : null;
+  const snapshot = batches.length > 0 ? await loadResumeSnapshot(userId, resumeId) : null;
 
   return batches.map((batch) =>
     serializeBatch(
@@ -440,7 +451,7 @@ export async function loadBatch(
 
   if (!batch) throw Errors.notFound('Proposal batch');
 
-  const snapshot = await loadResumeSnapshot(resumeId);
+  const snapshot = await loadResumeSnapshot(userId, resumeId);
   const proposals = batch.proposals.map((proposal) => serializeProposal(proposal, snapshot));
 
   return { batch: serializeBatch(batch, proposals), proposals };
@@ -458,7 +469,7 @@ export async function loadProposal(
 
   if (!proposal) throw Errors.notFound('Proposal');
 
-  const snapshot = await loadResumeSnapshot(resumeId);
+  const snapshot = await loadResumeSnapshot(userId, resumeId);
   return serializeProposal(proposal, snapshot);
 }
 
@@ -587,7 +598,7 @@ export async function applyProposal(
 
   const resolution = resolveApplyTarget(proposal.targetRef);
   if (!resolution.ok) {
-    await markUnavailable(proposal.id, resolution.reason);
+    await markUnavailable(userId, resumeId, proposal.id, resolution.reason);
     throw Errors.conflict(resolution.reason, { state: 'UNAVAILABLE' });
   }
 
@@ -662,9 +673,26 @@ export async function applyProposal(
   return loadProposal(userId, resumeId, batchId, proposalId);
 }
 
-async function markUnavailable(proposalId: string, reason: string): Promise<void> {
+/**
+ * Record that a proposal can no longer be applied.
+ *
+ * Scoped by owner and resume for the same reason as `loadResumeSnapshot`:
+ * its only caller has already proved both, but a write keyed on nothing but a
+ * row id is one careless new call site away from being an IDOR.
+ */
+async function markUnavailable(
+  userId: string,
+  resumeId: string,
+  proposalId: string,
+  reason: string
+): Promise<void> {
   await db.resumeEditProposal.updateMany({
-    where: { id: proposalId, state: { in: ['PENDING_REVIEW', 'APPROVED'] } },
+    where: {
+      id: proposalId,
+      userId,
+      profileId: resumeId,
+      state: { in: ['PENDING_REVIEW', 'APPROVED'] },
+    },
     data: { state: 'UNAVAILABLE', stateReason: reason },
   });
 }

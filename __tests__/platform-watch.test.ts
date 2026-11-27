@@ -51,8 +51,22 @@ import type {
 const WATCH_DIR = '_admin-panel/platform/watch';
 const WORKFLOW = '.github/workflows/platform-watch.yml';
 
+/**
+ * Read a repository file with line endings normalised.
+ *
+ * Every YAML assertion below is newline-anchored — `triggerBlock`, the
+ * `push:` line match, the `concurrency:` and `permissions:` lookups. Git
+ * checks these files out with CRLF on Windows, so without this the block
+ * extractors return the wrong slice and three assertions fail against a
+ * workflow that is entirely correct. One of them then searched the header
+ * comment and found the word `pull_request` in a sentence saying the
+ * workflow never uses it.
+ *
+ * Normalising weakens nothing: every assertion keeps its exact strictness
+ * and simply means the same thing on every platform.
+ */
 function read(relativePath: string): string {
-  return readFileSync(path.join(process.cwd(), relativePath), 'utf8');
+  return readFileSync(path.join(process.cwd(), relativePath), 'utf8').replace(/\r\n/g, '\n');
 }
 
 /** Comments stripped: these files explain in prose what they never do. */

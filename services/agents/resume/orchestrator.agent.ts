@@ -941,7 +941,10 @@ export const ORCHESTRATOR_BUDGET = {
  */
 export const REWRITE_ORCHESTRATOR_BUDGET = {
   maxSteps: 18,
-  maxDurationMs: 300_000,
+  // Below the route's `maxDuration = 300`, so this fires first and the user
+  // gets the agent's own budget message rather than an opaque platform
+  // timeout. The measured worst case across live runs is 57s.
+  maxDurationMs: 270_000,
   maxTokens: 160_000,
 } as const;
 
@@ -978,7 +981,17 @@ export const REWRITE_DELEGATION_LIMITS = {
   maxChildRuns: 10,
   maxCallsPerTool: 1 + MAX_REWRITE_REVISIONS,
   maxTotalTokens: 400_000,
-  maxTotalDurationMs: 360_000,
+  /**
+   * Below the route's `maxDuration = 300`, with margin to serialise a reply.
+   *
+   * It was 360_000, which is longer than the route deadline — so this ceiling
+   * could never fire first and the clean "this request ran too long" path was
+   * unreachable on the rewrite route. The platform killed the function
+   * mid-run instead, which looks to the user like a crash rather than a
+   * limit. Measured worst case across the live runs is 57s, so the headroom
+   * here is still roughly fourfold.
+   */
+  maxTotalDurationMs: 270_000,
 } as const;
 
 // ============================================================================

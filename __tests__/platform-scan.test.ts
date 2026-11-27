@@ -24,6 +24,21 @@ import {
   type DiscoveredSurface,
 } from '@/_admin-panel/platform/scan';
 
+/**
+ * Read a repository file with line endings normalised.
+ *
+ * Several assertions in this suite locate a block of YAML or TypeScript with a
+ * newline-anchored pattern. Git checks files out with CRLF on Windows, so
+ * those patterns miss and the suite fails against sources that are entirely
+ * correct — and because one of the misses happens at module scope, the whole
+ * file reported as a failed suite with zero tests, hiding everything else in
+ * it. Normalising changes no assertion; it makes each one mean the same thing
+ * on every platform.
+ */
+function readText(relativePath: string): string {
+  return readFileSync(path.join(process.cwd(), relativePath), 'utf8').replace(/\r\n/g, '\n');
+}
+
 /** A minimal fake tree: one claimed page, one excluded route, one orphan route. */
 const FAKE_SURFACES: DiscoveredSurface[] = [
   { path: 'app/(dashboard)/builder/page.tsx', kind: 'page' },
@@ -362,7 +377,7 @@ describe('drift report', { timeout: 30_000 }, () => {
  * was parsed with that package during development to confirm these readings.
  */
 describe('CI gates the build on drift (item 30)', { timeout: 30_000 }, () => {
-  const ci = readFileSync(path.join(process.cwd(), '.github/workflows/ci.yml'), 'utf8');
+  const ci = readText('.github/workflows/ci.yml');
 
   /**
    * Full-line `#` comments removed.
@@ -427,20 +442,14 @@ describe('CI gates the build on drift (item 30)', { timeout: 30_000 }, () => {
       const category = report.signals.find((s) => s.signal === 'category-health');
 
       expect(category).toBeDefined();
-      const okExpression = readFileSync(
-        path.join(process.cwd(), '_admin-panel/platform/scan/report.ts'),
-        'utf8'
-      );
+      const okExpression = readText('_admin-panel/platform/scan/report.ts');
       const expression = /\n    ok:\n([\s\S]*?),\n  \};/.exec(okExpression)?.[1] ?? '';
       expect(expression, 'the ok expression should be readable').not.toBe('');
       expect(expression).not.toContain('categoryHealth');
     });
 
     it('counts only contradiction terms in ok', () => {
-      const report = readFileSync(
-        path.join(process.cwd(), '_admin-panel/platform/scan/report.ts'),
-        'utf8'
-      );
+      const report = readText('_admin-panel/platform/scan/report.ts');
       const expression = /\n    ok:\n([\s\S]*?),\n  \};/.exec(report)?.[1] ?? '';
       const terms = expression.match(/\w+\.\w+\.length === 0/g) ?? [];
 
@@ -467,10 +476,7 @@ describe('CI gates the build on drift (item 30)', { timeout: 30_000 }, () => {
   });
 
   describe('the CLI exit contract CI depends on', () => {
-    const cli = readFileSync(
-      path.join(process.cwd(), '_admin-panel/platform/scan/cli.ts'),
-      'utf8'
-    ).replace(/\/\*[\s\S]*?\*\//g, '');
+    const cli = readText('_admin-panel/platform/scan/cli.ts').replace(/\/\*[\s\S]*?\*\//g, '');
 
     it('exits 1 under --strict only when the report is not ok', () => {
       expect(cli).toContain("const strict = process.argv.includes('--strict')");
@@ -557,10 +563,7 @@ describe('CI gates the build on drift (item 30)', { timeout: 30_000 }, () => {
 
     it('leaves the scheduled watch workflow advisory', () => {
       // Item 26's job stays non-blocking and still runs no scan of its own.
-      const watch = readFileSync(
-        path.join(process.cwd(), '.github/workflows/platform-watch.yml'),
-        'utf8'
-      );
+      const watch = readText('.github/workflows/platform-watch.yml');
 
       expect(watch).toMatch(/^\s{4}continue-on-error: true$/m);
       expect(watch).not.toContain('platform:scan');

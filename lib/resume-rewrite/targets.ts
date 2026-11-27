@@ -61,6 +61,14 @@ export function parseTargetRef(ref: string): ProposalTarget | null {
   const needsIndex = INDEXED.includes(typedField);
   if (needsIndex) {
     if (rawIndex === undefined) return null;
+    // Plain decimal digits only, checked before converting. `Number()` alone
+    // accepts `1e3`, `0x10`, `+5`, `5.0` and ` 5` — none of which
+    // `formatTargetRef` can produce, so accepting them would mean a ref that
+    // does not round-trip. Nothing reaches this with a hand-written ref
+    // today, but "parse accepts exactly what format emits" is the property
+    // the whole addressing scheme rests on, so it is checked rather than
+    // assumed.
+    if (!/^\d+$/.test(rawIndex)) return null;
     const index = Number(rawIndex);
     if (!Number.isInteger(index) || index < 0) return null;
     return { section: typedSection, recordId, field: typedField, index };

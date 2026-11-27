@@ -120,6 +120,9 @@ export const COVERAGE_MAP: PlatformFeature[] = [
     status: 'shipped',
     unitTests: [
       '__tests__/builder-pane-layout.test.ts',
+      // Phase 4: asserts the Builder layout opens no outbound connection of
+      // its own, after two leftover debug blocks were removed from it.
+      '__tests__/no-debug-egress.test.ts',
       '__tests__/entry-edit-guard.test.ts',
       '__tests__/bullet-mode.test.ts',
       '__tests__/contact-entries.test.ts',
@@ -642,6 +645,12 @@ export const COVERAGE_MAP: PlatformFeature[] = [
       '__tests__/rewrite-proposals-client.test.ts',
       '__tests__/rewrite-proposals-ui.test.ts',
       '__tests__/builder-apply-proposal-sync.test.ts',
+      // Phase 4. The integration suite runs against real PostgreSQL and skips
+      // itself when DATABASE_URL is not loopback, so it is safe anywhere.
+      '__tests__/integration/resume-proposals.pg.test.ts',
+      '__tests__/resume-proposals-security.test.ts',
+      '__tests__/builder-save-sync.test.ts',
+      '__tests__/agent-budget-invariants.test.ts',
       // `resume-rewrite-orchestration.test.ts` exercises this feature too, but
       // it enters through `runResumeOrchestrator`, so the import graph
       // attributes it to `resume-multi-agent` and it is listed there.

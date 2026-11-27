@@ -196,6 +196,10 @@ describe('scanTestAttribution on the real tree', () => {
     expect(sourceText).toEqual([
       '__tests__/dashboard-follio-card.test.ts',
       '__tests__/landing-page-oauth-visibility.test.ts',
+      // Phase 4's: whether the Builder opens an outbound connection of its
+      // own is a fact about source text, and reading it is the only way to
+      // prove the removed debug blocks have not come back.
+      '__tests__/no-debug-egress.test.ts',
       '__tests__/onboarding-hard-gate.test.ts',
       '__tests__/onboarding-no-review.test.ts',
       '__tests__/onboarding-resume-start-choice.test.ts',
@@ -237,8 +241,12 @@ describe('scanTestAttribution on the real tree', () => {
       // facts about a file, and the no-second-runner guarantee is a fact
       // about module source. Both can only be checked by reading them.
       '__tests__/platform-watch.test.ts',
+      // Phase 4's: the two unscoped internal queries it pins are facts about
+      // how the service composes its `where` clauses, which only reading the
+      // source can check.
+      '__tests__/resume-proposals-security.test.ts',
     ]);
-    expect(report.summary.sourceText).toBe(15);
+    expect(report.summary.sourceText).toBe(17);
   });
 
   it('classifies every test exactly once', () => {

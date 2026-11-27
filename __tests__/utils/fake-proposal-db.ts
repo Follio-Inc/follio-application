@@ -262,23 +262,23 @@ export function createFakeDb(store: FakeStore, options: FakeDbOptions = {}) {
       },
     },
 
-    profile: {
-      findFirst: async ({ where }: { where: Record<string, unknown> }) => {
-        const row = store.profiles.find((profile) => matches(profile as never, where));
-        return row ? clone(row) : null;
-      },
-      findUnique: async ({ where }: { where: Record<string, unknown> }) => {
+    profile: (() => {
+      // `select` always asks for the same shape in this service, so the
+      // relations are attached unconditionally. Both lookups share one
+      // implementation because the service uses `findFirst` for the
+      // owner-scoped snapshot read and the fake must not quietly disagree
+      // with it about what comes back.
+      const lookup = async ({ where }: { where: Record<string, unknown> }) => {
         const row = store.profiles.find((profile) => matches(profile as never, where));
         if (!row) return null;
-        // `select` always asks for the same shape in this service, so the
-        // relations are attached unconditionally.
         return clone({
           ...row,
           workExperiences: store.experiences.filter((item) => item.profileId === row.id),
           projects: store.projects.filter((item) => item.profileId === row.id),
         });
-      },
-    },
+      };
+      return { findFirst: lookup, findUnique: lookup };
+    })(),
 
     resumeProposalBatch: {
       create: async ({ data }: { data: Record<string, unknown> }) => {

@@ -23,11 +23,24 @@ export default defineConfig({
     // there.
     maxWorkers: 4,
     include: ['**/*.test.ts', '**/*.test.tsx'],
+    // Supplying `exclude` replaces Vitest's defaults rather than adding to
+    // them, so these have to be real globs. The bare strings that were here
+    // matched only a path equal to `node_modules`, which left
+    // `mcp-server/node_modules/**` in scope: Vitest collected the `zod`
+    // package's own vendored test suite and reported its failures as if they
+    // were this application's.
     exclude: [
-      'node_modules',
-      '.next',
-      'dist',
-      '_experiments',
+      '**/node_modules/**',
+      '**/.next/**',
+      '**/dist/**',
+      '**/coverage/**',
+      '_experiments/**',
+      // `mcp-server` is a separate npm package with its own dependencies and
+      // its own runner: its tests register with `node:test`, not Vitest, so
+      // Vitest loads them, finds no suite it recognises and calls that a
+      // failure. They are run by `npm --prefix mcp-server test`, which builds
+      // the server first — something this config cannot do.
+      'mcp-server/**',
       '_admin-panel/modules/developer/live-qa/pathways/**',
       '_admin-panel/modules/developer/live-qa/.artifacts/**',
     ],
