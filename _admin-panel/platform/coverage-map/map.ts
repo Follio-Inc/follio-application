@@ -1,0 +1,868 @@
+import type { ExcludedPath, PlatformFeature } from './types';
+
+/**
+ * The coverage map — the owner-facing Follio inventory (PLATFORM_TODO item 2).
+ *
+ * Reachability classification is item 3 and deliberately absent here. In
+ * particular the `lib/resume-parser/` tests are **not** attached to any feature:
+ * they cover a parser reachable only through an orphaned service, and listing
+ * them under AI resume import would assert coverage that does not exist.
+ *
+ * Rules for entries:
+ * - `codeLocations` and `unitTests` are repo-relative and must exist on disk.
+ *   `__tests__/platform-coverage-map.test.ts` enforces this.
+ * - A directory in `codeLocations` claims everything beneath it.
+ * - Overlapping claims are allowed and expected: `/onboarding/import` is both an
+ *   onboarding step and the resume-import entry point. Ownership is not exclusive.
+ * - `pathways` must resolve to a real `LIVE_QA_PATHWAYS` id.
+ * - `userDescription` describes what a person does, not how the code works.
+ * - Record a known gap in `notes` rather than leaving it implied.
+ * - `lab` names a lab id. One feature carries one today: `resume-import-ai`,
+ *   built in item 21. The id is a declaration of intent — whether the lab
+ *   exists is `IMPLEMENTED_LABS`' business, not this file's.
+ *
+ * Why some tests stay `uncategorized` (item 5a). These are not gaps to close by
+ * inventing ownership — they belong to no owner-facing feature:
+ * - The Developer Platform's own tests: `devtools-overlay`, `live-qa-catalog`,
+ *   `platform-coverage-map`, `platform-scan`, `platform-scan-tests`,
+ *   `platform-scan-pathways`, `platform-scan-source-facts`,
+ *   `platform-scan-reachability`, `platform-shell`, `platform-test-console`,
+ *   `platform-test-runner`, `platform-test-detail`, `platform-live-qa`,
+ *   `platform-test-execution`, `platform-test-history`, `platform-drift-page`,
+ *   `platform-drift-proposals`, `platform-drift-quarantine`, `platform-labs-home`,
+ *   `platform-resume-lab`, `platform-resume-lab-telemetry`,
+ *   `platform-resume-lab-comparison`.
+ *   They cover `_admin-panel/`, which is operator tooling, not product.
+ * - Shared infrastructure no single feature owns: `errors`, `html-utils`,
+ *   `logger`, `prisma-connection`, `url`, `utils`, `validations`. Attributing
+ *   `lib/utils.ts` to one feature would be a fiction every other feature pays
+ *   for the next time the drift scan runs.
+ *
+ * Separately, `__tests__/agents/runtime.test.ts` and
+ * `__tests__/agents/delegation.test.ts` stay `unlisted`: both test the shared
+ * `lib/agents` runtime — the second covers the Phase 2A `agentAsTool`
+ * delegation primitive, the shared-state blackboard and the delegation limits
+ * — and they reach `portfolio` and `resume-agent` only because they use those
+ * agents' ids as fixtures. Listing either under a feature would claim coverage
+ * the test does not provide.
+ *
+ * Rules for `aiStages` and `prismaModels` (item 7). Both are *declarations*,
+ * checked against what the repository actually does:
+ * - `aiStages` names the `MAX_TOKENS` keys a feature's own code passes. All
+ *   eleven budgeted keys but `agentTurn` are declared; `agentTurn` belongs to
+ *   the shared `lib/agents` runtime, which no feature claims for the same
+ *   reason `codeLocations` leaves it out. An AI feature with no key is normal —
+ *   `jd-match` imports no AI client at all.
+ * - `prismaModels` names only the models a feature's code queries **and no
+ *   other feature's does**. That is eight of thirty-one. The shared tables are
+ *   deliberately declared nowhere: `Profile` is queried from seventeen
+ *   features' code and `User` from fourteen, so listing them everywhere would
+ *   record ownership nobody has — the same judgement item 5a made about
+ *   `uncategorized` tests over shared utilities. The scan still reports every
+ *   model, and still names the one with no feature owner at all (`Admin`,
+ *   queried only from the excluded admin surfaces).
+ */
+export const COVERAGE_MAP: PlatformFeature[] = [
+  {
+    id: 'resume-import-ai',
+    name: 'AI resume import',
+    userDescription:
+      'Uploads a resume PDF and gets a filled-in Follio profile back, instead of typing everything by hand.',
+    codeLocations: [
+      'app/api/import/resume/route.ts',
+      'app/api/resumes/[resumeId]/import-resume/route.ts',
+      'app/onboarding/import/page.tsx',
+      'services/import/resume-ai.service.ts',
+      'services/agents/resume-parse',
+      // `lib/agents` is deliberately NOT claimed: the resume-parse agent runs on
+      // that runtime, but so do the portfolio and snap-view agents. A feature
+      // owns what implements it, not the shared machinery it runs on.
+    ],
+    category: 'Resume import',
+    status: 'shipped',
+    lab: 'resume-import-ai',
+    // Both call sites are in this feature's own code: resumeParse in
+    // services/import/resume-ai.service.ts, follioVoice in the agent's rewrite
+    // step. `data-sources` also reaches resumeParse, but only because it claims
+    // the whole `services/import` directory — the import pipeline is this
+    // feature's, so the stage is declared here and not there.
+    aiStages: ['follioVoice', 'resumeParse'],
+    unitTests: [
+      // Covers the agent definition plus the Follio-voice rewrite step.
+      '__tests__/agents/follio-voice.test.ts',
+      // Covers the admin resume reader that wraps this service (service mocked).
+      '__tests__/devtools-resume-reader.test.ts',
+    ],
+    pathways: ['onboarding.upload'],
+    notes:
+      'Thinnest coverage of any shipped resume feature. No test references extractTextFromPDF, parseResumeTextWithAI, normalizeAIData or saveAIResumeToProfile; only importResumeWithAI appears in a test, and there it is mocked. The route does not compose the three stages itself — it calls extractTextFromPDF then delegates to runResumeParseAgent, which adds a fourth stage (rewriteNormalizedResumeForFollio) and writes an AgentRun. See PLATFORM_TODO item 21.',
+  },
+  {
+    id: 'resume-builder',
+    name: 'Resume builder',
+    userDescription:
+      'Edits every part of a resume — basics, experience, education, skills, projects, links, photos — and watches a live preview update.',
+    codeLocations: [
+      'app/(dashboard)/builder',
+      'app/(dashboard)/builder/components/all-sections-editor.tsx',
+      'app/api/profile',
+      'app/api/photos',
+      'lib/total-experience.ts',
+      'lib/skills',
+      // Section-editing implementation the builder is actually built from.
+      'lib/document-builder',
+      'lib/rich-text/bullet-mode.ts',
+      'lib/resume/header-layout.ts',
+      'lib/contact',
+      'lib/hooks/use-contact-manager.ts',
+    ],
+    category: 'Builder',
+    status: 'shipped',
+    unitTests: [
+      '__tests__/builder-pane-layout.test.ts',
+      // Phase 4: asserts the Builder layout opens no outbound connection of
+      // its own, after two leftover debug blocks were removed from it.
+      '__tests__/no-debug-egress.test.ts',
+      '__tests__/entry-edit-guard.test.ts',
+      '__tests__/bullet-mode.test.ts',
+      '__tests__/contact-entries.test.ts',
+      '__tests__/contact-source-label.test.ts',
+      '__tests__/resume-header-layout.test.ts',
+      '__tests__/total-experience.test.ts',
+      '__tests__/skill-groups.test.ts',
+      // Both cover lib/hooks/use-contact-manager, the builder's contact editor —
+      // not the resume parser, where their names suggest they belong.
+      '__tests__/remove-email-from-list.test.ts',
+      '__tests__/remove-phone-from-list.test.ts',
+    ],
+    pathways: [],
+    notes:
+      'Every section renders inline on /builder via all-sections-editor; there is no per-section route, and /builder/[section] is a redirect stub. Autosave has no unit coverage — entry-edit-guard covers change detection only. No Live QA pathway covers section editing; builder.designer-templates belongs to designer-templates.',
+  },
+  {
+    id: 'resume-share-visibility',
+    name: 'Resume sharing and visibility',
+    userDescription:
+      'Chooses who can see a resume — private, a secret link, or a public URL — and shares that link.',
+    codeLocations: [
+      'app/(dashboard)/share',
+      'components/share-dialog.tsx',
+      'lib/visibility.ts',
+      'lib/public-resume.ts',
+      'lib/share-token.ts',
+      'lib/share',
+      'lib/shareable-resume-link.ts',
+      'app/api/profile/share-token/route.ts',
+      'app/api/profile/unlisted-key/route.ts',
+      'app/r/[key]/page.tsx',
+    ],
+    category: 'Sharing',
+    status: 'shipped',
+    unitTests: [
+      '__tests__/visibility.test.ts',
+      '__tests__/public-resume.test.ts',
+      '__tests__/shareable-resume-link.test.ts',
+      '__tests__/share-foundation.test.ts',
+    ],
+    pathways: ['share.visibility-cycle'],
+    notes:
+      'lib/share-token.ts has no test of its own, so expiry and exhaustion of a share token are uncovered.',
+  },
+  {
+    id: 'cover-letter',
+    name: 'Cover letter builder',
+    userDescription:
+      'Writes and designs a cover letter, downloads it as a PDF, and shares it by secret link.',
+    codeLocations: [
+      'app/(dashboard)/cover-letter-builder',
+      'app/api/cover-letters',
+      'app/cl/[key]/page.tsx',
+      'app/cover-letter-preview/[id]',
+      'lib/cover-letter',
+      'components/document-dashboard',
+      'services/cover-letter.service.ts',
+      'services/cover-letter-export.service.ts',
+    ],
+    category: 'Cover letter',
+    status: 'shipped',
+    prismaModels: ['CoverLetter'],
+    unitTests: [
+      '__tests__/cover-letter-visibility.test.ts',
+      '__tests__/cover-letter-document-design.test.ts',
+    ],
+    pathways: ['cover-letter.builder-smoke'],
+  },
+  {
+    id: 'public-follio',
+    name: 'Public Follio page',
+    userDescription:
+      'Shares one link that shows who they are, with doors through to their resume, work, links and highlights.',
+    codeLocations: [
+      'app/u/[handle]',
+      'app/[username]',
+      'app/me',
+      'components/public-profile-chrome.tsx',
+      'lib/public-profile-chrome.ts',
+      'lib/follio-identity',
+      'lib/resume/highlights.ts',
+      'lib/resume/presentation.ts',
+      'lib/resume/contact.ts',
+      'lib/features.ts',
+    ],
+    category: 'Public surfaces',
+    status: 'shipped',
+    unitTests: [
+      // From main: the Follio/resume view switch and highlight rendering.
+      '__tests__/follio-view-switch.test.tsx',
+      '__tests__/resume-highlights-render.test.tsx',
+      '__tests__/public-profile-chrome.test.ts',
+      '__tests__/follio-peek.test.ts',
+      '__tests__/resume-highlights.test.ts',
+      '__tests__/follio-identity.test.ts',
+      '__tests__/follio-voice.test.ts',
+      '__tests__/resume-presentation.test.ts',
+      '__tests__/resume-contact.test.ts',
+    ],
+    pathways: ['links.public-page'],
+    notes:
+      'Status is shipped, but the /work door alone is gated by NEXT_PUBLIC_PORTFOLIO_ENABLED. `flag` is left unset deliberately — setting it would imply the whole page is off. Also owns the vanity /[username] and /me entry points.',
+  },
+
+  // ── Entry and account ───────────────────────────────────────────────────
+  {
+    id: 'marketing-site',
+    name: 'Marketing and legal pages',
+    userDescription:
+      'Lands on follio.me, learns what Follio is, and finds the contact, privacy and terms pages.',
+    codeLocations: [
+      'app/page.tsx',
+      'components/landing-page.tsx',
+      'app/contact',
+      'app/privacy',
+      'app/terms',
+    ],
+    category: 'Public surfaces',
+    status: 'shipped',
+    unitTests: ['__tests__/landing-page-oauth-visibility.test.ts'],
+    pathways: ['public.landing'],
+  },
+  {
+    id: 'auth-access',
+    name: 'Sign-in, sign-up and the workspace gate',
+    userDescription:
+      'Creates an account or signs in — by email or an OAuth provider — and gets sent back to wherever they were heading.',
+    codeLocations: [
+      'app/sign-in',
+      'app/sign-up',
+      'middleware.ts',
+      'lib/active-profile.ts',
+      'lib/clerk-env.ts',
+    ],
+    category: 'Account',
+    status: 'shipped',
+    unitTests: [
+      // From main: deleting a resume is an ownership-scoped operation.
+      '__tests__/resume-delete.test.ts',
+      '__tests__/middleware.test.ts',
+      '__tests__/clerk-env.test.ts',
+      '__tests__/active-profile.test.ts',
+      '__tests__/onboarding-hard-gate.test.ts',
+    ],
+    pathways: ['auth.dashboard-gate'],
+    notes:
+      'Clerk-hosted. Live QA never drives the sign-in UI; it replays a captured storage state. onboarding-hard-gate moved here in item 5a: despite its name it asserts on the redirect machinery (lib/active-profile.ts, components/client-redirect.tsx, the dashboard shell), which is the access layer — it reads no app/onboarding file at all.',
+  },
+  {
+    id: 'settings-account',
+    name: 'Settings and account',
+    userDescription:
+      'Changes their handle, privacy and appearance preferences, manages AI assistants, or deletes their account.',
+    codeLocations: [
+      'app/(dashboard)/settings',
+      'app/api/account',
+      'app/api/profile/check-handle',
+      'app/api/profile/dismiss-banner',
+      'lib/account',
+    ],
+    category: 'Account',
+    status: 'shipped',
+    // Only this feature queries AgentRun, through account deletion.
+    prismaModels: ['AgentRun'],
+    unitTests: [
+      '__tests__/delete-account.test.ts',
+      '__tests__/clear-account-client-state.test.ts',
+      '__tests__/connect-external-account.test.ts',
+      '__tests__/resolve-user.test.ts',
+    ],
+    pathways: [],
+  },
+
+  // ── Getting started ─────────────────────────────────────────────────────
+  {
+    id: 'onboarding',
+    name: 'Onboarding',
+    userDescription:
+      'Picks why they are here, chooses to upload a resume or start blank, and comes out with a first resume in the builder.',
+    codeLocations: [
+      'app/onboarding',
+      'app/api/onboarding',
+      'lib/onboarding',
+      'lib/onboarding-ui.ts',
+      'components/onboarding',
+    ],
+    category: 'Onboarding',
+    status: 'shipped',
+    unitTests: [
+      '__tests__/onboarding-no-review.test.ts',
+      '__tests__/onboarding-resume-start-choice.test.ts',
+      '__tests__/onboarding-skip-next.test.ts',
+      '__tests__/onboarding-summary-overwrite.test.ts',
+      '__tests__/onboarding-ui.test.ts',
+      '__tests__/onboarding-resume-construction.test.ts',
+      '__tests__/project-import-prefill.test.ts',
+      '__tests__/review-import.test.ts',
+      '__tests__/lab-import-constellation.test.ts',
+    ],
+    pathways: ['onboarding.blank'],
+    notes:
+      'Five of these tests assert on Follio source text via readFileSync rather than on behavior, so they catch deletions but not behavioral regressions. /onboarding/review is a redirect stub to /onboarding/build.',
+  },
+
+  // ── Resume lifecycle ────────────────────────────────────────────────────
+  {
+    id: 'resume-management',
+    name: 'Resume library',
+    userDescription:
+      'Keeps several resumes side by side — creates, clones, renames and deletes them, and picks which one is their main public resume.',
+    codeLocations: [
+      'app/(dashboard)/resumes',
+      'app/(dashboard)/dashboard/page.tsx',
+      'app/(dashboard)/dashboard/dashboard-client.tsx',
+      'app/(dashboard)/dashboard/dashboard-resumes-section.tsx',
+      'components/document-dashboard',
+      'app/api/resumes',
+      'lib/resume-title.ts',
+      'lib/resume/new-resume-defaults.ts',
+    ],
+    category: 'Resumes',
+    status: 'shipped',
+    unitTests: [
+      '__tests__/resume-title.test.ts',
+      '__tests__/new-resume-defaults.test.ts',
+      '__tests__/sort-resumes-public-first.test.ts',
+      '__tests__/dashboard-follio-card.test.ts',
+      '__tests__/document-dashboard-foundation.test.ts',
+    ],
+    pathways: ['multi-resume.create-blank'],
+    notes:
+      'Clone, rename, delete and set-primary are covered only at the title-helper level; the operations themselves and their API routes have no test.',
+  },
+  {
+    id: 'designer-templates',
+    name: 'Designer and templates',
+    userDescription:
+      'Switches resume templates, fonts, colours and page layout, and zooms in to check how the page will print.',
+    codeLocations: [
+      'app/(dashboard)/builder/components/designer-panel.tsx',
+      'app/(dashboard)/builder/components/resume-design-panel.tsx',
+      'app/(dashboard)/builder/components/resume-template-gallery.tsx',
+      'app/(dashboard)/builder/components/resume-zoom-modal.tsx',
+      'app/api/profile/resume-design',
+      'lib/resume/templates',
+      'lib/resume-design.ts',
+      'lib/resume/atelier.ts',
+      'lib/resume/page-layout.ts',
+      'app/preview/[templateId]',
+    ],
+    category: 'Builder',
+    status: 'shipped',
+    unitTests: [
+      '__tests__/resume-templates.test.ts',
+      '__tests__/resume-fonts.test.ts',
+      '__tests__/resume-page-layout.test.ts',
+      '__tests__/resume-zoom-modal.test.ts',
+      '__tests__/resume-atelier.test.ts',
+      '__tests__/resume-template-preview-profile.test.ts',
+    ],
+    pathways: ['builder.designer-templates'],
+    notes:
+      'Pathway moved here from resume-builder in item 2 — it exercises the Designer panel, not section editing. Item 5a moved template-switch and minimal-studio-utils to portfolio: the import graph showed both test lib/portfolio template code, not resume templates.',
+  },
+  {
+    id: 'download-export',
+    name: 'Download and export',
+    userDescription:
+      'Downloads their resume as a PDF, or pulls their profile out as JSON or plain text.',
+    codeLocations: [
+      'app/(dashboard)/builder/components/download-dialog.tsx',
+      'app/api/export',
+      'lib/document-download',
+      'lib/document-pdf',
+      'lib/hooks/use-resume-download.ts',
+      'services/export.service.ts',
+      'services/document-pdf.service.ts',
+      'app/resume-preview/[id]',
+      'pdf-worker',
+    ],
+    category: 'Export',
+    status: 'shipped',
+    prismaModels: ['DocumentPdfCache'],
+    unitTests: [
+      '__tests__/export-service.test.ts',
+      '__tests__/document-download-share.test.ts',
+      '__tests__/document-pdf-render.test.ts',
+      '__tests__/use-resume-download.test.ts',
+    ],
+    pathways: [],
+    notes:
+      'document-pdf-render stubs fetch, so the worker contract is covered but no test ever produces real PDF bytes.',
+  },
+
+  // ── Bringing data in ────────────────────────────────────────────────────
+  {
+    id: 'data-sources',
+    name: 'Data sources',
+    userDescription:
+      'Connects GitHub, LinkedIn, Medium, YouTube, Google or plain links, and pulls that work into their profile.',
+    codeLocations: [
+      'app/(dashboard)/builder/data-sources',
+      'app/(dashboard)/data-sources',
+      'app/api/data-sources',
+      'app/api/import/github',
+      'app/api/import/google',
+      'app/api/import/linkedin',
+      'app/api/import/links',
+      'app/api/import/medium',
+      'app/api/import/youtube',
+      'services/import',
+      'services/github.service.ts',
+      'services/github-enhanced.service.ts',
+      'lib/import/profile-url.ts',
+    ],
+    category: 'Data sources',
+    status: 'shipped',
+    unitTests: [
+      '__tests__/github-service.test.ts',
+      '__tests__/linkedin-profile-url.test.ts',
+      '__tests__/profile-url.test.ts',
+    ],
+    pathways: [],
+    notes:
+      'Connect flows cross third-party OAuth consent screens and stay manual — automating them needs real test apps per provider. No Live QA pathway covers this area.',
+  },
+  {
+    id: 'import-sync',
+    name: 'Import sync and merge',
+    userDescription:
+      'Re-pulls from a connected source, previews what would change, and applies only the parts they want.',
+    codeLocations: [
+      'app/(dashboard)/builder/import-sync',
+      'app/api/import/jobs',
+      'app/api/import/sessions',
+      'app/api/import/sync-apply',
+      'app/api/import/sync-preview',
+      'app/api/import/sync-status',
+      'services/merge.service.ts',
+      'services/multi-source-merger.service.ts',
+      'services/import-session.service.ts',
+    ],
+    category: 'Data sources',
+    status: 'shipped',
+    prismaModels: ['ImportSession'],
+    unitTests: ['__tests__/merge.service.test.ts', '__tests__/multi-source-merger.test.ts'],
+    pathways: [],
+  },
+
+  // ── AI features ─────────────────────────────────────────────────────────
+  {
+    id: 'follio-voice',
+    name: 'Follio voice',
+    userDescription:
+      'Has their imported resume copy rewritten into a Follio headline and about section that sound like a person, not a CV.',
+    codeLocations: ['services/agents/resume-parse/rewrite-for-follio.ts'],
+    category: 'AI',
+    status: 'shipped',
+    aiStages: ['follioVoice'],
+    unitTests: ['__tests__/agents/follio-voice.test.ts'],
+    pathways: [],
+    notes:
+      'No route or page of its own — it runs as a step inside the resume-parse agent, so it ships only via resume-import-ai. Its MAX_TOKENS key is in aiStages, where the drift scan can check it.',
+  },
+  {
+    id: 'snap-view',
+    name: 'Snap view',
+    userDescription: 'Gets an at-a-glance generated summary card of their profile.',
+    codeLocations: [
+      'app/api/profile/[handle]/snap-view',
+      'services/snap-view.service.ts',
+      'services/agents/snap-view',
+      'types/snap-view.ts',
+    ],
+    category: 'AI',
+    status: 'shipped',
+    aiStages: ['snapViewGeneration'],
+    unitTests: ['__tests__/agents/snap-view-agent.test.ts'],
+    pathways: [],
+  },
+  {
+    id: 'brand-insight',
+    name: 'Brand insight and logos',
+    userDescription:
+      'Sees the companies and schools on their profile recognised, with the right logo and a short read on each.',
+    codeLocations: [
+      'app/api/brand/insight',
+      'app/api/brand/logo',
+      'lib/brand-insight',
+      'lib/brand-logo',
+    ],
+    category: 'AI',
+    status: 'shipped',
+    unitTests: ['__tests__/follio-insight.test.ts', '__tests__/brand-logo.test.ts'],
+    pathways: [],
+  },
+  {
+    id: 'jd-match',
+    name: 'JD match / resume lens',
+    userDescription:
+      'Pastes a job description and sees which parts of their resume line up with it, highlighted in place.',
+    codeLocations: [
+      'lib/jd-match',
+      'lib/resume-lens',
+      'components/resume-lens',
+      'app/api/extension/match-jd',
+    ],
+    category: 'AI',
+    status: 'shipped',
+    unitTests: ['__tests__/jd-match.test.ts', '__tests__/resume-lens.test.ts'],
+    pathways: [],
+    notes:
+      'Shipped on two paths: the resume lens on the public resume page (app/u/[handle]/resume-shell.tsx) and the extension match-jd endpoint. `aiStages` is deliberately unset: it has no MAX_TOKENS key because it imports no AI client at all — the matching is lexical. A drift signal keyed on MAX_TOKENS alone would miss this feature entirely, which is why the scan reports it under "AI-category features that call no AI client" rather than as a gap.',
+  },
+  {
+    id: 'resume-agent',
+    name: 'Resume analysis agent',
+    userDescription:
+      'Asks for a read of one of their resumes and gets back a plain summary of what it contains, or a comparison against a job description they paste or a target role they pick — nothing is changed.',
+    codeLocations: [
+      'app/api/resumes/[resumeId]/agent',
+      'app/(dashboard)/resumes/analyze-resume-dialog.tsx',
+      'services/agents/resume',
+      'lib/role-profiles',
+      // `lib/jd-match` and `lib/resume-lens` are deliberately NOT claimed: the
+      // extension's match-jd endpoint and the public resume lens own them, and
+      // this feature only calls them.
+      // `lib/agents` is deliberately NOT claimed, for the same reason
+      // `resume-import-ai` leaves it out: the portfolio, snap-view and
+      // resume-parse agents run on that runtime too. A feature owns what
+      // implements it, not the shared machinery it runs on.
+    ],
+    category: 'AI',
+    status: 'shipped',
+    unitTests: [
+      '__tests__/resume-agent-api.test.ts',
+      '__tests__/resume-agent-tools.test.ts',
+      '__tests__/resume-agent-integration.test.ts',
+      '__tests__/builder-ai-assistant.test.ts',
+      '__tests__/analyze-dialog-response.test.ts',
+    ],
+    pathways: [],
+    notes:
+      'Read-only by construction: the agent registers one data tool (get_resume), three deterministic read-only evaluators (score_against_jd, find_missing_keywords, evaluate_against_role) and the terminal result tool, so no prompt can reach an editing path. The evaluators call no AI client — the figures come from lib/jd-match and lib/role-profiles — so the model chooses which to run and explains the output but never produces a score itself. The pasted job description and the chosen role are carried in agent meta, not in the model context, so the model can only learn about them through a tool result. `aiStages` is unset deliberately — the only MAX_TOKENS key this feature runs under is `agentTurn`, whose call site is lib/agents/runtime.ts, which this feature does not claim; declaring it here would produce a stale drift entry pointing outside the feature. `prismaModels` is unset for the same reason the rest of the map leaves Profile and User undeclared: the agent reads Profile, which seventeen features already query. Billable-request protection is process-local (app/api/resumes/[resumeId]/agent/rate-limit.ts): 5 runs per 10 minutes and one in flight per user, which resets on restart and does not span serverless instances. A durable limit needs a shared store. The developer harness at local-tests/resume-agent/run-live.ts exercises the same agent against a local database and is not product code.',
+  },
+  {
+    id: 'resume-multi-agent',
+    name: 'Resume multi-agent analysis',
+    userDescription:
+      'Nothing yet — this is the orchestrated version of resume analysis, built but not reachable from the product. When it ships, a user will get one report combining a writing review with a job-description or target-role comparison.',
+    codeLocations: [
+      'services/agents/resume/engine.ts',
+      'services/agents/resume/orchestrator.agent.ts',
+      'services/agents/resume/evaluation.agent.ts',
+      'services/agents/resume/jd-match.agent.ts',
+      'services/agents/resume/quality-tools.ts',
+      'lib/resume-quality',
+      // `lib/agents` is deliberately NOT claimed, for the same reason
+      // `resume-agent` leaves it out: the delegation primitive and the runtime
+      // are shared machinery, not this feature's implementation.
+    ],
+    category: 'AI',
+    // 'flagged' as of Phase 2C: the orchestrator now serves
+    // /api/resumes/[resumeId]/agent when FOLLIO_MULTI_AGENT_ENABLED=true, and
+    // the single-agent Resume Agent serves it otherwise.
+    status: 'flagged',
+    flag: 'FOLLIO_MULTI_AGENT_ENABLED',
+    unitTests: [
+      '__tests__/agents/resume-orchestrator.test.ts',
+      '__tests__/agents/resume-rewrite-orchestration.test.ts',
+      '__tests__/resume-quality.test.ts',
+      '__tests__/analysis-engine.test.ts',
+    ],
+    pathways: [],
+    notes:
+      'Phase 2B. Three independent agents on the shared runtime: `resume-orchestrator` delegates to `resume-evaluation` and `resume-jd-match` through lib/agents/agent-as-tool, and each specialist runs its own tool-calling loop with its own Zod output schema, its own budget and its own AgentRun row (correlated by parentRunId/rootRunId). Deliberately `unshipped`: no route and no UI reaches it, and the Phase 1 `resume-agent` still serves /api/resumes/[resumeId]/agent and the Builder unchanged. The matching specialist reuses the Phase 1 tools verbatim rather than reimplementing them, so the two cannot drift apart. The evaluation specialist is grounded on lib/resume-quality, which calls no AI client — every count, percentage and finding is computed, copied out of run memory into the result, and copied again off the namespaced blackboard into the orchestrated report, so no model in the tree can state a figure it did not compute. `aiStages` is unset for the same reason as `resume-agent`: the only MAX_TOKENS key is `agentTurn`, whose call site is in the shared runtime this feature does not claim. Tree-wide limits live in ORCHESTRATOR_DELEGATION_LIMITS (depth 1, 3 child runs, 2 calls per specialist, 200k tokens, 240s).',
+  },
+
+  {
+    id: 'resume-rewrite-loop',
+    name: 'Resume rewrite and verification',
+    userDescription:
+      'Nothing yet — this is the part that proposes better wording for specific resume bullets and checks each suggestion before showing it. When it ships, a user will see suggested edits side by side with their own text, each marked verified, rejected or needing an answer from them, and nothing changes until they accept it.',
+    codeLocations: [
+      'services/agents/resume/rewrite.agent.ts',
+      'services/agents/resume/rewrite-tools.ts',
+      'services/agents/resume/verification.agent.ts',
+      'services/agents/resume/verification-tools.ts',
+      'services/agents/resume/shared-keys.ts',
+      'lib/resume-rewrite',
+      // Phase 3B.1: persistence, human approval and the one write path.
+      'lib/resume-proposals',
+      'services/resume-proposals.service.ts',
+      // More specific than the `app/api/resumes` claim on the `resumes`
+      // feature, the same way `resume-agent` claims its own `/agent` subtree.
+      'app/api/resumes/[resumeId]/rewrite-proposals',
+      // Phase 3B.2: the review surface, and the Builder-side coordination
+      // that stops an applied suggestion being saved over. Claimed file by
+      // file rather than by directory, because `app/(dashboard)/builder`
+      // belongs to the Builder feature and this only adds to it.
+      'app/(dashboard)/builder/components/rewrite-proposals-dialog.tsx',
+      'app/(dashboard)/builder/lib/apply-proposal-sync.ts',
+      // `services/agents/resume/orchestrator.agent.ts` is NOT claimed here: it
+      // belongs to `resume-multi-agent`, which this feature extends rather
+      // than replaces.
+    ],
+    category: 'AI',
+    // Reachable since Phase 3B.2: the Builder's AI Resume Assistant offers
+    // "Generate AI Improvements", and the review dialog behind it lists,
+    // approves, rejects and applies. `flag` is deliberately unset even though
+    // generation refuses without FOLLIO_MULTI_AGENT_ENABLED, following this
+    // file's own rule — only part of the feature is gated, and marking the
+    // whole thing flagged would wrongly imply that reviewing and applying an
+    // already-stored batch stops working too. The notes say which part.
+    status: 'shipped',
+    prismaModels: ['ResumeEditProposal', 'ResumeProposalBatch'],
+    unitTests: [
+      '__tests__/agents/resume-rewrite-guards.test.ts',
+      '__tests__/agents/resume-rewrite-outcomes.test.ts',
+      '__tests__/agents/resume-rewrite.test.ts',
+      '__tests__/resume-proposal-state.test.ts',
+      '__tests__/resume-proposals-service.test.ts',
+      '__tests__/resume-proposals-api.test.ts',
+      '__tests__/rewrite-proposals-client.test.ts',
+      '__tests__/rewrite-proposals-ui.test.ts',
+      '__tests__/builder-apply-proposal-sync.test.ts',
+      // Phase 4. The integration suite runs against real PostgreSQL and skips
+      // itself when DATABASE_URL is not loopback, so it is safe anywhere.
+      '__tests__/integration/resume-proposals.pg.test.ts',
+      '__tests__/resume-proposals-security.test.ts',
+      '__tests__/builder-save-sync.test.ts',
+      '__tests__/agent-budget-invariants.test.ts',
+      // `resume-rewrite-orchestration.test.ts` exercises this feature too, but
+      // it enters through `runResumeOrchestrator`, so the import graph
+      // attributes it to `resume-multi-agent` and it is listed there.
+    ],
+    pathways: [],
+    notes:
+      'Phase 3A, hardened in 3A.1. Two more independent agents on the shared runtime: `resume-rewrite` proposes addressed edits and `resume-verification` rules on them, each with its own tool-calling loop, Zod output schema, budget and AgentRun row. Proposals never touch the database — they name a stable record id and field path (lib/resume-rewrite/targets.ts) so Phase 3B can apply one as a field write rather than a string search, and Phase 3A performs no writes at all. Factual grounding is deterministic and runs twice: `propose_rewrite` refuses to store a proposal carrying a blocking issue, and the verifier re-runs every guard against the live resume and merges the model’s verdicts with the result in code, taking the stricter of the two — so an approving model cannot clear a proposal the guards rejected, and a proposal the verifier skipped defaults to needs_user_input rather than approved. The revision loop is bounded by MAX_REWRITE_REVISIONS and per-tool counters in orchestrator.agent.ts, not by the prompt; REWRITE_DELEGATION_LIMITS widens the tree-wide ceilings only for runs that requested a rewrite, so an evaluation request keeps the Phase 2B limits exactly. `aiStages` is unset for the same reason as `resume-agent` and `resume-multi-agent`: the only MAX_TOKENS key is `agentTurn`, whose call site is in the shared runtime no feature claims. Phase 3B.1 added persistence and the approval path: a batch records what an authorized run produced, and only a verifier-approved proposal is even offered for review — everything else is stored UNAVAILABLE. Applying needs the AI verdict and the human decision to agree, and is a single conditional UPDATE (`SET bullets[n] = $new WHERE bullets[n] = $original`), so a concurrent edit is refused rather than lost and a repeated apply matches zero rows. The agents still have no database write tool. Phase 3B.2 added the Builder surface: a fifth AI Resume Assistant action opening a review dialog that is deliberately separate from the evaluation dialog, so running an evaluation can never become a rewrite. Approving and applying are separate presses, the apply request carries no body, and the client offers Apply only from the server’s own `applicable` flag. The Builder is not autosaved (`builder-client.tsx` contains an unused debounced autosave; the live surface is AllSectionsEditor’s explicit Save), so the lost-update risk is a stale draft saved after an apply — closed by an apply gate that refuses while a save is in flight, while an inline form is open, or when the draft holds an unsaved edit to the same field, plus a `commitInlineChange` of the applied text into both draft and saved baseline. Phase 3A.1 closed the gap the first live run exposed: the guards only understood named entities and figures, so a benefit clause appended to a true sentence ("…, enhancing data retrieval speed") passed every check and the verifier approved it. lib/resume-rewrite/outcomes.ts now detects introduced result constructions and tests what they claim against the whole resume, `propose_rewrite` refuses them outright, and the verifier must classify every proposition as a supported fact, a faithful paraphrase, a reasonable inference or an unsupported new claim — with the last two disqualifying approval in code, because a plausible inference asserted as fact is the failure mode.',
+  },
+
+  {
+    id: 'resume-edit-sessions',
+    name: 'AI resume editing',
+    userDescription:
+      'Asks for a change in their own words — "tailor this to the job", "add numbers" — and gets the rewritten sections back to apply or undo in one go.',
+    codeLocations: [
+      'app/api/resume-edits',
+      'lib/resume-edit',
+      'services/ai/resume-edit',
+      'services/resume-edit-session.service.ts',
+      'services/resume-edit-source.ts',
+    ],
+    category: 'AI',
+    status: 'shipped',
+    aiStages: ['resumeEdit'],
+    prismaModels: ['ResumeEditSession'],
+    unitTests: [
+      '__tests__/resume-edit.test.ts',
+      '__tests__/resume-edit-ops.test.ts',
+      '__tests__/ai-edit-scores.test.tsx',
+      '__tests__/resume-skill-profile.test.ts',
+    ],
+    pathways: [],
+    notes:
+      'Arrived on main while the multi-agent branch was in flight, and the two are deliberately separate implementations rather than one merged path. This is a single-shot edit: one brief produces one ResumeEditSession holding the changes it proposed, applied or reverted as a unit, with what each change replaced kept so it can be undone. `resume-rewrite-loop` is the other one: many independently verified proposals, each approved and applied on its own, with deterministic fabrication guards and a rewrite/verification feedback loop behind it. Neither supersedes the other and neither writes through the other’s code path; the merge preserved both.',
+  },
+
+  {
+    id: 'job-fit',
+    name: 'Job fit and alignment',
+    userDescription:
+      'Pastes a job posting and sees what it actually asks for, how their resume lines up against it, and a recruiter-style read of the fit.',
+    codeLocations: [
+      'app/(dashboard)/match/page.tsx',
+      'app/api/jd-align',
+      'app/api/job-fit',
+      'app/api/job-requirements',
+      'services/ai/jd-align',
+      'services/ai/job-requirements',
+      'services/ai/judge',
+    ],
+    category: 'AI',
+    status: 'shipped',
+    aiStages: ['jdAlign', 'jdExpert', 'jobRequirements'],
+    unitTests: [
+      '__tests__/jd-align.test.ts',
+      '__tests__/job-requirements.test.ts',
+      '__tests__/jd-match-metrics.test.tsx',
+      '__tests__/skills-match.test.ts',
+    ],
+    pathways: [],
+    notes:
+      'Distinct from `jd-match`, which is lexical and calls no AI client: this one reads the posting with a model (`jobRequirements`), aligns resume evidence against it (`jdAlign`) and produces a holistic read (`jdExpert`). All three MAX_TOKENS keys are declared here because the call sites are in this feature’s own services. Separate again from the multi-agent JD/Role Matching Agent, which scores the same comparison deterministically inside an agent tree.',
+  },
+
+  // ── Integrations ────────────────────────────────────────────────────────
+  {
+    id: 'ai-connector-mcp',
+    name: 'AI connector and MCP',
+    userDescription:
+      'Connects an AI assistant to their Follio so it can read their profile and propose edits they approve.',
+    codeLocations: [
+      'app/api/ai-connector',
+      'app/api/mcp',
+      'app/api/oauth',
+      'app/oauth/authorize',
+      // OAuth discovery metadata, served from the well-known prefix the specs
+      // require rather than from `app/api`. Listed as three files, not as the
+      // `app/.well-known` directory: a future well-known endpoint for
+      // something else must surface as unmapped, not be claimed by this
+      // feature because of where it sits (PLATFORM_TODO item 8a).
+      'app/.well-known/oauth-authorization-server/route.ts',
+      'app/.well-known/oauth-protected-resource/route.ts',
+      'app/.well-known/oauth-protected-resource/api/mcp/route.ts',
+      'lib/ai-connector',
+      'lib/mcp',
+      'services/ai-connector.service.ts',
+      'services/ai-connector-oauth.service.ts',
+    ],
+    category: 'Integrations',
+    status: 'shipped',
+    // The four connector tables are queried nowhere else.
+    prismaModels: ['AiConnectorAuthCode', 'AiConnectorClient', 'AiConnectorToken', 'AiEditDraft'],
+    unitTests: [
+      '__tests__/ai-connector.test.ts',
+      // From main: the MCP server, its route and origin handling, the OAuth
+      // redirect, and the resume tools the connector exposes.
+      '__tests__/mcp-protocol.test.ts',
+      '__tests__/mcp-public-origin.test.ts',
+      '__tests__/mcp-route.test.ts',
+      '__tests__/oauth-redirect.test.ts',
+      '__tests__/resume-evaluate.test.ts',
+      '__tests__/resume-target.test.ts',
+    ],
+    pathways: [],
+    notes:
+      "The three app/.well-known handlers are this feature's own code: each one imports only lib/ai-connector/oauth-metadata and lib/ai-connector/cors, and returns the authorization-server or protected-resource metadata an AI assistant reads before connecting. They were outside signal 1 until item 8a widened route discovery from app/api to all of app/.",
+  },
+  {
+    id: 'chrome-extension',
+    name: 'Chrome extension',
+    userDescription:
+      'Uses the Follio browser extension to pull up their resumes and match them against a job posting while browsing.',
+    codeLocations: ['_extensions/chrome', 'app/api/extension'],
+    category: 'Integrations',
+    status: 'shipped',
+    unitTests: [],
+    pathways: [],
+    notes:
+      'No unit tests of its own. Its match-jd endpoint is covered indirectly by jd-match; the extension client code is untested.',
+  },
+
+  // ── Flagged off ─────────────────────────────────────────────────────────
+  {
+    id: 'portfolio',
+    name: 'Portfolio',
+    userDescription:
+      'Generates a full portfolio site from their profile and publishes it — unavailable unless the flag is on.',
+    codeLocations: [
+      'app/api/portfolio',
+      'app/(dashboard)/dashboard/portfolio/edit',
+      'services/portfolio',
+      'services/agents/portfolio',
+      'lib/portfolio',
+      'lib/portfolio-appearance.ts',
+      'lib/features.ts',
+    ],
+    category: 'Portfolio',
+    status: 'flagged',
+    flag: 'NEXT_PUBLIC_PORTFOLIO_ENABLED',
+    // Seven of the eleven budgeted stages: the six pipeline stages plus the
+    // content transform. `agentTurn` is not here — it belongs to the shared
+    // lib/agents runtime, which no feature claims, for the same reason
+    // `codeLocations` leaves it out.
+    aiStages: [
+      'contentTransform',
+      'designBrief',
+      'evidenceExtraction',
+      'narrativeGeneration',
+      'portfolioStrategy',
+      'profileUnderstanding',
+      'validation',
+    ],
+    unitTests: [
+      '__tests__/portfolio-appearance.test.ts',
+      '__tests__/portfolio-content.test.ts',
+      '__tests__/portfolio-overrides.test.ts',
+      '__tests__/portfolio-resolve-copy.test.ts',
+      '__tests__/portfolio-rich-html.test.ts',
+      '__tests__/features.test.ts',
+      '__tests__/template-switch.test.ts',
+      '__tests__/minimal-studio-utils.test.ts',
+      '__tests__/agents/narrative-prompt.test.ts',
+      '__tests__/agents/section-write.test.ts',
+    ],
+    pathways: [],
+    notes:
+      'Off unless NEXT_PUBLIC_PORTFOLIO_ENABLED=true. Six-stage pipeline at services/portfolio/pipeline/stage-a..f. The only feature flag in lib/features.ts. template-switch and minimal-studio-utils moved here in item 5a — both test lib/portfolio template code. __tests__/agents/runtime.test.ts is deliberately NOT listed: it tests the shared lib/agents runtime and only reaches portfolio because it uses portfolio agents as fixtures.',
+  },
+];
+
+/**
+ * Routes and pages deliberately outside the product inventory.
+ *
+ * A directory excludes everything beneath it. Every `app/**` page and
+ * `app/api/**` route must be either claimed by a feature above or listed here —
+ * `__tests__/platform-coverage-map.test.ts` fails otherwise, so a new route
+ * cannot land unnoticed.
+ */
+export const EXCLUDED: ExcludedPath[] = [
+  {
+    path: 'app/admin',
+    reason:
+      'Operator tooling: the admin shell plus the Developer Platform page shim. Not product, and gated by requireAdmin.',
+  },
+  {
+    path: 'app/api/admin',
+    reason:
+      'Admin-only API shims for the operator panel (health, status, catalog, test, live-qa, resume reader, users, stats). Not product.',
+  },
+  {
+    path: 'app/lab',
+    reason:
+      'Scratch experiment surface (import-constellation). Not linked from product navigation.',
+  },
+  {
+    path: 'app/portfolio-preview',
+    reason:
+      'Preview harness for portfolio templates, used while building them. Not a user-reachable product surface.',
+  },
+];
+
+export function getFeature(id: string): PlatformFeature | undefined {
+  return COVERAGE_MAP.find((feature) => feature.id === id);
+}
+
+export function listFeatures(ids?: string[]): PlatformFeature[] {
+  if (!ids?.length) return [...COVERAGE_MAP];
+  const wanted = new Set(ids);
+  return COVERAGE_MAP.filter((feature) => wanted.has(feature.id));
+}

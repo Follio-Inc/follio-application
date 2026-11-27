@@ -12,12 +12,29 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    // Cap the worker pool. The default is one worker per core, and each one
+    // loads Vite plus the TypeScript compiler; the Developer Platform's
+    // drift-scan tests additionally parse the ~670-file source tree inside
+    // their worker (PLATFORM_TODO items 5–8). On a many-core machine that put
+    // the run over the OS memory limit and killed unrelated workers at
+    // startup, so the pool is bounded rather than sized by core count. Four
+    // fits an 8 GB machine with other applications open and costs a few
+    // seconds; CI runners have fewer cores than this, so it changes nothing
+    // there.
+    maxWorkers: 4,
     include: ['**/*.test.ts', '**/*.test.tsx'],
+    // Supplying `exclude` replaces Vitest's defaults rather than adding to
+    // them, so these have to be real globs. Bare strings like `node_modules`
+    // match only a path equal to that name, which lets a nested package's
+    // `node_modules` stay in scope — Vitest then collects a dependency's own
+    // vendored test suite and reports its failures as if they were this
+    // application's.
     exclude: [
-      'node_modules',
-      '.next',
-      'dist',
-      '_experiments',
+      '**/node_modules/**',
+      '**/.next/**',
+      '**/dist/**',
+      '**/coverage/**',
+      '_experiments/**',
       '_admin-panel/modules/developer/live-qa/pathways/**',
       '_admin-panel/modules/developer/live-qa/.artifacts/**',
     ],

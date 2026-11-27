@@ -9,25 +9,29 @@ datasource db {
 }
 
 model User {
-  id                   String                @id @default(cuid())
-  clerkId              String                @unique
-  email                String                @unique
-  lastSignInAt         DateTime?
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
-  mainPurpose          MainPurpose?
-  importJobs           ImportJob[]
-  importLogs           ImportLog[]
-  importSessions       ImportSession[]
-  profile              Profile?              @relation("ActiveProfile")
-  primaryProfile       Profile?              @relation("PrimaryProfile")
-  profiles             Profile[]             @relation("OwnedProfiles")
-  coverLetters         CoverLetter[]
-  shareTokens          ShareToken[]
-  aiConnectorAuthCodes AiConnectorAuthCode[]
-  aiConnectorTokens    AiConnectorToken[]
-  aiEditDrafts         AiEditDraft[]
-  resumeEditSessions   ResumeEditSession[]
+  id                    String                @id @default(cuid())
+  clerkId               String                @unique
+  email                 String                @unique
+  lastSignInAt          DateTime?
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  mainPurpose           MainPurpose?
+  importJobs            ImportJob[]
+  importLogs            ImportLog[]
+  importSessions        ImportSession[]
+  profile               Profile?              @relation("ActiveProfile")
+  primaryProfile        Profile?              @relation("PrimaryProfile")
+  profiles              Profile[]             @relation("OwnedProfiles")
+  coverLetters          CoverLetter[]
+  shareTokens           ShareToken[]
+  aiConnectorAuthCodes  AiConnectorAuthCode[]
+  aiConnectorTokens     AiConnectorToken[]
+  aiEditDrafts          AiEditDraft[]
+  /// main: the AI resume-editing session workflow.
+  resumeEditSessions    ResumeEditSession[]
+  /// multi-agent: verified rewrite proposals and the batches they came in.
+  resumeProposalBatches ResumeProposalBatch[]
+  resumeEditProposals   ResumeEditProposal[]
 
   @@index([clerkId])
   @@index([email])
@@ -35,13 +39,28 @@ model User {
 
 /// Completely separate admin table — admins are NOT regular users.
 /// An admin has their own Clerk account and their own row here.
+/// Developer Platform authorization (PLATFORM_TODO item 28).
+///
+/// Distinct from `/api/admin/users/[id]/role`, which promotes a product user
+/// *to* admin by creating an Admin row. This decides what an admin may do
+/// inside `/admin/platform`, and nothing else.
+enum PlatformRole {
+  viewer
+  runner
+  maintainer
+}
+
 model Admin {
-  id        String   @id @default(cuid())
-  clerkId   String   @unique
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String       @id @default(cuid())
+  clerkId      String       @unique
+  email        String       @unique
+  name         String?
+  /// Non-null, defaulting to `maintainer` so the admins that existed before
+  /// item 28 keep exactly the access they had. Roles are therefore opt-in
+  /// demotion: nobody is restricted until someone is explicitly set lower.
+  platformRole PlatformRole @default(maintainer)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
   @@index([clerkId])
   @@index([email])
@@ -119,6 +138,8 @@ model Profile {
   linkedCoverLetters        CoverLetter[]
   aiEditDrafts              AiEditDraft[]
   resumeEditSessions        ResumeEditSession[]
+  resumeProposalBatches     ResumeProposalBatch[]
+  resumeEditProposals       ResumeEditProposal[]
 
   @@index([handle])
   @@index([status])
@@ -711,6 +732,14 @@ model GeneratedPortfolio {
 model AgentRun {
   id                   String    @id @default(cuid())
   agentId              String
+  /// Run that delegated to this one. Null for a top-level run.
+  parentRunId          String?
+  /// Root of this execution tree. Equals `id` for a top-level run, so every
+  /// run in one multi-agent execution shares a value and can be fetched in a
+  /// single query. Not a relation: these are ids of rows in this same table
+  /// and a self-relation would add cascade semantics we do not want on a
+  /// telemetry table that is allowed to lose rows.
+  rootRunId            String?
   version              String
   status               String
   stepMetas            Json      @default("[]")
@@ -733,6 +762,8 @@ model AgentRun {
   @@index([profileId])
   @@index([userId])
   @@index([startedAt])
+  @@index([parentRunId])
+  @@index([rootRunId])
 }
 
 enum PortfolioStatus {
@@ -936,9 +967,96 @@ model AiEditDraft {
   @@index([expiresAt])
 }
 
+/// Verification verdict produced by the Resume Verification Agent.
+///
+/// Server-derived only: it is copied from a validated agent run, never from a
+/// request body. `UNVERIFIED` is the honest value for a proposal the verifier
+/// never ruled on, and it is deliberately distinct from `REJECTED`.
+enum ProposalVerificationStatus {
+  APPROVED
+  REVISION_REQUIRED
+  REJECTED
+  NEEDS_USER_INPUT
+  UNVERIFIED
+}
+
+/// What the human said. Kept separate from the AI verdict on purpose: an
+/// agent approving a rewrite is not a user accepting it, and both are required
+/// before anything is written to a resume.
+enum ProposalDecision {
+  NONE
+  APPROVED
+  REJECTED
+}
+
+/// Lifecycle of one proposal. Transitions are enforced in
+/// services/resume-proposals.service.ts, not here.
+///
+/// A proposal only starts at PENDING_REVIEW when its verification verdict was
+/// APPROVED. Everything else starts UNAVAILABLE, so "the verifier was unsure"
+/// can never drift into "the user may apply this".
+enum ProposalState {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  APPLIED
+  STALE
+  UNAVAILABLE
+}
+
+/// How the rewrite run that produced a batch finished. Mirrors the
+/// orchestrator's own `rewrite.status`, copied from the validated output.
+enum ProposalBatchStatus {
+  COMPLETE
+  INCOMPLETE
+  UNVERIFIED
+  FAILED
+}
+
+/// One authorized rewrite run: the proposals it produced, and what it cost.
+///
+/// A batch is a record of an agent execution, not an instruction. Nothing here
+/// is applied to a resume by its existence; see ResumeEditProposal.state.
+model ResumeProposalBatch {
+  id               String               @id @default(cuid())
+  userId           String
+  profileId        String
+  /// Analysis context the rewrite ran under: general | jd | role.
+  mode             String
+  status           ProposalBatchStatus
+  /// Root AgentRun id for the whole execution tree. Not a relation: AgentRun
+  /// is telemetry that is allowed to lose rows, so a FK would either block
+  /// pruning it or cascade a batch away with its history.
+  rootRunId        String?
+  /// Caller-supplied key that makes a retry return the first batch instead of
+  /// paying for a second billable run. Scoped per resume.
+  idempotencyKey   String?
+  /// The orchestrator's combined summary. Model prose, kept for display.
+  summary          String               @default("")
+  /// Questions only the user can answer, from the Rewrite Agent.
+  openQuestions    String[]
+  /// Anything that failed or could not be checked.
+  limitations      String[]
+  /// Rewrite rounds after the first, as counted by the orchestrator.
+  revisionAttempts Int                  @default(0)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  user             User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profile          Profile              @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  proposals        ResumeEditProposal[]
+
+  @@unique([profileId, idempotencyKey])
+  @@index([userId, createdAt])
+  @@index([profileId, createdAt])
+}
+
 /// One AI edit request from the builder ("tailor to this job", "add numbers")
 /// and the changes it proposed. Applied changes keep what they replaced so
 /// they can be undone. Shapes live in lib/resume-edit/types.ts.
+///
+/// Separate from ResumeProposalBatch on purpose: this is main's single-shot
+/// edit workflow, that one is the multi-agent verified-rewrite workflow. They
+/// write through different code paths and neither supersedes the other.
 model ResumeEditSession {
   id             String    @id @default(cuid())
   userId         String
@@ -955,6 +1073,71 @@ model ResumeEditSession {
 
   @@index([userId, createdAt])
   @@index([profileId, createdAt])
+}
+
+/// One reviewable edit to one resume element.
+///
+/// Addressed, never searched for: `targetRecordId` plus `fieldName` plus
+/// `arrayIndex` locate the text exactly, so applying one is a field write
+/// rather than a string replace through a resume that may have moved on.
+/// `originalText` is the resume's own string at generation time and is what
+/// staleness is detected against.
+model ResumeEditProposal {
+  id        String @id @default(cuid())
+  batchId   String
+  /// Denormalised from the batch so every ownership check is one query and
+  /// cannot be skipped by addressing a proposal directly.
+  userId    String
+  profileId String
+
+  /// The agent's own stable id, derived from the target. Stable across
+  /// revision rounds, which is what let the verifier's feedback be matched
+  /// back to a revised proposal.
+  agentProposalId String
+  /// The Rewrite Agent run that produced it.
+  agentRunId      String?
+
+  /// Canonical address, e.g. `experience:exp1:bullets:0`.
+  targetRef      String
+  section        String
+  targetRecordId String
+  fieldName      String
+  arrayIndex     Int?
+
+  originalText      String
+  proposedText      String
+  explanation       String   @default("")
+  sourceEvidence    String[]
+  keywordsAddressed String[]
+  /// What the Rewrite Agent could not settle from the resume alone.
+  uncertainties     String[]
+
+  verificationStatus  ProposalVerificationStatus
+  verificationReason  String                     @default("")
+  /// Findings from lib/resume-rewrite's deterministic guards, as returned.
+  deterministicIssues Json                       @default("[]")
+  revisionRound       Int                        @default(0)
+
+  decision    ProposalDecision @default(NONE)
+  state       ProposalState
+  /// Why a proposal became STALE or UNAVAILABLE, for the UI to show.
+  stateReason String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  decidedAt DateTime?
+  appliedAt DateTime?
+
+  batch   ResumeProposalBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  user    User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profile Profile             @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  /// One proposal per target per batch. The deterministic duplicate-target
+  /// guard already refuses a second one; this is the database saying so too.
+  @@unique([batchId, targetRef])
+  @@index([userId, state])
+  @@index([profileId, state])
+  @@index([batchId])
 }
 
 /// Cached Chromium print of a resume or cover letter. One row per document+layout.

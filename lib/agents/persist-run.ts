@@ -34,6 +34,11 @@ export async function persistAgentRun(
       create: {
         id: run.id,
         agentId: run.agentId,
+        // Null for a top-level run; set for anything a parent delegated to.
+        parentRunId: run.parentRunId ?? null,
+        // Always set, so one execution's runs can be fetched in a single query
+        // rather than by walking the parent chain.
+        rootRunId: run.rootRunId ?? run.id,
         version: run.version,
         status: run.status,
         stepMetas: asJson(run.stepMetas),

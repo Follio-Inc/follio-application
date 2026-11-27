@@ -16,9 +16,11 @@ export const QUICK_LINKS: QuickLink[] = [
   { id: 'admin', label: 'Admin', href: '/admin', group: 'Admin' },
   { id: 'lab', label: 'Lab', href: '/lab', group: 'Admin' },
   {
+    // Item 25 deleted the panel tab this pointed at; the Resume Lab is what
+    // replaced it, so the link follows rather than rotting.
     id: 'developer-resume-reader',
-    label: 'Resume reader',
-    href: '/admin/developer?tab=resume-reader',
+    label: 'Resume lab',
+    href: '/admin/platform/labs/resume-import-ai',
     group: 'Admin',
   },
 ];

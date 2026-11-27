@@ -16,6 +16,7 @@ Every code change must pass the same checks that run on push/PR in GitHub Action
 | Lint & Type Check | `npm run format:check` | Yes |
 | Test | `npm run test:run` | Yes |
 | Build | `npm run build:ci` | Yes (for changes that affect build) |
+| Developer Platform Drift | `npm run platform:scan -- --strict` | Yes (for changes to features, routes, tests, AI stages, flags or Prisma models) |
 
 Pre-commit (Husky) runs Prettier on staged files via lint-staged. Commit messages are validated by commitlint.
 
@@ -40,6 +41,13 @@ Pre-commit (Husky) runs Prettier on staged files via lint-staged. Commit message
      ```bash
      npm run build:ci
      ```
+   - If you added, changed or removed a feature, route, test file, AI stage, feature flag or Prisma
+     model, also run the drift scan the way CI runs it, and record the change in
+     `_admin-panel/platform/coverage-map/map.ts` if it reports a contradiction:
+     ```bash
+     npm run platform:scan -- --strict
+     ```
+     Recorded gaps do not fail it; only the map contradicting the repository does.
    - Shortcut when many files changed: `npm run validate` (typecheck + lint + tests), then `npm run format:check`.
 
 3. **Match project style**

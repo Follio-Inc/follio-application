@@ -48,6 +48,17 @@ export interface BuilderState {
   isSaving: boolean;
 
   /**
+   * Whether an AI rewrite suggestion is being applied to this resume.
+   *
+   * The apply path writes resume text on the server, outside the Builder's
+   * own save. While it runs, the draft in this store may be a moment behind
+   * the database, so saving it would write the older text back. Save is
+   * disabled for the duration — a few hundred milliseconds — rather than the
+   * Builder's persistence being reworked around it.
+   */
+  isApplyingProposal: boolean;
+
+  /**
    * Whether a section is currently in inline-editing mode (e.g. an expanded
    * experience form). When true, the sidebar and other interactive areas
    * should be blocked so the user focuses on saving or discarding.
@@ -77,6 +88,9 @@ export interface BuilderState {
 
   /** Set the saving loading state. */
   setSaving: (saving: boolean) => void;
+
+  /** Set the applying-a-suggestion lock. See `isApplyingProposal`. */
+  setApplyingProposal: (applying: boolean) => void;
 
   /** Set the inline-editing lock state. */
   setInlineEditing: (editing: boolean) => void;
@@ -162,6 +176,7 @@ export function createBuilderStore(profile: FullProfile): BuilderStoreApi {
     contactDraft: initialContact,
     savedContact: { ...initialContact },
     isSaving: false,
+    isApplyingProposal: false,
     isInlineEditing: false,
 
     updateDraft: (updates) =>
@@ -193,6 +208,8 @@ export function createBuilderStore(profile: FullProfile): BuilderStoreApi {
       })),
 
     setSaving: (saving) => set({ isSaving: saving }),
+
+    setApplyingProposal: (applying) => set({ isApplyingProposal: applying }),
 
     setInlineEditing: (editing) => set({ isInlineEditing: editing }),
   }));

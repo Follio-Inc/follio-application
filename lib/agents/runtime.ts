@@ -15,6 +15,12 @@ import { logger } from '@/lib/logger';
 import { zodToOpenAIParameters } from '@/lib/agents/define-tool';
 import { AgentBudgetExceededError, AgentCancelledError, AgentError } from '@/lib/agents/errors';
 import { createAgentMemory } from '@/lib/agents/memory';
+import { assertTreeDuration, recordTreeTokens } from '@/lib/agents/delegation';
+import {
+  createSharedState,
+  PINNED_RESUME_META_KEY,
+  SharedStateStore,
+} from '@/lib/agents/shared-state';
 import { persistAgentRun } from '@/lib/agents/persist-run';
 
 import type {
@@ -47,15 +53,32 @@ export async function runAgent<TInput, TOutput>(
   const stepMetas: AgentStepMeta[] = [];
   const totalTokens: AgentTokenUsage = { input: 0, output: 0 };
 
+  // A run with no parent is the root of its own tree, so `rootRunId` is always
+  // set and a single-agent run is just a tree of one.
+  const rootRunId = ctx.rootRunId ?? runId;
+
   const run: AgentRunRecord = {
     id: runId,
     agentId: agent.id,
+    parentRunId: ctx.parentRunId,
+    rootRunId,
     version: agent.version,
     status: 'running',
     stepMetas,
     totalTokensUsed: totalTokens,
     startedAt,
   };
+
+  /**
+   * Context seen by this run and by anything it delegates to.
+   *
+   * The blackboard is created lazily and only when delegation is in play: a
+   * plain single-agent run gets no store and no `shared`, so nothing about
+   * the existing agents changes.
+   */
+  const sharedStore = ctx.sharedStore ?? (ctx.delegation ? new SharedStateStore() : undefined);
+
+  const runCtx: AgentContext = { ...ctx, rootRunId, sharedStore };
 
   runtimeLogger.info('Agent run started', {
     runId,
@@ -69,7 +92,7 @@ export async function runAgent<TInput, TOutput>(
     errorToThrow?: unknown
   ): Promise<AgentRunResult<TOutput>> => {
     await persistAgentRun(run, {
-      ctx,
+      ctx: runCtx,
       inputSummary: summarizeInput(agent.id, input),
       outputSummary: result ? summarizeOutput(agent.id, result.output) : undefined,
       generatedPortfolioId:
@@ -86,8 +109,8 @@ export async function runAgent<TInput, TOutput>(
 
     const output =
       agent.kind === 'workflow'
-        ? await runWorkflowAgent(agent, input, ctx, run)
-        : await runToolAgent(agent, input, ctx, run);
+        ? await runWorkflowAgent(agent, input, runCtx, run)
+        : await runToolAgent(agent, input, runCtx, run);
 
     run.status = 'succeeded';
     run.finishedAt = new Date().toISOString();
@@ -109,7 +132,7 @@ export async function runAgent<TInput, TOutput>(
         error: error instanceof Error ? error.message : String(error),
       });
       try {
-        const output = await agent.fallback(input, ctx);
+        const output = await agent.fallback(input, runCtx);
         run.status = 'succeeded';
         run.finishedAt = new Date().toISOString();
         run.error = error instanceof Error ? error.message : String(error);
@@ -275,7 +298,28 @@ async function runToolAgent<TInput, TOutput>(
   run: AgentRunRecord
 ): Promise<TOutput> {
   const memory = createAgentMemory({ __input: input });
-  const toolCtx: AgentToolContext = { ...ctx, runId: run.id, memory };
+
+  // The blackboard view for this run, scoped to this agent's namespace and to
+  // whatever resume the run is pinned to. Built here rather than passed in, so
+  // no caller — and no parent agent — can hand a run a wider view than it
+  // should have. Absent entirely when the run has no store, which is every
+  // single-agent run.
+  const pinned = ctx.meta?.[PINNED_RESUME_META_KEY];
+  const shared = ctx.sharedStore
+    ? createSharedState(ctx.sharedStore, {
+        agentId: agent.id,
+        runId: run.id,
+        resumeId: typeof pinned === 'string' && pinned.trim() ? pinned.trim() : undefined,
+      })
+    : undefined;
+
+  const toolCtx: AgentToolContext = {
+    ...ctx,
+    runId: run.id,
+    agentId: agent.id,
+    memory,
+    shared,
+  };
   const toolsByName = new Map(agent.tools.map((t) => [t.name, t]));
 
   if (!toolsByName.has(agent.resultToolName)) {
@@ -302,6 +346,13 @@ async function runToolAgent<TInput, TOutput>(
     assertNotCancelled(ctx, agent.id);
     assertWithinDuration(ctx, agent.id, run.startedAt);
     assertTokenBudget(ctx, agent.id, run.totalTokensUsed);
+    // Wall-clock is the one tree-wide ceiling enforced here, as a hard stop:
+    // the request has a deadline whatever the agents would like to do next.
+    // The cumulative token ceiling is deliberately NOT checked here — it is
+    // enforced at delegation boundaries (lib/agents/delegation.ts), so running
+    // out of tokens refuses new child agents instead of killing a run that is
+    // about to produce an answer.
+    if (ctx.delegation) assertTreeDuration(ctx.delegation, agent.id);
 
     emitProgress(ctx, {
       agentId: agent.id,
@@ -322,6 +373,9 @@ async function runToolAgent<TInput, TOutput>(
     });
 
     addTokens(run.totalTokensUsed, meta.tokensUsed);
+    // Same spend, counted twice on purpose: once for this run's own budget,
+    // once against the ceiling shared by every agent in the execution.
+    recordTreeTokens(ctx, meta.tokensUsed);
     run.stepMetas.push({
       stepId: `llm-turn-${step + 1}`,
       kind: 'llm',

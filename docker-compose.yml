@@ -1,5 +1,15 @@
 # Docker Compose for Follio Local Development
-# Run: docker-compose up -d
+#
+# Runs the DATABASE only. The Next.js app runs on the host with `npm run dev`.
+#
+#   docker compose up -d        start Postgres in the background
+#   docker compose ps           see status + health
+#   docker compose stop         stop containers, keep the data
+#   docker compose down         remove containers, keep the data (named volume)
+#
+# The host port comes from POSTGRES_PORT in .env (Compose reads that file
+# automatically). It defaults to 5432, so teammates without a POSTGRES_PORT
+# entry get the documented behaviour unchanged.
 
 services:
   postgres:
@@ -11,17 +21,25 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: follio
     ports:
-      - '5432:5432'
+      # "<host port>:<container port>" — inside Docker it is always 5432.
+      - '${POSTGRES_PORT:-5432}:5432'
     volumes:
+      # Named volume: the data lives inside Docker, NOT in this repo folder,
+      # and survives `docker compose down`.
       - follio_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      # -d follio so "healthy" means the follio database itself is ready
+      # to accept queries, not merely that the server process booted.
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d follio']
       interval: 5s
       timeout: 5s
       retries: 5
 
-  # Optional: Redis for caching and rate limiting
+  # Optional: Redis for caching and rate limiting.
+  # No application code imports Redis yet, so it is behind a profile and does
+  # not start by default. Start it with: docker compose --profile redis up -d
   redis:
+    profiles: ['redis']
     image: redis:7-alpine
     container_name: follio-redis
     restart: unless-stopped

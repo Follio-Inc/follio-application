@@ -69,8 +69,9 @@ function createPrismaClient(): PrismaClient {
  * ProfileSection.subHeadings → generation 10.
  * ProfileSection fingerprint coverage → generation 11.
  * ProfileSection.entryGrouping → generation 12.
+ * ResumeProposalBatch / ResumeEditProposal → generation 13.
  */
-const PRISMA_CLIENT_GENERATION = 12;
+const PRISMA_CLIENT_GENERATION = 13;
 
 function schemaFieldFingerprint(): string {
   const modelNames = [
@@ -81,6 +82,7 @@ function schemaFieldFingerprint(): string {
     'CoverLetter',
     'AiEditDraft',
     'DocumentPdfCache',
+    'ResumeEditProposal',
   ] as const;
   return modelNames
     .map((name) => {

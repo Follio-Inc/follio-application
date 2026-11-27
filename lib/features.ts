@@ -22,3 +22,21 @@ export function assertPortfolioEnabled(): void {
     throw new AppError('Portfolio is currently unavailable', ErrorCode.NOT_FOUND, 404);
   }
 }
+
+/**
+ * Whether resume analysis runs the multi-agent orchestrator instead of the
+ * single-agent Resume Agent.
+ *
+ * Deliberately **not** `NEXT_PUBLIC_`: unlike the portfolio flag, nothing in
+ * the browser may decide which engine runs. The client never sends it and
+ * never reads it — the server picks the engine and reports which one it used
+ * in the response, so the UI can label the result without being able to
+ * influence it.
+ *
+ * Off by default. The orchestrator spends roughly twice the tokens of the
+ * single-agent path, so an unset variable must mean the cheaper, older,
+ * known-good behaviour.
+ */
+export function isMultiAgentResumeEnabled(): boolean {
+  return process.env.FOLLIO_MULTI_AGENT_ENABLED === 'true';
+}

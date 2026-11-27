@@ -134,10 +134,17 @@ describe('developer resume reader', () => {
     expect(userId).toBe('admin-1');
   });
 
-  it('wires smoke + quick link to the resume reader tab', () => {
+  it('points the smoke item and quick link at the Resume lab', () => {
+    // Item 25 deleted the `?tab=resume-reader` panel tab these addressed.
+    // `/admin/developer` now redirects and drops the query, so both were
+    // repointed at the surface that replaced the tab.
     const smoke = getSmokeItems().find((item) => item.id === 'ai-resume-reader');
     const link = getQuickLinks().find((item) => item.id === 'developer-resume-reader');
-    expect(smoke?.href).toBe('/admin/developer?tab=resume-reader');
-    expect(link?.href).toBe('/admin/developer?tab=resume-reader');
+
+    expect(smoke?.href).toBe('/admin/platform/labs/resume-import-ai');
+    expect(link?.href).toBe('/admin/platform/labs/resume-import-ai');
+    for (const href of [smoke?.href, link?.href]) {
+      expect(href).not.toContain('tab=resume-reader');
+    }
   });
 });

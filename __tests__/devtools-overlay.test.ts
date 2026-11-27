@@ -1,3 +1,16 @@
+/**
+ * The surviving `modules/developer/` infrastructure.
+ *
+ * Historical name: this file once covered the DevtoolsPanel overlay, which
+ * item 25 retired along with `suites.ts` and `suites-catalog.ts`. What it
+ * covers now is the shared code the **new** Developer Platform runs on and
+ * which happens to live in the same directory — the local-only guard, the
+ * Live QA catalog, the resume-reader catalog, and the quick-link and smoke
+ * registries. The suite-registry assertions went with the registry; the
+ * guard assertions are the reason this file still matters, because nothing
+ * else pins "never in production, even with the opt-in flag".
+ */
+
 import { describe, expect, it } from 'vitest';
 
 import { ADMIN_PANEL_NAV } from '@/_admin-panel/nav';
@@ -10,26 +23,17 @@ import {
 } from '@/_admin-panel/modules/developer/guard';
 import { getQuickLinks } from '@/_admin-panel/modules/developer/links';
 import { getSmokeItems } from '@/_admin-panel/modules/developer/smoke';
-import { getTestSuite, TEST_SUITES } from '@/_admin-panel/modules/developer/suites-catalog';
 
 describe('admin-panel developer module', () => {
-  it('registers developer as a separate nav module from users', () => {
+  it('keeps the modules independent in the sidebar', () => {
     const ids = ADMIN_PANEL_NAV.map((item) => item.id);
-    expect(ids).toContain('developer');
+
     expect(ids).toContain('users');
     expect(ids).toContain('overview');
-    const developer = ADMIN_PANEL_NAV.find((item) => item.id === 'developer');
-    expect(developer?.href).toBe('/admin/developer');
-  });
-
-  it('exposes named test suites with non-empty patterns', () => {
-    expect(TEST_SUITES.length).toBeGreaterThan(0);
-    for (const suite of TEST_SUITES) {
-      expect(suite.id).toBeTruthy();
-      expect(suite.patterns.length).toBeGreaterThan(0);
-      expect(getTestSuite(suite.id)?.id).toBe(suite.id);
-    }
-    expect(getTestSuite('not-a-real-suite')).toBeUndefined();
+    // Item 25 retired the panel and its sidebar entry; `platform` is the one
+    // Developer Platform now. `platform-shell.test.tsx` owns that assertion.
+    expect(ids).toContain('platform');
+    expect(ids).not.toContain('developer');
   });
 
   it('exposes smoke items and quick links', () => {
